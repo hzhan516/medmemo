@@ -1,0 +1,61 @@
+# === Go ===
+/vendor/
+/go.work
+/go.work.sum
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+wire_gen.go
+
+# === Wails ===
+/build/bin/
+/build/windows/
+/build/darwin/
+/build/linux/
+/frontend/dist/
+/frontend/wailsjs/
+
+# === Node.js / Frontend ===
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+dist/
+*.local
+
+# === IDE ===
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# === OS ===
+Thumbs.db
+
+# === Test & Coverage ===
+coverage.out
+coverage.html
+*.cover
+
+# === Local Data ===
+/.medmemo/
+/data/
+
+# === Resources (large binaries, downloaded at build time) ===
+/resources/models/*.onnx
+/resources/models/*.bin
+/resources/models/*.param
+
+# === Temporary ===
+/tmp/
+*.tmp
+*.bak
+/AGENTS.md
+/medmemo/
