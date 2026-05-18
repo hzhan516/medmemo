@@ -1,0 +1,83 @@
+run:
+  timeout: 5m
+  go: "1.22"
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - depguard
+    - gocritic
+    - gofmt
+    - goimports
+    - misspell
+    - revive
+    - unconvert
+
+linters-settings:
+  depguard:
+    rules:
+      # DEP-001: domain 包只能导入标准库和 pkg/models
+      domain_zero_deps:
+        files:
+          - "**/internal/domain/**/*.go"
+        deny:
+          - pkg: "github.com/medmemo/medmemo/internal/**/*"
+            desc: "domain layer must not depend on any internal sub-packages"
+          - pkg: "github.com/medmemo/medmemo/pkg/desensitizer"
+            desc: "domain layer must not depend on pkg/desensitizer"
+        allow:
+          - pkg: "github.com/medmemo/medmemo/pkg/models"
+            desc: "domain layer may depend on pkg/models"
+
+      # DEP-002: application 层不能直接调用 adapter 实现
+      app_no_adapter:
+        files:
+          - "**/internal/application/**/*.go"
+        deny:
+          - pkg: "github.com/medmemo/medmemo/internal/adapters/**/*"
+            desc: "application layer must not depend on adapter implementations"
+          - pkg: "github.com/medmemo/medmemo/internal/infrastructure/**/*"
+            desc: "application layer must not depend on infrastructure"
+        allow:
+          - pkg: "github.com/medmemo/medmemo/internal/domain/**/*"
+            desc: "application layer may depend on domain"
+          - pkg: "github.com/medmemo/medmemo/pkg/models"
+            desc: "application layer may depend on pkg/models"
+
+      # DEP-003: adapter 层不能反向依赖 cmd
+      adapter_no_cmd:
+        files:
+          - "**/internal/adapters/**/*.go"
+        deny:
+          - pkg: "github.com/medmemo/medmemo/cmd/**/*"
+            desc: "adapter layer must not depend on cmd package"
+
+      # DEP-005: infrastructure 层不知道业务存在
+      infra_no_business:
+        files:
+          - "**/internal/infrastructure/**/*.go"
+        deny:
+          - pkg: "github.com/medmemo/medmemo/internal/domain/**/*"
+            desc: "infrastructure layer must not depend on domain"
+          - pkg: "github.com/medmemo/medmemo/internal/application/**/*"
+            desc: "infrastructure layer must not depend on application"
+          - pkg: "github.com/medmemo/medmemo/internal/adapters/**/*"
+            desc: "infrastructure layer must not depend on adapters"
+
+  revive:
+    rules:
+      - name: exported
+        arguments:
+          - "sayRepetitiveInsteadOfStutters"
+      - name: var-naming
+      - name: indent-error-flow
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0

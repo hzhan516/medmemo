@@ -1,0 +1,27 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "MedMemo",
+  "outputfilename": "MedMemo",
+  "frontend": {
+    "dir": "./web",
+    "install": "npm install",
+    "build": "npm run build",
+    "dev": "npm run dev",
+    "package": "npm",
+    "wailsjsdir": "./wailsjs"
+  },
+  "author": {
+    "name": "MedMemo Contributors",
+    "email": "hello@medmemo.dev"
+  },
+  "info": {
+    "companyName": "MedMemo Open Source Community",
+    "productName": "MedMemo",
+    "productVersion": "0.1.0",
+    "copyright": "Copyright © 2026 MedMemo Contributors",
+    "comments": "Your personal health memory assistant. Not a medical device."
+  },
+  "nsisType": "multiple",
+  "obfuscated": false,
+  "garbleargs": ""
+}

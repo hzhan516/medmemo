@@ -1,0 +1,37 @@
+// Package network 封装 HTTP 客户端，提供重试、超时、断路器能力。
+package network
+
+import (
+	"context"
+	"net/http"
+	"time"
+
+	"github.com/google/wire"
+)
+
+// HTTPClient 带增强功能的 HTTP 客户端封装。
+type HTTPClient struct {
+	client  *http.Client
+	baseURL string
+}
+
+// NewHTTPClient 创建增强型 HTTP 客户端。
+func NewHTTPClient(baseURL string) *HTTPClient {
+	return &HTTPClient{
+		client: &http.Client{
+			Timeout: 30 * time.Second,
+		},
+		baseURL: baseURL,
+	}
+}
+
+// Do 执行 HTTP 请求，内置重试与超时控制。
+func (c *HTTPClient) Do(ctx context.Context, req *http.Request) (*http.Response, error) {
+	// TODO(作者): 实现指数退避重试 + semaphore 并发限制（最大 4 并发） [Issue#024]
+	return c.client.Do(req)
+}
+
+// NetworkSet 供 Wire 使用的 ProviderSet。
+var NetworkSet = wire.NewSet(
+	NewHTTPClient,
+)
