@@ -4,6 +4,7 @@ import { Send, Square } from 'lucide-react'
 interface ChatInputProps {
   onSend: (message: string) => void
   onStop?: () => void
+  onNewConversation?: () => void
   isLoading?: boolean
   placeholder?: string
 }
@@ -12,13 +13,15 @@ interface ChatInputProps {
  * 底部聊天输入区域。
  * 最小高度 56px，最大 120px，支持自动扩展。
  * 快捷键：Enter 发送、Shift+Enter 换行、Escape 清空。
+ * 支持 /new 命令新建会话。
  * 空输入框时按 Up Arrow 可编辑上一条消息 [Issue#032]。
  */
 export function ChatInput({
   onSend,
   onStop,
+  onNewConversation,
   isLoading = false,
-  placeholder = '输入你的健康问题...',
+  placeholder,
 }: ChatInputProps) {
   const [content, setContent] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -35,12 +38,20 @@ export function ChatInput({
   const handleSend = useCallback(() => {
     const trimmed = content.trim()
     if (!trimmed || isLoading) return
+
+    // /new 命令：新建会话
+    if (trimmed === '/new') {
+      onNewConversation?.()
+      setContent('')
+      return
+    }
+
     onSend(trimmed)
     setContent('')
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
     }
-  }, [content, isLoading, onSend])
+  }, [content, isLoading, onSend, onNewConversation])
 
   const handleStop = useCallback(() => {
     if (!isLoading || !onStop) return
@@ -64,6 +75,8 @@ export function ChatInput({
     [handleSend, handleStop, isLoading, onStop]
   )
 
+  const displayPlaceholder = placeholder ?? (isLoading ? 'AI 正在生成回复...' : '输入你的健康问题，或输入 /new 新建会话')
+
   return (
     <div className="shrink-0 border-t border-border bg-background px-4 py-3">
       <div className="flex items-end gap-2 max-w-3xl mx-auto">
@@ -73,7 +86,7 @@ export function ChatInput({
             value={content}
             onChange={(e) => setContent(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={isLoading ? 'AI 正在生成回复...' : placeholder}
+            placeholder={displayPlaceholder}
             rows={1}
             className="
               w-full min-h-[56px] max-h-[120px] resize-none
@@ -132,7 +145,7 @@ export function ChatInput({
 
       <div className="text-center mt-1.5">
         <span className="text-[10px] text-muted-foreground">
-          {isLoading ? 'Enter 停止生成 · 正在接收回复' : 'Enter 发送 · Shift+Enter 换行 · Escape 取消'}
+          {isLoading ? 'Enter 停止生成 · 正在接收回复' : 'Enter 发送 · Shift+Enter 换行 · Escape 取消 · /new 新建会话'}
         </span>
       </div>
     </div>

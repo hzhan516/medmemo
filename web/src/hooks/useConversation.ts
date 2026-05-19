@@ -18,6 +18,9 @@ export function useConversation() {
     abortLastMessage,
     setStreaming,
     setConversationId,
+    addConversation,
+    selectConversation,
+    updateConversation,
   } = useChatStore()
 
   const [error, setError] = useState<string | null>(null)
@@ -29,6 +32,17 @@ export function useConversation() {
     })
     const removeEnd = EventsOn('chat:stream:end', () => {
       setStreaming(false)
+      // 流式结束后更新当前会话的预览和时间
+      if (currentConversationId) {
+        const lastMsg = useChatStore.getState().messages
+        const lastAssistant = [...lastMsg].reverse().find((m) => m.role === 'assistant')
+        if (lastAssistant) {
+          updateConversation(currentConversationId, {
+            preview: lastAssistant.content.slice(0, 60),
+            updatedAt: Date.now(),
+          })
+        }
+      }
     })
     const removeError = EventsOn('chat:stream:error', (err: string) => {
       setLastMessageError(err)
@@ -45,7 +59,7 @@ export function useConversation() {
       removeError()
       removeInterrupted()
     }
-  }, [appendToLastMessage, setLastMessageError, abortLastMessage, setStreaming])
+  }, [appendToLastMessage, setLastMessageError, abortLastMessage, setStreaming, currentConversationId, updateConversation])
 
   const sendMessage = useCallback(
     async (content: string) => {
@@ -58,7 +72,14 @@ export function useConversation() {
       if (!convId) {
         try {
           convId = await wails.createConversation()
-          setConversationId(convId)
+          const newConv = {
+            id: convId,
+            title: '新对话',
+            updatedAt: Date.now(),
+            unread: 0,
+          }
+          addConversation(newConv)
+          selectConversation(convId)
         } catch (e) {
           setError('创建会话失败')
           return
@@ -73,6 +94,12 @@ export function useConversation() {
         timestamp: Date.now(),
       }
       addMessage(userMsg)
+
+      // 更新会话 preview
+      updateConversation(convId, {
+        preview: content.trim().slice(0, 60),
+        updatedAt: Date.now(),
+      })
 
       // 添加空的 AI 消息占位
       const aiMsgId = `msg_${Date.now()}_ai`
@@ -123,6 +150,9 @@ export function useConversation() {
       setLastMessageError,
       setStreaming,
       setConversationId,
+      addConversation,
+      selectConversation,
+      updateConversation,
       wails,
     ]
   )
@@ -157,13 +187,19 @@ export function useConversation() {
   const startNewConversation = useCallback(async () => {
     try {
       const id = await wails.createConversation()
-      setConversationId(id)
-      useChatStore.setState({ messages: [] })
+      const newConv = {
+        id,
+        title: '新对话',
+        updatedAt: Date.now(),
+        unread: 0,
+      }
+      addConversation(newConv)
+      selectConversation(id)
       setError(null)
     } catch (e) {
       setError('创建新会话失败')
     }
-  }, [wails, setConversationId])
+  }, [wails, addConversation, selectConversation])
 
   return {
     messages,
