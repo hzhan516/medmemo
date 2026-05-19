@@ -47,6 +47,10 @@ export function useWails() {
     return await WailsApp.CheckEmergency(text)
   }, [])
 
+  const generateTitle = useCallback(async (convId: string, userMessage: string): Promise<void> => {
+    return await WailsApp.GenerateTitle(convId, userMessage)
+  }, [])
+
   return {
     sendMessage,
     sendMessageStream,
@@ -55,5 +59,6 @@ export function useWails() {
     createConversation,
     getModels,
     checkEmergency,
+    generateTitle,
   }
 }

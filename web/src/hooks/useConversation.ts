@@ -52,12 +52,16 @@ export function useConversation() {
       abortLastMessage()
       setStreaming(false)
     })
+    const removeTitle = EventsOn('chat:title:generated', (payload: { conv_id: string; title: string }) => {
+      updateConversation(payload.conv_id, { title: payload.title })
+    })
 
     return () => {
       removeToken()
       removeEnd()
       removeError()
       removeInterrupted()
+      removeTitle()
     }
   }, [appendToLastMessage, setLastMessageError, abortLastMessage, setStreaming, currentConversationId, updateConversation])
 
@@ -135,6 +139,14 @@ export function useConversation() {
           messages: [...history, { role: 'user', content: content.trim() }],
           model: 'kimi-lite',
         })
+
+        // 首条用户消息后异步生成标题（不阻塞流式输出）
+        const isFirstMessage = messages.filter((m) => m.role === 'user').length === 0
+        if (isFirstMessage) {
+          wails.generateTitle(convId, content.trim()).catch(() => {
+            // 标题生成失败静默处理，不影响对话流程
+          })
+        }
       } catch (e) {
         setLastMessageError(String(e))
         setStreaming(false)

@@ -104,4 +104,5 @@ func (c *DefaultComplianceChecker) Check(ctx context.Context, text string) (*Com
 var ApplicationSet = wire.NewSet(
 	NewChatOrchestrator,
 	NewDefaultComplianceChecker,
+	NewTitleGenerator,
 )

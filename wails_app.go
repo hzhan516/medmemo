@@ -25,6 +25,7 @@ type WailsApp struct {
 	config           *entity.AppConfig
 	convRepo         port.ConversationRepository
 	msgRepo          port.MessageRepository
+	titleGen         *usecase.TitleGenerator
 	streamMu         sync.Mutex
 	streamCancel     context.CancelFunc
 }
@@ -36,6 +37,7 @@ func NewWailsApp(
 	cfg *entity.AppConfig,
 	convRepo port.ConversationRepository,
 	msgRepo port.MessageRepository,
+	titleGen *usecase.TitleGenerator,
 ) *WailsApp {
 	return &WailsApp{
 		chatOrchestrator: chat,
@@ -43,6 +45,7 @@ func NewWailsApp(
 		config:           cfg,
 		convRepo:         convRepo,
 		msgRepo:          msgRepo,
+		titleGen:         titleGen,
 	}
 }
 
@@ -265,6 +268,36 @@ func (a *WailsApp) CheckEmergency(text string) (*EmergencyResult, error) {
 		Message: "",
 		Action:  "",
 	}, nil
+}
+
+// GenerateTitle 异步生成会话标题，通过 Wails Events 推送结果。
+// 前端应在首条用户消息发送后调用此方法。
+func (a *WailsApp) GenerateTitle(convID string, userMessage string) {
+	go func() {
+		ctx, cancel := context.WithTimeout(a.ctx, 3*time.Second)
+		defer cancel()
+
+		title, err := a.titleGen.Generate(ctx, userMessage)
+		if err != nil {
+			// AI 生成失败或超时，降级到本地规则
+			title = usecase.FallbackTitle(userMessage)
+		}
+
+		// 持久化到数据库
+		if a.convRepo != nil {
+			_ = a.convRepo.Save(ctx, &entity.Conversation{
+				ID:        models.ConversationID(convID),
+				Title:     title,
+				UpdatedAt: time.Now(),
+			})
+		}
+
+		// 推送前端更新
+		runtime.EventsEmit(a.ctx, "chat:title:generated", map[string]string{
+			"conv_id": convID,
+			"title":   title,
+		})
+	}()
 }
 
 // ShowEmergencyDialog 触发紧急症状弹窗（供前端调用）。

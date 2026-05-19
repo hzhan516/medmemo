@@ -44,4 +44,6 @@ export function GetModels(): Promise<Array<ModelInfo>>;
 
 export function CheckEmergency(arg1: string): Promise<EmergencyResult>;
 
+export function GenerateTitle(arg1: string, arg2: string): Promise<void>;
+
 export function ShowEmergencyDialog(arg1: string, arg2: string): Promise<void>;

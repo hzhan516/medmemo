@@ -29,6 +29,10 @@ export function CheckEmergency(arg1) {
   return window['go']['main']['WailsApp']['CheckEmergency'](arg1);
 }
 
+export function GenerateTitle(arg1, arg2) {
+  return window['go']['main']['WailsApp']['GenerateTitle'](arg1, arg2);
+}
+
 export function ShowEmergencyDialog(arg1, arg2) {
   return window['go']['main']['WailsApp']['ShowEmergencyDialog'](arg1, arg2);
 }
