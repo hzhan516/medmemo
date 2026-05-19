@@ -4,8 +4,11 @@ package onnx
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/google/wire"
@@ -45,10 +48,42 @@ func (w *NERWorker) Predict(ctx context.Context, text string) ([]EntitySpan, err
 				Label: normalizeLabel(e.Entity),
 				Start: int(e.Start),
 				End:   int(e.End),
+				Score: float32(e.Score),
 			})
 		}
 	}
 	return spans, nil
+}
+
+// verifyModelSHA256 对 model.onnx 执行可选的 SHA-256 完整性校验。
+// 若同目录下存在 .sha256 文件则读取并比对；不存在则跳过校验。
+func verifyModelSHA256(modelFile string) error {
+	sumFile := modelFile + ".sha256"
+	expected, err := os.ReadFile(sumFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // 无校验文件，跳过
+		}
+		return fmt.Errorf("read sha256 file failed: %w", err)
+	}
+
+	data, err := os.ReadFile(modelFile)
+	if err != nil {
+		return fmt.Errorf("read model file failed: %w", err)
+	}
+
+	hash := sha256.Sum256(data)
+	actual := hex.EncodeToString(hash[:])
+
+	// .sha256 文件格式可能是 "<hash>  <filename>" 或纯 hash
+	expectedStr := string(expected)
+	if idx := len(actual); idx <= len(expectedStr) {
+		expectedStr = expectedStr[:idx]
+	}
+	if actual != expectedStr {
+		return fmt.Errorf("SHA-256 mismatch: expected %s, got %s", expectedStr, actual)
+	}
+	return nil
 }
 
 // normalizeLabel 将 hugot BIO 标签（如 B-PER、I-PER）归一化为实体类型（PER）。
@@ -65,6 +100,7 @@ type EntitySpan struct {
 	Label string // PER, ORG, DISEASE, DRUG 等
 	Start int
 	End   int
+	Score float32 // 置信度，范围 [0, 1]
 }
 
 // Engine ONNX 推理引擎，管理 Worker Pool 和任务分发。
@@ -116,6 +152,12 @@ func NewEngine(cfg EngineConfig) (*Engine, error) {
 	// 检查模型目录是否存在（包含 model.onnx 和 tokenizer.json）
 	if _, err := os.Stat(cfg.ModelPath); os.IsNotExist(err) {
 		return e, nil // 降级：模型未下载，不报错
+	}
+
+	// 可选 SHA-256 校验：若存在 .sha256 文件则校验模型完整性
+	modelFile := filepath.Join(cfg.ModelPath, "model.onnx")
+	if err := verifyModelSHA256(modelFile); err != nil {
+		return e, nil // 降级：校验失败，不报错
 	}
 
 	// 初始化 hugot ORT Session（全局单例）

@@ -27,3 +27,8 @@ func PlatformLibPath(resourceDir string) (string, error) {
 	}
 	return filepath.Join(resourceDir, "lib", runtime.GOOS, libName), nil
 }
+
+// DefaultModelPath 返回默认 NER 模型目录路径。
+func DefaultModelPath(resourceDir string) string {
+	return filepath.Join(resourceDir, "models", "distilbert-ner")
+}

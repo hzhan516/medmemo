@@ -57,6 +57,10 @@ coverage.html
 /resources/lib/*/
 !/resources/lib/*/.gitkeep
 
+# === ONNX NER models (use scripts/build/download-model.*) ===
+/resources/models/*/
+!/resources/models/*/.gitkeep
+
 # === Temporary ===
 /tmp/
 *.tmp

@@ -2,6 +2,10 @@ package onnx
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -82,9 +86,51 @@ func TestEntitySpan_Struct(t *testing.T) {
 		Label: "PER",
 		Start: 0,
 		End:   6,
+		Score: 0.9876,
 	}
 	assert.Equal(t, "张三", span.Text)
 	assert.Equal(t, "PER", span.Label)
 	assert.Equal(t, 0, span.Start)
 	assert.Equal(t, 6, span.End)
+	assert.InDelta(t, float32(0.9876), span.Score, 0.0001)
+}
+
+// TestVerifyModelSHA256_Missing 验证无 .sha256 文件时跳过校验。
+func TestVerifyModelSHA256_Missing(t *testing.T) {
+	tmpDir := t.TempDir()
+	modelFile := filepath.Join(tmpDir, "model.onnx")
+	require.NoError(t, os.WriteFile(modelFile, []byte("dummy"), 0644))
+
+	err := verifyModelSHA256(modelFile)
+	assert.NoError(t, err, "无 .sha256 文件时应跳过校验")
+}
+
+// TestVerifyModelSHA256_Mismatch 验证 SHA-256 不匹配时返回错误。
+func TestVerifyModelSHA256_Mismatch(t *testing.T) {
+	tmpDir := t.TempDir()
+	modelFile := filepath.Join(tmpDir, "model.onnx")
+	shaFile := modelFile + ".sha256"
+
+	require.NoError(t, os.WriteFile(modelFile, []byte("dummy model data"), 0644))
+	require.NoError(t, os.WriteFile(shaFile, []byte("0000000000000000000000000000000000000000000000000000000000000000"), 0644))
+
+	err := verifyModelSHA256(modelFile)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "mismatch")
+}
+
+// TestVerifyModelSHA256_Valid 验证正确的 SHA-256 通过校验。
+func TestVerifyModelSHA256_Valid(t *testing.T) {
+	tmpDir := t.TempDir()
+	modelFile := filepath.Join(tmpDir, "model.onnx")
+	shaFile := modelFile + ".sha256"
+
+	data := []byte("valid model content for sha256 test")
+	require.NoError(t, os.WriteFile(modelFile, data, 0644))
+
+	hash := sha256.Sum256(data)
+	require.NoError(t, os.WriteFile(shaFile, []byte(hex.EncodeToString(hash[:])), 0644))
+
+	err := verifyModelSHA256(modelFile)
+	assert.NoError(t, err)
 }

@@ -21,6 +21,7 @@ const (
 	defaultEnableCloud     = true
 	defaultEnableAnalytics = false
 	defaultProviderType    = models.ProviderKimi
+	defaultModelDir        = "resources/models/distilbert-ner"
 )
 
 // Loader 配置加载器，负责从文件/环境变量/默认值加载配置。
@@ -43,6 +44,7 @@ type rawConfig struct {
 	ProviderType    string `json:"provider_type" yaml:"provider_type"`
 	APIEndpoint     string `json:"api_endpoint" yaml:"api_endpoint"`
 	APIKeyFile      string `json:"api_key_file" yaml:"api_key_file"`
+	ModelDir        string `json:"model_dir" yaml:"model_dir"`
 }
 
 // Load 加载并校验配置，返回领域层 AppConfig。
@@ -95,6 +97,7 @@ func (l *Loader) loadDefaults() *rawConfig {
 		ProviderType:    string(defaultProviderType),
 		APIEndpoint:     "",
 		APIKeyFile:      "",
+		ModelDir:        defaultModelDir,
 	}
 }
 
@@ -146,6 +149,9 @@ func (l *Loader) applyEnvOverrides(raw *rawConfig) {
 	if v := os.Getenv("MEDMEMO_API_KEY_FILE"); v != "" {
 		raw.APIKeyFile = v
 	}
+	if v := os.Getenv("MEDMEMO_MODEL_DIR"); v != "" {
+		raw.ModelDir = v
+	}
 }
 
 func (l *Loader) toDomain(raw *rawConfig) *entity.AppConfig {
@@ -154,6 +160,7 @@ func (l *Loader) toDomain(raw *rawConfig) *entity.AppConfig {
 		DefaultModel: raw.DefaultModel,
 		Language:     raw.Language,
 		APIEndpoint:  raw.APIEndpoint,
+		ModelDir:     expandTilde(raw.ModelDir),
 	}
 	if raw.EnableCloud != nil {
 		cfg.EnableCloud = *raw.EnableCloud
