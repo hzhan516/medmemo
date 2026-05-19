@@ -15,6 +15,7 @@ export function useConversation() {
     addMessage,
     appendToLastMessage,
     setLastMessageError,
+    setLastMessageWarnings,
     abortLastMessage,
     setStreaming,
     setConversationId,
@@ -52,6 +53,12 @@ export function useConversation() {
       abortLastMessage()
       setStreaming(false)
     })
+    const removeCompliance = EventsOn('chat:stream:compliance', (payload: { level: string; warning: string; notice: string }) => {
+      const warnings: string[] = [payload.level]
+      if (payload.warning) warnings.push(`WARNING:${payload.warning}`)
+      if (payload.notice) warnings.push(`NOTICE:${payload.notice}`)
+      setLastMessageWarnings(warnings)
+    })
     const removeTitle = EventsOn('chat:title:generated', (payload: { conv_id: string; title: string }) => {
       updateConversation(payload.conv_id, { title: payload.title })
     })
@@ -61,9 +68,10 @@ export function useConversation() {
       removeEnd()
       removeError()
       removeInterrupted()
+      removeCompliance()
       removeTitle()
     }
-  }, [appendToLastMessage, setLastMessageError, abortLastMessage, setStreaming, currentConversationId, updateConversation])
+  }, [appendToLastMessage, setLastMessageError, setLastMessageWarnings, abortLastMessage, setStreaming, currentConversationId, updateConversation])
 
   const sendMessage = useCallback(
     async (content: string) => {

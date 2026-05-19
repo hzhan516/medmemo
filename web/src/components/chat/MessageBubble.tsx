@@ -1,4 +1,4 @@
-import { User, Bot, AlertCircle, Copy, RotateCcw } from 'lucide-react'
+import { User, Bot, AlertCircle, Copy, RotateCcw, ShieldAlert, Info } from 'lucide-react'
 import type { ChatMessage } from '@/stores/chatStore'
 import { MarkdownRenderer } from '@/components/markdown/MarkdownRenderer'
 
@@ -12,9 +12,16 @@ interface MessageBubbleProps {
  * 用户消息：蓝色渐变，右侧对齐，圆角 16px。
  * AI 消息：白色/暗色背景，左侧对齐。
  * 系统提示：浅色背景，居中，13px 小字。
+ * 合规标记：L2_WARNING 橙色警告框，L3_NOTICE 蓝色提示条。
  */
 export function MessageBubble({ message, onRetry }: MessageBubbleProps) {
-  const { id, role, content, isStreaming, interrupted, error } = message
+  const { id, role, content, isStreaming, interrupted, error, warnings } = message
+
+  // 解析合规级别
+  const hasL2Warning = warnings?.some((w) => w === 'L2_WARNING')
+  const hasL3Notice = warnings?.some((w) => w === 'L3_NOTICE')
+  const l2WarningText = warnings?.find((w) => w.startsWith('WARNING:'))?.replace('WARNING:', '')
+  const l3NoticeText = warnings?.find((w) => w.startsWith('NOTICE:'))?.replace('NOTICE:', '')
 
   if (role === 'system') {
     return (
@@ -84,6 +91,17 @@ export function MessageBubble({ message, onRetry }: MessageBubbleProps) {
               </div>
             )}
 
+            {/* L2 警告框 */}
+            {hasL2Warning && (
+              <div className="flex items-start gap-2 mb-2 p-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-xs">
+                <ShieldAlert size={14} className="shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium">内容风险提示</p>
+                  <p className="opacity-80">{l2WarningText || "以上内容仅为信息参考，不能替代专业医疗诊断。"}</p>
+                </div>
+              </div>
+            )}
+
             <MarkdownRenderer content={content} />
 
             {/* 中断标记 */}
@@ -96,6 +114,14 @@ export function MessageBubble({ message, onRetry }: MessageBubbleProps) {
             {/* 流式光标 */}
             {isStreaming && content.length > 0 && (
               <span className="inline-block w-1.5 h-4 ml-0.5 bg-current opacity-50 animate-pulse" />
+            )}
+
+            {/* L3 提示条 */}
+            {hasL3Notice && (
+              <div className="flex items-start gap-2 mt-2 pt-2 border-t border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 text-xs">
+                <Info size={12} className="shrink-0 mt-0.5" />
+                <span>{l3NoticeText || "以上内容仅为健康科普信息，不能替代专业医疗诊断。"}</span>
+              </div>
             )}
 
             {/* 错误时的操作按钮 */}

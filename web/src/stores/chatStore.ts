@@ -8,6 +8,7 @@ export interface ChatMessage {
   isStreaming?: boolean
   interrupted?: boolean
   error?: string
+  warnings?: string[] // 合规检测标记：L2_WARNING / L3_NOTICE
 }
 
 export interface Conversation {
@@ -40,6 +41,7 @@ interface ChatState {
   abortLastMessage: () => void
   setStreaming: (streaming: boolean) => void
   clearMessages: () => void
+  setLastMessageWarnings: (warnings: string[]) => void
 
   setConversations: (conversations: Conversation[]) => void
   addConversation: (conversation: Conversation) => void
@@ -137,6 +139,17 @@ export const useChatStore = create<ChatState>((set) => ({
     }),
 
   setStreaming: (streaming) => set({ isStreaming: streaming }),
+
+  setLastMessageWarnings: (warnings) =>
+    set((state) => {
+      const msgs = [...state.messages]
+      if (msgs.length === 0) return state
+      const lastIdx = msgs.length - 1
+      const last = msgs[lastIdx]
+      if (last.role !== 'assistant') return state
+      msgs[lastIdx] = { ...last, warnings }
+      return { messages: msgs }
+    }),
 
   clearMessages: () => set({ messages: [], currentConversationId: null }),
 

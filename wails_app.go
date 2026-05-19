@@ -138,6 +138,16 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) error {
 	// 保存用户消息和 AI 回复
 	a.saveMessages(ctx, req.ConversationID, req.Messages, fullReply.String())
 
+	// 流式结束后对完整内容做一次合规检测（MVP 简化策略）
+	compResult, compErr := a.chatOrchestrator.CheckCompliance(ctx, fullReply.String())
+	if compErr == nil && compResult.Level != "L4_NORMAL" {
+		runtime.EventsEmit(a.ctx, "chat:stream:compliance", map[string]string{
+			"level":   compResult.Level,
+			"warning": compResult.Warning,
+			"notice":  compResult.Notice,
+		})
+	}
+
 	runtime.EventsEmit(a.ctx, "chat:stream:end", nil)
 	return nil
 }

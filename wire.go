@@ -24,7 +24,7 @@ func InitializeApp() (*App, func(), error) {
 		usecase.NewMemoryRetriever,
 		wire.Bind(new(port.MemoryRepository), new(*repository.MemoryRepoSQLite)),
 		wire.Bind(new(port.SensitiveDetector), new(*detector.RuleDetector)),
-		wire.Bind(new(usecase.ComplianceChecker), new(*usecase.DefaultComplianceChecker)),
+		wire.Bind(new(usecase.ComplianceChecker), new(*usecase.RuleComplianceChecker)),
 		wire.Bind(new(port.ConversationRepository), new(*repository.ConversationRepoSQLite)),
 		wire.Bind(new(port.MessageRepository), new(*repository.MessageRepoSQLite)),
 		wire.Bind(new(port.DisclaimerRepository), new(*repository.DisclaimerRepoSQLite)),
