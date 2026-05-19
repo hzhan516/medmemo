@@ -53,6 +53,10 @@ coverage.html
 /resources/models/*.bin
 /resources/models/*.param
 
+# === ONNX Runtime dynamic libraries (use scripts/build/download-onnx.*) ===
+/resources/lib/*/
+!/resources/lib/*/.gitkeep
+
 # === Temporary ===
 /tmp/
 *.tmp
