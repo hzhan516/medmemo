@@ -6,14 +6,11 @@ package main
 import (
 	"github.com/google/wire"
 	"github.com/medmemo/medmemo/internal/adapters/ai"
+	"github.com/medmemo/medmemo/internal/adapters/detector"
 	"github.com/medmemo/medmemo/internal/adapters/repository"
-	"github.com/medmemo/medmemo/internal/application/pipeline"
+	"github.com/medmemo/medmemo/internal/application/port"
 	"github.com/medmemo/medmemo/internal/application/usecase"
 	"github.com/medmemo/medmemo/internal/infrastructure/config"
-	"github.com/medmemo/medmemo/internal/infrastructure/database"
-	"github.com/medmemo/medmemo/internal/infrastructure/network"
-	"github.com/medmemo/medmemo/internal/infrastructure/onnx"
-	"github.com/medmemo/medmemo/internal/infrastructure/secret"
 )
 
 // InitializeApp 通过 Wire 编译期依赖注入组装完整应用。
@@ -21,15 +18,17 @@ import (
 func InitializeApp() (*App, func(), error) {
 	wire.Build(
 		NewApp,
+		NewWailsApp,
 		usecase.ApplicationSet,
-		pipeline.PipelineSet,
-		ai.AIAdapterSet,
+		usecase.NewMemoryRetriever,
+		wire.Bind(new(port.MemoryRepository), new(*repository.MemoryRepoDuckDB)),
+		wire.Bind(new(port.SensitiveDetector), new(*detector.RuleDetector)),
+		wire.Bind(new(usecase.ComplianceChecker), new(*usecase.DefaultComplianceChecker)),
+		ai.ProviderSet,
 		repository.RepositorySet,
-		onnx.ONNXSet,
-		database.DatabaseSet,
+		detector.ProviderSet,
 		config.ConfigSet,
-		secret.SecretSet,
-		network.NetworkSet,
+		wire.Value(""),
 	)
 	return nil, nil, nil
 }

@@ -1,24 +1,29 @@
-import { useState } from 'react'
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { AppLayout } from '@/components/layout/AppLayout'
+import { ChatPage } from '@/pages/ChatPage'
+import { SettingsPage } from '@/pages/SettingsPage'
+import { AboutPage } from '@/pages/AboutPage'
+import { useTheme } from '@/hooks/useTheme'
 
+/**
+ * 根组件：全局主题初始化与 HashRouter 路由配置。
+ * 桌面端使用 HashRouter 避免无 server 场景下的 404 问题。
+ */
 function App() {
-  const [count, setCount] = useState(0)
+  useTheme()
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-4">
-      <h1 className="text-3xl font-bold mb-4">MedMemo</h1>
-      <p className="text-muted-foreground mb-6">你的私人健康记忆助手</p>
-      <div className="flex flex-col items-center gap-4">
-        <button
-          className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity"
-          onClick={() => setCount((c) => c + 1)}
-        >
-          count is {count}
-        </button>
-        <p className="text-sm text-muted-foreground">
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-    </div>
+    <HashRouter>
+      <Routes>
+        <Route element={<AppLayout />}>
+          <Route path="/chat" element={<ChatPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/about" element={<AboutPage />} />
+          <Route path="/" element={<Navigate to="/chat" replace />} />
+          <Route path="*" element={<Navigate to="/chat" replace />} />
+        </Route>
+      </Routes>
+    </HashRouter>
   )
 }
 

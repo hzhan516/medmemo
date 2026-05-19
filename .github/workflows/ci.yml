@@ -31,6 +31,9 @@ jobs:
       - name: Frontend lint
         run: cd web && npm run lint
 
+      - name: Frontend typecheck
+        run: cd web && npx tsc --noEmit
+
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v4
         with:
@@ -95,8 +98,11 @@ jobs:
       - name: Install frontend dependencies
         run: cd web && npm ci
 
+      - name: Frontend build check
+        run: cd web && npm run build
+
       - name: Build Linux binary
-        run: wails build -platform linux/amd64
+        run: wails build -platform linux/amd64 -tags webkit2_41
 
       - name: Check binary size
         run: |
@@ -107,6 +113,13 @@ jobs:
             exit 1
           fi
           echo "Binary size OK: $SIZE bytes"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: medmemo-linux-build
+          path: build/bin/
+          retention-days: 30
 
   cross-platform-build:
     name: Cross Platform Build

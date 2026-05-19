@@ -11,9 +11,8 @@ func ProviderFactory() port.LLMClient {
 	return nil
 }
 
-// AIAdapterSet 供 Wire 使用的 ProviderSet。
-var AIAdapterSet = wire.NewSet(
-	NewOpenAIAdapter,
-	NewLocalAdapter,
+// ProviderSet 供 Wire 使用的 ProviderSet。
+// 当前仅暴露 ProviderFactory，具体适配器构造待配置完善后接入。
+var ProviderSet = wire.NewSet(
 	ProviderFactory,
 )

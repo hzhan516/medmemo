@@ -4,12 +4,16 @@
 all: build
 
 # 开发模式（热重载）
+# Fedora 43+ 使用 webkit2gtk-4.1，需传递 -tags webkit2_41
 dev:
-	wails dev
+	cd web && npm install
+	wails dev -tags webkit2_41
 
 # 生产构建（当前平台）
+# 先手动构建前端，再调用 wails build（Wails v2.12 在 frontend.dir != frontend 时可能跳过前端构建）
 build:
-	wails build -clean
+	cd web && npm install && npm run build
+	wails build -clean -tags webkit2_41
 
 # 运行测试
 test:
@@ -29,7 +33,7 @@ lint:
 
 # 生成 Wire 依赖注入代码
 wire:
-	wire ./cmd/health-assistant
+	wire .
 
 # 安装开发依赖工具
 install-tools:
@@ -55,10 +59,13 @@ clean:
 
 # 交叉编译（需对应平台环境）
 build-darwin:
-	wails build -platform darwin/universal -clean
+	cd web && npm install && npm run build
+	wails build -platform darwin/universal -clean -tags webkit2_41
 
 build-windows:
-	wails build -platform windows/amd64 -clean
+	cd web && npm install && npm run build
+	wails build -platform windows/amd64 -clean -tags webkit2_41
 
 build-linux:
-	wails build -platform linux/amd64 -clean
+	cd web && npm install && npm run build
+	wails build -platform linux/amd64 -clean -tags webkit2_41

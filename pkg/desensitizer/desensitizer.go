@@ -58,6 +58,6 @@ func NewRuleEngine() *RuleEngine {
 
 // Process 执行规则匹配与替换。
 func (e *RuleEngine) Process(text string) (models.DeidentifyResult, error) {
-	// TODO(作者): 实现 Aho-Corasick 多模式匹配或 regexp 批量替换
+	// TODO(作者): 实现 Aho-Corasick 多模式匹配或 regexp 批量替换 [Issue#029]
 	return models.DeidentifyResult{OriginalText: text, SafeText: text}, nil
 }

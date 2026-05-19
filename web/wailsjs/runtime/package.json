@@ -1,0 +1,7 @@
+{
+  "name": "@wailsio/runtime",
+  "version": "2.12.0",
+  "description": "Wails v2 runtime bindings",
+  "main": "runtime.js",
+  "types": "runtime.d.ts"
+}

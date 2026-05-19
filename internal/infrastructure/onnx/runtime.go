@@ -18,7 +18,7 @@ type NERWorker struct {
 
 // NewNERWorker 创建推理 Worker。
 func NewNERWorker(id int, modelPath string) (*NERWorker, error) {
-	// TODO(作者): 加载 int8 量化 DistilBERT-ONNX 模型
+	// TODO(作者): 加载 int8 量化 DistilBERT-ONNX 模型 [Issue#026]
 	return &NERWorker{id: id}, nil
 }
 

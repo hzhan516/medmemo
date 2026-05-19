@@ -8,7 +8,7 @@ import (
 	"github.com/medmemo/medmemo/pkg/models"
 )
 
-// FamilyRepoKuzu 基于 Kùzǔ 图数据库的家族关系仓库实现。
+// FamilyRepoKuzu 基于 kùzǔ 图数据库的家族关系仓库实现。
 type FamilyRepoKuzu struct {
 	// TODO(作者): 接入 Kùzǔ Go 绑定 [Issue#016]
 }

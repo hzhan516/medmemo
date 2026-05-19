@@ -68,7 +68,22 @@ type ComplianceResult struct {
 	SafeText string
 }
 
+// DefaultComplianceChecker 是 ComplianceChecker 的默认占位实现，
+// 返回放行结果，待合规引擎完善后替换。
+type DefaultComplianceChecker struct{}
+
+// NewDefaultComplianceChecker 创建默认合规检查器。
+func NewDefaultComplianceChecker() *DefaultComplianceChecker {
+	return &DefaultComplianceChecker{}
+}
+
+// Check 执行合规检查，当前始终放行。
+func (c *DefaultComplianceChecker) Check(ctx context.Context, text string) (*ComplianceResult, error) {
+	return &ComplianceResult{Blocked: false, Level: "L4", SafeText: text}, nil
+}
+
 // ApplicationSet 供 Wire 使用的 ProviderSet。
 var ApplicationSet = wire.NewSet(
 	NewChatOrchestrator,
+	NewDefaultComplianceChecker,
 )

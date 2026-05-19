@@ -34,7 +34,13 @@ func (l *Loader) Load() (*entity.AppConfig, error) {
 	return cfg, nil
 }
 
+// LoadConfig 从 Loader 加载并返回 AppConfig，供 Wire 注入。
+func LoadConfig(loader *Loader) (*entity.AppConfig, error) {
+	return loader.Load()
+}
+
 // ConfigSet 供 Wire 使用的 ProviderSet。
 var ConfigSet = wire.NewSet(
 	NewLoader,
+	LoadConfig,
 )

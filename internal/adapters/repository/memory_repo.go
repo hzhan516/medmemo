@@ -13,7 +13,7 @@ import (
 
 // MemoryRepoDuckDB 基于 DuckDB 的记忆仓库实现。
 type MemoryRepoDuckDB struct {
-	db *DuckDBConnection // TODO(作者): 替换为 infrastructure/database 暴露的具体连接类型
+	db *DuckDBConnection // TODO(作者): 替换为 infrastructure/database 暴露的具体连接类型 [Issue#025]
 }
 
 // NewMemoryRepoDuckDB 构造函数。
