@@ -67,3 +67,4 @@ coverage.html
 *.bak
 /AGENTS.md
 /medmemo/
+/web/test-report/
