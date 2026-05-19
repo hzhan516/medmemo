@@ -8,10 +8,12 @@ import (
 	"github.com/medmemo/medmemo/internal/adapters/ai"
 	"github.com/medmemo/medmemo/internal/adapters/detector"
 	"github.com/medmemo/medmemo/internal/adapters/repository"
+	"github.com/medmemo/medmemo/internal/application/pipeline"
 	"github.com/medmemo/medmemo/internal/application/port"
 	"github.com/medmemo/medmemo/internal/application/usecase"
 	"github.com/medmemo/medmemo/internal/infrastructure/config"
 	"github.com/medmemo/medmemo/internal/infrastructure/database"
+	"github.com/medmemo/medmemo/internal/infrastructure/onnx"
 )
 
 // InitializeApp 通过 Wire 编译期依赖注入组装完整应用。
@@ -31,8 +33,13 @@ func InitializeApp() (*App, func(), error) {
 		ai.ProviderSet,
 		repository.RepositorySet,
 		detector.ProviderSet,
+		detector.ONNXNERSet,
+		pipeline.PipelineSet,
 		config.ConfigSet,
 		database.DatabaseSet,
+		onnx.ONNXSet,
+		NewEngineConfig,
+		wire.Bind(new(port.NERDetector), new(*detector.ONNXNERDetector)),
 		wire.Value(""),
 	)
 	return nil, nil, nil

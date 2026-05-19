@@ -4,7 +4,9 @@ package pipeline
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
+	"sort"
 
 	"github.com/google/wire"
 	"github.com/medmemo/medmemo/internal/application/port"
@@ -70,39 +72,173 @@ func (s *L1RuleStage) Process(ctx context.Context, input PipelineInput) (Pipelin
 	if err != nil {
 		return PipelineOutput{}, fmt.Errorf("L1 rule deidentify failed: %w", err)
 	}
-	// 将脱敏结果中的占位符映射存入 Metadata，供后续还原使用
 	if input.Metadata == nil {
 		input.Metadata = make(map[string]any)
 	}
+	// 保存原始文本供 L2 在原始文本上做 NER（避免 L1 占位符干扰模型上下文）
+	input.Metadata["original_text"] = input.Text
 	input.Metadata["l1_entities"] = result.Entities
 	input.Metadata["l1_placeholders"] = result.Placeholder
 	return PipelineOutput{Text: result.SafeText, Metadata: input.Metadata}, nil
 }
 
 // L2NERStage 二级 NER 模型脱敏阶段。
+// 基于 DistilBERT-ONNX 识别人名、地点、机构名，补充 L1 未覆盖的实体。
 type L2NERStage struct {
-	detector port.SensitiveDetector
+	detector port.NERDetector
 }
 
-func NewL2NERStage(det port.SensitiveDetector) *L2NERStage {
+// NewL2NERStage 创建 L2 NER 脱敏阶段。
+func NewL2NERStage(det port.NERDetector) *L2NERStage {
 	return &L2NERStage{detector: det}
 }
 
 func (s *L2NERStage) Process(ctx context.Context, input PipelineInput) (PipelineOutput, error) {
-	// TODO(作者): 调用 ONNX NER 模型检测并替换实体 [Issue#006]
-	return PipelineOutput{Text: input.Text, Metadata: input.Metadata}, nil
+	// 1. 可用性检查：NER 不可用时降级透传，不阻断流水线
+	if s.detector == nil || !s.detector.IsAvailable() {
+		return PipelineOutput{Text: input.Text, Metadata: input.Metadata}, nil
+	}
+
+	// 2. 获取原始文本（L1 存入 Metadata）
+	originalText, _ := input.Metadata["original_text"].(string)
+	if originalText == "" {
+		originalText = input.Text
+	}
+
+	// 3. 在原始文本上执行 NER 推理，避免 L1 占位符干扰模型上下文
+	entities, err := s.detector.Predict(ctx, originalText)
+	if err != nil {
+		// 降级：推理失败时不阻断流水线，直接透传 L1 结果
+		return PipelineOutput{Text: input.Text, Metadata: input.Metadata}, nil
+	}
+	if len(entities) == 0 {
+		return PipelineOutput{Text: input.Text, Metadata: input.Metadata}, nil
+	}
+
+	// 4. 获取 L1 实体，过滤与 L1 区域重叠的 NER 结果（L1 优先）
+	l1Entities, _ := input.Metadata["l1_entities"].([]models.SensitiveEntity)
+	entities = filterOverlappingEntities(entities, l1Entities)
+	if len(entities) == 0 {
+		return PipelineOutput{Text: input.Text, Metadata: input.Metadata}, nil
+	}
+
+	// 5. 偏移量映射：将原始文本中的 NER 位置映射到 L1 脱敏文本中的对应位置
+	for i := range entities {
+		entities[i].StartPos = mapOriginalToDeidPos(entities[i].StartPos, l1Entities)
+		entities[i].EndPos = mapOriginalToDeidPos(entities[i].EndPos, l1Entities)
+	}
+
+	// 6. 按 StartPos 降序排序，从后向前替换（避免偏移量混乱）
+	sort.Slice(entities, func(i, j int) bool {
+		return entities[i].StartPos > entities[j].StartPos
+	})
+
+	text := input.Text
+	for i, e := range entities {
+		hash := fmt.Sprintf("%x", sha256.Sum256([]byte(e.Text+fmt.Sprintf("_l2_%d", i))))[:8]
+		prefix := mapTypeToPlaceholderPrefix(e.Type)
+		placeholder := fmt.Sprintf("{{%s_%s}}", prefix, hash)
+
+		// 边界安全检查
+		if e.StartPos < 0 || e.EndPos > len(text) || e.StartPos >= e.EndPos {
+			continue
+		}
+		text = text[:e.StartPos] + placeholder + text[e.EndPos:]
+	}
+
+	// 7. 将 L2 实体记录存入 Metadata，供后续阶段或日志使用
+	input.Metadata["l2_entities"] = entities
+	return PipelineOutput{Text: text, Metadata: input.Metadata}, nil
 }
 
 // L3KeywordStage 三级关键词字典脱敏阶段。
 type L3KeywordStage struct{}
+
+// NewL3KeywordStage 创建 L3 关键词字典脱敏阶段。
+func NewL3KeywordStage() *L3KeywordStage {
+	return &L3KeywordStage{}
+}
 
 func (s *L3KeywordStage) Process(ctx context.Context, input PipelineInput) (PipelineOutput, error) {
 	// TODO(作者): 接入 Trie 树前缀匹配字典 [Issue#007]
 	return PipelineOutput{Text: input.Text, Metadata: input.Metadata}, nil
 }
 
+// --- 辅助函数 ---
+
+// filterOverlappingEntities 过滤掉与 L1 实体区域重叠的 NER 结果。
+// L1 规则引擎对身份证/手机号等有精确 regexp 验证，误报率低于 NER，
+// 因此重叠时 L1 优先，避免同一文本被重复替换。
+func filterOverlappingEntities(nerEntities, l1Entities []models.SensitiveEntity) []models.SensitiveEntity {
+	if len(l1Entities) == 0 {
+		return nerEntities
+	}
+	var filtered []models.SensitiveEntity
+	for _, ne := range nerEntities {
+		overlap := false
+		for _, le := range l1Entities {
+			if ne.StartPos < le.EndPos && ne.EndPos > le.StartPos {
+				overlap = true
+				break
+			}
+		}
+		if !overlap {
+			filtered = append(filtered, ne)
+		}
+	}
+	return filtered
+}
+
+// mapOriginalToDeidPos 将原始文本中的位置映射到 L1 脱敏文本中的对应位置。
+// 遍历 L1 实体（按 StartPos 升序），维护累积偏移量 delta，
+// 即每个 L1 实体替换为占位符后带来的长度变化总和。
+func mapOriginalToDeidPos(origPos int, l1Entities []models.SensitiveEntity) int {
+	if len(l1Entities) == 0 {
+		return origPos
+	}
+	// 按 StartPos 升序排序，确保 delta 累积正确
+	sorted := make([]models.SensitiveEntity, len(l1Entities))
+	copy(sorted, l1Entities)
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].StartPos < sorted[j].StartPos
+	})
+
+	delta := 0
+	for _, e := range sorted {
+		if origPos <= e.StartPos {
+			break
+		}
+		if e.Placeholder != "" {
+			delta += len(e.Placeholder) - (e.EndPos - e.StartPos)
+		}
+	}
+	return origPos + delta
+}
+
+// mapTypeToPlaceholderPrefix 将实体类型映射为占位符前缀。
+func mapTypeToPlaceholderPrefix(entityType string) string {
+	switch entityType {
+	case "姓名":
+		return "per"
+	case "地点":
+		return "loc"
+	case "机构名":
+		return "org"
+	default:
+		return "ent"
+	}
+}
+
+// NewDefaultDeidentifyPipeline 创建默认的三级脱敏流水线（L1→L2→L3），
+// 供 Wire 注入使用，避免变参接口带来的多绑定问题。
+func NewDefaultDeidentifyPipeline(l1 *L1RuleStage, l2 *L2NERStage, l3 *L3KeywordStage) *DeidentifyPipeline {
+	return NewDeidentifyPipeline(l1, l2, l3)
+}
+
 // PipelineSet 供 Wire 使用的 ProviderSet。
 var PipelineSet = wire.NewSet(
-	NewDeidentifyPipeline,
+	NewDefaultDeidentifyPipeline,
+	NewL1RuleStage,
 	NewL2NERStage,
+	NewL3KeywordStage,
 )

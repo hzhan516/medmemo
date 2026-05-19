@@ -196,11 +196,12 @@ func (e *RuleEngine) Process(text string) (models.DeidentifyResult, error) {
 		placeholder := fmt.Sprintf("{{%s_%s}}", m.rule.config.Placeholder, hash)
 
 		entity := models.SensitiveEntity{
-			Text:     m.text,
-			Type:     m.rule.config.EntityType,
-			Level:    m.rule.level,
-			StartPos: m.start,
-			EndPos:   m.end,
+			Text:        m.text,
+			Type:        m.rule.config.EntityType,
+			Level:       m.rule.level,
+			StartPos:    m.start,
+			EndPos:      m.end,
+			Placeholder: placeholder,
 		}
 		result.Entities = append(result.Entities, entity)
 

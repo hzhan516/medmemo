@@ -21,6 +21,15 @@ type LLMClient interface {
 	CheckAvailability(ctx context.Context) (bool, string)
 }
 
+// NERDetector 定义命名实体识别检测端口。
+// 实现者基于 DistilBERT-ONNX 等深度学习模型识别人名、地点、机构名等实体。
+type NERDetector interface {
+	// Predict 对文本执行 NER 推理，返回识别到的实体列表。
+	Predict(ctx context.Context, text string) ([]models.SensitiveEntity, error)
+	// IsAvailable 返回 NER 引擎是否已就绪（模型、动态库、Session 均初始化成功）。
+	IsAvailable() bool
+}
+
 // RecordStore 定义记录存储端口（适配多种底层存储）。
 type RecordStore interface {
 	// Save 持久化键值记录。
