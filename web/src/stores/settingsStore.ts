@@ -2,15 +2,16 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
 type Theme = 'light' | 'dark' | 'system'
+type ComplianceBarMode = 'always' | 'first' | 'off'
 
 interface SettingsState {
   theme: Theme
   selectedModel: string
-  complianceNoticeDismissed: boolean
+  complianceBarMode: ComplianceBarMode
 
   setTheme: (theme: Theme) => void
   setSelectedModel: (model: string) => void
-  dismissComplianceNotice: () => void
+  setComplianceBarMode: (mode: ComplianceBarMode) => void
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -18,11 +19,11 @@ export const useSettingsStore = create<SettingsState>()(
     (set) => ({
       theme: 'system',
       selectedModel: 'kimi-lite',
-      complianceNoticeDismissed: false,
+      complianceBarMode: 'always',
 
       setTheme: (theme) => set({ theme }),
       setSelectedModel: (model) => set({ selectedModel: model }),
-      dismissComplianceNotice: () => set({ complianceNoticeDismissed: true }),
+      setComplianceBarMode: (mode) => set({ complianceBarMode: mode }),
     }),
     {
       name: 'medmemo-settings',

@@ -30,6 +30,7 @@ interface ChatState {
   searchQuery: string
   lastDeleted: Conversation | null
   showTrash: boolean
+  dismissedBarSessions: string[] // 已手动关闭合规提示条的会话 ID 列表
 
   setConversationId: (id: string | null) => void
   addMessage: (message: ChatMessage) => void
@@ -54,6 +55,8 @@ interface ChatState {
   setShowTrash: (show: boolean) => void
   selectConversation: (id: string | null) => void
   cleanupOldDeleted: () => void
+
+  dismissComplianceBarForSession: (sessionId: string) => void
 }
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000
@@ -69,6 +72,7 @@ export const useChatStore = create<ChatState>((set) => ({
   searchQuery: '',
   lastDeleted: null,
   showTrash: false,
+  dismissedBarSessions: [],
 
   setConversationId: (id) => set({ currentConversationId: id }),
 
@@ -242,5 +246,12 @@ export const useChatStore = create<ChatState>((set) => ({
       deletedConversations: state.deletedConversations.filter(
         (c) => !c.deletedAt || Date.now() - c.deletedAt < THIRTY_DAYS_MS
       ),
+    })),
+
+  dismissComplianceBarForSession: (sessionId) =>
+    set((state) => ({
+      dismissedBarSessions: state.dismissedBarSessions.includes(sessionId)
+        ? state.dismissedBarSessions
+        : [...state.dismissedBarSessions, sessionId],
     })),
 }))

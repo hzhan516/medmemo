@@ -3,6 +3,7 @@ import { ChatContainer } from '@/components/chat/ChatContainer'
 import { ChatInput } from '@/components/chat/ChatInput'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Header } from '@/components/layout/Header'
+import { ComplianceBar } from '@/components/ComplianceBar'
 import { useConversation } from '@/hooks/useConversation'
 import { useChatStore } from '@/stores/chatStore'
 import { Undo2 } from 'lucide-react'
@@ -75,6 +76,8 @@ export function ChatPage() {
 
       <div className="flex-1 flex flex-col min-w-0 relative">
         <Header />
+
+        <ComplianceBar conversationId={currentConversationId} />
 
         <ChatContainer
           messages={messages}
