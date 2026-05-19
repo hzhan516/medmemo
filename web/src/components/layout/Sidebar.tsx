@@ -3,8 +3,16 @@ import { Plus, PanelLeftClose, PanelLeft } from 'lucide-react'
 import { SidebarItem } from './SidebarItem'
 import { ResizableHandle } from './ResizableHandle'
 
+interface ConversationItem {
+  id: string
+  title: string
+  preview?: string
+  timestamp?: string
+  unread?: number
+}
+
 interface SidebarProps {
-  conversations: Array<{ id: string; title: string }>
+  conversations: ConversationItem[]
   activeId?: string | null
   onSelect?: (id: string) => void
   onNewConversation?: () => void
@@ -110,6 +118,9 @@ export function Sidebar({
               key={conv.id}
               id={conv.id}
               title={conv.title}
+              preview={conv.preview}
+              timestamp={conv.timestamp}
+              unread={conv.unread}
               isActive={conv.id === activeId}
               onClick={() => onSelect?.(conv.id)}
               onRename={onRename}

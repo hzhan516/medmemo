@@ -20,10 +20,22 @@ export function ChatPage() {
 
   // 会话列表（占位，后续对接后端 API）
   const [conversations, setConversations] = useState<
-    Array<{ id: string; title: string }>
+    Array<{ id: string; title: string; preview?: string; timestamp?: string; unread?: number }>
   >([
-    { id: 'demo-1', title: '头痛和发热咨询' },
-    { id: 'demo-2', title: '家族糖尿病史' },
+    {
+      id: 'demo-1',
+      title: '头痛和发热咨询',
+      preview: '最近三天一直头痛，伴有低烧...',
+      timestamp: '10:23',
+      unread: 2,
+    },
+    {
+      id: 'demo-2',
+      title: '家族糖尿病史',
+      preview: '我父亲和祖父都有糖尿病...',
+      timestamp: '昨天',
+      unread: 0,
+    },
   ])
 
   const handleNewConversation = useCallback(async () => {
@@ -60,7 +72,11 @@ export function ChatPage() {
       <div className="flex-1 flex flex-col min-w-0">
         <Header />
 
-        <ChatContainer messages={messages} isStreaming={isStreaming} />
+        <ChatContainer
+          messages={messages}
+          isStreaming={isStreaming}
+          onStartNewConversation={handleNewConversation}
+        />
 
         {error && (
           <div className="shrink-0 px-4 py-2 bg-destructive/10 text-destructive text-xs text-center">

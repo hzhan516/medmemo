@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/wire"
 	"github.com/medmemo/medmemo/internal/domain/entity"
+	"github.com/medmemo/medmemo/pkg/models"
 )
 
 // Loader 配置加载器，负责从文件/环境变量/默认值加载配置。
@@ -27,6 +28,8 @@ func (l *Loader) Load() (*entity.AppConfig, error) {
 		Language:        "zh-CN",
 		EnableCloud:     true,
 		EnableAnalytics: false,
+		ProviderType:    models.ProviderKimi,
+		APIEndpoint:     "",
 	}
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("config validation failed: %w", err)

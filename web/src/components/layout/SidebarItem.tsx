@@ -4,6 +4,9 @@ import { useState } from 'react'
 interface SidebarItemProps {
   id: string
   title: string
+  preview?: string
+  timestamp?: string
+  unread?: number
   isActive?: boolean
   onClick?: () => void
   onRename?: (id: string, newTitle: string) => void
@@ -16,6 +19,9 @@ interface SidebarItemProps {
 export function SidebarItem({
   id,
   title,
+  preview,
+  timestamp,
+  unread,
   isActive = false,
   onClick,
   onRename,
@@ -50,7 +56,7 @@ export function SidebarItem({
       `}
       onClick={onClick}
     >
-      <MessageSquare size={16} className="shrink-0" />
+      <MessageSquare size={16} className="shrink-0 mt-0.5" />
 
       {isEditing ? (
         <input
@@ -69,7 +75,24 @@ export function SidebarItem({
           onClick={(e) => e.stopPropagation()}
         />
       ) : (
-        <span className="flex-1 truncate">{title || '新对话'}</span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2">
+            <span className="truncate text-sm font-medium">{title || '新对话'}</span>
+            {timestamp && (
+              <span className="text-[10px] text-muted-foreground shrink-0">{timestamp}</span>
+            )}
+          </div>
+          {preview && (
+            <div className="flex items-center justify-between gap-2 mt-0.5">
+              <span className="truncate text-xs text-muted-foreground">{preview}</span>
+              {unread !== undefined && unread > 0 && (
+                <span className="shrink-0 min-w-[18px] h-[18px] px-1.5 rounded-full bg-primary text-primary-foreground text-[10px] font-medium flex items-center justify-center">
+                  {unread > 99 ? '99+' : unread}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
       {!isEditing && (

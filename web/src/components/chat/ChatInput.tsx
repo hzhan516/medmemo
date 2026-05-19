@@ -9,7 +9,7 @@ interface ChatInputProps {
 
 /**
  * 底部聊天输入区域。
- * 最小高度 120px，最大 300px，支持自动扩展。
+ * 最小高度 56px，最大 120px，支持自动扩展。
  * 快捷键：Enter 发送、Shift+Enter 换行、Escape 清空。
  * 空输入框时按 Up Arrow 可编辑上一条消息 [Issue#032]。
  */
@@ -65,7 +65,7 @@ export function ChatInput({
             placeholder={placeholder}
             rows={1}
             className="
-              w-full min-h-[48px] max-h-[220px] resize-none
+              w-full min-h-[56px] max-h-[120px] resize-none
               rounded-xl border border-input bg-background px-4 py-3 pr-10
               text-sm placeholder:text-muted-foreground
               focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent

@@ -2,17 +2,18 @@ import { useEffect, useRef } from 'react'
 import { MessageBubble } from './MessageBubble'
 import { TypingIndicator } from './TypingIndicator'
 import type { ChatMessage } from '@/stores/chatStore'
-import { Bot } from 'lucide-react'
+import { Bot, Plus } from 'lucide-react'
 
 interface ChatContainerProps {
   messages: ChatMessage[]
   isStreaming: boolean
+  onStartNewConversation?: () => void
 }
 
 /**
  * 消息列表滚动容器，自动滚动到底部。
  */
-export function ChatContainer({ messages, isStreaming }: ChatContainerProps) {
+export function ChatContainer({ messages, isStreaming, onStartNewConversation }: ChatContainerProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -28,13 +29,22 @@ export function ChatContainer({ messages, isStreaming }: ChatContainerProps) {
               <Bot size={32} className="text-accent-foreground" />
             </div>
             <h2 className="text-lg font-medium mb-2">MedMemo 健康助手</h2>
-            <p className="text-sm text-center max-w-sm">
+            <p className="text-sm text-center max-w-sm mb-4">
               我是你的私人健康记忆助手。我可以帮你了解症状、推荐科室、管理家族健康档案。
               <br />
               <span className="text-xs opacity-70 mt-1 block">
                 请注意：我不提供医疗诊断或治疗建议。
               </span>
             </p>
+            {onStartNewConversation && (
+              <button
+                onClick={onStartNewConversation}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+              >
+                <Plus size={16} />
+                新建对话
+              </button>
+            )}
           </div>
         )}
 

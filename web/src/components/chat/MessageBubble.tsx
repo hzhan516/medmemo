@@ -1,5 +1,6 @@
 import { User, Bot, AlertCircle } from 'lucide-react'
 import type { ChatMessage } from '@/stores/chatStore'
+import { MarkdownRenderer } from '@/components/markdown/MarkdownRenderer'
 
 interface MessageBubbleProps {
   message: ChatMessage
@@ -54,12 +55,21 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           }
         `}
       >
-        <div className="whitespace-pre-wrap break-words">
-          {content}
-          {isStreaming && (
-            <span className="inline-block w-1.5 h-4 ml-0.5 bg-current opacity-50 animate-pulse" />
-          )}
-        </div>
+        {isUser ? (
+          <div className="whitespace-pre-wrap break-words">
+            {content}
+            {isStreaming && (
+              <span className="inline-block w-1.5 h-4 ml-0.5 bg-current opacity-50 animate-pulse" />
+            )}
+          </div>
+        ) : (
+          <div className="break-words">
+            <MarkdownRenderer content={content} />
+            {isStreaming && content.length > 0 && (
+              <span className="inline-block w-1.5 h-4 ml-0.5 bg-current opacity-50 animate-pulse" />
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
