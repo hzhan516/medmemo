@@ -1,0 +1,11 @@
+{
+  "name": "bank_card",
+  "entity_type": "银行卡号",
+  "patterns": [
+    "\\b(\\d{16}|\\d{17}|\\d{18}|\\d{19})\\b"
+  ],
+  "keywords": [],
+  "min_digits": 16,
+  "level": "P3",
+  "placeholder": "BANK_CARD"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "id_card",
+  "entity_type": "身份证号",
+  "patterns": [
+    "\\b(\\d{15}|\\d{17}[\\dXx])\\b"
+  ],
+  "keywords": [],
+  "min_digits": 15,
+  "level": "P3",
+  "placeholder": "ID_CARD"
+}

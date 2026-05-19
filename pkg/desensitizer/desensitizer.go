@@ -1,20 +1,25 @@
 // Package desensitizer 提供公共的脱敏算法工具包。
 // 不依赖任何 internal/ 子包，可被外部模块引用。
 //
-// 当前实现基于 regexp 顺序匹配，覆盖常见 PII 类型：
+// L1 规则引擎采用 Aho-Corasick 预筛选 + Regexp 精确验证的混合架构：
+//   - AC 自动机扫描特征关键词（如 @、http://），快速激活相关规则
+//   - 数字序列扫描为无特征关键词的规则（身份证、银行卡）做二次激活
+//   - 仅在激活的规则上执行 regexp，大幅减少全文本扫描次数
+//
+// 覆盖实体类型：
 //   - 身份证号（15/18 位）
 //   - 大陆手机号（11 位）
 //   - 银行卡号（16-19 位）
 //   - 邮箱地址
 //   - URL
 //
-// 性能预算：单条文本 <1ms（regexp 实现，待后续升级为 Aho-Corasick）。
+// 性能预算：单条文本 <1ms（AC 预筛选 + regexp 精确验证）。
 package desensitizer
 
 import (
 	"crypto/sha256"
 	"fmt"
-	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/medmemo/medmemo/pkg/models"
@@ -48,65 +53,45 @@ func (p *Pipeline) Execute(text string) (models.DeidentifyResult, error) {
 	return result, nil
 }
 
-// RuleEngine 基于正则规则的一级脱敏引擎（L1）。
-// 延迟 <1ms，覆盖：身份证、手机号、银行卡、邮箱、URL。
+// RuleEngine 基于规则的一级脱敏引擎（L1）。
+// 采用 Aho-Corasick 多模式预筛选 + Regexp 精确验证的混合架构，
+// 时间复杂度接近 O(n)，覆盖：身份证、手机号、银行卡、邮箱、URL。
 type RuleEngine struct {
-	rules []rule
+	rules []compiledRule
+	ac    *AhoCorasick
 }
 
-type rule struct {
-	name        string
-	pattern     *regexp.Regexp
-	entityType  string
-	level       models.SensitivityLevel
-	placeholder string
+// matchInfo 记录一次 regexp 匹配的结果。
+type matchInfo struct {
+	rule  compiledRule
+	start int
+	end   int
+	text  string
 }
 
-// NewRuleEngine 初始化规则脱敏引擎，内置常用正则规则。
+// NewRuleEngine 初始化规则脱敏引擎，加载外置规则并构建 AC 自动机。
+// 规则加载失败时降级返回空引擎（所有文本直接放行，不阻断业务）。
 func NewRuleEngine() *RuleEngine {
-	return &RuleEngine{
-		rules: []rule{
-			{
-				name:        "id_card",
-				pattern:     regexp.MustCompile(`\b(\d{15}|\d{17}[\dXx])\b`),
-				entityType:  "身份证号",
-				level:       models.P3Confidential,
-				placeholder: "ID_CARD",
-			},
-			{
-				name:        "phone",
-				pattern:     regexp.MustCompile(`(?:(?:\+?86)?1[3-9]\d{9}|\b1[3-9]\d{9}\b)`),
-				entityType:  "手机号",
-				level:       models.P3Confidential,
-				placeholder: "PHONE",
-			},
-			{
-				name:        "bank_card",
-				pattern:     regexp.MustCompile(`\b(\d{16}|\d{17}|\d{18}|\d{19})\b`),
-				entityType:  "银行卡号",
-				level:       models.P3Confidential,
-				placeholder: "BANK_CARD",
-			},
-			{
-				name:        "email",
-				pattern:     regexp.MustCompile(`[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`),
-				entityType:  "邮箱",
-				level:       models.P2Internal,
-				placeholder: "EMAIL",
-			},
-			{
-				name:        "url",
-				pattern:     regexp.MustCompile(`https?://[^\s<>"{}|\^\[\]]+`),
-				entityType:  "URL",
-				level:       models.P2Internal,
-				placeholder: "URL",
-			},
-		},
+	rules, err := loadDefaultRules()
+	if err != nil {
+		// 降级：规则加载失败时返回空规则引擎，确保调用方不 panic
+		return &RuleEngine{rules: []compiledRule{}}
 	}
+
+	var keywords []string
+	for _, r := range rules {
+		keywords = append(keywords, r.config.Keywords...)
+	}
+	var ac *AhoCorasick
+	if len(keywords) > 0 {
+		ac = NewAhoCorasick(keywords)
+	}
+
+	return &RuleEngine{rules: rules, ac: ac}
 }
 
 // Process 执行规则匹配与替换。
-// 顺序遍历规则，对每个匹配项生成占位符并记录映射关系。
+// 流程：AC 预筛选 → 数字扫描 → regexp 精确匹配 → 去重 → 从后向前替换。
 func (e *RuleEngine) Process(text string) (models.DeidentifyResult, error) {
 	result := models.DeidentifyResult{
 		OriginalText: text,
@@ -115,44 +100,146 @@ func (e *RuleEngine) Process(text string) (models.DeidentifyResult, error) {
 		Placeholder:  make(map[string]string),
 	}
 
-	// 由于多个规则可能重叠，采用逐规则处理、维护偏移量的策略
-	offset := 0
+	if len(e.rules) == 0 || text == "" {
+		return result, nil
+	}
+
+	// 确定哪些规则需要执行 regexp
+	ruleActive := make(map[string]bool)
 	for _, r := range e.rules {
-		matches := r.pattern.FindAllStringIndex(result.SafeText, -1)
-		if matches == nil {
-			continue
-		}
+		// 无关键词的规则默认激活（后续通过数字扫描二次判断）
+		ruleActive[r.config.Name] = len(r.config.Keywords) == 0
+	}
 
-		// 从后向前替换，避免偏移量混乱
-		for i := len(matches) - 1; i >= 0; i-- {
-			m := matches[i]
-			matchedText := result.SafeText[m[0]:m[1]]
-
-			// 生成唯一占位符：{{TYPE_HASH}}
-			hash := fmt.Sprintf("%x", sha256.Sum256([]byte(matchedText+fmt.Sprintf("_%d_%d", m[0], m[1]))))[:8]
-			placeholder := fmt.Sprintf("{{%s_%s}}", r.placeholder, hash)
-
-			// 记录实体信息
-			entity := models.SensitiveEntity{
-				Text:     matchedText,
-				Type:     r.entityType,
-				Level:    r.level,
-				StartPos: m[0] + offset,
-				EndPos:   m[1] + offset,
+	// AC 预筛选：扫描特征关键词，激活对应规则
+	if e.ac != nil {
+		acMatches := e.ac.Search(text)
+		for _, m := range acMatches {
+			for _, r := range e.rules {
+				if contains(r.config.Keywords, m.Pattern) {
+					ruleActive[r.config.Name] = true
+					break
+				}
 			}
-			result.Entities = append(result.Entities, entity)
-
-			// P2 级记录占位符映射（可逆）；P3 级不记录（不可逆）
-			if r.level == models.P2Internal {
-				result.Placeholder[placeholder] = matchedText
-			}
-
-			// 执行替换
-			result.SafeText = result.SafeText[:m[0]] + placeholder + result.SafeText[m[1]:]
 		}
 	}
 
+	// 数字长度快速扫描：为 min_digits > 0 但未激活的规则做二次判断
+	maxMinDigits := 0
+	for _, r := range e.rules {
+		if !ruleActive[r.config.Name] && r.config.MinDigits > maxMinDigits {
+			maxMinDigits = r.config.MinDigits
+		}
+	}
+	if maxMinDigits > 0 {
+		maxFound := maxDigitSequence(text)
+		for _, r := range e.rules {
+			if !ruleActive[r.config.Name] && r.config.MinDigits > 0 && maxFound >= r.config.MinDigits {
+				ruleActive[r.config.Name] = true
+			}
+		}
+	}
+
+	// 收集所有 regexp 匹配（在原始文本上执行，避免占位符干扰）
+	var matches []matchInfo
+	for _, r := range e.rules {
+		if !ruleActive[r.config.Name] {
+			continue
+		}
+		for _, re := range r.patterns {
+			for _, loc := range re.FindAllStringIndex(text, -1) {
+				matches = append(matches, matchInfo{
+					rule:  r,
+					start: loc[0],
+					end:   loc[1],
+					text:  text[loc[0]:loc[1]],
+				})
+			}
+		}
+	}
+
+	if len(matches) == 0 {
+		return result, nil
+	}
+
+	// 去重：按 start 升序排序，重叠时保留先出现的（与顺序遍历行为一致）
+	sort.Slice(matches, func(i, j int) bool {
+		if matches[i].start == matches[j].start {
+			return matches[i].end < matches[j].end
+		}
+		return matches[i].start < matches[j].start
+	})
+
+	var deduped []matchInfo
+	for _, m := range matches {
+		overlap := false
+		for _, d := range deduped {
+			if m.start < d.end && m.end > d.start {
+				overlap = true
+				break
+			}
+		}
+		if !overlap {
+			deduped = append(deduped, m)
+		}
+	}
+	matches = deduped
+
+	// 按 start 降序排序，从后向前替换（避免偏移量混乱）
+	sort.Slice(matches, func(i, j int) bool {
+		return matches[i].start > matches[j].start
+	})
+
+	safeText := text
+	for _, m := range matches {
+		hash := fmt.Sprintf("%x", sha256.Sum256([]byte(m.text+fmt.Sprintf("_%d_%d", m.start, m.end))))[:8]
+		placeholder := fmt.Sprintf("{{%s_%s}}", m.rule.config.Placeholder, hash)
+
+		entity := models.SensitiveEntity{
+			Text:     m.text,
+			Type:     m.rule.config.EntityType,
+			Level:    m.rule.level,
+			StartPos: m.start,
+			EndPos:   m.end,
+		}
+		result.Entities = append(result.Entities, entity)
+
+		// P2 级记录占位符映射（可逆）；P3 级不记录（不可逆）
+		if m.rule.level == models.P2Internal {
+			result.Placeholder[placeholder] = m.text
+		}
+
+		safeText = safeText[:m.start] + placeholder + safeText[m.end:]
+	}
+
+	result.SafeText = safeText
 	return result, nil
+}
+
+// maxDigitSequence 返回文本中最长连续数字序列的长度。
+func maxDigitSequence(text string) int {
+	maxCount, count := 0, 0
+	for _, r := range text {
+		if r >= '0' && r <= '9' {
+			count++
+			if count > maxCount {
+				maxCount = count
+			}
+		} else {
+			count = 0
+		}
+	}
+	return maxCount
+}
+
+// contains 检查 slice 中是否包含指定字符串。
+func contains(slice []string, s string) bool {
+	for _, v := range slice {
+		if v == s {
+			return true
+		}
+	}
+	return false
 }
 
 // Restore 将脱敏后的文本还原为原始文本（仅支持 P2 级占位符）。
