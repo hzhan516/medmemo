@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { useSettingsStore } from '@/stores/settingsStore'
+import { useOnboardingStore } from '@/stores/onboardingStore'
 import { useTheme } from '@/hooks/useTheme'
 import { Card, CardContent } from '@/components/ui/card'
-import { Monitor, Moon, Sun, Check, Bell, BellDot, BellOff, RefreshCw, Shield, FlaskConical } from 'lucide-react'
+import { Monitor, Moon, Sun, Check, Bell, BellDot, BellOff, RefreshCw, Shield, FlaskConical, ShieldCheck, ShieldOff, Eye, Trash2, RotateCcw } from 'lucide-react'
 
 /**
  * 设置页面：支持主题切换、模型选择与合规提示条模式。
@@ -9,7 +11,12 @@ import { Monitor, Moon, Sun, Check, Bell, BellDot, BellOff, RefreshCw, Shield, F
  */
 export function SettingsPage() {
   const { theme, setTheme } = useTheme()
-  const { selectedModel, setSelectedModel, complianceBarMode, setComplianceBarMode, autoCheckUpdate, setAutoCheckUpdate, updateChannel, setUpdateChannel } = useSettingsStore()
+  const { selectedModel, setSelectedModel, complianceBarMode, setComplianceBarMode, autoCheckUpdate, setAutoCheckUpdate, updateChannel, setUpdateChannel, desensitizationLevel, setDesensitizationLevel, dataRetentionDays, setDataRetentionDays } = useSettingsStore()
+  const onboardingCompleted = useOnboardingStore((s) => s.completed)
+  const analytics = useOnboardingStore((s) => s.analytics)
+  const resetOnboarding = useOnboardingStore((s) => s.reset)
+  const clearAnalytics = useOnboardingStore((s) => s.clearAnalytics)
+  const [showAnalytics, setShowAnalytics] = useState(false)
 
   const models = [
     { id: 'kimi-lite', name: 'Kimi Lite', provider: 'kimi' },
@@ -33,6 +40,20 @@ export function SettingsPage() {
   const updateChannels = [
     { id: 'stable' as const, label: '稳定版', icon: Shield, desc: '仅接收正式版本更新' },
     { id: 'beta' as const, label: '测试版', icon: FlaskConical, desc: '包含预发布版本，优先体验新功能' },
+  ]
+
+  const desensitizationLevels = [
+    { id: 'standard' as const, label: '标准', icon: Shield, desc: '规则脱敏 + NER 模型识别' },
+    { id: 'strict' as const, label: '严格', icon: ShieldCheck, desc: '三重脱敏兜底，最大程度保护' },
+    { id: 'off' as const, label: '关闭', icon: ShieldOff, desc: '不进行脱敏，明文传输' },
+  ]
+
+  const retentionOptions = [
+    { value: 7, label: '7 天' },
+    { value: 30, label: '30 天' },
+    { value: 90, label: '90 天' },
+    { value: 365, label: '1 年' },
+    { value: 0, label: '永久保留' },
   ]
 
   return (
@@ -153,6 +174,153 @@ export function SettingsPage() {
                 </Card>
               )
             })}
+          </div>
+        </section>
+
+        {/* 隐私设置 */}
+        <section>
+          <h2 className="text-sm font-medium text-muted-foreground mb-3 uppercase tracking-wider">
+            隐私
+          </h2>
+          <div className="space-y-4">
+            {/* 脱敏级别 */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">脱敏级别</label>
+              <div className="space-y-2">
+                {desensitizationLevels.map((l) => {
+                  const Icon = l.icon
+                  const isActive = desensitizationLevel === l.id
+                  return (
+                    <Card
+                      key={l.id}
+                      className={`cursor-pointer transition-all ${
+                        isActive
+                          ? 'border-primary bg-primary/5'
+                          : 'border-border hover:border-primary/30 hover:bg-accent'
+                      }`}
+                      onClick={() => setDesensitizationLevel(l.id)}
+                    >
+                      <CardContent className="p-4 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Icon size={18} className={isActive ? 'text-primary' : 'text-muted-foreground'} />
+                          <div>
+                            <div className={`text-sm font-medium ${isActive ? 'text-primary' : 'text-foreground'}`}>
+                              {l.label}
+                            </div>
+                            <div className="text-xs text-muted-foreground">{l.desc}</div>
+                          </div>
+                        </div>
+                        {isActive && (
+                          <div className="w-4 h-4 rounded-full bg-primary flex items-center justify-center">
+                            <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* 数据留存期限 */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">数据留存期限</label>
+              <div className="flex flex-wrap gap-2">
+                {retentionOptions.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setDataRetentionDays(opt.value)}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                      dataRetentionDays === opt.value
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted text-muted-foreground hover:bg-accent'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* 安装向导 */}
+        <section>
+          <h2 className="text-sm font-medium text-muted-foreground mb-3 uppercase tracking-wider">
+            安装向导
+          </h2>
+          <div className="p-4 rounded-lg border border-border bg-card space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-medium text-foreground">
+                  {onboardingCompleted ? '向导已完成' : '向导未完成'}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {onboardingCompleted
+                    ? '您已完成首次安装引导配置'
+                    : '首次安装引导尚未完成，部分功能可能未配置'}
+                </div>
+              </div>
+              <button
+                onClick={resetOnboarding}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-border hover:bg-accent transition-colors"
+              >
+                <RotateCcw size={14} />
+                重新运行
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* 本地埋点 */}
+        <section>
+          <h2 className="text-sm font-medium text-muted-foreground mb-3 uppercase tracking-wider">
+            本地埋点
+          </h2>
+          <div className="p-4 rounded-lg border border-border bg-card space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-medium text-foreground">向导完成统计</div>
+                <div className="text-xs text-muted-foreground">
+                  {analytics.length > 0
+                    ? `已记录 ${analytics.length} 个步骤的数据（纯本地存储，不上传）`
+                    : '暂无记录'}
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAnalytics(!showAnalytics)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-border hover:bg-accent transition-colors"
+              >
+                <Eye size={14} />
+                {showAnalytics ? '隐藏' : '查看'}
+              </button>
+            </div>
+            {showAnalytics && analytics.length > 0 && (
+              <div className="space-y-2 pt-2 border-t border-border">
+                {analytics.map((a) => (
+                  <div key={a.step} className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">步骤 {a.step}</span>
+                    <div className="flex items-center gap-3">
+                      <span className={a.completedAt ? 'text-green-600' : 'text-amber-600'}>
+                        {a.completedAt ? '已完成' : a.skipped ? '已跳过' : '进行中'}
+                      </span>
+                      {a.completedAt && (
+                        <span className="text-muted-foreground">
+                          {((a.completedAt - a.startedAt) / 1000).toFixed(1)}s
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                <button
+                  onClick={clearAnalytics}
+                  className="flex items-center gap-1.5 text-xs text-destructive hover:text-destructive/80 transition-colors mt-2"
+                >
+                  <Trash2 size={12} />
+                  清除埋点数据
+                </button>
+              </div>
+            )}
           </div>
         </section>
 

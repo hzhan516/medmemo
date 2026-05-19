@@ -94,3 +94,9 @@ export function SetUpdateSettings(arg1: UpdateSettingsResponse): Promise<void>;
 export function SkipUpdateVersion(arg1: string): Promise<void>;
 
 export function OpenDownloadURL(arg1: string): void;
+
+export function SaveAPIKey(arg1: string, arg2: string): Promise<void>;
+
+export function HasAPIKey(arg1: string): Promise<boolean>;
+
+export function GetVersion(): Promise<string>;

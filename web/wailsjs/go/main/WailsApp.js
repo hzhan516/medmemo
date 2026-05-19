@@ -80,3 +80,15 @@ export function SkipUpdateVersion(arg1) {
 export function OpenDownloadURL(arg1) {
   window['go']['main']['WailsApp']['OpenDownloadURL'](arg1);
 }
+
+export function SaveAPIKey(arg1, arg2) {
+  return window['go']['main']['WailsApp']['SaveAPIKey'](arg1, arg2);
+}
+
+export function HasAPIKey(arg1) {
+  return window['go']['main']['WailsApp']['HasAPIKey'](arg1);
+}
+
+export function GetVersion() {
+  return window['go']['main']['WailsApp']['GetVersion']();
+}

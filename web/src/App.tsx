@@ -7,9 +7,11 @@ import { AboutPage } from '@/pages/AboutPage'
 import { DisclaimerModal } from '@/components/DisclaimerModal'
 import { UpdateModal } from '@/components/UpdateModal'
 import { UpdateBanner } from '@/components/UpdateBanner'
+import { OnboardingWizard } from '@/components/onboarding/OnboardingWizard'
 import { useTheme } from '@/hooks/useTheme'
 import { useWails } from '@/hooks/useWails'
 import { useUpdate } from '@/hooks/useUpdate'
+import { useOnboardingStore } from '@/stores/onboardingStore'
 
 /**
  * 根组件：全局主题初始化、HashRouter 路由配置与免责声明检测。
@@ -22,6 +24,10 @@ function App() {
   const [disclaimerRequired, setDisclaimerRequired] = useState<boolean | null>(null)
   const [disclaimerText, setDisclaimerText] = useState('')
   const [disclaimerVersion, setDisclaimerVersion] = useState('')
+
+  const onboardingCompleted = useOnboardingStore((s) => s.completed)
+  const onboardingSkipped = useOnboardingStore((s) => s.skipped)
+  const [showOnboarding, setShowOnboarding] = useState(false)
 
   const {
     updateInfo,
@@ -78,6 +84,13 @@ function App() {
     }
   }, [declineDisclaimer])
 
+  // 免责声明完成后，检测是否需要展示安装向导
+  useEffect(() => {
+    if (disclaimerRequired === false && !onboardingCompleted && !onboardingSkipped) {
+      setShowOnboarding(true)
+    }
+  }, [disclaimerRequired, onboardingCompleted, onboardingSkipped])
+
   // 等待免责声明状态检测完成，避免闪烁
   if (disclaimerRequired === null) {
     return (
@@ -127,6 +140,8 @@ function App() {
         onDismiss={dismissUpdate}
         onOpenDownloadPage={openDownloadPage}
       />
+
+      {showOnboarding && <OnboardingWizard onClose={() => setShowOnboarding(false)} />}
     </>
   )
 }

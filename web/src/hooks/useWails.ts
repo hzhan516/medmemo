@@ -12,6 +12,8 @@ import type {
   UpdateSettingsResponse,
 } from '@wails/go/main/WailsApp'
 
+import { SaveAPIKey, HasAPIKey, GetVersion } from '@wails/go/main/WailsApp'
+
 /**
  * Wails 后端绑定方法封装 Hook。
  * 统一处理错误并提供类型安全的调用接口。
@@ -99,6 +101,18 @@ export function useWails() {
     WailsApp.OpenDownloadURL(url)
   }, [])
 
+  const saveAPIKey = useCallback(async (provider: string, apiKey: string): Promise<void> => {
+    return await SaveAPIKey(provider, apiKey)
+  }, [])
+
+  const hasAPIKey = useCallback(async (provider: string): Promise<boolean> => {
+    return await HasAPIKey(provider)
+  }, [])
+
+  const getVersion = useCallback(async (): Promise<string> => {
+    return await GetVersion()
+  }, [])
+
   return {
     sendMessage,
     sendMessageStream,
@@ -119,5 +133,8 @@ export function useWails() {
     setUpdateSettings,
     skipUpdateVersion,
     openDownloadURL,
+    saveAPIKey,
+    hasAPIKey,
+    getVersion,
   }
 }

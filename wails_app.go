@@ -15,6 +15,7 @@ import (
 	"github.com/medmemo/medmemo/internal/application/updater"
 	"github.com/medmemo/medmemo/internal/application/usecase"
 	"github.com/medmemo/medmemo/internal/domain/entity"
+	"github.com/medmemo/medmemo/internal/infrastructure/secret"
 	"github.com/medmemo/medmemo/pkg/models"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -30,6 +31,7 @@ type WailsApp struct {
 	disclaimerRepo   port.DisclaimerRepository
 	titleGen         *usecase.TitleGenerator
 	updaterSvc       *updater.Service
+	secretStore      secret.Store
 	streamMu         sync.Mutex
 	streamCancel     context.CancelFunc
 }
@@ -44,6 +46,7 @@ func NewWailsApp(
 	disclaimerRepo port.DisclaimerRepository,
 	titleGen *usecase.TitleGenerator,
 	updaterSvc *updater.Service,
+	secretStore secret.Store,
 ) *WailsApp {
 	return &WailsApp{
 		chatOrchestrator: chat,
@@ -54,6 +57,7 @@ func NewWailsApp(
 		disclaimerRepo:   disclaimerRepo,
 		titleGen:         titleGen,
 		updaterSvc:       updaterSvc,
+		secretStore:      secretStore,
 	}
 }
 
@@ -553,4 +557,41 @@ func (a *WailsApp) SkipUpdateVersion(v string) error {
 // OpenDownloadURL 通过系统浏览器打开指定 URL。
 func (a *WailsApp) OpenDownloadURL(url string) {
 	runtime.BrowserOpenURL(a.ctx, url)
+}
+
+// --- Onboarding 向导相关绑定方法 ---
+
+// SaveAPIKey 将指定提供商的 API Key 安全保存到系统密钥环。
+// provider 对应 models.ProviderType 的字符串形式，apiKey 为原始密钥值。
+func (a *WailsApp) SaveAPIKey(provider string, apiKey string) error {
+	if provider == "" {
+		return fmt.Errorf("provider cannot be empty")
+	}
+	if apiKey == "" {
+		return fmt.Errorf("api key cannot be empty")
+	}
+	key := fmt.Sprintf("apikey:%s", provider)
+	if err := a.secretStore.Set(key, []byte(apiKey)); err != nil {
+		return fmt.Errorf("failed to save API key for provider %s: %w", provider, err)
+	}
+	return nil
+}
+
+// HasAPIKey 检测指定提供商是否已配置 API Key。
+func (a *WailsApp) HasAPIKey(provider string) (bool, error) {
+	if provider == "" {
+		return false, fmt.Errorf("provider cannot be empty")
+	}
+	key := fmt.Sprintf("apikey:%s", provider)
+	_, err := a.secretStore.Get(key)
+	if err != nil {
+		// 密钥不存在或读取失败，均视为未配置
+		return false, nil
+	}
+	return true, nil
+}
+
+// GetVersion 返回当前应用版本号（构建时通过 -ldflags 注入）。
+func (a *WailsApp) GetVersion() string {
+	return version
 }
