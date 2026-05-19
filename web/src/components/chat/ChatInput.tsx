@@ -8,6 +8,7 @@ interface ChatInputProps {
   isLoading?: boolean
   placeholder?: string
   blockedByEmergency?: boolean
+  lastUserMessage?: string
 }
 
 /**
@@ -24,6 +25,7 @@ export function ChatInput({
   isLoading = false,
   placeholder,
   blockedByEmergency = false,
+  lastUserMessage,
 }: ChatInputProps) {
   const [content, setContent] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -73,8 +75,12 @@ export function ChatInput({
       if (e.key === 'Escape') {
         setContent('')
       }
+      if (e.key === 'ArrowUp' && content === '' && lastUserMessage) {
+        e.preventDefault()
+        setContent(lastUserMessage)
+      }
     },
-    [handleSend, handleStop, isLoading, onStop]
+    [handleSend, handleStop, isLoading, onStop, content, lastUserMessage]
   )
 
   const displayPlaceholder = placeholder ?? (isLoading ? 'AI 正在生成回复...' : '输入你的健康问题，或输入 /new 新建会话')
@@ -162,7 +168,7 @@ export function ChatInput({
             ? '请先确认紧急症状警告后方可继续'
             : isLoading
               ? 'Enter 停止生成 · 正在接收回复'
-              : 'Enter 发送 · Shift+Enter 换行 · Escape 取消 · /new 新建会话'}
+              : 'Enter 发送 · Shift+Enter 换行 · Escape 取消 · ↑ 编辑上一条 · /new 新建会话'}
         </span>
       </div>
     </div>

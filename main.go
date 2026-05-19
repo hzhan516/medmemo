@@ -63,7 +63,7 @@ func main() {
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "app run error: %v\n", err)
-		os.Exit(1)
+		return
 	}
 }
 

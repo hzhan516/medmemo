@@ -134,6 +134,7 @@ export function ChatPage() {
           onNewConversation={handleNewConversation}
           isLoading={isStreaming}
           blockedByEmergency={inputBlockedByEmergency}
+          lastUserMessage={messages.filter((m) => m.role === 'user').slice(-1)[0]?.content}
         />
 
         {/* A 级紧急症状全屏弹窗（z-index 最高） */}

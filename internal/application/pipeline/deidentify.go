@@ -67,7 +67,7 @@ func (p *DeidentifyPipeline) Execute(ctx context.Context, raw string) (models.De
 			allEntities = append(allEntities, l2Entities...)
 		}
 
-		input = PipelineInput{Text: output.Text, Metadata: output.Metadata}
+		input = PipelineInput(output)
 	}
 	return models.DeidentifyResult{
 		OriginalText: raw,
@@ -117,7 +117,7 @@ func NewL2NERStage(det port.NERDetector) *L2NERStage {
 func (s *L2NERStage) Process(ctx context.Context, input PipelineInput) (PipelineOutput, error) {
 	// 1. 可用性检查：NER 不可用时降级透传，不阻断流水线
 	if s.detector == nil || !s.detector.IsAvailable() {
-		return PipelineOutput{Text: input.Text, Metadata: input.Metadata}, nil
+		return PipelineOutput(input), nil
 	}
 
 	// 2. 获取原始文本（L1 存入 Metadata）
@@ -130,17 +130,17 @@ func (s *L2NERStage) Process(ctx context.Context, input PipelineInput) (Pipeline
 	entities, err := s.detector.Predict(ctx, originalText)
 	if err != nil {
 		// 降级：推理失败时不阻断流水线，直接透传 L1 结果
-		return PipelineOutput{Text: input.Text, Metadata: input.Metadata}, nil
+		return PipelineOutput(input), nil
 	}
 	if len(entities) == 0 {
-		return PipelineOutput{Text: input.Text, Metadata: input.Metadata}, nil
+		return PipelineOutput(input), nil
 	}
 
 	// 4. 获取 L1 实体，过滤与 L1 区域重叠的 NER 结果（L1 优先）
 	l1Entities, _ := input.Metadata["l1_entities"].([]models.SensitiveEntity)
 	entities = filterOverlappingEntities(entities, l1Entities)
 	if len(entities) == 0 {
-		return PipelineOutput{Text: input.Text, Metadata: input.Metadata}, nil
+		return PipelineOutput(input), nil
 	}
 
 	// 5. 偏移量映射：将原始文本中的 NER 位置映射到 L1 脱敏文本中的对应位置
@@ -182,7 +182,7 @@ func NewL3KeywordStage() *L3KeywordStage {
 
 func (s *L3KeywordStage) Process(ctx context.Context, input PipelineInput) (PipelineOutput, error) {
 	// TODO(作者): 接入 Trie 树前缀匹配字典 [Issue#007]
-	return PipelineOutput{Text: input.Text, Metadata: input.Metadata}, nil
+	return PipelineOutput(input), nil
 }
 
 // --- 辅助函数 ---
