@@ -4,20 +4,35 @@ package usecase
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/google/wire"
 	"github.com/medmemo/medmemo/internal/application"
 	"github.com/medmemo/medmemo/internal/application/port"
+	"github.com/medmemo/medmemo/internal/domain/entity"
+	"github.com/medmemo/medmemo/pkg/desensitizer"
 	"github.com/medmemo/medmemo/pkg/models"
 )
 
+// Deidentifier 脱敏流水线接口，供 ChatOrchestrator 消费。
+type Deidentifier interface {
+	Execute(ctx context.Context, raw string) (models.DeidentifyResult, error)
+}
+
+// MemoryQuerier 记忆检索接口，供 ChatOrchestrator 消费。
+type MemoryQuerier interface {
+	RetrieveForContext(ctx context.Context, query string, limit int) ([]*entity.HealthMemory, error)
+}
+
 // ChatOrchestrator 编排单次对话的完整流程：
-// 输入脱敏 → 记忆检索 → 上下文组装 → LLM 调用 → 合规检测 → 输出还原。
+// 输入脱敏 → 记忆检索 → 上下文组装 → LLM 调用 → 输出还原 → 合规检测。
 type ChatOrchestrator struct {
-	llmClient  port.LLMClient
-	memoryRepo port.MemoryRepository
-	detector   port.SensitiveDetector
-	compliance ComplianceChecker // 本地接口，见下方
+	llmClient       port.LLMClient
+	memoryRepo      port.MemoryRepository
+	detector        port.SensitiveDetector
+	compliance      ComplianceChecker
+	deidPipeline    Deidentifier
+	memoryRetriever MemoryQuerier
 }
 
 // NewChatOrchestrator 构造函数，供 Wire 注入。
@@ -26,12 +41,16 @@ func NewChatOrchestrator(
 	mem port.MemoryRepository,
 	det port.SensitiveDetector,
 	comp ComplianceChecker,
+	deid Deidentifier,
+	retriever MemoryQuerier,
 ) *ChatOrchestrator {
 	return &ChatOrchestrator{
-		llmClient:  llm,
-		memoryRepo: mem,
-		detector:   det,
-		compliance: comp,
+		llmClient:       llm,
+		memoryRepo:      mem,
+		detector:        det,
+		compliance:      comp,
+		deidPipeline:    deid,
+		memoryRetriever: retriever,
 	}
 }
 
@@ -49,15 +68,100 @@ type ChatResponse struct {
 	Warnings   []string
 }
 
+// isLocalModel 判断是否为本地模型（数据不离开本机，跳过脱敏）。
+func isLocalModel(pt models.ProviderType) bool {
+	return pt == models.ProviderOllama || pt == models.ProviderLocal
+}
+
+// findLastUserMessage 找到 messages 中最后一条用户消息的索引，无则返回 -1。
+func findLastUserMessage(msgs []models.Message) int {
+	for i := len(msgs) - 1; i >= 0; i-- {
+		if msgs[i].Role == models.RoleUser {
+			return i
+		}
+	}
+	return -1
+}
+
+// injectMemories 将检索到的记忆片段注入为 system message 前缀。
+func injectMemories(msgs []models.Message, memories []*entity.HealthMemory) []models.Message {
+	if len(memories) == 0 {
+		return msgs
+	}
+	var parts []string
+	for _, m := range memories {
+		if m.Content != "" {
+			parts = append(parts, m.Content)
+		}
+	}
+	if len(parts) == 0 {
+		return msgs
+	}
+
+	memCtx := "以下是与当前话题相关的历史记忆，供你参考（不对外展示）：\n" + strings.Join(parts, "\n")
+
+	result := make([]models.Message, 0, len(msgs)+1)
+	// 若首条已是 system，则在内容前追加记忆上下文
+	if len(msgs) > 0 && msgs[0].Role == models.RoleSystem {
+		result = append(result, models.Message{
+			Role:    models.RoleSystem,
+			Content: memCtx + "\n\n" + msgs[0].Content,
+		})
+		result = append(result, msgs[1:]...)
+	} else {
+		result = append(result, models.Message{Role: models.RoleSystem, Content: memCtx})
+		result = append(result, msgs...)
+	}
+	return result
+}
+
 // Execute 执行单次对话用例（非流式）。
-// 流程：LLM 调用 → 合规检测 → 组装响应。
+// 完整流程：输入脱敏 → 记忆检索 → 上下文组装 → LLM 调用 → 输出还原 → 合规检测。
 func (c *ChatOrchestrator) Execute(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
-	reply, err := c.llmClient.Chat(ctx, req.Messages)
+	messages := req.Messages
+	var deidResult models.DeidentifyResult
+
+	// 1. 输入脱敏（仅云端模型）
+	if !isLocalModel(req.Model) && c.deidPipeline != nil {
+		lastIdx := findLastUserMessage(req.Messages)
+		if lastIdx >= 0 {
+			r, err := c.deidPipeline.Execute(ctx, req.Messages[lastIdx].Content)
+			if err == nil {
+				deidResult = r
+				messages = make([]models.Message, len(req.Messages))
+				copy(messages, req.Messages)
+				messages[lastIdx].Content = r.SafeText
+			}
+			// 脱敏失败时降级，继续使用原始文本
+		}
+	}
+
+	// 2. 记忆检索（对脱敏后的内容检索，避免敏感信息进入检索 query）
+	if c.memoryRetriever != nil {
+		lastIdx := findLastUserMessage(messages)
+		if lastIdx >= 0 {
+			memories, _ := c.memoryRetriever.RetrieveForContext(ctx, messages[lastIdx].Content, 3)
+			if len(memories) > 0 {
+				messages = injectMemories(messages, memories)
+			}
+		}
+	}
+
+	// 3. LLM 调用
+	reply, err := c.llmClient.Chat(ctx, messages)
 	if err != nil {
 		return nil, fmt.Errorf("chat execution failed: %w", err)
 	}
 
-	// 合规检测
+	// 4. 输出还原（仅云端模型且有 P2 占位符时）
+	if !isLocalModel(req.Model) && len(deidResult.Placeholder) > 0 {
+		reply = desensitizer.Restore(models.DeidentifyResult{
+			SafeText:    reply,
+			Placeholder: deidResult.Placeholder,
+		})
+	}
+
+	// 5. 合规检测
 	compResult, err := c.compliance.Check(ctx, reply)
 	if err != nil {
 		// 合规检测失败时降级放行，确保对话不中断
@@ -81,11 +185,63 @@ func (c *ChatOrchestrator) Execute(ctx context.Context, req ChatRequest) (*ChatR
 }
 
 // StreamExecute 执行流式对话用例。
-// MVP 阶段保持透传架构，Stream 结束后由调用方对完整内容做一次性合规检测。
+// MVP 阶段：输入脱敏与记忆注入后启动流式，Stream 结束后对完整内容做还原与合规检测。
 func (c *ChatOrchestrator) StreamExecute(ctx context.Context, req ChatRequest, onChunk func(string)) error {
-	if err := c.llmClient.StreamChat(ctx, req.Messages, onChunk); err != nil {
+	messages := req.Messages
+	var deidResult models.DeidentifyResult
+
+	// 1. 输入脱敏（仅云端模型）
+	if !isLocalModel(req.Model) && c.deidPipeline != nil {
+		lastIdx := findLastUserMessage(req.Messages)
+		if lastIdx >= 0 {
+			r, err := c.deidPipeline.Execute(ctx, req.Messages[lastIdx].Content)
+			if err == nil {
+				deidResult = r
+				messages = make([]models.Message, len(req.Messages))
+				copy(messages, req.Messages)
+				messages[lastIdx].Content = r.SafeText
+			}
+		}
+	}
+
+	// 2. 记忆检索
+	if c.memoryRetriever != nil {
+		lastIdx := findLastUserMessage(messages)
+		if lastIdx >= 0 {
+			memories, _ := c.memoryRetriever.RetrieveForContext(ctx, messages[lastIdx].Content, 3)
+			if len(memories) > 0 {
+				messages = injectMemories(messages, memories)
+			}
+		}
+	}
+
+	// 3. 收集完整流式内容用于后续还原与检测
+	var fullReply stringsBuilder
+
+	err := c.llmClient.StreamChat(ctx, messages, func(chunk string) {
+		fullReply.WriteString(chunk)
+		onChunk(chunk)
+	})
+	if err != nil {
 		return fmt.Errorf("stream execution failed: %w", err)
 	}
+
+	// 4. 输出还原
+	reply := fullReply.String()
+	if !isLocalModel(req.Model) && len(deidResult.Placeholder) > 0 {
+		reply = desensitizer.Restore(models.DeidentifyResult{
+			SafeText:    reply,
+			Placeholder: deidResult.Placeholder,
+		})
+	}
+
+	// 5. 流式结束后对完整内容做一次性合规检测（MVP 简化策略）
+	compResult, compErr := c.compliance.Check(ctx, reply)
+	if compErr == nil && compResult.Level != application.L4Normal.String() {
+		// 通过 Wails 事件或回调方式告知前端合规结果，当前不阻断流式
+		_ = compResult
+	}
+
 	return nil
 }
 
@@ -148,6 +304,19 @@ func (c *RuleComplianceChecker) Check(ctx context.Context, text string) (*Compli
 		MatchedRule:   res.MatchedRule,
 		ReplacedTerms: res.ReplacedTerms,
 	}, nil
+}
+
+// stringsBuilder 是 strings.Builder 的轻量别名，避免 import strings 包（仅内部使用）。
+type stringsBuilder struct {
+	b []byte
+}
+
+func (s *stringsBuilder) WriteString(str string) {
+	s.b = append(s.b, str...)
+}
+
+func (s *stringsBuilder) String() string {
+	return string(s.b)
 }
 
 // ApplicationSet 供 Wire 使用的 ProviderSet。

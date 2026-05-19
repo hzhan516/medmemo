@@ -41,18 +41,39 @@ func NewDeidentifyPipeline(stages ...DeidentifyStage) *DeidentifyPipeline {
 }
 
 // Execute 顺序执行各阶段，任一阶段出错即短路返回。
+// 收集各阶段产生的实体和 P2 级占位符映射，供输出还原使用。
 func (p *DeidentifyPipeline) Execute(ctx context.Context, raw string) (models.DeidentifyResult, error) {
 	input := PipelineInput{Text: raw, Metadata: make(map[string]any)}
+	var allEntities []models.SensitiveEntity
+	allPlaceholders := make(map[string]string)
+
 	for _, stage := range p.stages {
 		output, err := stage.Process(ctx, input)
 		if err != nil {
 			return models.DeidentifyResult{}, fmt.Errorf("deidentify stage %T failed: %w", stage, err)
 		}
+
+		// 收集 L1 阶段的实体和 P2 占位符映射
+		if l1Entities, ok := output.Metadata["l1_entities"].([]models.SensitiveEntity); ok {
+			allEntities = append(allEntities, l1Entities...)
+		}
+		if l1Placeholders, ok := output.Metadata["l1_placeholders"].(map[string]string); ok {
+			for k, v := range l1Placeholders {
+				allPlaceholders[k] = v
+			}
+		}
+		// 收集 L2 阶段的实体
+		if l2Entities, ok := output.Metadata["l2_entities"].([]models.SensitiveEntity); ok {
+			allEntities = append(allEntities, l2Entities...)
+		}
+
 		input = PipelineInput{Text: output.Text, Metadata: output.Metadata}
 	}
 	return models.DeidentifyResult{
 		OriginalText: raw,
 		SafeText:     input.Text,
+		Entities:     allEntities,
+		Placeholder:  allPlaceholders,
 	}, nil
 }
 

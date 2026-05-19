@@ -44,6 +44,8 @@ func InitializeApp() (*App, func(), error) {
 		wire.Bind(new(port.NERDetector), new(*detector.ONNXNERDetector)),
 		wire.Bind(new(secret.Store), new(*secret.KeyringStore)),
 		wire.Bind(new(database.DBConnector), new(*database.SQLCipherConnector)),
+		wire.Bind(new(usecase.Deidentifier), new(*pipeline.DeidentifyPipeline)),
+		wire.Bind(new(usecase.MemoryQuerier), new(*usecase.MemoryRetriever)),
 		wire.Value(""),
 	)
 	return nil, nil, nil
