@@ -7,10 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
+	"github.com/medmemo/medmemo/internal/application"
 	"github.com/medmemo/medmemo/internal/application/port"
 	"github.com/medmemo/medmemo/internal/application/usecase"
 	"github.com/medmemo/medmemo/internal/domain/entity"
@@ -273,81 +273,15 @@ type EmergencyResult struct {
 	Action  string `json:"action"`  // 建议操作
 }
 
-// emergencyKeywords 定义 A 级和 B 级紧急症状关键词。
-// A 级：需要立即就医；B 级：建议尽快就医。
-// 纯内存匹配，延迟 <5ms，不依赖 AI 响应或网络。
-var (
-	aLevelKeywords = []string{
-		"胸痛伴呼吸困难", "胸痛 呼吸困难", "胸口痛 喘不上气",
-		"意识丧失", "昏迷", "昏倒", "不省人事",
-		"大出血", "大量出血", "血流不止",
-		"严重过敏", "过敏性休克", "喉咙肿胀", "呼吸困难",
-		"抽搐", "癫痫发作", "持续抽搐",
-		"中毒", "误食", "药物过量", "服药过量",
-		"溺水", "窒息", "卡喉", "异物卡喉",
-		"车祸", "坠落", "高空坠落", "严重外伤",
-		"烧烫伤 大面积", "三度烧伤",
-		"孕妇 出血", "孕妇 腹痛", "孕妇 破水",
-		"新生儿 发热", "婴儿 高烧", "婴儿 拒食",
-		"胸痛 放射", "胸痛 左臂", "胸痛 出汗",
-	}
-
-	bLevelKeywords = []string{
-		"持续高热", "高烧三天", "发烧超过三天", "发热 三天",
-		"剧烈腹痛", "肚子剧痛", "腹痛难忍",
-		"血尿", "尿血", "尿液带血",
-		"视力突然下降", "突然看不见", "视力模糊",
-		"持续呕吐", "呕吐不止", "无法进食",
-		"严重腹泻", "腹泻 脱水", "拉肚子 水样",
-		"头痛 呕吐", "头痛 颈部僵硬",
-		"肢体无力", "半身麻木", "口角歪斜",
-		"心悸 胸闷", "心跳过快", "心律不齐",
-		"血糖 极高", "血糖 极低", "糖尿病 昏迷",
-	}
-)
-
 // CheckEmergency 检查文本是否包含紧急症状（AGENTS.md 7.3）。
-// 采用本地关键词匹配，延迟 <5ms，独立于 AI 回复流程。
+// 委托 application 层的 EvaluateEmergency 执行本地关键词匹配，延迟 <5ms，独立于 AI 回复流程。
 func (a *WailsApp) CheckEmergency(text string) (*EmergencyResult, error) {
-	// A 级检测（立即就医）
-	for _, kw := range aLevelKeywords {
-		if containsAll(text, kw) {
-			return &EmergencyResult{
-				Level:   "A",
-				Message: "检测到可能危及生命的紧急症状，请立即就医或拨打急救电话（如 120）。",
-				Action:  "立即就医 / 拨打 120",
-			}, nil
-		}
-	}
-
-	// B 级检测（尽快就医）
-	for _, kw := range bLevelKeywords {
-		if containsAll(text, kw) {
-			return &EmergencyResult{
-				Level:   "B",
-				Message: "检测到可能需要尽快就医的症状，建议尽快前往医院就诊。",
-				Action:  "尽快就医",
-			}, nil
-		}
-	}
-
+	result := application.EvaluateEmergency(text)
 	return &EmergencyResult{
-		Level:   "none",
-		Message: "",
-		Action:  "",
+		Level:   string(result.Level),
+		Message: result.Message,
+		Action:  result.Action,
 	}, nil
-}
-
-// containsAll 检查文本中是否同时包含关键词中的所有分词。
-func containsAll(text, keyword string) bool {
-	parts := strings.Fields(keyword)
-	lowerText := strings.ToLower(text)
-	for _, part := range parts {
-		if !strings.Contains(lowerText, strings.ToLower(part)) {
-			return false
-		}
-	}
-	return true
 }
 
 // GenerateTitle 异步生成会话标题，通过 Wails Events 推送结果。

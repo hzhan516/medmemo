@@ -4,6 +4,8 @@ import { ChatInput } from '@/components/chat/ChatInput'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Header } from '@/components/layout/Header'
 import { ComplianceBar } from '@/components/ComplianceBar'
+import { EmergencyAlertModal } from '@/components/EmergencyAlertModal'
+import { EmergencyWarningBanner } from '@/components/EmergencyWarningBanner'
 import { useConversation } from '@/hooks/useConversation'
 import { useChatStore } from '@/stores/chatStore'
 import { Undo2 } from 'lucide-react'
@@ -16,10 +18,14 @@ export function ChatPage() {
     messages,
     isStreaming,
     currentConversationId,
+    emergencyAlert,
     sendMessage,
     stopGeneration,
     retryMessage,
     startNewConversation,
+    handleEmergencyContinue,
+    handleEmergencyNotEmergency,
+    handleAcknowledgeWarning,
     error,
   } = useConversation()
 
@@ -66,6 +72,11 @@ export function ChatPage() {
     setShowUndo(false)
   }, [undoDelete])
 
+  // B 级警告是否展示：有 alert 且 level 为 B
+  const showBWarning = emergencyAlert?.level === 'B'
+  // 输入区是否被紧急症状阻断
+  const inputBlockedByEmergency = showBWarning
+
   return (
     <div className="flex h-full">
       <Sidebar
@@ -85,6 +96,15 @@ export function ChatPage() {
           onStartNewConversation={handleNewConversation}
           onRetry={retryMessage}
         />
+
+        {/* B 级紧急症状警告横幅 */}
+        {showBWarning && (
+          <EmergencyWarningBanner
+            message={emergencyAlert.message}
+            onAcknowledge={handleAcknowledgeWarning}
+            onNotEmergency={handleEmergencyNotEmergency}
+          />
+        )}
 
         {error && (
           <div className="shrink-0 px-4 py-2 bg-destructive/10 text-destructive text-xs text-center">
@@ -111,7 +131,19 @@ export function ChatPage() {
           onStop={stopGeneration}
           onNewConversation={handleNewConversation}
           isLoading={isStreaming}
+          blockedByEmergency={inputBlockedByEmergency}
         />
+
+        {/* A 级紧急症状全屏弹窗（z-index 最高） */}
+        {emergencyAlert?.level === 'A' && (
+          <EmergencyAlertModal
+            open={true}
+            message={emergencyAlert.message}
+            action={emergencyAlert.action}
+            onContinue={handleEmergencyContinue}
+            onNotEmergency={handleEmergencyNotEmergency}
+          />
+        )}
       </div>
     </div>
   )

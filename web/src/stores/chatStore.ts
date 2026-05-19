@@ -11,6 +11,12 @@ export interface ChatMessage {
   warnings?: string[] // 合规检测标记：L2_WARNING / L3_NOTICE
 }
 
+export interface EmergencyAlert {
+  level: 'A' | 'B'
+  message: string
+  action: string
+}
+
 export interface Conversation {
   id: string
   title: string
@@ -32,6 +38,10 @@ interface ChatState {
   lastDeleted: Conversation | null
   showTrash: boolean
   dismissedBarSessions: string[] // 已手动关闭合规提示条的会话 ID 列表
+
+  // 紧急症状检测状态
+  emergencyAlert: EmergencyAlert | null
+  emergencyWarningAcknowledged: boolean // B 级警告是否已点击「我已了解」
 
   setConversationId: (id: string | null) => void
   addMessage: (message: ChatMessage) => void
@@ -59,6 +69,10 @@ interface ChatState {
   cleanupOldDeleted: () => void
 
   dismissComplianceBarForSession: (sessionId: string) => void
+
+  // 紧急症状状态管理
+  setEmergencyAlert: (alert: EmergencyAlert | null) => void
+  acknowledgeEmergencyWarning: () => void
 }
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000
@@ -75,6 +89,8 @@ export const useChatStore = create<ChatState>((set) => ({
   lastDeleted: null,
   showTrash: false,
   dismissedBarSessions: [],
+  emergencyAlert: null,
+  emergencyWarningAcknowledged: false,
 
   setConversationId: (id) => set({ currentConversationId: id }),
 
@@ -267,4 +283,15 @@ export const useChatStore = create<ChatState>((set) => ({
         ? state.dismissedBarSessions
         : [...state.dismissedBarSessions, sessionId],
     })),
+
+  setEmergencyAlert: (alert) =>
+    set((state) => ({
+      emergencyAlert: alert,
+      // A 级弹窗重置确认状态；B 级保持原状态
+      emergencyWarningAcknowledged:
+        alert?.level === 'A' ? false : state.emergencyWarningAcknowledged,
+    })),
+
+  acknowledgeEmergencyWarning: () =>
+    set({ emergencyWarningAcknowledged: true }),
 }))

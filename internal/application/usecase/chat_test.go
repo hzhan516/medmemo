@@ -7,20 +7,28 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/medmemo/medmemo/internal/application"
 	"github.com/medmemo/medmemo/internal/application/port"
 	"github.com/medmemo/medmemo/pkg/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// mustEmptyRulesPath 创建包含空规则库的临时 JSON 文件并返回路径，
-// 确保测试中 RuleComplianceChecker 加载成功且所有文本放行。
+// mustEmptyRulesPath 创建包含空规则库的临时 JSON 文件并返回路径。
 func mustEmptyRulesPath(t *testing.T) string {
 	t.Helper()
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "rules.json")
 	require.NoError(t, os.WriteFile(path, []byte(`{"version":"test","rules":[]}`), 0644))
 	return path
+}
+
+// newTestComplianceChecker 从临时规则文件创建合规检查器（供测试使用）。
+func newTestComplianceChecker(t *testing.T, path string) *RuleComplianceChecker {
+	t.Helper()
+	ci, err := application.NewComplianceInterceptor(path)
+	require.NoError(t, err)
+	return &RuleComplianceChecker{interceptor: ci}
 }
 
 // mockLLMClient 是 port.LLMClient 的手动 Mock 实现。
@@ -52,8 +60,7 @@ var _ port.LLMClient = (*mockLLMClient)(nil)
 
 // TestRuleComplianceChecker_Check 验证空规则库下合规检查器始终放行。
 func TestRuleComplianceChecker_Check(t *testing.T) {
-	checker, err := NewRuleComplianceChecker(mustEmptyRulesPath(t))
-	require.NoError(t, err)
+	checker := newTestComplianceChecker(t, mustEmptyRulesPath(t))
 	ctx := context.Background()
 
 	result, err := checker.Check(ctx, "这是一条测试内容")
@@ -65,8 +72,7 @@ func TestRuleComplianceChecker_Check(t *testing.T) {
 
 // TestRuleComplianceChecker_Check_EmptyText 验证空文本不报错。
 func TestRuleComplianceChecker_Check_EmptyText(t *testing.T) {
-	checker, err := NewRuleComplianceChecker(mustEmptyRulesPath(t))
-	require.NoError(t, err)
+	checker := newTestComplianceChecker(t, mustEmptyRulesPath(t))
 	ctx := context.Background()
 
 	result, err := checker.Check(ctx, "")
@@ -77,8 +83,7 @@ func TestRuleComplianceChecker_Check_EmptyText(t *testing.T) {
 // TestChatOrchestrator_Execute_Success 验证非流式对话正常返回。
 func TestChatOrchestrator_Execute_Success(t *testing.T) {
 	mock := &mockLLMClient{chatReply: "你好，有什么可以帮你的？"}
-	comp, err := NewRuleComplianceChecker(mustEmptyRulesPath(t))
-	require.NoError(t, err)
+	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
 	orch := NewChatOrchestrator(mock, nil, nil, comp)
 
 	req := ChatRequest{
@@ -95,15 +100,14 @@ func TestChatOrchestrator_Execute_Success(t *testing.T) {
 // TestChatOrchestrator_Execute_Error 验证 LLM 错误被正确包装。
 func TestChatOrchestrator_Execute_Error(t *testing.T) {
 	mock := &mockLLMClient{chatErr: fmt.Errorf("network timeout")}
-	comp, err := NewRuleComplianceChecker(mustEmptyRulesPath(t))
-	require.NoError(t, err)
+	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
 	orch := NewChatOrchestrator(mock, nil, nil, comp)
 
 	req := ChatRequest{
 		Messages: []models.Message{{Role: models.RoleUser, Content: "test"}},
 	}
 
-	_, err = orch.Execute(context.Background(), req)
+	_, err := orch.Execute(context.Background(), req)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "chat execution failed")
 }
@@ -111,8 +115,7 @@ func TestChatOrchestrator_Execute_Error(t *testing.T) {
 // TestChatOrchestrator_StreamExecute_Success 验证流式对话 callback 被逐 chunk 调用。
 func TestChatOrchestrator_StreamExecute_Success(t *testing.T) {
 	mock := &mockLLMClient{streamChunks: []string{"你", "好", "！"}}
-	comp, err := NewRuleComplianceChecker(mustEmptyRulesPath(t))
-	require.NoError(t, err)
+	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
 	orch := NewChatOrchestrator(mock, nil, nil, comp)
 
 	req := ChatRequest{
@@ -120,7 +123,7 @@ func TestChatOrchestrator_StreamExecute_Success(t *testing.T) {
 	}
 
 	var collected []string
-	err = orch.StreamExecute(context.Background(), req, func(chunk string) {
+	err := orch.StreamExecute(context.Background(), req, func(chunk string) {
 		collected = append(collected, chunk)
 	})
 	require.NoError(t, err)
@@ -130,15 +133,14 @@ func TestChatOrchestrator_StreamExecute_Success(t *testing.T) {
 // TestChatOrchestrator_StreamExecute_Error 验证流式错误被正确包装。
 func TestChatOrchestrator_StreamExecute_Error(t *testing.T) {
 	mock := &mockLLMClient{streamErr: fmt.Errorf("connection reset")}
-	comp, err := NewRuleComplianceChecker(mustEmptyRulesPath(t))
-	require.NoError(t, err)
+	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
 	orch := NewChatOrchestrator(mock, nil, nil, comp)
 
 	req := ChatRequest{
 		Messages: []models.Message{{Role: models.RoleUser, Content: "test"}},
 	}
 
-	err = orch.StreamExecute(context.Background(), req, func(chunk string) {})
+	err := orch.StreamExecute(context.Background(), req, func(chunk string) {})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "stream execution failed")
 }

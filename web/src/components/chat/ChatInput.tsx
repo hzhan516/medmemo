@@ -7,6 +7,7 @@ interface ChatInputProps {
   onNewConversation?: () => void
   isLoading?: boolean
   placeholder?: string
+  blockedByEmergency?: boolean
 }
 
 /**
@@ -22,6 +23,7 @@ export function ChatInput({
   onNewConversation,
   isLoading = false,
   placeholder,
+  blockedByEmergency = false,
 }: ChatInputProps) {
   const [content, setContent] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -37,7 +39,7 @@ export function ChatInput({
 
   const handleSend = useCallback(() => {
     const trimmed = content.trim()
-    if (!trimmed || isLoading) return
+    if (!trimmed || isLoading || blockedByEmergency) return
 
     // /new 命令：新建会话
     if (trimmed === '/new') {
@@ -95,7 +97,7 @@ export function ChatInput({
               focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent
               transition-all
             "
-            disabled={isLoading}
+            disabled={isLoading || blockedByEmergency}
           />
           <div className="absolute right-3 bottom-3 text-[10px] text-muted-foreground select-none">
             {content.length > 0 && !isLoading && (
@@ -111,7 +113,18 @@ export function ChatInput({
           </div>
         </div>
 
-        {isLoading ? (
+        {blockedByEmergency ? (
+          <button
+            disabled
+            className="
+              shrink-0 w-10 h-10 rounded-xl flex items-center justify-center
+              bg-muted text-muted-foreground cursor-not-allowed
+            "
+            aria-label="请先确认紧急警告"
+          >
+            <Send size={18} />
+          </button>
+        ) : isLoading ? (
           <button
             onClick={handleStop}
             className="
@@ -145,7 +158,11 @@ export function ChatInput({
 
       <div className="text-center mt-1.5">
         <span className="text-[10px] text-muted-foreground">
-          {isLoading ? 'Enter 停止生成 · 正在接收回复' : 'Enter 发送 · Shift+Enter 换行 · Escape 取消 · /new 新建会话'}
+          {blockedByEmergency
+            ? '请先确认紧急症状警告后方可继续'
+            : isLoading
+              ? 'Enter 停止生成 · 正在接收回复'
+              : 'Enter 发送 · Shift+Enter 换行 · Escape 取消 · /new 新建会话'}
         </span>
       </div>
     </div>
