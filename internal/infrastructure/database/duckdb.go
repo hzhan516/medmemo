@@ -121,6 +121,23 @@ func (c *SQLiteConnector) Migrate(ctx context.Context) error {
 			CREATE INDEX IF NOT EXISTS idx_messages_deleted ON messages(deleted_at);
 			`,
 		},
+		{
+			version: 3,
+			sql: `
+			CREATE TABLE IF NOT EXISTS memories (
+				id TEXT PRIMARY KEY,
+				tier INTEGER NOT NULL,
+				content TEXT NOT NULL,
+				tags TEXT,
+				source_conv TEXT,
+				confidence REAL DEFAULT 1.0,
+				created_at INTEGER NOT NULL,
+				accessed_at INTEGER NOT NULL
+			);
+			CREATE INDEX IF NOT EXISTS idx_memories_tier ON memories(tier);
+			CREATE INDEX IF NOT EXISTS idx_memories_accessed ON memories(accessed_at);
+			`,
+		},
 	}
 
 	for _, m := range migrations {

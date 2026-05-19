@@ -22,7 +22,7 @@ func InitializeApp() (*App, func(), error) {
 		NewWailsApp,
 		usecase.ApplicationSet,
 		usecase.NewMemoryRetriever,
-		wire.Bind(new(port.MemoryRepository), new(*repository.MemoryRepoDuckDB)),
+		wire.Bind(new(port.MemoryRepository), new(*repository.MemoryRepoSQLite)),
 		wire.Bind(new(port.SensitiveDetector), new(*detector.RuleDetector)),
 		wire.Bind(new(usecase.ComplianceChecker), new(*usecase.DefaultComplianceChecker)),
 		wire.Bind(new(port.ConversationRepository), new(*repository.ConversationRepoSQLite)),

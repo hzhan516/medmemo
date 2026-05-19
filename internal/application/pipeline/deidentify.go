@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/wire"
 	"github.com/medmemo/medmemo/internal/application/port"
+	"github.com/medmemo/medmemo/pkg/desensitizer"
 	"github.com/medmemo/medmemo/pkg/models"
 )
 
@@ -54,11 +55,28 @@ func (p *DeidentifyPipeline) Execute(ctx context.Context, raw string) (models.De
 }
 
 // L1RuleStage 一级规则脱敏阶段。
-type L1RuleStage struct{}
+// 基于 regexp 匹配身份证号、手机号、银行卡、邮箱、URL，延迟 <1ms。
+type L1RuleStage struct {
+	engine *desensitizer.RuleEngine
+}
+
+// NewL1RuleStage 创建 L1 规则脱敏阶段。
+func NewL1RuleStage() *L1RuleStage {
+	return &L1RuleStage{engine: desensitizer.NewRuleEngine()}
+}
 
 func (s *L1RuleStage) Process(ctx context.Context, input PipelineInput) (PipelineOutput, error) {
-	// TODO(作者): 接入 pkg/desensitizer 规则引擎 [Issue#005]
-	return PipelineOutput{Text: input.Text, Metadata: input.Metadata}, nil
+	result, err := s.engine.Process(input.Text)
+	if err != nil {
+		return PipelineOutput{}, fmt.Errorf("L1 rule deidentify failed: %w", err)
+	}
+	// 将脱敏结果中的占位符映射存入 Metadata，供后续还原使用
+	if input.Metadata == nil {
+		input.Metadata = make(map[string]any)
+	}
+	input.Metadata["l1_entities"] = result.Entities
+	input.Metadata["l1_placeholders"] = result.Placeholder
+	return PipelineOutput{Text: result.SafeText, Metadata: input.Metadata}, nil
 }
 
 // L2NERStage 二级 NER 模型脱敏阶段。
