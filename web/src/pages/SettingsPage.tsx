@@ -1,7 +1,7 @@
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useTheme } from '@/hooks/useTheme'
 import { Card, CardContent } from '@/components/ui/card'
-import { Monitor, Moon, Sun, Check, Bell, BellDot, BellOff } from 'lucide-react'
+import { Monitor, Moon, Sun, Check, Bell, BellDot, BellOff, RefreshCw, Shield, FlaskConical } from 'lucide-react'
 
 /**
  * 设置页面：支持主题切换、模型选择与合规提示条模式。
@@ -9,7 +9,7 @@ import { Monitor, Moon, Sun, Check, Bell, BellDot, BellOff } from 'lucide-react'
  */
 export function SettingsPage() {
   const { theme, setTheme } = useTheme()
-  const { selectedModel, setSelectedModel, complianceBarMode, setComplianceBarMode } = useSettingsStore()
+  const { selectedModel, setSelectedModel, complianceBarMode, setComplianceBarMode, autoCheckUpdate, setAutoCheckUpdate, updateChannel, setUpdateChannel } = useSettingsStore()
 
   const models = [
     { id: 'kimi-lite', name: 'Kimi Lite', provider: 'kimi' },
@@ -28,6 +28,11 @@ export function SettingsPage() {
     { id: 'always' as const, label: '始终展示', icon: BellDot, desc: '每次进入会话都展示，可手动关闭' },
     { id: 'first' as const, label: '首次展示', icon: Bell, desc: '新会话首次进入时展示，关闭后不再显示' },
     { id: 'off' as const, label: '关闭', icon: BellOff, desc: '完全不展示合规提示条' },
+  ]
+
+  const updateChannels = [
+    { id: 'stable' as const, label: '稳定版', icon: Shield, desc: '仅接收正式版本更新' },
+    { id: 'beta' as const, label: '测试版', icon: FlaskConical, desc: '包含预发布版本，优先体验新功能' },
   ]
 
   return (
@@ -148,6 +153,81 @@ export function SettingsPage() {
                 </Card>
               )
             })}
+          </div>
+        </section>
+
+        {/* 更新设置 */}
+        <section>
+          <h2 className="text-sm font-medium text-muted-foreground mb-3 uppercase tracking-wider">
+            自动更新
+          </h2>
+          <div className="space-y-4">
+            {/* 自动检测开关 */}
+            <div
+              className={`flex items-center justify-between p-4 rounded-lg border cursor-pointer transition-all ${
+                autoCheckUpdate
+                  ? 'border-primary bg-primary/5'
+                  : 'border-border hover:border-primary/30 hover:bg-accent'
+              }`}
+              onClick={() => setAutoCheckUpdate(!autoCheckUpdate)}
+            >
+              <div className="flex items-center gap-3">
+                <RefreshCw size={18} className={autoCheckUpdate ? 'text-primary' : 'text-muted-foreground'} />
+                <div>
+                  <div className={`text-sm font-medium ${autoCheckUpdate ? 'text-primary' : 'text-foreground'}`}>
+                    自动检测更新
+                  </div>
+                  <div className="text-xs text-muted-foreground">应用启动时自动检查 GitHub Releases 新版本</div>
+                </div>
+              </div>
+              <div
+                className={`w-10 h-5 rounded-full transition-colors relative ${
+                  autoCheckUpdate ? 'bg-primary' : 'bg-muted'
+                }`}
+              >
+                <div
+                  className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${
+                    autoCheckUpdate ? 'translate-x-5' : 'translate-x-0.5'
+                  }`}
+                />
+              </div>
+            </div>
+
+            {/* 更新通道 */}
+            <div className="space-y-2">
+              {updateChannels.map((ch) => {
+                const Icon = ch.icon
+                const isActive = updateChannel === ch.id
+                return (
+                  <Card
+                    key={ch.id}
+                    className={`cursor-pointer transition-all ${
+                      isActive
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border hover:border-primary/30 hover:bg-accent'
+                    }`}
+                    onClick={() => setUpdateChannel(ch.id)}
+                  >
+                    <CardContent className="p-4 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Icon size={18} className={isActive ? 'text-primary' : 'text-muted-foreground'} />
+                        <div>
+                          <div className={`text-sm font-medium ${isActive ? 'text-primary' : 'text-foreground'}`}>
+                            {ch.label}
+                          </div>
+                          <div className="text-xs text-muted-foreground">{ch.desc}</div>
+                        </div>
+                      </div>
+                      {isActive && (
+                        <div className="w-4 h-4 rounded-full bg-primary flex items-center justify-center">
+                          <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )
+              })}
+            </div>
           </div>
         </section>
       </div>

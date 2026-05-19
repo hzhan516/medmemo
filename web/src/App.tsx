@@ -5,8 +5,11 @@ import { ChatPage } from '@/pages/ChatPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { AboutPage } from '@/pages/AboutPage'
 import { DisclaimerModal } from '@/components/DisclaimerModal'
+import { UpdateModal } from '@/components/UpdateModal'
+import { UpdateBanner } from '@/components/UpdateBanner'
 import { useTheme } from '@/hooks/useTheme'
 import { useWails } from '@/hooks/useWails'
+import { useUpdate } from '@/hooks/useUpdate'
 
 /**
  * 根组件：全局主题初始化、HashRouter 路由配置与免责声明检测。
@@ -19,6 +22,19 @@ function App() {
   const [disclaimerRequired, setDisclaimerRequired] = useState<boolean | null>(null)
   const [disclaimerText, setDisclaimerText] = useState('')
   const [disclaimerVersion, setDisclaimerVersion] = useState('')
+
+  const {
+    updateInfo,
+    downloadProgress,
+    isDownloading,
+    downloadPath,
+    error: updateError,
+    doDownload,
+    doApply,
+    doSkip,
+    dismissUpdate,
+    openDownloadPage,
+  } = useUpdate()
 
   // 应用启动时检测免责声明状态
   useEffect(() => {
@@ -76,6 +92,8 @@ function App() {
 
   return (
     <>
+      <UpdateBanner info={updateInfo} onShowDetails={() => {}} onDismiss={dismissUpdate} />
+
       <HashRouter>
         <Routes>
           <Route element={<AppLayout />}>
@@ -96,6 +114,19 @@ function App() {
           onDecline={handleDecline}
         />
       )}
+
+      <UpdateModal
+        info={updateInfo}
+        isDownloading={isDownloading}
+        downloadProgress={downloadProgress}
+        downloadPath={downloadPath}
+        error={updateError}
+        onDownload={doDownload}
+        onApply={doApply}
+        onSkip={doSkip}
+        onDismiss={dismissUpdate}
+        onOpenDownloadPage={openDownloadPage}
+      />
     </>
   )
 }

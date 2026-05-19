@@ -36,15 +36,17 @@ func NewLoader(configPath string) *Loader {
 
 // rawConfig 表示配置文件中的原始结构。
 type rawConfig struct {
-	DataDir         string `json:"data_dir" yaml:"data_dir"`
-	DefaultModel    string `json:"default_model" yaml:"default_model"`
-	Language        string `json:"language" yaml:"language"`
-	EnableCloud     *bool  `json:"enable_cloud" yaml:"enable_cloud"`
-	EnableAnalytics *bool  `json:"enable_analytics" yaml:"enable_analytics"`
-	ProviderType    string `json:"provider_type" yaml:"provider_type"`
-	APIEndpoint     string `json:"api_endpoint" yaml:"api_endpoint"`
-	APIKeyFile      string `json:"api_key_file" yaml:"api_key_file"`
-	ModelDir        string `json:"model_dir" yaml:"model_dir"`
+	DataDir            string `json:"data_dir" yaml:"data_dir"`
+	DefaultModel       string `json:"default_model" yaml:"default_model"`
+	Language           string `json:"language" yaml:"language"`
+	EnableCloud        *bool  `json:"enable_cloud" yaml:"enable_cloud"`
+	EnableAnalytics    *bool  `json:"enable_analytics" yaml:"enable_analytics"`
+	ProviderType       string `json:"provider_type" yaml:"provider_type"`
+	APIEndpoint        string `json:"api_endpoint" yaml:"api_endpoint"`
+	APIKeyFile         string `json:"api_key_file" yaml:"api_key_file"`
+	ModelDir           string `json:"model_dir" yaml:"model_dir"`
+	UpdateCheckEnabled *bool  `json:"update_check_enabled" yaml:"update_check_enabled"`
+	UpdateChannel      string `json:"update_channel" yaml:"update_channel"`
 }
 
 // Load 加载并校验配置，返回领域层 AppConfig。
@@ -83,21 +85,25 @@ func (l *Loader) Load() (*entity.AppConfig, error) {
 func (l *Loader) loadDefaults() *rawConfig {
 	enableCloud := defaultEnableCloud
 	enableAnalytics := defaultEnableAnalytics
+	updateCheckEnabled := true
+	updateChannel := string(entity.ChannelBeta)
 	dataDir := expandTilde(defaultDataDir)
 	if dataDir == "" {
 		// 兜底：若无法解析主目录，使用当前工作目录下的 .medmemo/data
 		dataDir = ".medmemo/data"
 	}
 	return &rawConfig{
-		DataDir:         dataDir,
-		DefaultModel:    defaultModel,
-		Language:        defaultLanguage,
-		EnableCloud:     &enableCloud,
-		EnableAnalytics: &enableAnalytics,
-		ProviderType:    string(defaultProviderType),
-		APIEndpoint:     "",
-		APIKeyFile:      "",
-		ModelDir:        defaultModelDir,
+		DataDir:            dataDir,
+		DefaultModel:       defaultModel,
+		Language:           defaultLanguage,
+		EnableCloud:        &enableCloud,
+		EnableAnalytics:    &enableAnalytics,
+		ProviderType:       string(defaultProviderType),
+		APIEndpoint:        "",
+		APIKeyFile:         "",
+		ModelDir:           defaultModelDir,
+		UpdateCheckEnabled: &updateCheckEnabled,
+		UpdateChannel:      updateChannel,
 	}
 }
 
@@ -152,15 +158,23 @@ func (l *Loader) applyEnvOverrides(raw *rawConfig) {
 	if v := os.Getenv("MEDMEMO_MODEL_DIR"); v != "" {
 		raw.ModelDir = v
 	}
+	if v := os.Getenv("MEDMEMO_UPDATE_CHECK"); v != "" {
+		enabled := v == "true" || v == "1"
+		raw.UpdateCheckEnabled = &enabled
+	}
+	if v := os.Getenv("MEDMEMO_UPDATE_CHANNEL"); v != "" {
+		raw.UpdateChannel = v
+	}
 }
 
 func (l *Loader) toDomain(raw *rawConfig) *entity.AppConfig {
 	cfg := &entity.AppConfig{
-		DataDir:      expandTilde(raw.DataDir),
-		DefaultModel: raw.DefaultModel,
-		Language:     raw.Language,
-		APIEndpoint:  raw.APIEndpoint,
-		ModelDir:     expandTilde(raw.ModelDir),
+		DataDir:       expandTilde(raw.DataDir),
+		DefaultModel:  raw.DefaultModel,
+		Language:      raw.Language,
+		APIEndpoint:   raw.APIEndpoint,
+		ModelDir:      expandTilde(raw.ModelDir),
+		UpdateChannel: entity.UpdateChannel(raw.UpdateChannel),
 	}
 	if raw.EnableCloud != nil {
 		cfg.EnableCloud = *raw.EnableCloud
@@ -168,9 +182,15 @@ func (l *Loader) toDomain(raw *rawConfig) *entity.AppConfig {
 	if raw.EnableAnalytics != nil {
 		cfg.EnableAnalytics = *raw.EnableAnalytics
 	}
+	if raw.UpdateCheckEnabled != nil {
+		cfg.UpdateCheckEnabled = *raw.UpdateCheckEnabled
+	}
 	cfg.ProviderType = models.ProviderType(raw.ProviderType)
 	if cfg.ProviderType == "" {
 		cfg.ProviderType = defaultProviderType
+	}
+	if cfg.UpdateChannel == "" {
+		cfg.UpdateChannel = entity.ChannelBeta
 	}
 	return cfg
 }

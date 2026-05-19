@@ -8,13 +8,16 @@ import (
 	"github.com/medmemo/medmemo/internal/adapters/ai"
 	"github.com/medmemo/medmemo/internal/adapters/detector"
 	"github.com/medmemo/medmemo/internal/adapters/repository"
+	adapterUpdater "github.com/medmemo/medmemo/internal/adapters/updater"
 	"github.com/medmemo/medmemo/internal/application/pipeline"
 	"github.com/medmemo/medmemo/internal/application/port"
+	"github.com/medmemo/medmemo/internal/application/updater"
 	"github.com/medmemo/medmemo/internal/application/usecase"
 	"github.com/medmemo/medmemo/internal/infrastructure/config"
 	"github.com/medmemo/medmemo/internal/infrastructure/database"
 	"github.com/medmemo/medmemo/internal/infrastructure/onnx"
 	"github.com/medmemo/medmemo/internal/infrastructure/secret"
+	infraUpdater "github.com/medmemo/medmemo/internal/infrastructure/updater"
 )
 
 // InitializeApp 通过 Wire 编译期依赖注入组装完整应用。
@@ -40,6 +43,9 @@ func InitializeApp() (*App, func(), error) {
 		database.DatabaseSet,
 		onnx.ONNXSet,
 		secret.SecretSet,
+		infraUpdater.InstallerSet,
+		adapterUpdater.ProviderSet,
+		updater.ProviderSet,
 		NewEngineConfig,
 		wire.Bind(new(port.NERDetector), new(*detector.ONNXNERDetector)),
 		wire.Bind(new(secret.Store), new(*secret.KeyringStore)),

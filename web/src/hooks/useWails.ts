@@ -7,6 +7,9 @@ import type {
   ModelInfo,
   EmergencyResult,
   DisclaimerStatus,
+  UpdateInfoResponse,
+  DownloadUpdateRequest,
+  UpdateSettingsResponse,
 } from '@wails/go/main/WailsApp'
 
 /**
@@ -68,6 +71,34 @@ export function useWails() {
     return await WailsApp.ReportComplianceFeedback(ruleID, originalText)
   }, [])
 
+  const checkUpdate = useCallback(async (): Promise<UpdateInfoResponse | null> => {
+    return await WailsApp.CheckUpdate()
+  }, [])
+
+  const downloadUpdate = useCallback(async (req: DownloadUpdateRequest): Promise<string> => {
+    return await WailsApp.DownloadUpdate(req)
+  }, [])
+
+  const applyUpdate = useCallback(async (path: string): Promise<void> => {
+    return await WailsApp.ApplyUpdate(path)
+  }, [])
+
+  const getUpdateSettings = useCallback(async (): Promise<UpdateSettingsResponse> => {
+    return await WailsApp.GetUpdateSettings()
+  }, [])
+
+  const setUpdateSettings = useCallback(async (req: UpdateSettingsResponse): Promise<void> => {
+    return await WailsApp.SetUpdateSettings(req)
+  }, [])
+
+  const skipUpdateVersion = useCallback(async (v: string): Promise<void> => {
+    return await WailsApp.SkipUpdateVersion(v)
+  }, [])
+
+  const openDownloadURL = useCallback((url: string): void => {
+    WailsApp.OpenDownloadURL(url)
+  }, [])
+
   return {
     sendMessage,
     sendMessageStream,
@@ -81,5 +112,12 @@ export function useWails() {
     acceptDisclaimer,
     declineDisclaimer,
     reportComplianceFeedback,
+    checkUpdate,
+    downloadUpdate,
+    applyUpdate,
+    getUpdateSettings,
+    setUpdateSettings,
+    skipUpdateVersion,
+    openDownloadURL,
   }
 }

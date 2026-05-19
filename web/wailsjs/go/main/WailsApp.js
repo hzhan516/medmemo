@@ -52,3 +52,31 @@ export function DeclineDisclaimer() {
 export function ReportComplianceFeedback(arg1, arg2) {
   return window['go']['main']['WailsApp']['ReportComplianceFeedback'](arg1, arg2);
 }
+
+export function CheckUpdate() {
+  return window['go']['main']['WailsApp']['CheckUpdate']();
+}
+
+export function DownloadUpdate(arg1) {
+  return window['go']['main']['WailsApp']['DownloadUpdate'](arg1);
+}
+
+export function ApplyUpdate(arg1) {
+  return window['go']['main']['WailsApp']['ApplyUpdate'](arg1);
+}
+
+export function GetUpdateSettings() {
+  return window['go']['main']['WailsApp']['GetUpdateSettings']();
+}
+
+export function SetUpdateSettings(arg1) {
+  return window['go']['main']['WailsApp']['SetUpdateSettings'](arg1);
+}
+
+export function SkipUpdateVersion(arg1) {
+  return window['go']['main']['WailsApp']['SkipUpdateVersion'](arg1);
+}
+
+export function OpenDownloadURL(arg1) {
+  window['go']['main']['WailsApp']['OpenDownloadURL'](arg1);
+}

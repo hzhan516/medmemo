@@ -61,3 +61,36 @@ export function AcceptDisclaimer(arg1: string): Promise<void>;
 export function DeclineDisclaimer(): Promise<void>;
 
 export function ReportComplianceFeedback(arg1: string, arg2: string): Promise<void>;
+
+export interface UpdateInfoResponse {
+  version: string;
+  name: string;
+  body: string;
+  published_at: string;
+  mandatory: boolean;
+  channel: string;
+}
+
+export interface DownloadUpdateRequest {
+  version: string;
+}
+
+export interface UpdateSettingsResponse {
+  check_enabled: boolean;
+  channel: string;
+  skip_version: string;
+}
+
+export function CheckUpdate(): Promise<UpdateInfoResponse | null>;
+
+export function DownloadUpdate(arg1: DownloadUpdateRequest): Promise<string>;
+
+export function ApplyUpdate(arg1: string): Promise<void>;
+
+export function GetUpdateSettings(): Promise<UpdateSettingsResponse>;
+
+export function SetUpdateSettings(arg1: UpdateSettingsResponse): Promise<void>;
+
+export function SkipUpdateVersion(arg1: string): Promise<void>;
+
+export function OpenDownloadURL(arg1: string): void;
