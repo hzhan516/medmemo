@@ -19,7 +19,7 @@ type MessageRepoSQLite struct {
 }
 
 // NewMessageRepoSQLite 构造函数。
-func NewMessageRepoSQLite(connector *database.SQLiteConnector) *MessageRepoSQLite {
+func NewMessageRepoSQLite(connector database.DBConnector) *MessageRepoSQLite {
 	return &MessageRepoSQLite{db: connector.DB()}
 }
 

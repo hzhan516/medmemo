@@ -18,7 +18,7 @@ type ConversationRepoSQLite struct {
 }
 
 // NewConversationRepoSQLite 构造函数。
-func NewConversationRepoSQLite(connector *database.SQLiteConnector) *ConversationRepoSQLite {
+func NewConversationRepoSQLite(connector database.DBConnector) *ConversationRepoSQLite {
 	return &ConversationRepoSQLite{db: connector.DB()}
 }
 

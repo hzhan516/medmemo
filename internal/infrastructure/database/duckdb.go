@@ -82,95 +82,12 @@ func (c *SQLiteConnector) Close() error {
 
 // Migrate 执行版本化数据库迁移。
 func (c *SQLiteConnector) Migrate(ctx context.Context) error {
-	var version int
-	if err := c.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
-		return fmt.Errorf("failed to read schema version: %w", err)
-	}
-
-	migrations := []struct {
-		version int
-		sql     string
-	}{
-		{
-			version: 1,
-			sql: `
-			CREATE TABLE IF NOT EXISTS conversations (
-				id TEXT PRIMARY KEY,
-				title TEXT NOT NULL DEFAULT '',
-				model TEXT NOT NULL DEFAULT '',
-				created_at INTEGER NOT NULL,
-				updated_at INTEGER NOT NULL,
-				archived_at INTEGER,
-				deleted_at INTEGER
-			);
-			CREATE INDEX IF NOT EXISTS idx_conversations_updated ON conversations(updated_at);
-			CREATE INDEX IF NOT EXISTS idx_conversations_deleted ON conversations(deleted_at);
-			`,
-		},
-		{
-			version: 2,
-			sql: `
-			CREATE TABLE IF NOT EXISTS messages (
-				id TEXT PRIMARY KEY,
-				conversation_id TEXT NOT NULL,
-				role TEXT NOT NULL,
-				content TEXT NOT NULL,
-				tokens INTEGER DEFAULT 0,
-				created_at INTEGER NOT NULL,
-				deleted_at INTEGER,
-				FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
-			);
-			CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, created_at);
-			CREATE INDEX IF NOT EXISTS idx_messages_deleted ON messages(deleted_at);
-			`,
-		},
-		{
-			version: 3,
-			sql: `
-			CREATE TABLE IF NOT EXISTS memories (
-				id TEXT PRIMARY KEY,
-				tier INTEGER NOT NULL,
-				content TEXT NOT NULL,
-				tags TEXT,
-				source_conv TEXT,
-				confidence REAL DEFAULT 1.0,
-				created_at INTEGER NOT NULL,
-				accessed_at INTEGER NOT NULL
-			);
-			CREATE INDEX IF NOT EXISTS idx_memories_tier ON memories(tier);
-			CREATE INDEX IF NOT EXISTS idx_memories_accessed ON memories(accessed_at);
-			`,
-		},
-		{
-			version: 4,
-			sql: `
-			CREATE TABLE IF NOT EXISTS disclaimer_acceptance (
-				version TEXT PRIMARY KEY,
-				accepted_at INTEGER NOT NULL,
-				text_hash TEXT
-			);
-			`,
-		},
-	}
-
-	for _, m := range migrations {
-		if version >= m.version {
-			continue
-		}
-		if _, err := c.db.ExecContext(ctx, m.sql); err != nil {
-			return fmt.Errorf("failed to apply migration v%d: %w", m.version, err)
-		}
-		if _, err := c.db.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", m.version)); err != nil {
-			return fmt.Errorf("failed to update schema version to v%d: %w", m.version, err)
-		}
-		version = m.version
-	}
-
-	return nil
+	return migrateSQLiteSchema(ctx, c.db)
 }
 
 // DatabaseSet 供 Wire 使用的 ProviderSet。
 var DatabaseSet = wire.NewSet(
 	NewDuckDBConnector,
 	NewSQLiteConnector,
+	NewSQLCipherConnector,
 )

@@ -14,6 +14,7 @@ import (
 	"github.com/medmemo/medmemo/internal/infrastructure/config"
 	"github.com/medmemo/medmemo/internal/infrastructure/database"
 	"github.com/medmemo/medmemo/internal/infrastructure/onnx"
+	"github.com/medmemo/medmemo/internal/infrastructure/secret"
 )
 
 // InitializeApp 通过 Wire 编译期依赖注入组装完整应用。
@@ -38,8 +39,11 @@ func InitializeApp() (*App, func(), error) {
 		config.ConfigSet,
 		database.DatabaseSet,
 		onnx.ONNXSet,
+		secret.SecretSet,
 		NewEngineConfig,
 		wire.Bind(new(port.NERDetector), new(*detector.ONNXNERDetector)),
+		wire.Bind(new(secret.Store), new(*secret.KeyringStore)),
+		wire.Bind(new(database.DBConnector), new(*database.SQLCipherConnector)),
 		wire.Value(""),
 	)
 	return nil, nil, nil

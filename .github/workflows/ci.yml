@@ -51,6 +51,9 @@ jobs:
         with:
           go-version: '1.22'
 
+      - name: Install SQLCipher
+        run: sudo apt-get update && sudo apt-get install -y libsqlcipher-dev
+
       - name: Run unit tests
         run: go test -race -coverprofile=coverage.out ./...
 
@@ -71,6 +74,9 @@ jobs:
         with:
           go-version: '1.22'
 
+      - name: Install SQLCipher
+        run: sudo apt-get update && sudo apt-get install -y libsqlcipher-dev
+
       - name: Run integration tests
         run: go test -race -tags=integration ./...
 
@@ -84,6 +90,9 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
+
+      - name: Install SQLCipher
+        run: sudo apt-get update && sudo apt-get install -y libsqlcipher-dev
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -149,8 +158,20 @@ jobs:
       - name: Install frontend dependencies
         run: cd web && npm ci
 
-      - name: Build (Linux/macOS)
-        if: runner.os != 'Windows'
+      - name: Install SQLCipher (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libsqlcipher-dev
+
+      - name: Install SQLCipher (macOS)
+        if: runner.os == 'macOS'
+        run: brew install sqlcipher
+
+      - name: Build (Linux)
+        if: runner.os == 'Linux'
+        run: wails build -clean -tags webkit2_41
+
+      - name: Build (macOS)
+        if: runner.os == 'macOS'
         run: wails build -clean
 
       - name: Build (Windows)

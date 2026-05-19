@@ -21,8 +21,8 @@ type MemoryRepoSQLite struct {
 	db *sql.DB
 }
 
-// NewMemoryRepoSQLite 构造函数，复用 SQLiteConnector。
-func NewMemoryRepoSQLite(connector *database.SQLiteConnector) *MemoryRepoSQLite {
+// NewMemoryRepoSQLite 构造函数，复用 DBConnector。
+func NewMemoryRepoSQLite(connector database.DBConnector) *MemoryRepoSQLite {
 	return &MemoryRepoSQLite{db: connector.DB()}
 }
 

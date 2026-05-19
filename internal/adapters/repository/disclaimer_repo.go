@@ -17,7 +17,7 @@ type DisclaimerRepoSQLite struct {
 }
 
 // NewDisclaimerRepoSQLite 构造函数。
-func NewDisclaimerRepoSQLite(connector *database.SQLiteConnector) *DisclaimerRepoSQLite {
+func NewDisclaimerRepoSQLite(connector database.DBConnector) *DisclaimerRepoSQLite {
 	return &DisclaimerRepoSQLite{db: connector.DB()}
 }
 
