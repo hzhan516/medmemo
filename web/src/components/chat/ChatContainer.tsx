@@ -9,12 +9,13 @@ interface ChatContainerProps {
   isStreaming: boolean
   onStartNewConversation?: () => void
   onRetry?: (messageId: string) => void
+  onReportCompliance?: (messageId: string, ruleID: string) => void
 }
 
 /**
  * 消息列表滚动容器，自动滚动到底部。
  */
-export function ChatContainer({ messages, isStreaming, onStartNewConversation, onRetry }: ChatContainerProps) {
+export function ChatContainer({ messages, isStreaming, onStartNewConversation, onRetry, onReportCompliance }: ChatContainerProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -50,7 +51,7 @@ export function ChatContainer({ messages, isStreaming, onStartNewConversation, o
         )}
 
         {messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} onRetry={onRetry} />
+          <MessageBubble key={msg.id} message={msg} onRetry={onRetry} onReportCompliance={onReportCompliance} />
         ))}
 
         {isStreaming && messages[messages.length - 1]?.role !== 'assistant' && (

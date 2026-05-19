@@ -26,6 +26,7 @@ export function ChatPage() {
     handleEmergencyContinue,
     handleEmergencyNotEmergency,
     handleAcknowledgeWarning,
+    reportComplianceFeedback,
     error,
   } = useConversation()
 
@@ -95,6 +96,7 @@ export function ChatPage() {
           isStreaming={isStreaming}
           onStartNewConversation={handleNewConversation}
           onRetry={retryMessage}
+          onReportCompliance={reportComplianceFeedback}
         />
 
         {/* B 级紧急症状警告横幅 */}

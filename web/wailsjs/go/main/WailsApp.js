@@ -48,3 +48,7 @@ export function AcceptDisclaimer(arg1) {
 export function DeclineDisclaimer() {
   return window['go']['main']['WailsApp']['DeclineDisclaimer']();
 }
+
+export function ReportComplianceFeedback(arg1, arg2) {
+  return window['go']['main']['WailsApp']['ReportComplianceFeedback'](arg1, arg2);
+}

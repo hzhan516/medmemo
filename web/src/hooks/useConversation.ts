@@ -18,6 +18,7 @@ export function useConversation() {
     appendToLastMessage,
     setLastMessageError,
     setLastMessageWarnings,
+    setLastMessageReplacedTerms,
     abortLastMessage,
     setStreaming,
     setConversationId,
@@ -57,11 +58,15 @@ export function useConversation() {
       abortLastMessage()
       setStreaming(false)
     })
-    const removeCompliance = EventsOn('chat:stream:compliance', (payload: { level: string; warning: string; notice: string }) => {
+    const removeCompliance = EventsOn('chat:stream:compliance', (payload: { level: string; warning: string; notice: string; replacedTerms?: string[]; matchedRule?: string }) => {
       const warnings: string[] = [payload.level]
       if (payload.warning) warnings.push(`WARNING:${payload.warning}`)
       if (payload.notice) warnings.push(`NOTICE:${payload.notice}`)
+      if (payload.matchedRule) warnings.push(`RULE:${payload.matchedRule}`)
       setLastMessageWarnings(warnings)
+      if (payload.replacedTerms && payload.replacedTerms.length > 0) {
+        setLastMessageReplacedTerms(payload.replacedTerms)
+      }
     })
     const removeTitle = EventsOn('chat:title:generated', (payload: { conv_id: string; title: string }) => {
       updateConversation(payload.conv_id, { title: payload.title })
@@ -282,5 +287,19 @@ export function useConversation() {
     handleEmergencyNotEmergency,
     handleAcknowledgeWarning,
     error,
+    reportComplianceFeedback: async (messageId: string, ruleID: string) => {
+      const msg = messages.find((m) => m.id === messageId)
+      if (!msg) return
+      try {
+        await wails.reportComplianceFeedback(ruleID, msg.content)
+        useChatStore.setState((state) => ({
+          messages: state.messages.map((m) =>
+            m.id === messageId ? { ...m, complianceFeedback: 'submitted' as const } : m
+          ),
+        }))
+      } catch (e) {
+        console.error('提交合规反馈失败:', e)
+      }
+    },
   }
 }
