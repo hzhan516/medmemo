@@ -32,6 +32,10 @@ export interface EmergencyResult {
 
 export function SendMessage(arg1: SendMessageRequest): Promise<SendMessageResponse>;
 
+export function SendMessageStream(arg1: SendMessageRequest): Promise<void>;
+
+export function StopGeneration(): Promise<void>;
+
 export function GetConversations(): Promise<Array<ConversationSummary>>;
 
 export function CreateConversation(): Promise<string>;

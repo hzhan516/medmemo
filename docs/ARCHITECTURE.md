@@ -57,12 +57,12 @@ flowchart TB
 
 ## 四层架构映射
 
-| 层级 | 职责 | 典型包路径 | 编译依赖原则 |
-|------|------|-----------|------------|
-| **Frameworks & Drivers** | Wails v2 前端桥接、系统托盘、窗口管理 | `cmd/health-assistant/` | 仅允许依赖内层 interface |
-| **Interface Adapters** | HTTP 客户端、DuckDB/Kùzǔ 仓库、ONNX 推理适配 | `internal/adapters/*` | 依赖 Application 层定义的接口 |
-| **Application Core** | 用例编排、脱敏流水线、端口定义 | `internal/application/*` | 不依赖任何外层，不依赖框架 |
-| **Domain** | 实体定义、领域服务、策略抽象 | `internal/domain/*` | **零外部依赖**，纯 Go 标准库 |
+| 层级                       | 职责                                | 典型包路径                    | 编译依赖原则                |
+|--------------------------|-----------------------------------|--------------------------|-----------------------|
+| **Frameworks & Drivers** | Wails v2 前端桥接、系统托盘、窗口管理           | `cmd/health-assistant/`  | 仅允许依赖内层 interface     |
+| **Interface Adapters**   | HTTP 客户端、DuckDB/Kùzǔ 仓库、ONNX 推理适配 | `internal/adapters/*`    | 依赖 Application 层定义的接口 |
+| **Application Core**     | 用例编排、脱敏流水线、端口定义                   | `internal/application/*` | 不依赖任何外层，不依赖框架         |
+| **Domain**               | 实体定义、领域服务、策略抽象                    | `internal/domain/*`      | **零外部依赖**，纯 Go 标准库    |
 
 ---
 
@@ -121,16 +121,16 @@ pkg               │   -    │      -      │    -     │       -        │
 
 ## 关键设计决策（ADR 索引）
 
-| ADR | 主题 | 决策 | 状态 |
-|-----|------|------|------|
-| ADR-001 | 桌面框架选型 | Wails v2（Go + React） | 已采纳 |
-| ADR-002 | 架构模式 | Clean Architecture 四层模型 | 已采纳 |
-| ADR-003 | 依赖注入 | Google Wire（编译期） | 已采纳 |
-| ADR-004 | 本地 AI 推理 | Hugot + ONNX Runtime | 已采纳 |
-| ADR-005 | 嵌入式数据库 | DuckDB（分析）+ SQLite（事务）+ Kùzǔ（图） | 已采纳 |
-| ADR-006 | 向量检索 | DuckDB `vss` 扩展 + HNSW 索引 | 已采纳 |
-| ADR-007 | 脱敏架构 | L1规则 + L2 NER ONNX + L3关键词字典 | 已采纳 |
-| ADR-008 | 流式合规检测 | 标点分句缓冲 + 检测通过后再推送 | 已采纳 |
+| ADR     | 主题       | 决策                              | 状态  |
+|---------|----------|---------------------------------|-----|
+| ADR-001 | 桌面框架选型   | Wails v2（Go + React）            | 已采纳 |
+| ADR-002 | 架构模式     | Clean Architecture 四层模型         | 已采纳 |
+| ADR-003 | 依赖注入     | Google Wire（编译期）                | 已采纳 |
+| ADR-004 | 本地 AI 推理 | Hugot + ONNX Runtime            | 已采纳 |
+| ADR-005 | 嵌入式数据库   | DuckDB（分析）+ SQLite（事务）+ Kùzǔ（图） | 已采纳 |
+| ADR-006 | 向量检索     | DuckDB `vss` 扩展 + HNSW 索引       | 已采纳 |
+| ADR-007 | 脱敏架构     | L1规则 + L2 NER ONNX + L3关键词字典    | 已采纳 |
+| ADR-008 | 流式合规检测   | 标点分句缓冲 + 检测通过后再推送               | 已采纳 |
 
 完整 ADR 文档位于 `docs/adr/` 目录。
 
@@ -138,10 +138,10 @@ pkg               │   -    │      -      │    -     │       -        │
 
 ## 编译产物形态
 
-| 组件 | 体积预算 | 说明 |
-|------|---------|------|
-| 主二进制 | ~50MB | Wails Runtime + DuckDB 引擎 + Go 运行时 + 业务逻辑 |
-| 资源目录 | ~100MB | ONNX 模型 ~50MB + Kùzǔ 库 ~15MB + 字典/规则 ~10MB + 前端资源 |
-| **总计** | **< 150MB** | 单二进制 + 资源目录 |
+| 组件     | 体积预算        | 说明                                                |
+|--------|-------------|---------------------------------------------------|
+| 主二进制   | ~50MB       | Wails Runtime + DuckDB 引擎 + Go 运行时 + 业务逻辑         |
+| 资源目录   | ~100MB      | ONNX 模型 ~50MB + Kùzǔ 库 ~15MB + 字典/规则 ~10MB + 前端资源 |
+| **总计** | **< 150MB** | 单二进制 + 资源目录                                       |
 
 支持平台：Windows 10+ / macOS 12+ / Linux (Ubuntu 20.04+)，架构 x64 与 ARM64。

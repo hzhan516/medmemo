@@ -48,11 +48,29 @@ type ChatResponse struct {
 	Warnings   []string
 }
 
-// Execute 执行单次对话用例。
+// Execute 执行单次对话用例（非流式）。
+// 当前为简化实现：直接调用 LLM，跳过完整流水线（脱敏/记忆/合规待 TASK-003 完善）。
 func (c *ChatOrchestrator) Execute(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
 	// TODO(作者): 实现完整流水线 [Issue#003]
 	// 1. 脱敏检测 → 2. 记忆检索 → 3. LLM 调用 → 4. 合规检测 → 5. 输出还原
-	return nil, fmt.Errorf("not implemented")
+	reply, err := c.llmClient.Chat(ctx, req.Messages)
+	if err != nil {
+		return nil, fmt.Errorf("chat execution failed: %w", err)
+	}
+	return &ChatResponse{
+		Reply:      reply,
+		Confidence: 0.0,
+		Warnings:   nil,
+	}, nil
+}
+
+// StreamExecute 执行流式对话用例。
+// 当前为简化实现：直接透传 LLM 流式输出，跳过完整流水线（待 TASK-003 完善）。
+func (c *ChatOrchestrator) StreamExecute(ctx context.Context, req ChatRequest, onChunk func(string)) error {
+	if err := c.llmClient.StreamChat(ctx, req.Messages, onChunk); err != nil {
+		return fmt.Errorf("stream execution failed: %w", err)
+	}
+	return nil
 }
 
 // ComplianceChecker 应用层本地接口，检查输出内容合规性。

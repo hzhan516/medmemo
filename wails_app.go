@@ -4,7 +4,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/medmemo/medmemo/internal/application/usecase"
@@ -19,6 +21,8 @@ type WailsApp struct {
 	chatOrchestrator *usecase.ChatOrchestrator
 	memoryRetriever  *usecase.MemoryRetriever
 	config           *entity.AppConfig
+	streamMu         sync.Mutex
+	streamCancel     context.CancelFunc
 }
 
 // NewWailsApp 构造函数，供 Wire 调用。
@@ -53,7 +57,7 @@ type SendMessageResponse struct {
 	Warnings   []string `json:"warnings"`
 }
 
-// SendMessage 发送对话消息，编排完整对话流程。
+// SendMessage 发送对话消息，编排完整对话流程（非流式）。
 func (a *WailsApp) SendMessage(req SendMessageRequest) (*SendMessageResponse, error) {
 	ctx, cancel := context.WithTimeout(a.ctx, 30*time.Second)
 	defer cancel()
@@ -74,6 +78,53 @@ func (a *WailsApp) SendMessage(req SendMessageRequest) (*SendMessageResponse, er
 		Confidence: resp.Confidence,
 		Warnings:   resp.Warnings,
 	}, nil
+}
+
+// SendMessageStream 发送流式对话请求，通过 Wails Events 实时推送 token。
+func (a *WailsApp) SendMessageStream(req SendMessageRequest) error {
+	ctx, cancel := context.WithTimeout(a.ctx, 120*time.Second)
+
+	a.streamMu.Lock()
+	a.streamCancel = cancel
+	a.streamMu.Unlock()
+
+	defer func() {
+		a.streamMu.Lock()
+		a.streamCancel = nil
+		a.streamMu.Unlock()
+		cancel()
+	}()
+
+	chatReq := usecase.ChatRequest{
+		ConversationID: models.ConversationID(req.ConversationID),
+		Messages:       req.Messages,
+		Model:          models.ProviderType(req.Model),
+	}
+
+	err := a.chatOrchestrator.StreamExecute(ctx, chatReq, func(chunk string) {
+		runtime.EventsEmit(a.ctx, "chat:stream:token", chunk)
+	})
+
+	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			runtime.EventsEmit(a.ctx, "chat:stream:interrupted", nil)
+			return nil
+		}
+		runtime.EventsEmit(a.ctx, "chat:stream:error", err.Error())
+		return fmt.Errorf("stream failed: %w", err)
+	}
+
+	runtime.EventsEmit(a.ctx, "chat:stream:end", nil)
+	return nil
+}
+
+// StopGeneration 中断当前正在进行的流式生成。
+func (a *WailsApp) StopGeneration() {
+	a.streamMu.Lock()
+	if a.streamCancel != nil {
+		a.streamCancel()
+	}
+	a.streamMu.Unlock()
 }
 
 // ConversationSummary 会话摘要。

@@ -1,9 +1,10 @@
-import { User, Bot, AlertCircle } from 'lucide-react'
+import { User, Bot, AlertCircle, Copy, RotateCcw } from 'lucide-react'
 import type { ChatMessage } from '@/stores/chatStore'
 import { MarkdownRenderer } from '@/components/markdown/MarkdownRenderer'
 
 interface MessageBubbleProps {
   message: ChatMessage
+  onRetry?: (messageId: string) => void
 }
 
 /**
@@ -12,8 +13,8 @@ interface MessageBubbleProps {
  * AI 消息：白色/暗色背景，左侧对齐。
  * 系统提示：浅色背景，居中，13px 小字。
  */
-export function MessageBubble({ message }: MessageBubbleProps) {
-  const { role, content, isStreaming } = message
+export function MessageBubble({ message, onRetry }: MessageBubbleProps) {
+  const { id, role, content, isStreaming, interrupted, error } = message
 
   if (role === 'system') {
     return (
@@ -27,6 +28,14 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   }
 
   const isUser = role === 'user'
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(content)
+    } catch {
+      // 忽略复制失败
+    }
+  }
 
   return (
     <div
@@ -51,7 +60,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           max-w-[80%] px-4 py-3 text-sm leading-relaxed
           ${isUser
             ? 'bg-gradient-to-br from-user-blue to-user-blue-dark text-white rounded-2xl rounded-tr-sm'
-            : 'bg-ai-bg dark:bg-ai-bg-dark text-ai-text dark:text-gray-200 border border-border rounded-2xl rounded-tl-sm shadow-sm'
+            : `bg-ai-bg dark:bg-ai-bg-dark text-ai-text dark:text-gray-200 border rounded-2xl rounded-tl-sm shadow-sm ${error ? 'border-destructive' : 'border-border'}`
           }
         `}
       >
@@ -64,9 +73,53 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           </div>
         ) : (
           <div className="break-words">
+            {/* 错误状态 */}
+            {error && (
+              <div className="flex items-start gap-2 mb-2 p-2 rounded-lg bg-destructive/10 text-destructive text-xs">
+                <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium">生成失败</p>
+                  <p className="opacity-80">{error}</p>
+                </div>
+              </div>
+            )}
+
             <MarkdownRenderer content={content} />
+
+            {/* 中断标记 */}
+            {interrupted && (
+              <span className="text-xs text-muted-foreground ml-1">
+                [用户中断]
+              </span>
+            )}
+
+            {/* 流式光标 */}
             {isStreaming && content.length > 0 && (
               <span className="inline-block w-1.5 h-4 ml-0.5 bg-current opacity-50 animate-pulse" />
+            )}
+
+            {/* 错误时的操作按钮 */}
+            {error && (
+              <div className="flex items-center gap-2 mt-2 pt-2 border-t border-destructive/20">
+                <button
+                  onClick={handleCopy}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  title="复制已生成的内容"
+                >
+                  <Copy size={12} />
+                  复制内容
+                </button>
+                {onRetry && (
+                  <button
+                    onClick={() => onRetry(id)}
+                    className="flex items-center gap-1 text-xs text-primary hover:opacity-80 transition-opacity"
+                    title="重新生成"
+                  >
+                    <RotateCcw size={12} />
+                    重试
+                  </button>
+                )}
+              </div>
             )}
           </div>
         )}

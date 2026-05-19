@@ -8,12 +8,13 @@ interface ChatContainerProps {
   messages: ChatMessage[]
   isStreaming: boolean
   onStartNewConversation?: () => void
+  onRetry?: (messageId: string) => void
 }
 
 /**
  * 消息列表滚动容器，自动滚动到底部。
  */
-export function ChatContainer({ messages, isStreaming, onStartNewConversation }: ChatContainerProps) {
+export function ChatContainer({ messages, isStreaming, onStartNewConversation, onRetry }: ChatContainerProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -49,7 +50,7 @@ export function ChatContainer({ messages, isStreaming, onStartNewConversation }:
         )}
 
         {messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} />
+          <MessageBubble key={msg.id} message={msg} onRetry={onRetry} />
         ))}
 
         {isStreaming && messages[messages.length - 1]?.role !== 'assistant' && (

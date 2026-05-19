@@ -14,6 +14,8 @@ export function ChatPage() {
     isStreaming,
     currentConversationId,
     sendMessage,
+    stopGeneration,
+    retryMessage,
     startNewConversation,
     error,
   } = useConversation()
@@ -76,6 +78,7 @@ export function ChatPage() {
           messages={messages}
           isStreaming={isStreaming}
           onStartNewConversation={handleNewConversation}
+          onRetry={retryMessage}
         />
 
         {error && (
@@ -84,7 +87,11 @@ export function ChatPage() {
           </div>
         )}
 
-        <ChatInput onSend={sendMessage} isLoading={isStreaming} />
+        <ChatInput
+          onSend={sendMessage}
+          onStop={stopGeneration}
+          isLoading={isStreaming}
+        />
       </div>
     </div>
   )

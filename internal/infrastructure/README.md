@@ -19,11 +19,11 @@ internal/infrastructure/
 
 ## 导入约束（铁律）
 
-| 允许导入 | 禁止导入 |
-|---------|---------|
-| Go 标准库 | `github.com/medmemo/medmemo/internal/domain/*` |
+| 允许导入                                   | 禁止导入                                                |
+|----------------------------------------|-----------------------------------------------------|
+| Go 标准库                                 | `github.com/medmemo/medmemo/internal/domain/*`      |
 | 第三方框架库（Wails, DuckDB, Viper, Hugot...） | `github.com/medmemo/medmemo/internal/application/*` |
-| — | `github.com/medmemo/medmemo/internal/adapters/*` |
+| —                                      | `github.com/medmemo/medmemo/internal/adapters/*`    |
 
 > ⚠️ 基础设施层如果导入了任何业务包，将破坏 Clean Architecture 的依赖方向。
 
@@ -42,30 +42,31 @@ internal/infrastructure/
 ## 示例
 
 ```go
-// database/duckdb.go
+// Package database database/duckdb.go
 package database
 
 import (
-    "database/sql"
-    _ "github.com/marcboeker/go-duckdb"
+	"database/sql"
+
+	_ "github.com/marcboeker/go-duckdb"
 )
 
 type DuckDBConnector struct {
-    db *sql.DB
+	db *sql.DB
 }
 
 func NewDuckDBConnector(dataSourceName string) (*DuckDBConnector, error) {
-    db, err := sql.Open("duckdb", dataSourceName)
-    if err != nil {
-        return nil, err
-    }
-    if err := db.Ping(); err != nil {
-        return nil, err
-    }
-    return &DuckDBConnector{db: db}, nil
+	db, err := sql.Open("duckdb", dataSourceName)
+	if err != nil {
+		return nil, err
+	}
+	if err := db.Ping(); err != nil {
+		return nil, err
+	}
+	return &DuckDBConnector{db: db}, nil
 }
 
 func (c *DuckDBConnector) Close() error {
-    return c.db.Close()
+	return c.db.Close()
 }
 ```

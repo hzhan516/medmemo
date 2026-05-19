@@ -5,6 +5,14 @@ export function SendMessage(arg1) {
   return window['go']['main']['WailsApp']['SendMessage'](arg1);
 }
 
+export function SendMessageStream(arg1) {
+  return window['go']['main']['WailsApp']['SendMessageStream'](arg1);
+}
+
+export function StopGeneration() {
+  return window['go']['main']['WailsApp']['StopGeneration']();
+}
+
 export function GetConversations() {
   return window['go']['main']['WailsApp']['GetConversations']();
 }

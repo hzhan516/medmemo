@@ -133,12 +133,12 @@ EventsOn('compliance:warning', (level: string, reason: string) => {
 
 ## 错误码定义
 
-| 错误码 | 含义 | HTTP 等效 | 处理建议 |
-|--------|------|----------|---------|
-| `ErrNotFound` | 记录不存在 | 404 | 提示用户创建新记录 |
-| `ErrInvalidConfig` | 配置非法 | 400 | 引导用户检查设置 |
-| `ErrDuplicateEntry` | 重复记录 | 409 | 提示用户合并或替换 |
-| `ErrComplianceBlocked` | 内容被合规阻断 | 403 | 显示标准提示语，终止输出 |
-| `ErrSensitiveDataLeak` | 敏感数据泄露风险 | 403 | 触发二次脱敏 |
+| 错误码                    | 含义       | HTTP 等效 | 处理建议         |
+|------------------------|----------|---------|--------------|
+| `ErrNotFound`          | 记录不存在    | 404     | 提示用户创建新记录    |
+| `ErrInvalidConfig`     | 配置非法     | 400     | 引导用户检查设置     |
+| `ErrDuplicateEntry`    | 重复记录     | 409     | 提示用户合并或替换    |
+| `ErrComplianceBlocked` | 内容被合规阻断  | 403     | 显示标准提示语，终止输出 |
+| `ErrSensitiveDataLeak` | 敏感数据泄露风险 | 403     | 触发二次脱敏       |
 
 所有错误通过 `fmt.Errorf("...: %w", err)` 包装传递，前端通过 `errors.Is` 链判断根因。

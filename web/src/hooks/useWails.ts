@@ -20,6 +20,17 @@ export function useWails() {
     []
   )
 
+  const sendMessageStream = useCallback(
+    async (req: SendMessageRequest): Promise<void> => {
+      return await WailsApp.SendMessageStream(req)
+    },
+    []
+  )
+
+  const stopGeneration = useCallback(async (): Promise<void> => {
+    return await WailsApp.StopGeneration()
+  }, [])
+
   const getConversations = useCallback(async (): Promise<ConversationSummary[]> => {
     return await WailsApp.GetConversations()
   }, [])
@@ -38,6 +49,8 @@ export function useWails() {
 
   return {
     sendMessage,
+    sendMessageStream,
+    stopGeneration,
     getConversations,
     createConversation,
     getModels,

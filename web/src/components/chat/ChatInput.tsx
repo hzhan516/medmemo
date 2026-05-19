@@ -1,8 +1,9 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { Send, Loader2 } from 'lucide-react'
+import { Send, Square } from 'lucide-react'
 
 interface ChatInputProps {
   onSend: (message: string) => void
+  onStop?: () => void
   isLoading?: boolean
   placeholder?: string
 }
@@ -15,6 +16,7 @@ interface ChatInputProps {
  */
 export function ChatInput({
   onSend,
+  onStop,
   isLoading = false,
   placeholder = '输入你的健康问题...',
 }: ChatInputProps) {
@@ -40,17 +42,26 @@ export function ChatInput({
     }
   }, [content, isLoading, onSend])
 
+  const handleStop = useCallback(() => {
+    if (!isLoading || !onStop) return
+    onStop()
+  }, [isLoading, onStop])
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault()
-        handleSend()
+        if (isLoading && onStop) {
+          handleStop()
+        } else {
+          handleSend()
+        }
       }
       if (e.key === 'Escape') {
         setContent('')
       }
     },
-    [handleSend]
+    [handleSend, handleStop, isLoading, onStop]
   )
 
   return (
@@ -62,7 +73,7 @@ export function ChatInput({
             value={content}
             onChange={(e) => setContent(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={placeholder}
+            placeholder={isLoading ? 'AI 正在生成回复...' : placeholder}
             rows={1}
             className="
               w-full min-h-[56px] max-h-[120px] resize-none
@@ -74,7 +85,7 @@ export function ChatInput({
             disabled={isLoading}
           />
           <div className="absolute right-3 bottom-3 text-[10px] text-muted-foreground select-none">
-            {content.length > 0 && (
+            {content.length > 0 && !isLoading && (
               <span>
                 {content.length > 2000 ? (
                   <span className="text-destructive">{content.length}</span>
@@ -87,26 +98,41 @@ export function ChatInput({
           </div>
         </div>
 
-        <button
-          onClick={handleSend}
-          disabled={!content.trim() || isLoading}
-          className={`
-            shrink-0 w-10 h-10 rounded-xl flex items-center justify-center
-            transition-all
-            ${content.trim() && !isLoading
-              ? 'bg-primary text-primary-foreground hover:opacity-90 shadow-sm'
-              : 'bg-muted text-muted-foreground cursor-not-allowed'
-            }
-          `}
-          aria-label="发送"
-        >
-          {isLoading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
-        </button>
+        {isLoading ? (
+          <button
+            onClick={handleStop}
+            className="
+              shrink-0 w-10 h-10 rounded-xl flex items-center justify-center
+              bg-destructive text-destructive-foreground
+              hover:opacity-90 transition-all shadow-sm
+            "
+            aria-label="停止生成"
+            title="停止生成"
+          >
+            <Square size={14} fill="currentColor" />
+          </button>
+        ) : (
+          <button
+            onClick={handleSend}
+            disabled={!content.trim()}
+            className={`
+              shrink-0 w-10 h-10 rounded-xl flex items-center justify-center
+              transition-all
+              ${content.trim()
+                ? 'bg-primary text-primary-foreground hover:opacity-90 shadow-sm'
+                : 'bg-muted text-muted-foreground cursor-not-allowed'
+              }
+            `}
+            aria-label="发送"
+          >
+            <Send size={18} />
+          </button>
+        )}
       </div>
 
       <div className="text-center mt-1.5">
         <span className="text-[10px] text-muted-foreground">
-          Enter 发送 · Shift+Enter 换行 · Escape 取消
+          {isLoading ? 'Enter 停止生成 · 正在接收回复' : 'Enter 发送 · Shift+Enter 换行 · Escape 取消'}
         </span>
       </div>
     </div>

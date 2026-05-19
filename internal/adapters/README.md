@@ -18,11 +18,11 @@ internal/adapters/
 
 ## 导入约束
 
-| 允许导入 | 禁止导入 |
-|---------|---------|
-| `github.com/medmemo/medmemo/internal/domain/*` | `github.com/medmemo/medmemo/internal/application/*` |
-| `github.com/medmemo/medmemo/internal/infrastructure/*` | `github.com/medmemo/medmemo/cmd/*` |
-| `github.com/medmemo/medmemo/pkg/models/` | — |
+| 允许导入                                                   | 禁止导入                                                |
+|--------------------------------------------------------|-----------------------------------------------------|
+| `github.com/medmemo/medmemo/internal/domain/*`         | `github.com/medmemo/medmemo/internal/application/*` |
+| `github.com/medmemo/medmemo/internal/infrastructure/*` | `github.com/medmemo/medmemo/cmd/*`                  |
+| `github.com/medmemo/medmemo/pkg/models/`               | —                                                   |
 
 ## 核心职责
 
@@ -39,23 +39,23 @@ internal/adapters/
 ## 示例
 
 ```go
-// ai/openai_adapter.go
+// Package ai ai/openai_adapter.go
 package ai
 
 import "github.com/medmemo/medmemo/internal/application/port"
 
 type OpenAIAdapter struct {
-    client *http.Client
-    apiKey string
+	client *http.Client
+	apiKey string
 }
 
 func (a *OpenAIAdapter) Chat(messages []port.Message) (string, error) {
-    // 实现 OpenAI API 调用
+	// 实现 OpenAI API 调用
 }
 
 // 通过 Wire 注册到 ProviderSet
 var ProviderSet = wire.NewSet(
-    NewOpenAIAdapter,
-    wire.Bind(new(port.LLMClient), new(*OpenAIAdapter)),
+	NewOpenAIAdapter,
+	wire.Bind(new(port.LLMClient), new(*OpenAIAdapter)),
 )
 ```

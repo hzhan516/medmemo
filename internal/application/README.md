@@ -17,11 +17,11 @@ internal/application/
 
 ## 导入约束
 
-| 允许导入 | 禁止导入 |
-|---------|---------|
-| `github.com/medmemo/medmemo/internal/domain/*` | `github.com/medmemo/medmemo/internal/adapters/*` |
-| `github.com/medmemo/medmemo/pkg/models/` | `github.com/medmemo/medmemo/internal/infrastructure/*` |
-| Go 标准库 | — |
+| 允许导入                                           | 禁止导入                                                   |
+|------------------------------------------------|--------------------------------------------------------|
+| `github.com/medmemo/medmemo/internal/domain/*` | `github.com/medmemo/medmemo/internal/adapters/*`       |
+| `github.com/medmemo/medmemo/pkg/models/`       | `github.com/medmemo/medmemo/internal/infrastructure/*` |
+| Go 标准库                                         | —                                                      |
 
 ## 核心职责
 
@@ -32,23 +32,23 @@ internal/application/
 ## 示例
 
 ```go
-// port/llm.go
+// Package port port/llm.go
 package port
 
 type LLMClient interface {
-    Chat(messages []Message) (string, error)
-    StreamChat(messages []Message, callback func(chunk string))
-    CheckAvailability() (bool, string)
+	Chat(messages []Message) (string, error)
+	StreamChat(messages []Message, callback func(chunk string))
+	CheckAvailability() (bool, string)
 }
 
 // usecase/chat.go
 package usecase
 
 func (o *ChatOrchestrator) Execute(ctx context.Context, req ChatRequest) (ChatResponse, error) {
-    // 1. 紧急症状检测
-    // 2. 三级脱敏流水线
-    // 3. LLM 调用
-    // 4. 合规拦截
-    // 5. 消息持久化
+	// 1. 紧急症状检测
+	// 2. 三级脱敏流水线
+	// 3. LLM 调用
+	// 4. 合规拦截
+	// 5. 消息持久化
 }
 ```

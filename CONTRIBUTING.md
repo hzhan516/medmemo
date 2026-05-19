@@ -6,13 +6,13 @@
 
 ### 前置依赖
 
-| 工具 | 最低版本 | 安装方式 |
-|------|---------|---------|
-| Go | 1.22+ | [官方下载](https://go.dev/dl/) 或 `brew install go` |
-| Node.js | 18.x+ | [官方下载](https://nodejs.org/) 或 `brew install node` |
-| Wails CLI | v2.9+ | `go install github.com/wailsapp/wails/v2/cmd/wails@latest` |
-| golangci-lint | latest | `make install-tools` |
-| Wire | v0.6+ | `make install-tools` |
+| 工具            | 最低版本   | 安装方式                                                       |
+|---------------|--------|------------------------------------------------------------|
+| Go            | 1.22+  | [官方下载](https://go.dev/dl/) 或 `brew install go`             |
+| Node.js       | 18.x+  | [官方下载](https://nodejs.org/) 或 `brew install node`          |
+| Wails CLI     | v2.9+  | `go install github.com/wailsapp/wails/v2/cmd/wails@latest` |
+| golangci-lint | latest | `make install-tools`                                       |
+| Wire          | v0.6+  | `make install-tools`                                       |
 
 ### 快速开始
 
@@ -48,13 +48,13 @@ develop (集成分支)
 feature/M<模块号>-<简述> (功能分支)
 ```
 
-| 分支类型 | 命名规范 | 合并策略 |
-|----------|----------|---------|
-| `main` | `main` | 仅接受 release/hotfix 合并 |
-| `develop` | `develop` | 仅接受 feature 合并，CI 全绿方可合并 |
-| `feature/*` | `feature/M<模块号>-<简述>` | Squash & Merge |
-| `release/*` | `release/v<版本号>` | Squash & Merge |
-| `hotfix/*` | `hotfix/<问题简述>` | Squash & Merge |
+| 分支类型        | 命名规范                  | 合并策略                     |
+|-------------|-----------------------|--------------------------|
+| `main`      | `main`                | 仅接受 release/hotfix 合并    |
+| `develop`   | `develop`             | 仅接受 feature 合并，CI 全绿方可合并 |
+| `feature/*` | `feature/M<模块号>-<简述>` | Squash & Merge           |
+| `release/*` | `release/v<版本号>`      | Squash & Merge           |
+| `hotfix/*`  | `hotfix/<问题简述>`       | Squash & Merge           |
 
 ## 提交规范（Conventional Commits）
 
@@ -62,16 +62,16 @@ feature/M<模块号>-<简述> (功能分支)
 <type>(<scope>): <subject>
 ```
 
-| Type | 用途 | Scope 示例 |
-|------|------|-----------|
-| `feat` | 新功能 | `feat(M03): add HNSW vector index` |
-| `fix` | Bug 修复 | `fix(PER-03): reduce ONNX inference latency` |
-| `perf` | 性能优化 | `perf(M06): optimize deidentify pipeline` |
+| Type       | 用途        | Scope 示例                                     |
+|------------|-----------|----------------------------------------------|
+| `feat`     | 新功能       | `feat(M03): add HNSW vector index`           |
+| `fix`      | Bug 修复    | `fix(PER-03): reduce ONNX inference latency` |
+| `perf`     | 性能优化      | `perf(M06): optimize deidentify pipeline`    |
 | `refactor` | 重构（无功能变更） | `refactor(domain): extract SensitivityLevel` |
-| `test` | 测试相关 | `test(M01): add E2E test for conversation` |
-| `docs` | 文档更新 | `docs(adr): add ADR-006 for HNSW` |
-| `chore` | 构建/工具 | `chore(ci): add Windows build matrix` |
-| `security` | 安全修复 | `security(M07): bump ONNX Runtime` |
+| `test`     | 测试相关      | `test(M01): add E2E test for conversation`   |
+| `docs`     | 文档更新      | `docs(adr): add ADR-006 for HNSW`            |
+| `chore`    | 构建/工具     | `chore(ci): add Windows build matrix`        |
+| `security` | 安全修复      | `security(M07): bump ONNX Runtime`           |
 
 **Scope 对照表**：`M01`-`M07` 对应 7 大功能模块，`ci`/`build`/`deps` 对应工程化。
 

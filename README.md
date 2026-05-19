@@ -37,15 +37,15 @@ MedMemo 是开源健康信息管理和咨询辅助工具，提供的所有信息
 
 ## 🛠 技术栈
 
-| 层级 | 技术选型 |
-|------|---------|
-| 桌面框架 | Wails v2（Go + React/TypeScript） |
-| 架构 | Clean Architecture 四层模型 |
-| 依赖注入 | Google Wire（编译期） |
-| 本地 AI | Hugot + ONNX Runtime（NER / 嵌入） |
-| LLM 接入 | OpenAI-compatible API / Ollama / llama.cpp |
-| 数据库 | DuckDB（分析）+ SQLite/SQLCipher（事务）+ Kùzǔ（图） |
-| 前端 | React 18 + TypeScript 严格模式 + Tailwind CSS + Zustand |
+| 层级     | 技术选型                                                |
+|--------|-----------------------------------------------------|
+| 桌面框架   | Wails v2（Go + React/TypeScript）                     |
+| 架构     | Clean Architecture 四层模型                             |
+| 依赖注入   | Google Wire（编译期）                                    |
+| 本地 AI  | Hugot + ONNX Runtime（NER / 嵌入）                      |
+| LLM 接入 | OpenAI-compatible API / Ollama / llama.cpp          |
+| 数据库    | DuckDB（分析）+ SQLite/SQLCipher（事务）+ Kùzǔ（图）           |
+| 前端     | React 18 + TypeScript 严格模式 + Tailwind CSS + Zustand |
 
 ---
 
@@ -156,13 +156,13 @@ git push origin feature/M01-your-feature
 
 ## 📚 文档导航
 
-| 文档 | 内容 |
-|------|------|
-| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | 系统架构总览、四层架构映射、数据流、模块依赖 |
-| [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md) | 开发规范、Clean Architecture 依赖规则、Wire 使用指南、测试策略 |
-| [docs/API.md](./docs/API.md) | 内部接口契约、Wails 前后端绑定说明、错误码定义 |
-| [docs/COMPLIANCE.md](./docs/COMPLIANCE.md) | 合规红线、三级脱敏流水线、四级拦截规则、紧急症状识别 |
-| [docs/SECURITY.md](./docs/SECURITY.md) | 安全披露流程、数据加密说明、依赖项安全扫描 |
+| 文档                                             | 内容                                          |
+|------------------------------------------------|---------------------------------------------|
+| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | 系统架构总览、四层架构映射、数据流、模块依赖                      |
+| [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md)   | 开发规范、Clean Architecture 依赖规则、Wire 使用指南、测试策略 |
+| [docs/API.md](./docs/API.md)                   | 内部接口契约、Wails 前后端绑定说明、错误码定义                  |
+| [docs/COMPLIANCE.md](./docs/COMPLIANCE.md)     | 合规红线、三级脱敏流水线、四级拦截规则、紧急症状识别                  |
+| [docs/SECURITY.md](./docs/SECURITY.md)         | 安全披露流程、数据加密说明、依赖项安全扫描                       |
 
 ---
 

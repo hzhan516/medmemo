@@ -26,12 +26,12 @@ MedMemo 严格遵循 Clean Architecture 四层模型，依赖方向始终向内�
 
 ### 包导入白名单
 
-| 源目录 | 允许导入 | 禁止导入 |
-|--------|---------|---------|
-| `internal/domain/*` | 标准库 + `pkg/models/` | 任何 `internal/` 子包 |
-| `internal/application/*` | `internal/domain/*` + `pkg/models/` + 标准库 | `internal/adapters/*` + `internal/infrastructure/*` |
-| `internal/adapters/*` | `internal/domain/*` + `internal/infrastructure/*` + `pkg/models/` | `internal/application/*` |
-| `internal/infrastructure/*` | 标准库 + 第三方框架库 | 任何 `internal/domain/` / `internal/application/` / `internal/adapters/` |
+| 源目录                         | 允许导入                                                              | 禁止导入                                                                   |
+|-----------------------------|-------------------------------------------------------------------|------------------------------------------------------------------------|
+| `internal/domain/*`         | 标准库 + `pkg/models/`                                               | 任何 `internal/` 子包                                                      |
+| `internal/application/*`    | `internal/domain/*` + `pkg/models/` + 标准库                         | `internal/adapters/*` + `internal/infrastructure/*`                    |
+| `internal/adapters/*`       | `internal/domain/*` + `internal/infrastructure/*` + `pkg/models/` | `internal/application/*`                                               |
+| `internal/infrastructure/*` | 标准库 + 第三方框架库                                                      | 任何 `internal/domain/` / `internal/application/` / `internal/adapters/` |
 
 **核心铁律**：`internal/domain/` 零外部依赖。CI 的 depguard 会阻断任何违规导入。
 
@@ -114,13 +114,13 @@ if err != nil {
 
 ### UI 颜色规范
 
-| 元素 | 亮色模式 | 暗色模式 |
-|------|---------|---------|
-| 用户消息背景 | `#4F8CFF` → `#3B7AF7` 渐变 | 同左 |
-| 用户消息文字 | 白色 | 白色 |
-| AI 消息背景 | `#FFFFFF` | `#2A2A2A` |
-| AI 消息文字 | `#333333` | `#E5E5E5` |
-| 系统提示背景 | `#F0F0F5` / `#FFF3E0` / `#E3F2FD` | 同左 |
+| 元素      | 亮色模式                              | 暗色模式      |
+|---------|-----------------------------------|-----------|
+| 用户消息背景  | `#4F8CFF` → `#3B7AF7` 渐变          | 同左        |
+| 用户消息文字  | 白色                                | 白色        |
+| AI 消息背景 | `#FFFFFF`                         | `#2A2A2A` |
+| AI 消息文字 | `#333333`                         | `#E5E5E5` |
+| 系统提示背景  | `#F0F0F5` / `#FFF3E0` / `#E3F2FD` | 同左        |
 
 ### CSS
 

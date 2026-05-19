@@ -18,9 +18,9 @@ internal/domain/
 
 ## 导入约束（铁律）
 
-| 允许导入 | 禁止导入 |
-|---------|---------|
-| Go 标准库 | `github.com/medmemo/medmemo/internal/**/*` |
+| 允许导入                                     | 禁止导入                                           |
+|------------------------------------------|------------------------------------------------|
+| Go 标准库                                   | `github.com/medmemo/medmemo/internal/**/*`     |
 | `github.com/medmemo/medmemo/pkg/models/` | `github.com/medmemo/medmemo/pkg/desensitizer/` |
 
 > ⚠️ 违反上述规则将被 CI 的 `depguard` 检查阻断合并。
@@ -35,24 +35,24 @@ internal/domain/
 ## 示例
 
 ```go
-// entity/conversation.go
+// Package entity entity/conversation.go
 package entity
 
 import "time"
 
 type Conversation struct {
-    ID        string
-    Title     string
-    CreatedAt time.Time
-    UpdatedAt time.Time
+	ID        string
+	Title     string
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 func (c *Conversation) Rename(title string) error {
-    if title == "" {
-        return ErrValidationFailed
-    }
-    c.Title = title
-    c.UpdatedAt = time.Now()
-    return nil
+	if title == "" {
+		return ErrValidationFailed
+	}
+	c.Title = title
+	c.UpdatedAt = time.Now()
+	return nil
 }
 ```
