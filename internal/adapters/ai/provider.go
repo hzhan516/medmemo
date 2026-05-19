@@ -19,7 +19,7 @@ var defaultEndpoints = map[models.ProviderType]string{
 
 // ProviderFactory 根据配置创建对应的 LLMClient 适配器。
 func ProviderFactory(cfg *entity.AppConfig) port.LLMClient {
-	// 从环境变量读取 API Key（后续将迁移至密钥环存储）
+	// 从环境变量读取 API Key（实际生产环境应通过 secret.Store 获取，此处保留环境变量作为开发调试入口）
 	apiKey := os.Getenv("MEDMEMO_API_KEY")
 
 	// 本地模型路由

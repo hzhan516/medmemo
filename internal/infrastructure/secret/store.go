@@ -1,11 +1,8 @@
 // Package secret 封装密钥安全存储。
 //
-// 当前实现提供两种后端：
-//   - FileStore：基于 AES-GCM 加密的文件系统存储（默认降级方案）。
-//   - KeyringStore：平台原生密钥环接口预留（待接入 99designs/keyring [Issue#023]）。
-//
-// ⚠️ 安全警告：FileStore 使用路径派生密钥，不适合生产环境存储高价值密钥。
-// 后续必须迁移至平台密钥环（macOS Keychain / Windows DPAPI / Linux Secret Service）。
+// KeyringStore 优先使用平台原生密钥环（macOS Keychain / Windows Credential Manager /
+// Linux Secret Service），headless 环境无可用后端时自动降级到 FileStore。
+// FileStore 基于 AES-GCM 加密文件系统存储，作为最终兜底方案。
 package secret
 
 import (
@@ -18,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/99designs/keyring"
 	"github.com/google/wire"
 )
 
@@ -28,38 +26,69 @@ type Store interface {
 	Delete(key string) error
 }
 
-// KeyringStore 基于平台密钥环的实现（接口预留，当前委托 FileStore）。
+// KeyringStore 基于平台原生密钥环的实现。
+// 平台密钥环不可用时自动降级到 FileStore，保证任何环境都可正常启动。
 type KeyringStore struct {
+	ring     keyring.Keyring
 	fallback *FileStore
 }
 
 // NewKeyringStore 创建密钥环存储实例。
-// 当前返回委托 FileStore 的实例，平台密钥环接入待后续实现 [Issue#023]。
+// 优先尝试系统密钥环，失败时静默降级到 FileStore，避免 headless CI 阻塞。
 func NewKeyringStore() (*KeyringStore, error) {
+	ring, err := keyring.Open(keyring.Config{
+		ServiceName: "MedMemo",
+		AllowedBackends: []keyring.BackendType{
+			keyring.KeychainBackend,
+			keyring.SecretServiceBackend,
+			keyring.KWalletBackend,
+			keyring.WinCredBackend,
+		},
+	})
+	if err == nil {
+		return &KeyringStore{ring: ring}, nil
+	}
+
 	fs, err := NewFileStore()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create fallback file store: %w", err)
+		return nil, fmt.Errorf("platform keyring unavailable and fallback file store failed: %w", err)
 	}
 	return &KeyringStore{fallback: fs}, nil
 }
 
 // Set 存储密钥。
 func (s *KeyringStore) Set(key string, value []byte) error {
-	return s.fallback.Set(key, value)
+	if s.fallback != nil {
+		return s.fallback.Set(key, value)
+	}
+	return s.ring.Set(keyring.Item{
+		Key:  key,
+		Data: value,
+	})
 }
 
 // Get 读取密钥。
 func (s *KeyringStore) Get(key string) ([]byte, error) {
-	return s.fallback.Get(key)
+	if s.fallback != nil {
+		return s.fallback.Get(key)
+	}
+	item, err := s.ring.Get(key)
+	if err != nil {
+		return nil, fmt.Errorf("keyring get failed for key %s: %w", key, err)
+	}
+	return item.Data, nil
 }
 
 // Delete 删除密钥。
 func (s *KeyringStore) Delete(key string) error {
-	return s.fallback.Delete(key)
+	if s.fallback != nil {
+		return s.fallback.Delete(key)
+	}
+	return s.ring.Remove(key)
 }
 
 // FileStore 基于文件系统的加密存储（AES-GCM）。
-// 密钥派生自 OS 用户目录路径哈希，提供基础安全性。
+// 密钥派生自 OS 用户目录路径哈希，提供基础安全性，不适合高安全场景。
 type FileStore struct {
 	baseDir string
 	key     []byte
@@ -78,7 +107,7 @@ func NewFileStore() (*FileStore, error) {
 	}
 
 	// 使用用户主目录路径哈希派生加密密钥
-	// ⚠️ 此方案仅提供基础保护，不适合高安全场景
+	// 此方案仅提供基础保护，不适合高安全场景
 	hash := sha256.Sum256([]byte(home + "/medmemo-secret"))
 	key := hash[:]
 
@@ -125,7 +154,7 @@ func (s *FileStore) Delete(key string) error {
 	path := s.filePath(key)
 	if err := os.Remove(path); err != nil {
 		if os.IsNotExist(err) {
-			return nil // 幂等删除
+			return nil
 		}
 		return fmt.Errorf("failed to remove secret file: %w", err)
 	}
@@ -133,7 +162,7 @@ func (s *FileStore) Delete(key string) error {
 }
 
 func (s *FileStore) filePath(key string) string {
-	// 使用 SHA-256 哈希文件名，避免特殊字符问题
+	// SHA-256 哈希文件名，避免特殊字符问题
 	hash := sha256.Sum256([]byte(key))
 	name := fmt.Sprintf("%x.secret", hash)
 	return filepath.Join(s.baseDir, name)
