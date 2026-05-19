@@ -141,11 +141,14 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) error {
 	// 流式结束后对完整内容做一次合规检测（MVP 简化策略）
 	compResult, compErr := a.chatOrchestrator.CheckCompliance(ctx, fullReply.String())
 	if compErr == nil && compResult.Level != "L4_NORMAL" {
-		runtime.EventsEmit(a.ctx, "chat:stream:compliance", map[string]string{
-			"level":   compResult.Level,
-			"warning": compResult.Warning,
-			"notice":  compResult.Notice,
-		})
+		payload := map[string]any{
+			"level":         compResult.Level,
+			"warning":       compResult.Warning,
+			"notice":        compResult.Notice,
+			"replacedTerms": compResult.ReplacedTerms,
+			"matchedRule":   compResult.MatchedRule,
+		}
+		runtime.EventsEmit(a.ctx, "chat:stream:compliance", payload)
 	}
 
 	runtime.EventsEmit(a.ctx, "chat:stream:end", nil)
@@ -379,4 +382,13 @@ func (a *WailsApp) ShowEmergencyDialog(title, message string) {
 		Title:   title,
 		Message: message,
 	})
+}
+
+// ReportComplianceFeedback 接收前端提交的合规误判反馈。
+func (a *WailsApp) ReportComplianceFeedback(ruleID string, originalText string) error {
+	logger := application.NewComplianceLogger("data")
+	if err := logger.LogFeedback(a.ctx, ruleID, originalText, "false_positive"); err != nil {
+		return fmt.Errorf("failed to log compliance feedback: %w", err)
+	}
+	return nil
 }

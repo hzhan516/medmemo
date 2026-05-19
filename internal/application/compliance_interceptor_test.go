@@ -340,3 +340,182 @@ func TestVersion(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "test-1.0.0", ci.Version())
 }
+
+// ========== EvaluateWithInlineReplace 测试 ==========
+
+// inlineRules 返回包含 inline 替换规则的测试规则库。
+func inlineRules() string {
+	return `{
+  "version": "test-inline-1.0.0",
+  "updated_at": "2026-05-18",
+  "rules": [
+    {
+      "id": "l1-inline-diag-001",
+      "level": "L1",
+      "name": "确定性诊断-inline-你患有",
+      "patterns": ["你患有([一-龥]+)"],
+      "action": "block",
+      "replace_mode": "inline",
+      "replacement": "您的情况可能与${1}有关，建议咨询医生确认"
+    },
+    {
+      "id": "l1-inline-diag-002",
+      "level": "L1",
+      "name": "确定性诊断-inline-确诊为",
+      "patterns": ["确诊为([一-龥]+)"],
+      "action": "block",
+      "replace_mode": "inline",
+      "replacement": "检查结果可能与${1}有关，需由医生面诊后确认"
+    },
+    {
+      "id": "l1-block-drug-001",
+      "level": "L1",
+      "name": "药物剂量处方",
+      "patterns": ["服用\\s*\\d+\\s*毫克"],
+      "action": "block",
+      "replacement": "DRUG_BLOCKED"
+    },
+    {
+      "id": "l2-diag-implied-001",
+      "level": "L2",
+      "name": "暗示性诊断",
+      "patterns": ["可能是[一-龥]+病"],
+      "action": "warn",
+      "warning": "WARN_IMPLIED"
+    },
+    {
+      "id": "l3-disease-001",
+      "level": "L3",
+      "name": "严重疾病",
+      "patterns": ["癌症"],
+      "action": "notice",
+      "notice": "NOTICE_SEVERE"
+    }
+  ]
+}`
+}
+
+// TestInlineReplace_SingleTerm 验证单条 inline 替换在文中局部生效。
+func TestInlineReplace_SingleTerm(t *testing.T) {
+	path := mustWriteRules(t, inlineRules())
+	ci, err := NewComplianceInterceptor(path)
+	require.NoError(t, err)
+
+	res, err := ci.EvaluateWithInlineReplace(context.Background(), "根据描述，你患有高血压，建议定期监测血压。")
+	require.NoError(t, err)
+	assert.Equal(t, L1Blocked.String(), res.Level)
+	assert.True(t, res.Blocked)
+	assert.Contains(t, res.SafeText, "您的情况可能与高血压有关，建议咨询医生确认")
+	assert.Contains(t, res.SafeText, "建议定期监测血压")
+	assert.Contains(t, res.ReplacedTerms, "l1-inline-diag-001")
+}
+
+// TestInlineReplace_MultipleTerms 验证多条 inline 规则依次替换。
+func TestInlineReplace_MultipleTerms(t *testing.T) {
+	path := mustWriteRules(t, inlineRules())
+	ci, err := NewComplianceInterceptor(path)
+	require.NoError(t, err)
+
+	res, err := ci.EvaluateWithInlineReplace(context.Background(), "你患有糖尿病，确诊为二型糖尿病。")
+	require.NoError(t, err)
+	assert.Equal(t, L1Blocked.String(), res.Level)
+	assert.True(t, res.Blocked)
+	// 两条 inline 规则都应该被应用
+	assert.Contains(t, res.SafeText, "您的情况可能与糖尿病有关，建议咨询医生确认")
+	assert.Contains(t, res.SafeText, "检查结果可能与二型糖尿病有关，需由医生面诊后确认")
+	assert.Len(t, res.ReplacedTerms, 2)
+}
+
+// TestInlineReplace_ThenL1Block 验证 inline 替换后仍命中整段阻断规则。
+func TestInlineReplace_ThenL1Block(t *testing.T) {
+	path := mustWriteRules(t, inlineRules())
+	ci, err := NewComplianceInterceptor(path)
+	require.NoError(t, err)
+
+	// 文本同时包含 inline 替换内容和整段阻断内容
+	res, err := ci.EvaluateWithInlineReplace(context.Background(), "你患有高血压，建议服用 500 毫克降压药。")
+	require.NoError(t, err)
+	// 药物剂量整段阻断优先级高于 inline 替换结果
+	assert.Equal(t, L1Blocked.String(), res.Level)
+	assert.True(t, res.Blocked)
+	assert.Equal(t, "DRUG_BLOCKED", res.SafeText)
+	// 但 inline 替换仍记录在 ReplacedTerms 中
+	assert.Contains(t, res.ReplacedTerms, "l1-inline-diag-001")
+}
+
+// TestInlineReplace_NoMatch 验证未命中 inline 规则时正常放行。
+func TestInlineReplace_NoMatch(t *testing.T) {
+	path := mustWriteRules(t, inlineRules())
+	ci, err := NewComplianceInterceptor(path)
+	require.NoError(t, err)
+
+	res, err := ci.EvaluateWithInlineReplace(context.Background(), "保持规律作息有助于健康。")
+	require.NoError(t, err)
+	assert.Equal(t, L4Normal.String(), res.Level)
+	assert.False(t, res.Blocked)
+	assert.Len(t, res.ReplacedTerms, 0)
+}
+
+// TestInlineReplace_L2AfterReplace 验证 inline 替换后命中 L2 警告。
+func TestInlineReplace_L2AfterReplace(t *testing.T) {
+	path := mustWriteRules(t, inlineRules())
+	ci, err := NewComplianceInterceptor(path)
+	require.NoError(t, err)
+
+	// inline 替换消除了 L1 命中，但文本中无 L2/L3 内容，应返回 L4
+	res, err := ci.EvaluateWithInlineReplace(context.Background(), "你患有高血压的可能性不大。")
+	require.NoError(t, err)
+	// "你患有高血压" 被 inline 替换，命中了禁止用语，仍标记为 L1
+	assert.Equal(t, L1Blocked.String(), res.Level)
+	assert.True(t, res.Blocked)
+}
+
+// TestInlineReplace_L3StillWorks 验证 inline 替换不影响 L3 提示。
+func TestInlineReplace_L3StillWorks(t *testing.T) {
+	path := mustWriteRules(t, inlineRules())
+	ci, err := NewComplianceInterceptor(path)
+	require.NoError(t, err)
+
+	res, err := ci.EvaluateWithInlineReplace(context.Background(), "癌症的早期筛查很重要。")
+	require.NoError(t, err)
+	assert.Equal(t, L3Notice.String(), res.Level)
+	assert.False(t, res.Blocked)
+	assert.Equal(t, "NOTICE_SEVERE", res.Notice)
+}
+
+// TestInlineReplace_EmptyRules 验证空规则库时 inline 替换直接放行。
+func TestInlineReplace_EmptyRules(t *testing.T) {
+	path := mustWriteRules(t, `{"version":"empty","rules":[]}`)
+	ci, err := NewComplianceInterceptor(path)
+	require.NoError(t, err)
+
+	res, err := ci.EvaluateWithInlineReplace(context.Background(), "你患有糖尿病。")
+	require.NoError(t, err)
+	assert.Equal(t, L4Normal.String(), res.Level)
+	assert.Len(t, res.ReplacedTerms, 0)
+}
+
+// TestInlineReplace_CaptureGroup 验证正则捕获组在替换中正确引用。
+func TestInlineReplace_CaptureGroup(t *testing.T) {
+	rules := `{
+  "version": "test-capture",
+  "rules": [
+    {
+      "id": "l1-capture-test",
+      "level": "L1",
+      "name": "捕获组测试",
+      "patterns": ["确诊为([一-龥]+)"],
+      "action": "block",
+      "replace_mode": "inline",
+      "replacement": "可能为${1}，建议咨询医生"
+    }
+  ]
+}`
+	path := mustWriteRules(t, rules)
+	ci, err := NewComplianceInterceptor(path)
+	require.NoError(t, err)
+
+	res, err := ci.EvaluateWithInlineReplace(context.Background(), "确诊为糖尿病")
+	require.NoError(t, err)
+	assert.Equal(t, "可能为糖尿病，建议咨询医生", res.SafeText)
+}

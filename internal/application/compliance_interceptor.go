@@ -40,12 +40,13 @@ func (r RiskLevel) String() string {
 
 // ComplianceResult 合规检查结果。
 type ComplianceResult struct {
-	Level       string // "L1_BLOCKED" | "L2_WARNING" | "L3_NOTICE" | "L4_NORMAL"
-	Blocked     bool   // L1 为 true
-	MatchedRule string // 命中的规则 ID
-	SafeText    string // L1 时为替换文本；其他等级为原文
-	Warning     string // L2 时的警告文案
-	Notice      string // L3 时的提示文案
+	Level         string   // "L1_BLOCKED" | "L2_WARNING" | "L3_NOTICE" | "L4_NORMAL"
+	Blocked       bool     // L1 为 true
+	MatchedRule   string   // 命中的规则 ID
+	SafeText      string   // L1 时为替换文本；其他等级为原文
+	Warning       string   // L2 时的警告文案
+	Notice        string   // L3 时的提示文案
+	ReplacedTerms []string // inline 替换中被替换的用词列表
 }
 
 // ComplianceRule 单条合规规则定义。
@@ -55,6 +56,7 @@ type ComplianceRule struct {
 	Name        string   `json:"name"`
 	Patterns    []string `json:"patterns"`
 	Action      string   `json:"action"`
+	ReplaceMode string   `json:"replace_mode,omitempty"` // "" | "inline"
 	Replacement string   `json:"replacement,omitempty"`
 	Warning     string   `json:"warning,omitempty"`
 	Notice      string   `json:"notice,omitempty"`
@@ -215,6 +217,49 @@ func (ci *ComplianceInterceptor) matchRule(text string, r compiledRule) bool {
 		}
 	}
 	return false
+}
+
+// EvaluateWithInlineReplace 先对文本执行 inline 用词替换，再执行常规合规评估。
+// 适用于 TASK-019 用词规范实时校验：将高风险用语在文中局部替换为合规表达。
+// inline 替换仅作用于 ReplaceMode == "inline" 的 L1 规则，按优先级顺序依次应用。
+// 替换后的文本再进入常规 Evaluate 流程进行整段阻断/警告/提示检测。
+func (ci *ComplianceInterceptor) EvaluateWithInlineReplace(ctx context.Context, text string) (*ComplianceResult, error) {
+	ci.mu.RLock()
+	rules := ci.rules
+	ci.mu.RUnlock()
+
+	replacedText := text
+	var replacedTerms []string
+
+	// 第一步：遍历所有 inline 规则，依次应用文中替换
+	for _, r := range rules {
+		if r.Level != "L1" || r.ReplaceMode != "inline" || r.Replacement == "" {
+			continue
+		}
+		for _, re := range r.compiled {
+			if re.MatchString(replacedText) {
+				replacedText = re.ReplaceAllString(replacedText, r.Replacement)
+				replacedTerms = append(replacedTerms, r.ID)
+				break // 该规则已命中并替换，跳过后续 pattern
+			}
+		}
+	}
+
+	// 第二步：对替换后的文本执行常规合规评估
+	result, err := ci.Evaluate(ctx, replacedText)
+	if err != nil {
+		return nil, fmt.Errorf("evaluate after inline replace failed: %w", err)
+	}
+
+	// 若发生了 inline 替换但常规评估仍为 L4_NORMAL，标记为 L1（因替换了禁止用语）
+	if len(replacedTerms) > 0 && result.Level == L4Normal.String() {
+		result.Level = L1Blocked.String()
+		result.Blocked = true
+		result.MatchedRule = replacedTerms[0]
+	}
+
+	result.ReplacedTerms = replacedTerms
+	return result, nil
 }
 
 // EvaluateWithTimeout 带超时的合规评估，防止极端场景下检测挂起。

@@ -64,6 +64,10 @@ export function useWails() {
     return await WailsApp.DeclineDisclaimer()
   }, [])
 
+  const reportComplianceFeedback = useCallback(async (ruleID: string, originalText: string): Promise<void> => {
+    return await WailsApp.ReportComplianceFeedback(ruleID, originalText)
+  }, [])
+
   return {
     sendMessage,
     sendMessageStream,
@@ -76,5 +80,6 @@ export function useWails() {
     getDisclaimerStatus,
     acceptDisclaimer,
     declineDisclaimer,
+    reportComplianceFeedback,
   }
 }

@@ -1,10 +1,11 @@
-import { User, Bot, AlertCircle, Copy, RotateCcw, ShieldAlert, Info } from 'lucide-react'
+import { User, Bot, AlertCircle, Copy, RotateCcw, ShieldAlert, Info, ThumbsDown, CheckCircle } from 'lucide-react'
 import type { ChatMessage } from '@/stores/chatStore'
 import { MarkdownRenderer } from '@/components/markdown/MarkdownRenderer'
 
 interface MessageBubbleProps {
   message: ChatMessage
   onRetry?: (messageId: string) => void
+  onReportCompliance?: (messageId: string, ruleID: string) => void
 }
 
 /**
@@ -14,14 +15,26 @@ interface MessageBubbleProps {
  * 系统提示：浅色背景，居中，13px 小字。
  * 合规标记：L2_WARNING 橙色警告框，L3_NOTICE 蓝色提示条。
  */
-export function MessageBubble({ message, onRetry }: MessageBubbleProps) {
-  const { id, role, content, isStreaming, interrupted, error, warnings } = message
+export function MessageBubble({ message, onRetry, onReportCompliance }: MessageBubbleProps) {
+  const { id, role, content, isStreaming, interrupted, error, warnings, replacedTerms, complianceFeedback } = message
 
   // 解析合规级别
+  const hasL1Blocked = warnings?.some((w) => w === 'L1_BLOCKED')
   const hasL2Warning = warnings?.some((w) => w === 'L2_WARNING')
   const hasL3Notice = warnings?.some((w) => w === 'L3_NOTICE')
   const l2WarningText = warnings?.find((w) => w.startsWith('WARNING:'))?.replace('WARNING:', '')
   const l3NoticeText = warnings?.find((w) => w.startsWith('NOTICE:'))?.replace('NOTICE:', '')
+
+  const hasComplianceIssue = hasL1Blocked || hasL2Warning || hasL3Notice || (replacedTerms && replacedTerms.length > 0)
+  const isFeedbackSubmitted = complianceFeedback === 'submitted'
+  const firstReplacedRule = replacedTerms && replacedTerms.length > 0 ? replacedTerms[0] : ''
+
+  const handleReportCompliance = () => {
+    if (isFeedbackSubmitted || !onReportCompliance) return
+    // 优先使用命中的规则 ID，fallback 到 replacedTerms
+    const ruleID = warnings?.find((w) => w.startsWith('RULE:'))?.replace('RULE:', '') || firstReplacedRule || 'unknown'
+    onReportCompliance(id, ruleID)
+  }
 
   if (role === 'system') {
     return (
@@ -91,6 +104,17 @@ export function MessageBubble({ message, onRetry }: MessageBubbleProps) {
               </div>
             )}
 
+            {/* L1 替换提示 */}
+            {(hasL1Blocked || (replacedTerms && replacedTerms.length > 0)) && (
+              <div className="flex items-start gap-2 mb-2 p-2 rounded-lg bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-xs">
+                <Info size={14} className="shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium">内容已调整为合规表述</p>
+                  <p className="opacity-80">原文中的部分用语已被替换为更安全的表达方式。</p>
+                </div>
+              </div>
+            )}
+
             {/* L2 警告框 */}
             {hasL2Warning && (
               <div className="flex items-start gap-2 mb-2 p-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-xs">
@@ -121,6 +145,27 @@ export function MessageBubble({ message, onRetry }: MessageBubbleProps) {
               <div className="flex items-start gap-2 mt-2 pt-2 border-t border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 text-xs">
                 <Info size={12} className="shrink-0 mt-0.5" />
                 <span>{l3NoticeText || "以上内容仅为健康科普信息，不能替代专业医疗诊断。"}</span>
+              </div>
+            )}
+
+            {/* 合规误判申诉按钮 */}
+            {hasComplianceIssue && !isStreaming && (
+              <div className="flex items-center justify-end gap-2 mt-2 pt-2 border-t border-border/50">
+                {isFeedbackSubmitted ? (
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <CheckCircle size={12} />
+                    已提交反馈
+                  </span>
+                ) : (
+                  <button
+                    onClick={handleReportCompliance}
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    title="如果认为以上内容被误拦截，可提交反馈"
+                  >
+                    <ThumbsDown size={12} />
+                    {hasL1Blocked ? '原始回复有误' : '此内容无风险'}
+                  </button>
+                )}
               </div>
             )}
 

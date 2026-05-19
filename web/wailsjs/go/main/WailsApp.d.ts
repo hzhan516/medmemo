@@ -59,3 +59,5 @@ export function GetDisclaimerStatus(): Promise<DisclaimerStatus>;
 export function AcceptDisclaimer(arg1: string): Promise<void>;
 
 export function DeclineDisclaimer(): Promise<void>;
+
+export function ReportComplianceFeedback(arg1: string, arg2: string): Promise<void>;

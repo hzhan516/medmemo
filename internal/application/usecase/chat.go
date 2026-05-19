@@ -101,17 +101,20 @@ type ComplianceChecker interface {
 
 // ComplianceResult 合规检查结果。
 type ComplianceResult struct {
-	Blocked  bool
-	Level    string
-	Reason   string
-	SafeText string
-	Warning  string // L2 警告文案
-	Notice   string // L3 提示文案
+	Blocked       bool
+	Level         string
+	Reason        string
+	SafeText      string
+	Warning       string   // L2 警告文案
+	Notice        string   // L3 提示文案
+	MatchedRule   string   // 命中的规则 ID
+	ReplacedTerms []string // inline 替换中被替换的用词规则 ID 列表
 }
 
 // RuleComplianceChecker 基于规则库的合规检查器实现。
 type RuleComplianceChecker struct {
 	interceptor *application.ComplianceInterceptor
+	logger      *application.ComplianceLogger
 }
 
 // NewRuleComplianceChecker 从默认规则库路径创建合规检查器。
@@ -120,21 +123,30 @@ func NewRuleComplianceChecker() (*RuleComplianceChecker, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create compliance interceptor: %w", err)
 	}
-	return &RuleComplianceChecker{interceptor: ci}, nil
+	logger := application.NewComplianceLogger("data")
+	return &RuleComplianceChecker{interceptor: ci, logger: logger}, nil
 }
 
-// Check 执行合规检查，调用拦截引擎评估文本风险等级。
+// Check 执行合规检查，先进行 inline 用词替换，再评估风险等级。
 func (c *RuleComplianceChecker) Check(ctx context.Context, text string) (*ComplianceResult, error) {
-	res, err := c.interceptor.Evaluate(ctx, text)
+	res, err := c.interceptor.EvaluateWithInlineReplace(ctx, text)
 	if err != nil {
 		return nil, fmt.Errorf("compliance evaluation failed: %w", err)
 	}
+
+	// 记录拦截日志（仅当命中规则时）
+	if res.Level != application.L4Normal.String() && c.logger != nil {
+		_ = c.logger.Log(ctx, res.MatchedRule, text, res.SafeText, res.Level)
+	}
+
 	return &ComplianceResult{
-		Blocked:  res.Blocked,
-		Level:    res.Level,
-		SafeText: res.SafeText,
-		Warning:  res.Warning,
-		Notice:   res.Notice,
+		Blocked:       res.Blocked,
+		Level:         res.Level,
+		SafeText:      res.SafeText,
+		Warning:       res.Warning,
+		Notice:        res.Notice,
+		MatchedRule:   res.MatchedRule,
+		ReplacedTerms: res.ReplacedTerms,
 	}, nil
 }
 
