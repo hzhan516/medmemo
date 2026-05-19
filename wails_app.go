@@ -26,6 +26,7 @@ type WailsApp struct {
 	config           *entity.AppConfig
 	convRepo         port.ConversationRepository
 	msgRepo          port.MessageRepository
+	disclaimerRepo   port.DisclaimerRepository
 	titleGen         *usecase.TitleGenerator
 	streamMu         sync.Mutex
 	streamCancel     context.CancelFunc
@@ -38,6 +39,7 @@ func NewWailsApp(
 	cfg *entity.AppConfig,
 	convRepo port.ConversationRepository,
 	msgRepo port.MessageRepository,
+	disclaimerRepo port.DisclaimerRepository,
 	titleGen *usecase.TitleGenerator,
 ) *WailsApp {
 	return &WailsApp{
@@ -46,6 +48,7 @@ func NewWailsApp(
 		config:           cfg,
 		convRepo:         convRepo,
 		msgRepo:          msgRepo,
+		disclaimerRepo:   disclaimerRepo,
 		titleGen:         titleGen,
 	}
 }
@@ -365,6 +368,64 @@ func (a *WailsApp) GenerateTitle(convID string, userMessage string) {
 			"title":   title,
 		})
 	}()
+}
+
+// DisclaimerStatus 返回当前免责声明状态，供前端在启动时检测是否需要展示。
+type DisclaimerStatus struct {
+	Required bool   `json:"required"`
+	Text     string `json:"text"`
+	Version  string `json:"version"`
+}
+
+// GetDisclaimerStatus 查询用户是否需要同意当前版本的免责声明。
+func (a *WailsApp) GetDisclaimerStatus() (*DisclaimerStatus, error) {
+	ctx, cancel := context.WithTimeout(a.ctx, 5*time.Second)
+	defer cancel()
+
+	rec, err := a.disclaimerRepo.GetAcceptance(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get disclaimer status: %w", err)
+	}
+
+	// 若从未同意，或已同意版本低于当前版本，均需重新展示
+	if rec == nil || rec.Version != entity.CurrentDisclaimerVersion {
+		return &DisclaimerStatus{
+			Required: true,
+			Text:     entity.DisclaimerText,
+			Version:  entity.CurrentDisclaimerVersion,
+		}, nil
+	}
+
+	return &DisclaimerStatus{
+		Required: false,
+		Text:     entity.DisclaimerText,
+		Version:  entity.CurrentDisclaimerVersion,
+	}, nil
+}
+
+// AcceptDisclaimer 记录用户同意当前版本的免责声明。
+func (a *WailsApp) AcceptDisclaimer(version string) error {
+	ctx, cancel := context.WithTimeout(a.ctx, 5*time.Second)
+	defer cancel()
+
+	if version != entity.CurrentDisclaimerVersion {
+		return fmt.Errorf("disclaimer version mismatch: expected %s, got %s", entity.CurrentDisclaimerVersion, version)
+	}
+
+	rec := &entity.DisclaimerAcceptance{
+		Version:    version,
+		AcceptedAt: time.Now(),
+		TextHash:   "", // 当前阶段无需哈希校验，预留字段
+	}
+	if err := a.disclaimerRepo.SaveAcceptance(ctx, rec); err != nil {
+		return fmt.Errorf("failed to save disclaimer acceptance: %w", err)
+	}
+	return nil
+}
+
+// DeclineDisclaimer 用户不同意免责声明，退出应用。
+func (a *WailsApp) DeclineDisclaimer() {
+	runtime.Quit(a.ctx)
 }
 
 // ShowEmergencyDialog 触发紧急症状弹窗（供前端调用）。

@@ -42,6 +42,9 @@ type SQLiteConnector struct {
 
 // NewSQLiteConnector 创建 SQLite 连接并配置连接池。
 func NewSQLiteConnector(dataDir string) (*SQLiteConnector, error) {
+	if dataDir == "" {
+		dataDir = ".medmemo/data"
+	}
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create data directory: %w", err)
 	}
@@ -136,6 +139,16 @@ func (c *SQLiteConnector) Migrate(ctx context.Context) error {
 			);
 			CREATE INDEX IF NOT EXISTS idx_memories_tier ON memories(tier);
 			CREATE INDEX IF NOT EXISTS idx_memories_accessed ON memories(accessed_at);
+			`,
+		},
+		{
+			version: 4,
+			sql: `
+			CREATE TABLE IF NOT EXISTS disclaimer_acceptance (
+				version TEXT PRIMARY KEY,
+				accepted_at INTEGER NOT NULL,
+				text_hash TEXT
+			);
 			`,
 		},
 	}

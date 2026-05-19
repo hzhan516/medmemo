@@ -30,6 +30,12 @@ export interface EmergencyResult {
   action: string;
 }
 
+export interface DisclaimerStatus {
+  required: boolean;
+  text: string;
+  version: string;
+}
+
 export function SendMessage(arg1: SendMessageRequest): Promise<SendMessageResponse>;
 
 export function SendMessageStream(arg1: SendMessageRequest): Promise<void>;
@@ -47,3 +53,9 @@ export function CheckEmergency(arg1: string): Promise<EmergencyResult>;
 export function GenerateTitle(arg1: string, arg2: string): Promise<void>;
 
 export function ShowEmergencyDialog(arg1: string, arg2: string): Promise<void>;
+
+export function GetDisclaimerStatus(): Promise<DisclaimerStatus>;
+
+export function AcceptDisclaimer(arg1: string): Promise<void>;
+
+export function DeclineDisclaimer(): Promise<void>;

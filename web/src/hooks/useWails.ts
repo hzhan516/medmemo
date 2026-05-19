@@ -6,6 +6,7 @@ import type {
   ConversationSummary,
   ModelInfo,
   EmergencyResult,
+  DisclaimerStatus,
 } from '@wails/go/main/WailsApp'
 
 /**
@@ -51,6 +52,18 @@ export function useWails() {
     return await WailsApp.GenerateTitle(convId, userMessage)
   }, [])
 
+  const getDisclaimerStatus = useCallback(async (): Promise<DisclaimerStatus> => {
+    return await WailsApp.GetDisclaimerStatus()
+  }, [])
+
+  const acceptDisclaimer = useCallback(async (version: string): Promise<void> => {
+    return await WailsApp.AcceptDisclaimer(version)
+  }, [])
+
+  const declineDisclaimer = useCallback(async (): Promise<void> => {
+    return await WailsApp.DeclineDisclaimer()
+  }, [])
+
   return {
     sendMessage,
     sendMessageStream,
@@ -60,5 +73,8 @@ export function useWails() {
     getModels,
     checkEmergency,
     generateTitle,
+    getDisclaimerStatus,
+    acceptDisclaimer,
+    declineDisclaimer,
   }
 }

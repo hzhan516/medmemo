@@ -168,4 +168,5 @@ var RepositorySet = wire.NewSet(
 	NewMemoryRepoSQLite,
 	NewConversationRepoSQLite,
 	NewMessageRepoSQLite,
+	NewDisclaimerRepoSQLite,
 )

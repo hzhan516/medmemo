@@ -35,6 +35,15 @@ type ConversationRepository interface {
 	Delete(ctx context.Context, id models.ConversationID) error
 }
 
+// DisclaimerRepository 定义免责声明同意记录的持久化接口。
+type DisclaimerRepository interface {
+	// GetAcceptance 查询用户已同意的免责声明记录。
+	// 若用户尚未同意，返回 nil 与 nil error。
+	GetAcceptance(ctx context.Context) (*entity.DisclaimerAcceptance, error)
+	// SaveAcceptance 保存或更新用户的免责声明同意记录。
+	SaveAcceptance(ctx context.Context, record *entity.DisclaimerAcceptance) error
+}
+
 // MessageRepository 定义消息的持久化接口。
 type MessageRepository interface {
 	// Save 保存单条消息。

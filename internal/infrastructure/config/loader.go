@@ -81,8 +81,13 @@ func (l *Loader) Load() (*entity.AppConfig, error) {
 func (l *Loader) loadDefaults() *rawConfig {
 	enableCloud := defaultEnableCloud
 	enableAnalytics := defaultEnableAnalytics
+	dataDir := expandTilde(defaultDataDir)
+	if dataDir == "" {
+		// 兜底：若无法解析主目录，使用当前工作目录下的 .medmemo/data
+		dataDir = ".medmemo/data"
+	}
 	return &rawConfig{
-		DataDir:         expandTilde(defaultDataDir),
+		DataDir:         dataDir,
 		DefaultModel:    defaultModel,
 		Language:        defaultLanguage,
 		EnableCloud:     &enableCloud,

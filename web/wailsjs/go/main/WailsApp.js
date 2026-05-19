@@ -36,3 +36,15 @@ export function GenerateTitle(arg1, arg2) {
 export function ShowEmergencyDialog(arg1, arg2) {
   return window['go']['main']['WailsApp']['ShowEmergencyDialog'](arg1, arg2);
 }
+
+export function GetDisclaimerStatus() {
+  return window['go']['main']['WailsApp']['GetDisclaimerStatus']();
+}
+
+export function AcceptDisclaimer(arg1) {
+  return window['go']['main']['WailsApp']['AcceptDisclaimer'](arg1);
+}
+
+export function DeclineDisclaimer() {
+  return window['go']['main']['WailsApp']['DeclineDisclaimer']();
+}
