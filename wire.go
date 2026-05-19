@@ -11,6 +11,7 @@ import (
 	"github.com/medmemo/medmemo/internal/application/port"
 	"github.com/medmemo/medmemo/internal/application/usecase"
 	"github.com/medmemo/medmemo/internal/infrastructure/config"
+	"github.com/medmemo/medmemo/internal/infrastructure/database"
 )
 
 // InitializeApp 通过 Wire 编译期依赖注入组装完整应用。
@@ -24,10 +25,13 @@ func InitializeApp() (*App, func(), error) {
 		wire.Bind(new(port.MemoryRepository), new(*repository.MemoryRepoDuckDB)),
 		wire.Bind(new(port.SensitiveDetector), new(*detector.RuleDetector)),
 		wire.Bind(new(usecase.ComplianceChecker), new(*usecase.DefaultComplianceChecker)),
+		wire.Bind(new(port.ConversationRepository), new(*repository.ConversationRepoSQLite)),
+		wire.Bind(new(port.MessageRepository), new(*repository.MessageRepoSQLite)),
 		ai.ProviderSet,
 		repository.RepositorySet,
 		detector.ProviderSet,
 		config.ConfigSet,
+		database.DatabaseSet,
 		wire.Value(""),
 	)
 	return nil, nil, nil

@@ -6,9 +6,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
+	"github.com/medmemo/medmemo/internal/application/port"
 	"github.com/medmemo/medmemo/internal/application/usecase"
 	"github.com/medmemo/medmemo/internal/domain/entity"
 	"github.com/medmemo/medmemo/pkg/models"
@@ -21,6 +23,8 @@ type WailsApp struct {
 	chatOrchestrator *usecase.ChatOrchestrator
 	memoryRetriever  *usecase.MemoryRetriever
 	config           *entity.AppConfig
+	convRepo         port.ConversationRepository
+	msgRepo          port.MessageRepository
 	streamMu         sync.Mutex
 	streamCancel     context.CancelFunc
 }
@@ -30,11 +34,15 @@ func NewWailsApp(
 	chat *usecase.ChatOrchestrator,
 	mem *usecase.MemoryRetriever,
 	cfg *entity.AppConfig,
+	convRepo port.ConversationRepository,
+	msgRepo port.MessageRepository,
 ) *WailsApp {
 	return &WailsApp{
 		chatOrchestrator: chat,
 		memoryRetriever:  mem,
 		config:           cfg,
+		convRepo:         convRepo,
+		msgRepo:          msgRepo,
 	}
 }
 
@@ -101,21 +109,78 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) error {
 		Model:          models.ProviderType(req.Model),
 	}
 
+	// 收集 AI 完整回复用于持久化
+	var fullReply stringsBuilder
+
 	err := a.chatOrchestrator.StreamExecute(ctx, chatReq, func(chunk string) {
+		fullReply.WriteString(chunk)
 		runtime.EventsEmit(a.ctx, "chat:stream:token", chunk)
 	})
 
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			runtime.EventsEmit(a.ctx, "chat:stream:interrupted", nil)
+			// 保存已生成的部分内容
+			a.saveMessages(ctx, req.ConversationID, req.Messages, fullReply.String())
 			return nil
 		}
 		runtime.EventsEmit(a.ctx, "chat:stream:error", err.Error())
 		return fmt.Errorf("stream failed: %w", err)
 	}
 
+	// 保存用户消息和 AI 回复
+	a.saveMessages(ctx, req.ConversationID, req.Messages, fullReply.String())
+
 	runtime.EventsEmit(a.ctx, "chat:stream:end", nil)
 	return nil
+}
+
+// stringsBuilder 是 strings.Builder 的别名，用于收集流式内容。
+type stringsBuilder struct {
+	b []byte
+}
+
+func (s *stringsBuilder) WriteString(str string) {
+	s.b = append(s.b, str...)
+}
+
+func (s *stringsBuilder) String() string {
+	return string(s.b)
+}
+
+// saveMessages 将对话消息持久化到数据库。
+func (a *WailsApp) saveMessages(ctx context.Context, convID string, messages []models.Message, aiReply string) {
+	if a.msgRepo == nil || convID == "" {
+		return
+	}
+	// 保存最后一条用户消息
+	if len(messages) > 0 {
+		lastUser := messages[len(messages)-1]
+		if lastUser.Role == models.RoleUser {
+			_ = a.msgRepo.Save(ctx, models.ConversationID(convID), &entity.Message{
+				ID:        fmt.Sprintf("msg_%d", time.Now().UnixNano()),
+				Role:      lastUser.Role,
+				Content:   lastUser.Content,
+				Timestamp: time.Now(),
+			})
+		}
+	}
+	// 保存 AI 回复
+	if aiReply != "" {
+		_ = a.msgRepo.Save(ctx, models.ConversationID(convID), &entity.Message{
+			ID:        fmt.Sprintf("msg_%d", time.Now().UnixNano()),
+			Role:      models.RoleAssistant,
+			Content:   aiReply,
+			Timestamp: time.Now(),
+		})
+	}
+	// 更新会话时间
+	if a.convRepo != nil {
+		_ = a.convRepo.Save(ctx, &entity.Conversation{
+			ID:        models.ConversationID(convID),
+			UpdatedAt: time.Now(),
+		})
+	}
 }
 
 // StopGeneration 中断当前正在进行的流式生成。
@@ -136,14 +201,34 @@ type ConversationSummary struct {
 
 // GetConversations 获取会话列表。
 func (a *WailsApp) GetConversations() ([]ConversationSummary, error) {
-	// TODO(作者): 接入 ConversationRepository [Issue#031]
-	return []ConversationSummary{}, nil
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+
+	convs, err := a.convRepo.ListRecent(ctx, 100)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list conversations: %w", err)
+	}
+
+	result := make([]ConversationSummary, len(convs))
+	for i, conv := range convs {
+		result[i] = ConversationSummary{
+			ID:        string(conv.ID),
+			Title:     conv.Title,
+			UpdatedAt: strconv.FormatInt(conv.UpdatedAt.UnixMilli(), 10),
+		}
+	}
+	return result, nil
 }
 
 // CreateConversation 创建新会话，返回会话 ID。
 func (a *WailsApp) CreateConversation() (string, error) {
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+
 	conv := entity.NewConversation(models.ProviderType(a.config.DefaultModel))
-	// TODO(作者): 持久化到 ConversationRepository [Issue#027]
+	if err := a.convRepo.Save(ctx, conv); err != nil {
+		return "", fmt.Errorf("failed to create conversation: %w", err)
+	}
 	return string(conv.ID), nil
 }
 

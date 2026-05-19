@@ -34,3 +34,16 @@ type ConversationRepository interface {
 	ListRecent(ctx context.Context, limit int) ([]*entity.Conversation, error)
 	Delete(ctx context.Context, id models.ConversationID) error
 }
+
+// MessageRepository 定义消息的持久化接口。
+type MessageRepository interface {
+	// Save 保存单条消息。
+	Save(ctx context.Context, convID models.ConversationID, msg *entity.Message) error
+	// ListByConversation 按会话查询消息，支持 cursor-based 分页。
+	// 返回消息列表和下一页 cursor（空字符串表示无更多数据）。
+	ListByConversation(ctx context.Context, convID models.ConversationID, cursor string, limit int) ([]*entity.Message, string, error)
+	// SoftDelete 软删除消息。
+	SoftDelete(ctx context.Context, msgID string) error
+	// Restore 恢复软删除的消息。
+	Restore(ctx context.Context, msgID string) error
+}

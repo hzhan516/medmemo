@@ -21,11 +21,11 @@ type Conversation struct {
 
 // Message 是会话中的单条消息，封装 models.Message 并附加领域元数据。
 type Message struct {
-	Role      models.Role
-	Content   string
-	Timestamp time.Time
-	// IsModified 标记该消息是否被用户编辑过，用于记忆一致性追踪。
-	IsModified bool
+	ID         string
+	Role       models.Role
+	Content    string
+	Timestamp  time.Time
+	IsModified bool // 标记该消息是否被用户编辑过，用于记忆一致性追踪。
 }
 
 // NewConversation 创建新会话，标题默认为空，由第一条消息自动生成。
@@ -43,6 +43,7 @@ func NewConversation(model models.ProviderType) *Conversation {
 // AddMessage 向会话追加消息并更新时间戳。
 func (c *Conversation) AddMessage(role models.Role, content string) {
 	c.Messages = append(c.Messages, Message{
+		ID:        fmt.Sprintf("msg_%d", time.Now().UnixNano()),
 		Role:      role,
 		Content:   content,
 		Timestamp: time.Now(),

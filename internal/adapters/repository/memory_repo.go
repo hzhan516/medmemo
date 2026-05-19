@@ -59,4 +59,6 @@ type DuckDBConnection struct{}
 // RepositorySet 供 Wire 使用的 ProviderSet。
 var RepositorySet = wire.NewSet(
 	NewMemoryRepoDuckDB,
+	NewConversationRepoSQLite,
+	NewMessageRepoSQLite,
 )

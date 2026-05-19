@@ -3,12 +3,15 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
+	"github.com/medmemo/medmemo/internal/infrastructure/database"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
@@ -64,6 +67,18 @@ type App struct {
 }
 
 // NewApp 构造函数，供 Wire 调用。
-func NewApp(wa *WailsApp) *App {
-	return &App{wailsApp: wa}
+// 启动时执行数据库迁移，返回 cleanup 回调用于关闭连接池。
+func NewApp(wa *WailsApp, sqlite *database.SQLiteConnector) (*App, func(), error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := sqlite.Migrate(ctx); err != nil {
+		return nil, nil, fmt.Errorf("database migration failed: %w", err)
+	}
+
+	cleanup := func() {
+		if err := sqlite.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to close database: %v\n", err)
+		}
+	}
+	return &App{wailsApp: wa}, cleanup, nil
 }
