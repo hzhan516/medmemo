@@ -1,0 +1,43 @@
+version: 2
+project_name: MedMemo
+
+before:
+  hooks:
+    - cd web && npm ci && npm run build
+
+builds:
+  - skip: true
+
+archives:
+  - id: medmemo
+    meta: true
+    formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ if .Env.PLATFORM }}{{ .Env.PLATFORM }}{{ else }}local{{ end }}"
+    files:
+      - src: build/bin/*
+        dst: .
+      - src: resources/**/*
+        dst: resources/
+
+checksum:
+  name_template: 'checksums.txt'
+
+release:
+  draft: true
+  prerelease: auto
+  mode: append
+  name_template: "MedMemo {{ .Version }}"
+  extra_files:
+    - glob: build/bin/*.AppImage
+    - glob: build/bin/*.dmg
+    - glob: build/bin/*-installer.exe
+
+changelog:
+  use: github
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - '^ci:'

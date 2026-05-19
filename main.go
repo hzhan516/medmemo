@@ -23,6 +23,9 @@ import (
 //go:embed all:web/dist
 var assets embed.FS
 
+// version 由构建时通过 -ldflags -X main.version={{.Version}} 注入。
+var version = "dev"
+
 func main() {
 	// 监听优雅关闭信号
 	sigCh := make(chan os.Signal, 1)
@@ -40,7 +43,7 @@ func main() {
 	}
 	defer cleanup()
 
-	fmt.Println("MedMemo starting...")
+	fmt.Printf("MedMemo %s starting...\n", version)
 
 	// 启动 Wails 桌面应用
 	err = wails.Run(&options.App{
