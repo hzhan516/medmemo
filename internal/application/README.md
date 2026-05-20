@@ -1,38 +1,69 @@
-# Application Layer（用例层）
+# Application Layer
 
-## 定位
+> 🌐 [中文版本](../../docs/i18n/zh-Hans-CN/internal/application/README.md)
 
-Application Layer 是 Clean Architecture 的第二层，负责**编排领域对象完成具体用户用例**。
+## Why This Layer Exists
 
-该层定义系统能做什么（Use Cases），以及系统需要什么外部能力（Ports）。它不知道这些能力由谁提供——数据库操作、HTTP 请求、AI 推理都由 adapter 层实现。
+The Application Layer is the second ring of Clean Architecture. It orchestrates domain objects to fulfill specific user use cases — such as "send a chat message" or "retrieve relevant memories for a conversation."
 
-## 目录结构
+This layer defines **what the system can do** (Use Cases) and **what external capabilities it needs** (Ports). It does not know who provides those capabilities — database access, HTTP calls, and AI inference are all injected by the adapter layer.
+
+By keeping this layer free of framework code, we ensure that:
+- Use cases are testable with mocked ports
+- Business workflows are visible in one place
+- New features can be added without touching infrastructure
+
+---
+
+## Directory Structure
 
 ```
 internal/application/
-├── usecase/    # 用例实现：ChatOrchestrator, MemoryRetriever, TitleGenerator...
-├── port/       # 端口定义：LLMClient, MemoryRepository, SensitiveDetector, ComplianceChecker...
-└── pipeline/   # 脱敏流水线编排器：协调 L1/L2/L3 三级脱敏
+├── usecase/    # Use case implementations: ChatOrchestrator, MemoryRetriever, TitleGenerator...
+├── port/       # Port definitions: LLMClient, MemoryRepository, SensitiveDetector, ComplianceChecker...
+└── pipeline/   # De-identification pipeline orchestrator: coordinates L1/L2/L3 sanitization
 ```
 
-## 导入约束
+| Package | Purpose | Example Types |
+|---------|---------|--------------|
+| `usecase/` | Concrete business workflows | `ChatOrchestrator`, `MemoryRetriever` |
+| `port/` | Interfaces for external capabilities | `LLMClient`, `MemoryRepository`, `ComplianceChecker` |
+| `pipeline/` | Multi-stage data transformation | `DeidentifyPipeline` |
 
-| 允许导入                                           | 禁止导入                                                   |
-|------------------------------------------------|--------------------------------------------------------|
-| `github.com/medmemo/medmemo/internal/domain/*` | `github.com/medmemo/medmemo/internal/adapters/*`       |
-| `github.com/medmemo/medmemo/pkg/models/`       | `github.com/medmemo/medmemo/internal/infrastructure/*` |
-| Go 标准库                                         | —                                                      |
+---
 
-## 核心职责
+## Import Constraints
 
-1. **用例编排**：接收输入 → 调用领域对象 → 协调适配器 → 返回输出
-2. **事务边界**：定义一个用例的原子性边界（如"发送消息"包含脱敏、API调用、合规检测、持久化）
-3. **端口定义**：通过 Go Interface 声明系统需要的外部能力，由 adapter 层注入实现
+| Allowed Imports | Forbidden Imports |
+|-----------------|-------------------|
+| `github.com/hzhan516/medmemo/internal/domain/*` | `github.com/hzhan516/medmemo/internal/adapters/*` |
+| `github.com/hzhan516/medmemo/pkg/models/` | `github.com/hzhan516/medmemo/internal/infrastructure/*` |
+| Go standard library | — |
 
-## 示例
+This layer never imports adapter implementations or infrastructure packages directly. All external dependencies arrive through the `port/` interfaces.
+
+---
+
+## Core Responsibilities
+
+1. **Use Case Orchestration** — Receive input → call domain objects → coordinate adapters → return output
+2. **Transaction Boundaries** — Define the atomic boundary of a use case (e.g., "send message" includes sanitization, API call, compliance check, and persistence)
+3. **Port Definitions** — Declare external capabilities via Go interfaces; implementations are injected by the adapter layer
+
+---
+
+## Design Principles
+
+- **One file per use case**. `ChatOrchestrator` handles the full chat flow; `MemoryRetriever` handles memory search. This makes workflows easy to locate and test.
+- **Ports are minimal**. `LLMClient` has only `Chat()`, `StreamChat()`, and `CheckAvailability()`. No provider-specific types leak through.
+- **Pipelines are composable**. The de-identification pipeline can run L1 (rule-based), L2 (NER model), or L3 (keyword dictionary) independently or in sequence.
+
+---
+
+## Example
 
 ```go
-// Package port port/llm.go
+// port/llm.go
 package port
 
 type LLMClient interface {
@@ -45,10 +76,22 @@ type LLMClient interface {
 package usecase
 
 func (o *ChatOrchestrator) Execute(ctx context.Context, req ChatRequest) (ChatResponse, error) {
-	// 1. 紧急症状检测
-	// 2. 三级脱敏流水线
-	// 3. LLM 调用
-	// 4. 合规拦截
-	// 5. 消息持久化
+	// 1. Emergency symptom detection
+	// 2. Three-stage de-identification pipeline
+	// 3. LLM invocation
+	// 4. Compliance interception
+	// 5. Message persistence
 }
 ```
+
+---
+
+## Related Layers
+
+- [Domain Layer](../domain/README.md) — Provides the entities and rules this layer orchestrates
+- [Adapters Layer](../adapters/README.md) — Implements the ports defined here
+- [Infrastructure Layer](../infrastructure/README.md) — Provides the raw technical capabilities adapters consume
+
+---
+
+*Last updated: 2026-05-19*

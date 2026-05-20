@@ -1,41 +1,77 @@
-# Domain Layer（实体层）
+# Domain Layer
 
-## 定位
+> 🌐 [中文版本](../../docs/i18n/zh-Hans-CN/internal/domain/README.md)
 
-Domain Layer 是 Clean Architecture 的最内层，承载 MedMemo 的核心业务实体与领域规则。
+## Why This Layer Exists
 
-**核心原则**：该层对框架、数据库、UI、外部 API 一无所知。所有技术细节都被排除在外，确保业务逻辑的纯粹性与长期稳定性。
+The Domain Layer is the innermost ring of Clean Architecture. It holds MedMemo's core business entities and domain rules — the logic that would remain unchanged even if we switched from Wails to Tauri, from DuckDB to PostgreSQL, or from ONNX to TensorFlow.
 
-## 目录结构
+By isolating business concepts from technical details, we ensure that:
+- Business rules are testable without databases, HTTP servers, or UI frameworks
+- Changes in infrastructure do not ripple into business logic
+- New developers can understand what the system *does* before learning how it *works*
+
+---
+
+## Directory Structure
 
 ```
 internal/domain/
-├── entity/       # 核心业务实体：Conversation, Memory, FamilyMember, HealthMemory...
-├── repository/   # 仓库接口（Port）：MemoryRepository, FamilyRepository...
-├── policy/       # 策略接口：脱敏策略、合规策略抽象
-└── service/      # 领域服务接口：跨实体的复杂业务规则
+├── entity/       # Core business entities: Conversation, Memory, FamilyMember, HealthMemory...
+├── repository/   # Repository interfaces (Ports): MemoryRepository, FamilyRepository...
+├── policy/       # Policy interfaces: de-identification strategies, compliance policies
+└── service/      # Domain service interfaces: complex cross-entity business rules
 ```
 
-## 导入约束（铁律）
+| Package | Purpose | Example Types |
+|---------|---------|--------------|
+| `entity/` | Pure business objects with behavior | `Conversation`, `HealthMemory`, `FamilyMember` |
+| `repository/` | Contracts for data persistence | `MemoryRepository`, `FamilyRepository` |
+| `policy/` | Abstractions for compliance & sensitivity | `DeidentifyPolicy`, `CompliancePolicy` |
+| `service/` | Operations spanning multiple entities | `HealthRiskEvaluator` |
 
-| 允许导入                                     | 禁止导入                                           |
-|------------------------------------------|------------------------------------------------|
-| Go 标准库                                   | `github.com/medmemo/medmemo/internal/**/*`     |
-| `github.com/medmemo/medmemo/pkg/models/` | `github.com/medmemo/medmemo/pkg/desensitizer/` |
+---
 
-> ⚠️ 违反上述规则将被 CI 的 `depguard` 检查阻断合并。
+## Import Constraints (Iron Rule)
 
-## 何时在此层添加代码
+| Allowed Imports | Forbidden Imports |
+|-----------------|-------------------|
+| Go standard library | `github.com/hzhan516/medmemo/internal/**/*` |
+| `github.com/hzhan516/medmemo/pkg/models/` | `github.com/hzhan516/medmemo/pkg/desensitizer/` |
 
-- 新增业务实体（如 `Conversation`、`HealthMemory`）
-- 定义领域错误（如 `ErrRecordNotFound`、`ErrValidationFailed`）
-- 定义仓库接口（由 adapter 层实现）
-- 定义领域事件（如 `MemoryCreated`）
+> ⚠️ Violating these rules will be blocked by the CI `depguard` check.
 
-## 示例
+This layer knows **nothing** about:
+- HTTP requests or REST APIs
+- Database connection strings
+- UI frameworks (React, Wails)
+- AI model inference libraries
+- Configuration file formats
+
+---
+
+## When to Add Code Here
+
+- **New business entities** (e.g., `Conversation`, `HealthMemory`)
+- **Domain errors** (e.g., `ErrRecordNotFound`, `ErrValidationFailed`)
+- **Repository interfaces** (implemented by the adapter layer)
+- **Domain events** (e.g., `MemoryCreated`)
+- **Cross-entity business rules** that cannot belong to a single entity
+
+---
+
+## Design Principles
+
+- **Entities encapsulate behavior**, not just data. A `Conversation` knows how to rename itself; a `FamilyMember` knows how to validate relationship graphs.
+- **Value objects are immutable**. Dates, sensitivity levels, and medical record IDs are value objects.
+- **Errors are part of the domain**. `ErrRecordNotFound` is defined here so that adapters can map their native errors (SQL `no rows`, HTTP 404) to a common language.
+
+---
+
+## Example
 
 ```go
-// Package entity entity/conversation.go
+// entity/conversation.go
 package entity
 
 import "time"
@@ -56,3 +92,15 @@ func (c *Conversation) Rename(title string) error {
 	return nil
 }
 ```
+
+---
+
+## Related Layers
+
+- [Application Layer](../application/README.md) — Orchestrates domain objects into use cases
+- [Adapters Layer](../adapters/README.md) — Implements the repository interfaces defined here
+- [Infrastructure Layer](../infrastructure/README.md) — Provides the technical capabilities adapters need
+
+---
+
+*Last updated: 2026-05-19*

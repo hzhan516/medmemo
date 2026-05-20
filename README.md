@@ -1,6 +1,8 @@
-# MedMemo — 你的私人健康记忆助手 🏥🧠
+# MedMemo — Your Private Health Memory Assistant 🏥🧠
 
-> *一个越用越懂你的开源桌面健康咨询工具。分层记忆 × 多角色 Agent × 本地 AI，让每一次对话都沉淀为持久记忆。*
+> 🌐 [中文版本](./docs/i18n/zh-Hans-CN/README.md)
+
+> *An open-source desktop health companion that learns you better over time. Layered memory × multi-model agents × local AI — every conversation becomes lasting knowledge.*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Go Version](https://img.shields.io/badge/Go-1.22%2B-blue)](https://go.dev)
@@ -8,128 +10,133 @@
 
 ---
 
-## 🚨 重要声明
+## 🚨 Important Disclaimer
 
-**MedMemo 不是医疗器械，不提供医疗诊断、治疗建议或处方服务。**
+**MedMemo is not a medical device. It does not provide medical diagnoses, treatment advice, or prescriptions.**
 
-MedMemo 是开源健康信息管理和咨询辅助工具，提供的所有信息、分析和建议**仅供参考，不能替代持有执照的执业医师的专业诊断、治疗建议或处方**。在做出任何医疗决定前，请务必咨询专业医疗机构和执业医师。
-
----
-
-## ✨ 核心特性
-
-### 🧠 分层长期记忆池
-采用仿生记忆模型：工作记忆（L1 当前会话）、短期记忆（L2 近期归档）、长期记忆（L3 知识图谱 + 向量索引）。关键症状自动归档，再次提及相关话题时智能唤醒。
-
-### 💬 Chatbox 式多模型自由切换
-一键在 Kimi、GPT、通义、Ollama、llama.cpp 等模型间切换，无需重新加载上下文。会话级上下文独立存储，支持窗口截断与摘要压缩。
-
-### 👨‍👩‍👧‍👦 家族关系网图谱
-可视化家族健康树，支持 Cypher 查询。系统自动分析疾病聚集模式，智能提示潜在遗传风险。
-
-### 🗂️ 可视化记忆管理台
-时间线视图 + 知识图谱视图双模式浏览，支持关键词搜索、标签筛选和导出。
-
-### 🔒 隐私优先，本地运行
-所有核心数据本地存储（SQLite + DuckDB + Kùzǔ），AI 推理本地完成（ONNX Runtime）。三级脱敏流水线确保敏感信息不出设备。
+MedMemo is an open-source health information management and consultation assistance tool. All information, analysis, and suggestions provided are **for reference only and cannot replace professional diagnosis, treatment advice, or prescriptions from a licensed physician**. Always consult professional medical institutions and licensed physicians before making any medical decisions.
 
 ---
 
-## 🛠 技术栈
+## ✨ Core Features
 
-| 层级     | 技术选型                                                |
-|--------|-----------------------------------------------------|
-| 桌面框架   | Wails v2（Go + React/TypeScript）                     |
-| 架构     | Clean Architecture 四层模型                             |
-| 依赖注入   | Google Wire（编译期）                                    |
-| 本地 AI  | Hugot + ONNX Runtime（NER / 嵌入）                      |
-| LLM 接入 | OpenAI-compatible API / Ollama / llama.cpp          |
-| 数据库    | DuckDB（分析）+ SQLite/SQLCipher（事务）+ Kùzǔ（图）           |
-| 前端     | React 18 + TypeScript 严格模式 + Tailwind CSS + Zustand |
+### 🧠 Layered Long-Term Memory Pool
+
+Inspired by biological memory models: Working Memory (L1, current session), Short-Term Memory (L2, recent archive), and Long-Term Memory (L3, knowledge graph + vector index). Key symptoms are automatically archived and intelligently recalled when related topics are mentioned again.
+
+### 💬 Chatbox-Style Multi-Model Switching
+
+Switch between Kimi, GPT, Qwen, Ollama, and llama.cpp with one click — no context reloading required. Session-level context is stored independently, with window truncation and summary compression support.
+
+### 👨‍👩‍👧‍👦 Family Health Relationship Graph
+
+Visualize your family's health tree with Cypher query support. The system automatically analyzes disease clustering patterns and intelligently alerts you to potential hereditary risks.
+
+### 🗂️ Visual Memory Management Console
+
+Browse via timeline view and knowledge graph view. Supports keyword search, tag filtering, and export.
+
+### 🔒 Privacy-First, Local-First
+
+All core data is stored locally (SQLite + DuckDB + Kùzǔ). AI inference runs on-device via ONNX Runtime. A three-stage de-identification pipeline ensures sensitive information never leaves your device.
 
 ---
 
-## 🚀 快速开始
+## 🛠 Tech Stack
 
-### 环境要求
+| Layer | Technology |
+|-------|------------|
+| Desktop Framework | Wails v2 (Go + React/TypeScript) |
+| Architecture | Clean Architecture (4-layer model) |
+| Dependency Injection | Google Wire (compile-time) |
+| Local AI | Hugot + ONNX Runtime (NER / embeddings) |
+| LLM Access | OpenAI-compatible API / Ollama / llama.cpp |
+| Database | DuckDB (analytics) + SQLite/SQLCipher (transactions) + Kùzǔ (graph) |
+| Frontend | React 18 + TypeScript Strict Mode + Tailwind CSS + Zustand |
 
-- **操作系统**：macOS 12+ / Windows 10+ / Linux (Ubuntu 20.04+)
-- **Go**：1.22+
-- **Node.js**：18.x+
-- **npm**：9.x+
+---
 
-### 安装 Wails CLI
+## 🚀 Quick Start
+
+### Requirements
+
+- **OS**: macOS 12+ / Windows 10+ / Linux (Ubuntu 20.04+)
+- **Go**: 1.22+
+- **Node.js**: 18.x+
+- **npm**: 9.x+
+
+### Install Wails CLI
 
 ```bash
 go install github.com/wailsapp/wails/v2/cmd/wails@latest
 wails version
-wails doctor  # 检查环境依赖
+wails doctor  # Check environment dependencies
 ```
 
-### 克隆与安装依赖
+### Clone & Install Dependencies
 
 ```bash
-git clone https://github.com/medmemo/medmemo.git
+git clone https://github.com/hzhan516/medmemo.git
 cd medmemo
 go mod download
 cd web && npm install && cd ..
 ```
 
-### 开发模式
+### Development Mode
 
 ```bash
-make dev      # 或 wails dev（热重载）
+make dev      # Or wails dev (hot reload)
 ```
 
-### 生产构建
+### Production Build
 
 ```bash
-make build    # 当前平台
+make build          # Current platform
 make build-darwin   # macOS
 make build-windows  # Windows
 make build-linux    # Linux
 ```
 
-产物位于 `build/bin/`：
+Build artifacts are located in `build/bin/`:
 - macOS: `MedMemo.app`
 - Windows: `MedMemo.exe`
 - Linux: `medmemo`
 
 ---
 
-## 📁 项目结构
+## 📁 Project Structure
 
 ```
 medmemo/
-├── cmd/health-assistant/    # 应用入口 + Wire 注入蓝图
+├── cmd/health-assistant/    # Application entry point + Wire injection blueprint
 ├── internal/
-│   ├── domain/              # [Entities层] 零外部依赖
+│   ├── domain/              # [Entities Layer] Zero external dependencies
 │   │   ├── entity/          # Conversation, Memory, FamilyMember...
-│   │   ├── repository/      # 仓库接口（Port）
-│   │   ├── policy/          # 合规策略、敏感分级策略
-│   │   └── service/         # 领域服务接口
-│   ├── application/         # [Use Cases层]
+│   │   ├── repository/      # Repository interfaces (Ports)
+│   │   ├── policy/          # Compliance and sensitivity policies
+│   │   └── service/         # Domain service interfaces
+│   ├── application/         # [Use Cases Layer]
 │   │   ├── usecase/         # ChatOrchestrator, MemoryRetriever...
 │   │   ├── port/            # LLMClient, RecordStore...
-│   │   └── pipeline/        # 三级脱敏流水线编排
-│   ├── adapters/            # [Interface Adapters层]
-│   │   ├── ai/              # OpenAI/Kimi/Local 适配器
-│   │   ├── repository/      # DuckDB/Kùzǔ 仓库实现
-│   │   └── dto/             # 数据传输对象转换
-│   └── infrastructure/      # [Frameworks & Drivers层]
-│       ├── onnx/            # Hugot ONNX 推理运行时
-│       ├── database/        # DuckDB/SQLite 连接池
-│       ├── config/          # Viper 配置加载
-│       ├── secret/          # 系统密钥环封装
-│       └── network/         # HTTP 客户端（重试/超时/断路器）
+│   │   └── pipeline/        # Three-stage de-identification orchestration
+│   ├── adapters/            # [Interface Adapters Layer]
+│   │   ├── ai/              # OpenAI/Kimi/Local adapters
+│   │   ├── repository/      # DuckDB/Kùzǔ repository implementations
+│   │   └── dto/             # Data transfer object transformations
+│   └── infrastructure/      # [Frameworks & Drivers Layer]
+│       ├── onnx/            # Hugot ONNX inference runtime
+│       ├── database/        # DuckDB/SQLite connection pools
+│       ├── config/          # Viper configuration loading
+│       ├── secret/          # System keychain wrapper
+│       └── network/         # HTTP client (retry/timeout/circuit breaker)
 ├── pkg/
-│   ├── desensitizer/        # 脱敏算法工具包
-│   └── models/              # 共享数据结构
-├── web/                     # Wails 前端（React + TypeScript）
-├── scripts/                 # 构建脚本、迁移、模型下载
-├── build/                   # CI/CD、Docker、打包
-├── docs/                    # 架构文档、API 文档、用户指南
-├── resources/               # 运行时资源（模型/字典/规则）
+│   ├── desensitizer/        # De-identification algorithm toolkit
+│   └── models/              # Shared data structures
+├── web/                     # Wails frontend (React + TypeScript)
+├── scripts/                 # Build scripts, migrations, model downloads
+├── build/                   # CI/CD, Docker, packaging
+├── docs/                    # Architecture docs, API docs, user guides
+├── resources/               # Runtime resources (models/dictionaries/rules)
 ├── go.mod
 ├── wails.json
 └── Makefile
@@ -137,45 +144,57 @@ medmemo/
 
 ---
 
-## 🤝 贡献指南
+## 🤝 Contributing
 
-欢迎所有形式的贡献！请阅读 [CONTRIBUTING.md](./CONTRIBUTING.md) 了解开发环境搭建、分支策略与提交规范。
+All forms of contribution are welcome! Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for development environment setup, branch strategy, and commit conventions.
 
-### 快速提交
+### Quick Contribution Workflow
 
 ```bash
-make install-tools   # 安装开发工具
+make install-tools   # Install development tools
 git checkout -b feature/M01-your-feature
-# 开发 → make dev 测试 → make lint → make test
+# Develop → make dev test → make lint → make test
 git commit -m "feat(M01): add xxx"
 git push origin feature/M01-your-feature
-# 发起 Pull Request
+# Open a Pull Request
 ```
 
 ---
 
-## 📚 文档导航
+## 📚 Documentation
 
-| 文档                                             | 内容                                          |
-|------------------------------------------------|---------------------------------------------|
-| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | 系统架构总览、四层架构映射、数据流、模块依赖                      |
-| [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md)   | 开发规范、Clean Architecture 依赖规则、Wire 使用指南、测试策略 |
-| [docs/API.md](./docs/API.md)                   | 内部接口契约、Wails 前后端绑定说明、错误码定义                  |
-| [docs/COMPLIANCE.md](./docs/COMPLIANCE.md)     | 合规红线、三级脱敏流水线、四级拦截规则、紧急症状识别                  |
-| [docs/SECURITY.md](./docs/SECURITY.md)         | 安全披露流程、数据加密说明、依赖项安全扫描                       |
+| Document | Content |
+|----------|---------|
+| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | System architecture overview, four-layer mapping, data flow, module dependencies |
+| [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md) | Development standards, Clean Architecture dependency rules, Wire guide, testing strategy |
+| [docs/API.md](./docs/API.md) | Internal interface contracts, Wails frontend-backend binding, error code definitions |
+| [docs/COMPLIANCE.md](./docs/COMPLIANCE.md) | Compliance red lines, three-stage de-identification pipeline, four-level interception rules, emergency symptom detection |
+| [docs/SECURITY.md](./docs/SECURITY.md) | Security disclosure process, data encryption details, dependency security scanning |
+| [docs/user-guide/README.md](./docs/user-guide/README.md) | End-user guide: installation, getting started, privacy policy, FAQ, troubleshooting |
 
 ---
 
-## 📜 许可证
+## 🌐 Repositories
 
-MedMemo 采用 [MIT License](./LICENSE)。可自由使用、修改和分发（含商业用途），须保留版权声明和许可证文本。
+- GitHub: [https://github.com/hzhan516/medmemo](https://github.com/hzhan516/medmemo)
+- Gitee: [https://gitee.com/DoyleZhang/medmemo](https://gitee.com/DoyleZhang/medmemo)
 
-**使用本软件即表示您同意许可证中包含的医疗免责声明。**
+---
+
+## 📜 License
+
+MedMemo is licensed under [MIT License](./LICENSE). Free to use, modify, and distribute (including commercially), provided the copyright notice and license text are retained.
+
+**Using this software means you agree to the medical disclaimer contained in the license.**
 
 ---
 
 <p align="center">
   Made with ❤️ by MedMemo Contributors
   <br>
-  <em>你的健康，值得被记住</em>
+  <em>Your health deserves to be remembered</em>
 </p>
+
+---
+
+*Last updated: 2026-05-19*

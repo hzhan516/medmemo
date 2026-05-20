@@ -1,48 +1,73 @@
-# Infrastructure Layer（基础设施层）
+# Infrastructure Layer
 
-## 定位
+> 🌐 [中文版本](../../docs/i18n/zh-Hans-CN/internal/infrastructure/README.md)
 
-Infrastructure Layer 是 Clean Architecture 的最外层，封装所有技术框架和第三方库。
+## Why This Layer Exists
 
-**核心原则**：该层不知道业务逻辑的存在。它只提供技术能力（数据库连接、HTTP 客户端、配置加载、密钥管理），由 adapter 层按需调用。
+The Infrastructure Layer is the outermost ring of Clean Architecture. It encapsulates all technical frameworks and third-party libraries.
 
-## 目录结构
+**Core principle**: this layer knows nothing about business logic. It only provides technical capabilities — database connections, HTTP clients, configuration loading, and secret management — which the adapter layer consumes as needed.
+
+By isolating framework code here, we ensure that:
+- Upgrading DuckDB or ONNX Runtime requires changes only in this layer
+- Business logic remains free of framework-specific types
+- Platform differences (macOS keychain vs. Windows Credential Manager) are handled in one place
+
+---
+
+## Directory Structure
 
 ```
 internal/infrastructure/
-├── onnx/       # Hugot ONNX Runtime 推理运行时封装
-├── database/   # DuckDB / SQLite 连接池、迁移、事务管理
-├── config/     # Viper 配置加载与校验
-├── secret/     # 系统密钥环封装（macOS Keychain / Windows Credential / Linux Secret Service）
-└── network/    # HTTP 客户端：重试、超时、断路器
+├── onnx/       # Hugot ONNX Runtime inference runtime wrapper
+├── database/   # DuckDB / SQLite connection pool, migrations, and transaction management
+├── config/     # Viper configuration loading and validation
+├── secret/     # System keychain wrapper (macOS Keychain / Windows Credential / Linux Secret Service)
+└── network/    # HTTP client: retry, timeout, circuit breaker
 ```
 
-## 导入约束（铁律）
+| Package | Purpose | Example Types |
+|---------|---------|--------------|
+| `onnx/` | Local AI model inference | `ONNXRuntime`, `InferenceWorker` |
+| `database/` | Database connectivity | `DuckDBConnector`, `SQLiteConnector` |
+| `config/` | Application configuration | `AppConfig`, `Load()` |
+| `secret/` | Secure credential storage | `KeychainStore` |
+| `network/` | Resilient HTTP communication | `RetryClient`, `CircuitBreaker` |
 
-| 允许导入                                   | 禁止导入                                                |
-|----------------------------------------|-----------------------------------------------------|
-| Go 标准库                                 | `github.com/medmemo/medmemo/internal/domain/*`      |
-| 第三方框架库（Wails, DuckDB, Viper, Hugot...） | `github.com/medmemo/medmemo/internal/application/*` |
-| —                                      | `github.com/medmemo/medmemo/internal/adapters/*`    |
+---
 
-> ⚠️ 基础设施层如果导入了任何业务包，将破坏 Clean Architecture 的依赖方向。
+## Import Constraints (Iron Rule)
 
-## 核心职责
+| Allowed Imports | Forbidden Imports |
+|-----------------|-------------------|
+| Go standard library | `github.com/hzhan516/medmemo/internal/domain/*` |
+| Third-party frameworks (Wails, DuckDB, Viper, Hugot...) | `github.com/hzhan516/medmemo/internal/application/*` |
+| — | `github.com/hzhan516/medmemo/internal/adapters/*` |
 
-1. **框架初始化**：数据库连接池创建、ONNX Runtime 加载、配置文件解析
-2. **资源管理**：提供 `Close()` / `Shutdown()` 方法，确保优雅释放
-3. **平台抽象**：跨平台差异（如密钥环、动态库路径）在此层屏蔽
+> ⚠️ If this layer imports any business package, it breaks Clean Architecture's dependency direction.
 
-## 设计原则
+---
 
-- **具体类型暴露**：基础设施层直接暴露具体类型（如 `*sql.DB`、`*onnx.Runtime`），不包装为接口——接口由 application/port 定义
-- **配置驱动**：所有可配置项（超时、连接数、路径）通过 `config/` 加载，禁止硬编码
-- **失败快速**：初始化时即验证依赖可用性（如数据库连接、模型文件存在性），避免运行时才发现问题
+## Core Responsibilities
 
-## 示例
+1. **Framework Initialization** — Create database connection pools, load ONNX Runtime, parse configuration files
+2. **Resource Management** — Provide `Close()` / `Shutdown()` methods for graceful release
+3. **Platform Abstraction** — Shield cross-platform differences (keychain APIs, dynamic library paths) from upper layers
+
+---
+
+## Design Principles
+
+- **Expose concrete types**. This layer returns concrete types (e.g., `*sql.DB`, `*onnx.Runtime`), not interfaces. Interfaces are defined in `application/port/`.
+- **Configuration-driven**. All tunables (timeouts, connection counts, paths) are loaded through `config/`. No hard-coded values.
+- **Fail fast**. Validate dependencies at initialization time (database connectivity, model file existence) to avoid runtime surprises.
+
+---
+
+## Example
 
 ```go
-// Package database database/duckdb.go
+// database/duckdb.go
 package database
 
 import (
@@ -70,3 +95,15 @@ func (c *DuckDBConnector) Close() error {
 	return c.db.Close()
 }
 ```
+
+---
+
+## Related Layers
+
+- [Adapters Layer](../adapters/README.md) — Consumes the technical capabilities this layer provides
+- [Application Layer](../application/README.md) — Defines the workflows that ultimately use these capabilities
+- [Domain Layer](../domain/README.md) — Holds the business rules completely independent of this layer
+
+---
+
+*Last updated: 2026-05-19*
