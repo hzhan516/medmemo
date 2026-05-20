@@ -92,3 +92,11 @@ export function HasAPIKey(arg1) {
 export function GetVersion() {
   return window['go']['main']['WailsApp']['GetVersion']();
 }
+
+export function DetectCLIToken(arg1) {
+  return window['go']['main']['WailsApp']['DetectCLIToken'](arg1);
+}
+
+export function BuildCLIProvider(arg1, arg2) {
+  return window['go']['main']['WailsApp']['BuildCLIProvider'](arg1, arg2);
+}

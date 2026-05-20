@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -694,19 +695,40 @@ func TestOpenAICompatibleClient_Chat_AuthMethod_NoAPIKey(t *testing.T) {
 	assert.Empty(t, authHeader)
 }
 
-// TestOpenAICompatibleClient_Chat_AuthMethod_CLIToken 验证 cli_token 方式返回认证错误（不发送网络请求）。
+// TestOpenAICompatibleClient_Chat_AuthMethod_CLIToken 验证 cli_token 方式正确读取凭证并发送 Bearer Token。
 func TestOpenAICompatibleClient_Chat_AuthMethod_CLIToken(t *testing.T) {
+	tmpDir := t.TempDir()
+	credPath := tmpDir + "/kimi-code.json"
+	require.NoError(t, os.WriteFile(credPath, []byte(`{"access_token":"cli-token-xyz"}`), 0600))
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "Bearer cli-token-xyz", r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"hi\"},\"finish_reason\":\"stop\"}]}\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	defer server.Close()
+
 	client := NewOpenAICompatibleClient()
 	cfg := models.ProviderConfig{
-		APIHost:    "https://api.example.com",
-		ModelID:    "gpt-4o",
-		AuthMethod: models.AuthMethodCLIToken,
+		APIHost:     server.URL,
+		ModelID:     "gpt-4o",
+		AuthMethod:  models.AuthMethodCLIToken,
+		AuthParams:  models.AuthParams{CLICredentialPath: credPath},
+		Temperature: 0.7,
 	}
 
-	_, err := client.Chat(context.Background(), ChatRequest{Messages: []models.Message{{Role: models.RoleUser, Content: "hi"}}}, cfg)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "auth_failed")
-	assert.Contains(t, err.Error(), "TASK-044")
+	ch, err := client.Chat(context.Background(), ChatRequest{Messages: []models.Message{{Role: models.RoleUser, Content: "hi"}}}, cfg)
+	require.NoError(t, err)
+
+	var contents []string
+	for chunk := range ch {
+		if chunk.Type == ChunkContent {
+			contents = append(contents, chunk.Payload)
+		}
+	}
+	assert.Equal(t, []string{"hi"}, contents)
 }
 
 // TestOpenAICompatibleClient_FetchModels_AuthMethod_OAuthDevice 验证 oauth_device 方式返回认证错误（不发送网络请求）。

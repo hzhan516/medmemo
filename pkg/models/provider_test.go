@@ -1,10 +1,13 @@
 package models
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // newValidProviderConfig 返回一个可用于测试的基础 ProviderConfig。
@@ -190,13 +193,50 @@ func TestProviderConfig_ResolveAuthToken_APIKey_Empty(t *testing.T) {
 	assert.Empty(t, token)
 }
 
-// TestProviderConfig_ResolveAuthToken_CLIToken 验证 cli_token 方式返回未实现错误。
+// TestProviderConfig_ResolveAuthToken_CLIToken 验证 cli_token 方式正确读取凭证文件。
 func TestProviderConfig_ResolveAuthToken_CLIToken(t *testing.T) {
+	tmpDir := t.TempDir()
+	credPath := filepath.Join(tmpDir, "kimi-code.json")
+	content := `{"access_token":"cli-token-abc","refresh_token":"rt_xyz"}`
+	require.NoError(t, os.WriteFile(credPath, []byte(content), 0600))
+
 	p := newValidProviderConfig()
 	p.AuthMethod = AuthMethodCLIToken
+	p.APIKey = ""
+	p.AuthParams = AuthParams{CLICredentialPath: credPath}
+
+	token, err := p.ResolveAuthToken()
+	assert.NoError(t, err)
+	assert.Equal(t, "cli-token-abc", token)
+}
+
+// TestProviderConfig_ResolveAuthToken_CLIToken_MissingFile 验证 cli_token 凭证文件不存在时返回错误。
+func TestProviderConfig_ResolveAuthToken_CLIToken_MissingFile(t *testing.T) {
+	p := newValidProviderConfig()
+	p.AuthMethod = AuthMethodCLIToken
+	p.APIKey = ""
+	p.AuthParams = AuthParams{CLICredentialPath: "/nonexistent/cred.json"}
+
 	_, err := p.ResolveAuthToken()
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "TASK-044")
+	assert.Contains(t, err.Error(), "failed to resolve cli token")
+}
+
+// TestProviderConfig_ResolveAuthToken_CLIToken_RefreshTokenHint 验证检测到 refresh_token 时返回提示。
+func TestProviderConfig_ResolveAuthToken_CLIToken_RefreshTokenHint(t *testing.T) {
+	tmpDir := t.TempDir()
+	credPath := filepath.Join(tmpDir, "adc.json")
+	content := `{"refresh_token":"1//refresh","type":"authorized_user"}`
+	require.NoError(t, os.WriteFile(credPath, []byte(content), 0600))
+
+	p := newValidProviderConfig()
+	p.AuthMethod = AuthMethodCLIToken
+	p.APIKey = ""
+	p.AuthParams = AuthParams{CLICredentialPath: credPath}
+
+	_, err := p.ResolveAuthToken()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "TASK-045")
 }
 
 // TestProviderConfig_ResolveAuthToken_OAuthDevice 验证 oauth_device 方式返回未实现错误。

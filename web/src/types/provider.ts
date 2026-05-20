@@ -41,6 +41,22 @@ export interface AuthParams {
 }
 
 /**
+ * CLI 检测结果，对应后端 auth.CLIDetectResult。
+ */
+export interface CLIDetectResult {
+  /** 提供商类型：kimi | gemini */
+  providerType: string
+  /** CLI 凭证文件是否存在 */
+  detected: boolean
+  /** 检测到的凭证文件路径 */
+  credentialPath: string
+  /** 文件内容是否包含有效 token 信息 */
+  loggedIn: boolean
+  /** 检测过程中的错误提示 */
+  error?: string
+}
+
+/**
  * 用户已添加的 Provider 配置。
  * 由 ProviderTemplate + 用户输入（认证配置、自定义参数）构成。
  */

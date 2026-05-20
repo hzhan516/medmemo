@@ -154,7 +154,14 @@ func (p *ProviderConfig) ResolveAuthToken() (string, error) {
 		// 允许空 API Key（如本地 Ollama 无需认证），由调用方决定是否发送 Authorization
 		return p.APIKey, nil
 	case AuthMethodCLIToken:
-		return "", fmt.Errorf("cli_token auth not yet implemented (TASK-044)")
+		token, hint, err := ReadCLITokenFromFile(p.AuthParams.CLICredentialPath)
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve cli token: %w", err)
+		}
+		if hint == "refresh_token" {
+			return "", fmt.Errorf("refresh_token requires TASK-045 to exchange for access_token")
+		}
+		return token, nil
 	case AuthMethodOAuthDevice:
 		return "", fmt.Errorf("oauth_device auth not yet implemented (TASK-046)")
 	case AuthMethodServiceAccount:

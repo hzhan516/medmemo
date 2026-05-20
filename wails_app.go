@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/medmemo/medmemo/internal/adapters/auth"
 	"github.com/medmemo/medmemo/internal/application"
 	"github.com/medmemo/medmemo/internal/application/port"
 	"github.com/medmemo/medmemo/internal/application/stream"
@@ -717,4 +718,65 @@ func (a *WailsApp) GetProviderHealthStatus(providerID string) (*HealthResultResp
 		CheckedAt:  result.CheckedAt.Format(time.RFC3339),
 		Error:      result.Error,
 	}, nil
+}
+
+// DetectCLIToken 检测指定类型的 CLI 是否安装并登录。
+// providerType 支持 "kimi" 和 "gemini"。
+func (a *WailsApp) DetectCLIToken(providerType string) (*auth.CLIDetectResult, error) {
+	if providerType == "" {
+		return nil, fmt.Errorf("provider_type cannot be empty")
+	}
+
+	svc := auth.NewCLITokenService()
+	result, err := svc.Detect(providerType)
+	if err != nil {
+		return nil, fmt.Errorf("failed to detect cli token: %w", err)
+	}
+	return result, nil
+}
+
+// BuildCLIProvider 根据检测到的 CLI 自动构建 ProviderConfig。
+// 流程：Detect → ReadToken → ValidateToken → 返回 ProviderConfig。
+// 验证失败时返回错误，不保存到数据库（由调用方决定是否保存）。
+func (a *WailsApp) BuildCLIProvider(providerType, modelID string) (*models.ProviderConfig, error) {
+	if providerType == "" {
+		return nil, fmt.Errorf("provider_type cannot be empty")
+	}
+
+	svc := auth.NewCLITokenService()
+
+	// 1. 检测 CLI 是否安装
+	detect, err := svc.Detect(providerType)
+	if err != nil {
+		return nil, fmt.Errorf("failed to detect cli: %w", err)
+	}
+	if !detect.Detected {
+		return nil, fmt.Errorf("cli %s not detected (credential file not found)", providerType)
+	}
+
+	// 2. 读取 token
+	token, err := svc.ReadToken(providerType, detect.CredentialPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read cli token: %w", err)
+	}
+
+	// 3. 构建 ProviderConfig
+	cfg, err := svc.BuildProviderConfig(providerType, modelID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build provider config: %w", err)
+	}
+
+	// 4. 验证 token 有效性（调用厂商 /v1/models）
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+
+	valid, err := svc.ValidateToken(ctx, cfg.APIHost, token)
+	if err != nil {
+		return nil, fmt.Errorf("token validation failed: %w", err)
+	}
+	if !valid {
+		return nil, fmt.Errorf("cli token for %s is invalid or expired", providerType)
+	}
+
+	return cfg, nil
 }

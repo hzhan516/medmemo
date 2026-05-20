@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -443,25 +444,35 @@ func TestHealthEngine_CheckNow_NoAPIKey(t *testing.T) {
 	assert.Empty(t, authHeader) // 不应发送 Authorization header
 }
 
-// TestHealthEngine_CheckNow_CLIToken_NotImplemented 验证 cli_token 方式返回 Red。
-func TestHealthEngine_CheckNow_CLIToken_NotImplemented(t *testing.T) {
+// TestHealthEngine_CheckNow_CLIToken_Success 验证 cli_token 方式正确读取凭证并通过健康检测。
+func TestHealthEngine_CheckNow_CLIToken_Success(t *testing.T) {
+	tmpDir := t.TempDir()
+	credPath := tmpDir + "/kimi-code.json"
+	require.NoError(t, os.WriteFile(credPath, []byte(`{"access_token":"cli-token-hc"}`), 0600))
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "Bearer cli-token-hc", r.Header.Get("Authorization"))
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
 	store := newMockProviderStore()
 	_ = store.Create(context.Background(), &models.ProviderConfig{
 		ID:         "cli-p1",
-		APIHost:    "https://api.example.com",
+		APIHost:    server.URL,
 		APIKey:     "",
 		ModelID:    "gpt-4o",
 		Enabled:    true,
 		AuthMethod: models.AuthMethodCLIToken,
-		AuthParams: models.AuthParams{CLICredentialPath: "~/.kimi/credentials/kimi-code.json"},
+		AuthParams: models.AuthParams{CLICredentialPath: credPath},
 	})
 
-	engine := NewHealthEngine(store)
+	engine := NewHealthEngineWithClient(store, server.Client())
 	result, err := engine.CheckNow(context.Background(), "cli-p1")
 	require.NoError(t, err)
 
-	assert.Equal(t, port.HealthRed, result.Status)
-	assert.Contains(t, result.Error, "TASK-044")
+	assert.Equal(t, port.HealthGreen, result.Status)
+	assert.Empty(t, result.Error)
 }
 
 // TestHealthEngine_CheckNow_OAuthDevice_NotImplemented 验证 oauth_device 方式返回 Red。

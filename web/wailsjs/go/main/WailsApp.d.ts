@@ -100,3 +100,15 @@ export function SaveAPIKey(arg1: string, arg2: string): Promise<void>;
 export function HasAPIKey(arg1: string): Promise<boolean>;
 
 export function GetVersion(): Promise<string>;
+
+export interface CLIDetectResult {
+  provider_type: string;
+  detected: boolean;
+  credential_path: string;
+  logged_in: boolean;
+  error: string;
+}
+
+export function DetectCLIToken(arg1: string): Promise<CLIDetectResult>;
+
+export function BuildCLIProvider(arg1: string, arg2: string): Promise<ProviderConfig>;
