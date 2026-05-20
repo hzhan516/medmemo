@@ -163,14 +163,14 @@ git push origin feature/M01-your-feature
 
 ## 📚 Documentation
 
-| Document | Content |
-|----------|---------|
-| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | System architecture overview, four-layer mapping, data flow, module dependencies |
-| [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md) | Development standards, Clean Architecture dependency rules, Wire guide, testing strategy |
-| [docs/API.md](./docs/API.md) | Internal interface contracts, Wails frontend-backend binding, error code definitions |
-| [docs/COMPLIANCE.md](./docs/COMPLIANCE.md) | Compliance red lines, three-stage de-identification pipeline, four-level interception rules, emergency symptom detection |
-| [docs/SECURITY.md](./docs/SECURITY.md) | Security disclosure process, data encryption details, dependency security scanning |
-| [docs/user-guide/README.md](./docs/user-guide/README.md) | End-user guide: installation, getting started, privacy policy, FAQ, troubleshooting |
+| Document                                                 | Content                                                                                                                  |
+|----------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------|
+| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)           | System architecture overview, four-layer mapping, data flow, module dependencies                                         |
+| [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md)             | Development standards, Clean Architecture dependency rules, Wire guide, testing strategy                                 |
+| [docs/API.md](./docs/API.md)                             | Internal interface contracts, Wails frontend-backend binding, error code definitions                                     |
+| [docs/COMPLIANCE.md](./docs/COMPLIANCE.md)               | Compliance red lines, three-stage de-identification pipeline, four-level interception rules, emergency symptom detection |
+| [docs/SECURITY.md](./docs/SECURITY.md)                   | Security disclosure process, data encryption details, dependency security scanning                                       |
+| [docs/user-guide/README.md](./docs/user-guide/README.md) | End-user guide: installation, getting started, privacy policy, FAQ, troubleshooting                                      |
 
 ---
 

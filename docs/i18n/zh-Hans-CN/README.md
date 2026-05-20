@@ -1,10 +1,10 @@
 # MedMemo — 你的私人健康记忆助手 🏥🧠
 
-> 🌐 [English Version](../../README.md)
+> 🌐 [English Version](../../../README.md)
 
 > *一个越用越懂你的开源桌面健康咨询工具。分层记忆 × 多角色 Agent × 本地 AI，让每一次对话都沉淀为持久记忆。*
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./../../../LICENSE)
 [![Go Version](https://img.shields.io/badge/Go-1.22%2B-blue)](https://go.dev)
 [![Wails v2](https://img.shields.io/badge/Wails-v2-green)](https://wails.io)
 
@@ -146,7 +146,7 @@ medmemo/
 
 ## 🤝 贡献指南
 
-欢迎所有形式的贡献！请阅读 [CONTRIBUTING.md](../../CONTRIBUTING.md) 了解开发环境搭建、分支策略与提交规范。
+欢迎所有形式的贡献！请阅读 [CONTRIBUTING.md](./CONTRIBUTING.md) 了解开发环境搭建、分支策略与提交规范。
 
 ### 快速提交
 
@@ -163,14 +163,14 @@ git push origin feature/M01-your-feature
 
 ## 📚 文档导航
 
-| 文档                                             | 内容                                          |
-|------------------------------------------------|---------------------------------------------|
-| [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) | 系统架构总览、四层架构映射、数据流、模块依赖                      |
-| [docs/DEVELOPMENT.md](../../docs/DEVELOPMENT.md)   | 开发规范、Clean Architecture 依赖规则、Wire 使用指南、测试策略 |
-| [docs/API.md](../../docs/API.md)                   | 内部接口契约、Wails 前后端绑定说明、错误码定义                  |
-| [docs/COMPLIANCE.md](../../docs/COMPLIANCE.md)     | 合规红线、三级脱敏流水线、四级拦截规则、紧急症状识别                  |
-| [docs/SECURITY.md](../../docs/SECURITY.md)         | 安全披露流程、数据加密说明、依赖项安全扫描                       |
-| [docs/user-guide/README.md](../../docs/user-guide/README.md) | 用户指南：安装、快速入门、隐私政策、FAQ、故障排查 |
+| 文档                                                  | 内容                                          |
+|-----------------------------------------------------|---------------------------------------------|
+| [docs/ARCHITECTURE.md](./ARCHITECTURE.md)           | 系统架构总览、四层架构映射、数据流、模块依赖                      |
+| [docs/DEVELOPMENT.md](./DEVELOPMENT.md)             | 开发规范、Clean Architecture 依赖规则、Wire 使用指南、测试策略 |
+| [docs/API.md](./API.md)                             | 内部接口契约、Wails 前后端绑定说明、错误码定义                  |
+| [docs/COMPLIANCE.md](./COMPLIANCE.md)               | 合规红线、三级脱敏流水线、四级拦截规则、紧急症状识别                  |
+| [docs/SECURITY.md](./SECURITY.md)                   | 安全披露流程、数据加密说明、依赖项安全扫描                       |
+| [docs/user-guide/README.md](./user-guide/README.md) | 用户指南：安装、快速入门、隐私政策、FAQ、故障排查                  |
 
 ---
 
@@ -183,7 +183,7 @@ git push origin feature/M01-your-feature
 
 ## 📜 许可证
 
-MedMemo 采用 [MIT License](../../LICENSE)。可自由使用、修改和分发（含商业用途），须保留版权声明和许可证文本。
+MedMemo 采用 [MIT License](../../../LICENSE)。可自由使用、修改和分发（含商业用途），须保留版权声明和许可证文本。
 
 **使用本软件即表示您同意许可证中包含的医疗免责声明。**
 

@@ -1,6 +1,6 @@
 # Getting Started
 
-> 🌐 [中文版本](./../../i18n/zh-Hans-CN/user-guide/getting-started.md)
+> 🌐 [中文版本](./../i18n/zh-Hans-CN/user-guide/getting-started.md)
 
 > Learn the core features of MedMemo: chatting, managing conversations, configuring settings, and using keyboard shortcuts.
 

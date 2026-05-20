@@ -1,6 +1,6 @@
 # MedMemo User Guide
 
-> 🌐 [中文版本](./../../i18n/zh-Hans-CN/user-guide/README.md)
+> 🌐 [中文版本](./../i18n/zh-Hans-CN/user-guide/README.md)
 
 > Welcome to MedMemo — your private, open-source desktop health companion. This guide helps you get the most out of MedMemo, from installation to daily use.
 
@@ -16,13 +16,13 @@ All your data stays on your device. Conversations are encrypted locally, and sen
 
 ## Quick Navigation
 
-| Document | Description |
-|----------|-------------|
-| [Installation Guide](./installation.md) | Download and install MedMemo on Windows, macOS, or Linux |
-| [Getting Started](./getting-started.md) | Core features: chat, conversation management, settings, shortcuts |
-| [Privacy Policy](./privacy-policy.md) | What data we collect, how it's stored, and your rights |
-| [FAQ](./faq.md) | Frequently asked questions (20+) covering installation, chat, privacy |
-| [Troubleshooting](./troubleshooting.md) | Common issues and step-by-step solutions |
+| Document                                | Description                                                           |
+|-----------------------------------------|-----------------------------------------------------------------------|
+| [Installation Guide](./installation.md) | Download and install MedMemo on Windows, macOS, or Linux              |
+| [Getting Started](./getting-started.md) | Core features: chat, conversation management, settings, shortcuts     |
+| [Privacy Policy](./privacy-policy.md)   | What data we collect, how it's stored, and your rights                |
+| [FAQ](./faq.md)                         | Frequently asked questions (20+) covering installation, chat, privacy |
+| [Troubleshooting](./troubleshooting.md) | Common issues and step-by-step solutions                              |
 
 ---
 

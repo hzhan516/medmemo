@@ -1,6 +1,6 @@
 # Domain Layer（实体层）
 
-> 🌐 [English Version](../../../../internal/domain/README.md)
+> 🌐 [English Version](../../../../../internal/domain/README.md)
 
 ## 定位
 

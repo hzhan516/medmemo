@@ -1,6 +1,6 @@
 # 常见问题
 
-> 🌐 [English Version](./../../../../user-guide/faq.md)
+> 🌐 [English Version](./../../../user-guide/faq.md)
 
 > 关于安装、配置和使用 MedMemo 的常见问答。
 

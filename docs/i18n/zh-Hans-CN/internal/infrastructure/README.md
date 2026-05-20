@@ -1,6 +1,6 @@
 # Infrastructure Layer（基础设施层）
 
-> 🌐 [English Version](../../../../internal/infrastructure/README.md)
+> 🌐 [English Version](../../../../../internal/infrastructure/README.md)
 
 ## 定位
 

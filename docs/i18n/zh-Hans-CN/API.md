@@ -1,31 +1,31 @@
-# API Documentation
+# API 文档
 
-> 🌐 [中文版本](./i18n/zh-Hans-CN/API.md)
+> 🌐 [English Version](../../API.md)
 
-> This document describes MedMemo's internal interface contracts and Wails frontend-backend binding specifications.
+> 本文档描述 MedMemo 内部接口契约与 Wails 前后端绑定规范。
 
 ---
 
-## Internal Interface Contracts
+## 内部接口契约
 
 ### LLMClient
 
 ```go
 type LLMClient interface {
-    // Chat sends a non-streaming conversation request and returns the full reply.
+    // Chat 发送非流式对话请求，返回完整回复。
     Chat(ctx context.Context, messages []models.Message) (string, error)
 
-    // StreamChat sends a streaming conversation request, pushing content chunk-by-chunk via callback.
+    // StreamChat 发送流式对话请求，通过 callback 逐块推送内容。
     StreamChat(ctx context.Context, messages []models.Message, callback func(chunk string)) error
 
-    // CheckAvailability checks whether the current model is available.
+    // CheckAvailability 检查当前模型是否可用。
     CheckAvailability(ctx context.Context) (bool, string)
 }
 ```
 
-**Implementations**:
-- `ai.OpenAIAdapter` — OpenAI-compatible API (Kimi / GPT / Qwen / SiliconFlow)
-- `ai.LocalAdapter` — Ollama / llama.cpp local endpoints
+**实现者**：
+- `ai.OpenAIAdapter` — OpenAI-compatible API（Kimi / GPT / Qwen / SiliconFlow）
+- `ai.LocalAdapter` — Ollama / llama.cpp 本地端点
 
 ---
 
@@ -39,7 +39,7 @@ type RecordStore interface {
 }
 ```
 
-Generic key-value storage port, implementable by SQLite / DuckDB / local filesystem.
+通用键值存储端口，可由 SQLite / DuckDB / 本地文件系统实现。
 
 ---
 
@@ -51,9 +51,9 @@ type SensitiveDetector interface {
 }
 ```
 
-**Implementations**:
-- `onnx.Engine` — Hugot + DistilBERT-ONNX NER model (L2 level)
-- `desensitizer.RuleEngine` — Regular expression rule engine (L1 level)
+**实现者**：
+- `onnx.Engine` — Hugot + DistilBERT-ONNX NER 模型（L2 级）
+- `desensitizer.RuleEngine` — 正则规则引擎（L1 级）
 
 ---
 
@@ -70,7 +70,7 @@ type MemoryRepository interface {
 }
 ```
 
-**Implementation**: `repository.MemoryRepoDuckDB`
+**实现者**：`repository.MemoryRepoDuckDB`
 
 ---
 
@@ -87,60 +87,60 @@ type FamilyRepository interface {
 }
 ```
 
-**Implementation**: `repository.FamilyRepoKuzu`
+**实现者**：`repository.FamilyRepoKuzu`
 
 ---
 
-## Wails Frontend-Backend Bindings
+## Wails 前后端绑定
 
-Wails v2 automatically generates frontend TypeScript bindings from Go struct methods.
+Wails v2 通过 Go 结构体方法自动生成前端 TypeScript 绑定。
 
-### Binding Example
+### 绑定示例
 
-**Go side (`wails_app.go`)**:
+**Go 端（`wails_app.go`）**：
 
 ```go
 type WailsApp struct {
     chatUC *usecase.ChatOrchestrator
 }
 
-// StartConversation creates a new conversation; frontend calls via window.go.main.WailsApp.StartConversation.
+// StartConversation 创建新会话，前端通过 window.go.main.WailsApp.StartConversation 调用。
 func (a *WailsApp) StartConversation(model string) (dto.ConversationDTO, error) {
     conv := entity.NewConversation(models.ProviderType(model))
     return dto.ToConversationDTO(conv), nil
 }
 
-// SendMessage sends a message and triggers a streaming response.
+// SendMessage 发送消息并触发流式响应。
 func (a *WailsApp) SendMessage(convID string, content string) error {
-    // Push streaming chunks to frontend via Wails Events
+    // 通过 Wails Events 推送流式 chunk 到前端
     return nil
 }
 ```
 
-**Frontend event listeners**:
+**前端事件监听**：
 
 ```typescript
 import { EventsOn } from '@wails/runtime'
 
 EventsOn('chat:stream', (chunk: string) => {
-  // Append to current conversation message list
+  // 追加到当前对话消息列表
 })
 
 EventsOn('compliance:warning', (level: string, reason: string) => {
-  // Display compliance warning banner
+  // 显示合规警告横幅
 })
 ```
 
 ---
 
-## Error Code Definitions
+## 错误码定义
 
-| Error Code | Meaning | HTTP Equivalent | Handling Suggestion |
-|:-----------|:--------|:----------------|:--------------------|
-| `ErrNotFound` | Record does not exist | 404 | Prompt user to create a new record |
-| `ErrInvalidConfig` | Invalid configuration | 400 | Guide user to check settings |
-| `ErrDuplicateEntry` | Duplicate record | 409 | Prompt user to merge or replace |
-| `ErrComplianceBlocked` | Content blocked by compliance | 403 | Display standard prompt, terminate output |
-| `ErrSensitiveDataLeak` | Sensitive data leak risk | 403 | Trigger secondary de-identification |
+| 错误码                    | 含义       | HTTP 等效 | 处理建议         |
+|------------------------|----------|---------|--------------|
+| `ErrNotFound`          | 记录不存在    | 404     | 提示用户创建新记录    |
+| `ErrInvalidConfig`     | 配置非法     | 400     | 引导用户检查设置     |
+| `ErrDuplicateEntry`    | 重复记录     | 409     | 提示用户合并或替换    |
+| `ErrComplianceBlocked` | 内容被合规阻断  | 403     | 显示标准提示语，终止输出 |
+| `ErrSensitiveDataLeak` | 敏感数据泄露风险 | 403     | 触发二次脱敏       |
 
-All errors are wrapped and propagated via `fmt.Errorf("...: %w", err)`. The frontend uses `errors.Is` to determine the root cause.
+所有错误通过 `fmt.Errorf("...: %w", err)` 包装传递，前端通过 `errors.Is` 链判断根因。

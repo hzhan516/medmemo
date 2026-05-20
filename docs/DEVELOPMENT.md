@@ -1,12 +1,14 @@
-# 开发指南
+# Development Guide
 
-> 本文档面向 MedMemo 开发者，说明如何在本项目中编写符合规范的代码。
+> 🌐 [中文版本](./i18n/zh-Hans-CN/DEVELOPMENT.md)
+
+> This document is intended for MedMemo developers, explaining how to write code that conforms to project standards.
 
 ---
 
-## Clean Architecture 四层依赖规则
+## Clean Architecture Four-Layer Dependency Rules
 
-MedMemo 严格遵循 Clean Architecture 四层模型，依赖方向始终向内指向领域核心。
+MedMemo strictly follows the Clean Architecture four-layer model; dependency direction always points inward toward the domain core.
 
 ```
 ┌──────────────────────────────────────┐
@@ -14,66 +16,66 @@ MedMemo 严格遵循 Clean Architecture 四层模型，依赖方向始终向内�
 │  (ONNX/DuckDB/SQLite/Wails/Viper)   │
 ├──────────────────────────────────────┤
 │    Adapters Layer                    │  ← Interface Adapters
-│  (AI适配器/仓库实现/DTO转换)          │
+│  (AI Adapter / Repository / DTO)    │
 ├──────────────────────────────────────┤
 │    Application Layer                 │  ← Use Cases
-│  (用例编排/端口定义/流水线)           │
+│  (Use Case Orchestration / Ports)   │
 ├──────────────────────────────────────┤
 │    Domain Layer                      │  ← Entities
-│  (实体/领域服务/策略接口)             │
+│  (Entities / Domain Services)       │
 └──────────────────────────────────────┘
 ```
 
-### 包导入白名单
+### Package Import Allowlist
 
-| 源目录                         | 允许导入                                                              | 禁止导入                                                                   |
-|-----------------------------|-------------------------------------------------------------------|------------------------------------------------------------------------|
-| `internal/domain/*`         | 标准库 + `pkg/models/`                                               | 任何 `internal/` 子包                                                      |
-| `internal/application/*`    | `internal/domain/*` + `pkg/models/` + 标准库                         | `internal/adapters/*` + `internal/infrastructure/*`                    |
-| `internal/adapters/*`       | `internal/domain/*` + `internal/infrastructure/*` + `pkg/models/` | `internal/application/*`                                               |
-| `internal/infrastructure/*` | 标准库 + 第三方框架库                                                      | 任何 `internal/domain/` / `internal/application/` / `internal/adapters/` |
+| Source Directory | Allowed Imports | Prohibited Imports |
+|-----------------|-----------------|-------------------|
+| `internal/domain/*` | Standard library + `pkg/models/` | Any `internal/` subpackage |
+| `internal/application/*` | `internal/domain/*` + `pkg/models/` + standard library | `internal/adapters/*` + `internal/infrastructure/*` |
+| `internal/adapters/*` | `internal/domain/*` + `internal/infrastructure/*` + `pkg/models/` | `internal/application/*` |
+| `internal/infrastructure/*` | Standard library + third-party framework libraries | Any `internal/domain/` / `internal/application/` / `internal/adapters/` |
 
-**核心铁律**：`internal/domain/` 零外部依赖。CI 的 depguard 会阻断任何违规导入。
+**Core Iron Rule**: `internal/domain/` has zero external dependencies. CI depguard will block any violating imports.
 
 ---
 
-## Wire 依赖注入使用指南
+## Wire Dependency Injection Guide
 
-MedMemo 使用 Google Wire 进行**编译期**依赖注入，禁止运行时反射注入。
+MedMemo uses Google Wire for **compile-time** dependency injection; runtime reflection injection is prohibited.
 
-### 添加新依赖的步骤
+### Steps to Add a New Dependency
 
-1. 在对应包内编写返回**具体类型**的 Provider 函数
-2. 在包的 `ProviderSet` 变量中注册（如 `ApplicationSet = wire.NewSet(...)`）
-3. 修改 `cmd/health-assistant/wire.go` 的 `InitializeApp` 函数，加入新的 ProviderSet
-4. 运行 `make wire` 重新生成 `wire_gen.go`
+1. Write a Provider function in the corresponding package that returns a **concrete type**.
+2. Register it in the package's `ProviderSet` variable (e.g., `ApplicationSet = wire.NewSet(...)`).
+3. Modify the `InitializeApp` function in `cmd/health-assistant/wire.go` to include the new ProviderSet.
+4. Run `make wire` to regenerate `wire_gen.go`.
 
-**绝对禁止**手动修改 `wire_gen.go`。
+**Absolutely prohibited** to manually edit `wire_gen.go`.
 
-### Provider 函数签名规范
+### Provider Function Signature Convention
 
 ```go
-// 正确：返回具体类型
+// Correct: returns concrete type
 func NewChatOrchestrator(llm port.LLMClient) *ChatOrchestrator
 
-// 错误：Wire 通过返回值匹配需求类型，不应返回接口
+// Incorrect: Wire matches by return type; should not return an interface
 func NewChatOrchestrator(llm port.LLMClient) port.UseCase
 ```
 
 ---
 
-## 错误处理规范
+## Error Handling Convention
 
-禁止裸返回原始错误，必须包装上下文：
+Bare returns of raw errors are prohibited; context must be wrapped:
 
 ```go
-// 禁止：
+// Prohibited:
 return err
 
-// 必须：
+// Required:
 return fmt.Errorf("failed to retrieve family member %s: %w", id, err)
 
-// 适配器层外部错误映射：
+// Adapter-layer external error mapping:
 if err != nil {
     return nil, fmt.Errorf("duckdb query failed: %w", domain.ErrRecordNotFound)
 }
@@ -81,92 +83,92 @@ if err != nil {
 
 ---
 
-## 并发安全规范
+## Concurrency Safety Convention
 
-### ONNX 推理
+### ONNX Inference
 
-- 固定 **2 个推理 Worker**，每个持有独立 ONNX Session
-- 任务通过有缓冲 channel（容量 16）派发
-- **不可共享 Session 并发调用**——`Run()` 非线程安全
+- Fixed **2 inference workers**, each holding an independent ONNX Session.
+- Tasks are dispatched through a buffered channel (capacity 16).
+- **Session sharing for concurrent calls is prohibited** — `Run()` is not thread-safe.
 
-### DuckDB 写入
+### DuckDB Writes
 
-- 单一 Goroutine 执行写入
-- 利用 MVCC 保证读并发安全
+- Single goroutine executes writes.
+- MVCC guarantees read concurrency safety.
 
-### HTTP 请求
+### HTTP Requests
 
-- semaphore 限制最大 4 个并发云端请求
+- Semaphore limits maximum 4 concurrent cloud requests.
 
 ---
 
-## 前端开发规范
+## Frontend Development Convention
 
-### TypeScript 严格模式
+### TypeScript Strict Mode
 
-`tsconfig.json` 中 `"strict": true` 不可关闭。
+`"strict": true` in `tsconfig.json` must not be disabled.
 
-### 组件规范
+### Component Convention
 
-- 命名：PascalCase（如 `ComplianceBar.tsx`）
-- Props：必须编写完整的 TypeScript 接口定义，禁止 `any` 逃逸
-- Hooks：camelCase 前缀 `use`（如 `useConversation.ts`）
+- Naming: PascalCase (e.g., `ComplianceBar.tsx`)
+- Props: Must write complete TypeScript interface definitions; `any` escape is prohibited.
+- Hooks: camelCase prefix `use` (e.g., `useConversation.ts`)
 
-### UI 颜色规范
+### UI Color Specification
 
-| 元素      | 亮色模式                              | 暗色模式      |
-|---------|-----------------------------------|-----------|
-| 用户消息背景  | `#4F8CFF` → `#3B7AF7` 渐变          | 同左        |
-| 用户消息文字  | 白色                                | 白色        |
-| AI 消息背景 | `#FFFFFF`                         | `#2A2A2A` |
-| AI 消息文字 | `#333333`                         | `#E5E5E5` |
-| 系统提示背景  | `#F0F0F5` / `#FFF3E0` / `#E3F2FD` | 同左        |
+| Element | Light Mode | Dark Mode |
+|---------|-----------|-----------|
+| User message background | `#4F8CFF` → `#3B7AF7` gradient | Same as left |
+| User message text | White | White |
+| AI message background | `#FFFFFF` | `#2A2A2A` |
+| AI message text | `#333333` | `#E5E5E5` |
+| System notice background | `#F0F0F5` / `#FFF3E0` / `#E3F2FD` | Same as left |
 
 ### CSS
 
-优先使用 Tailwind CSS 工具类，自定义样式通过 CSS 变量实现主题切换。
+Prioritize Tailwind CSS utility classes; custom styles should use CSS variables for theme switching.
 
 ---
 
-## 测试策略
+## Testing Strategy
 
-### 测试金字塔
+### Test Pyramid
 
 ```
       /\
-     /  \  E2E (5%)  — Wails 集成 / Playwright
+     /  \  E2E (5%)  — Wails Integration / Playwright
     /____\
    /      \
-  /        \ 集成测试 (25%) — go test + DuckDB 内存模式
+  /        \ Integration Tests (25%) — go test + DuckDB in-memory mode
  /__________\
 /            \
-/______________\ 单元测试 (70%) — go test + testify + mockery
+/______________\ Unit Tests (70%) — go test + testify + mockery
 ```
 
-### 覆盖率门禁
+### Coverage Gate
 
-- 单元测试行覆盖率 >= 70%
-- `domain` 层覆盖率 100%
-- 测试覆盖率不可下降（Codecov 基线检查）
+- Unit test line coverage >= 70%
+- `domain` layer coverage 100%
+- Test coverage must not decrease (Codecov baseline check)
 
-### 关键测试场景
+### Key Test Scenarios
 
-1. 合规引擎：全部四层风险等级用例，覆盖率 >= 80%
-2. 紧急症状：A级/B级关键词 100% 触发测试
-3. 脱敏流水线：PII 输入 → 占位符替换 → 云端响应回填
-4. 会话生命周期：新建 → 发送 → 重命名 → 重启 → 数据完整
-5. 模型切换：上下文继承、窗口截断、超时降级
-6. 离线降级：网络不可用时的本地模板响应
+1. Compliance engine: all four risk levels, coverage >= 80%
+2. Emergency symptoms: 100% trigger test for Level A/B keywords
+3. De-identification pipeline: PII input → placeholder replacement → cloud response backfill
+4. Conversation lifecycle: create → send → rename → restart → data integrity
+5. Model switching: context inheritance, window truncation, timeout downgrade
+6. Offline downgrade: local template response when network is unavailable
 
 ---
 
-## Context 使用规范
+## Context Usage Convention
 
-所有 I/O 操作必须接收 `context.Context`：
+All I/O operations must accept `context.Context`:
 
 ```go
 ctx, cancel := context.WithTimeout(parentCtx, 30*time.Second)
 defer cancel()
 ```
 
-优雅关闭顺序遵循依赖倒置：先关闭前端桥接，再停止推理 Worker，最后关闭数据库连接。
+Graceful shutdown order follows dependency inversion: close frontend bridge first, then stop inference workers, and finally close database connections.

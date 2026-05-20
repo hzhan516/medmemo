@@ -1,65 +1,67 @@
-# 安全文档
+# Security
 
-> 本文档说明 MedMemo 的安全实践、漏洞披露流程与数据保护机制。
+> 🌐 [中文版本](./i18n/zh-Hans-CN/SECURITY.md)
+
+> This document describes MedMemo's security practices, vulnerability disclosure process, and data protection mechanisms.
 
 ---
 
-## 安全披露流程
+## Security Disclosure Process
 
-如果你发现了安全漏洞，请通过以下方式负责任地披露：
+If you discover a security vulnerability, please disclose it responsibly through the following channels:
 
-1. **不要**在公开的 GitHub Issue 中披露漏洞详情
-2. 发送邮件至 `doyle_zhang@outlook.com`，包含：
-   - 漏洞描述与影响范围
-   - 复现步骤（最小可复现示例）
-   - 可能的修复建议
-3. 维护团队将在 **72 小时内**确认收到报告
-4. 修复完成后，我们将在公开披露前给予报告者合理的提前通知期
+1. **Do not** disclose vulnerability details in a public GitHub Issue.
+2. Send an email to `doyle_zhang@outlook.com` including:
+   - Vulnerability description and impact scope
+   - Reproduction steps (minimal reproducible example)
+   - Suggested fix if available
+3. The maintainers will acknowledge receipt within **72 hours**.
+4. After the fix is complete, we will provide the reporter with a reasonable advance notice period before public disclosure.
 
-## 数据本地存储与加密
+## Data Local Storage and Encryption
 
-MedMemo 的核心设计原则是**数据本地优先**：
+MedMemo's core design principle is **data-local-first**:
 
-- **SQLite/SQLCipher**：对话记录和配置采用 AES-256 加密存储
-- **DuckDB**：分析型查询数据库，数据文件本地存放
-- **Kùzǔ**：家族图谱图数据库，数据不离开设备
-- **密钥管理**：API Key、加密密钥存储在平台密钥环中（macOS Keychain / Windows DPAPI / Linux Secret Service）
+- **SQLite/SQLCipher**: Conversation records and configurations are stored with AES-256 encryption.
+- **DuckDB**: Analytical query database; data files remain local.
+- **Kùzǔ**: Family graph database; data never leaves the device.
+- **Key Management**: API Keys and encryption keys are stored in the platform keyring (macOS Keychain / Windows DPAPI / Linux Secret Service).
 
-### 不收集的数据
+### Data We Do Not Collect
 
-MedMemo **不会**将以下数据上传到任何服务器：
-- 用户对话内容
-- 家族成员健康信息
-- 个人身份识别信息（PII）
-- 使用行为日志
+MedMemo **will never** upload the following data to any server:
+- User conversation content
+- Family member health information
+- Personally identifiable information (PII)
+- Usage behavior logs
 
-### 可选的网络通信
+### Optional Network Communication
 
-仅在用户明确启用云端模型时，才会发生以下网络通信：
-- 向选定的 LLM API 端点发送**已脱敏**的对话请求
-- 模型可用性健康检查
+Network communication only occurs when the user explicitly enables a cloud-based model:
+- **De-identified** conversation requests are sent to the selected LLM API endpoint.
+- Model availability health checks.
 
-所有网络请求均通过本地配置代理，不经过 MedMemo 控制的服务器。
+All network requests are routed through a locally configured proxy and do not pass through MedMemo-controlled servers.
 
-## 依赖项安全扫描
+## Dependency Security Scanning
 
-项目使用以下工具进行依赖安全监控：
+The project uses the following tools for dependency security monitoring:
 
-- **Dependabot**：自动检测 Go Modules 和 npm 依赖中的已知漏洞
-- **govulncheck**：Go 官方漏洞扫描工具
-- **npm audit**：Node.js 依赖安全审计
+- **Dependabot**: Automatically detects known vulnerabilities in Go Modules and npm dependencies.
+- **govulncheck**: Official Go vulnerability scanning tool.
+- **npm audit**: Node.js dependency security audit.
 
-CI 流水线中集成安全扫描，高危漏洞阻断合并。
+Security scanning is integrated into the CI pipeline; high-severity vulnerabilities block merges.
 
-## 构建安全
+## Build Security
 
-- 所有发布二进制通过 GitHub Actions 自动化构建，构建日志公开可审计
-- 发布产物附带 SHA-256 校验和
-- 鼓励用户从源码自行构建以验证二进制完整性
+- All release binaries are built through GitHub Actions with publicly auditable build logs.
+- Release artifacts are accompanied by SHA-256 checksums.
+- Users are encouraged to build from source to verify binary integrity.
 
-## 安全最佳实践（用户端）
+## Security Best Practices (User-Side)
 
-1. 始终从官方渠道下载 MedMemo（GitHub Releases 或自行编译源码）
-2. 定期更新到最新版本以获取安全补丁
-3. 使用系统级别的全盘加密（BitLocker / FileVault / LUKS）增强数据保护
-4. 妥善保管本地数据备份，避免未加密传输
+1. Always download MedMemo from official channels (GitHub Releases or build from source).
+2. Update to the latest version regularly to receive security patches.
+3. Use system-level full-disk encryption (BitLocker / FileVault / LUKS) for additional data protection.
+4. Keep local data backups secure and avoid unencrypted transmission.

@@ -1,6 +1,6 @@
 # 安装指南
 
-> 🌐 [English Version](./../../../../user-guide/installation.md)
+> 🌐 [English Version](./../../../user-guide/installation.md)
 
 > 本指南指导你在 Windows、macOS 和 Linux 上安装 MedMemo。
 

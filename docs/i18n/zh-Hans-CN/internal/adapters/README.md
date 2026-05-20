@@ -1,6 +1,6 @@
 # Adapters Layer（适配器层）
 
-> 🌐 [English Version](../../../../internal/adapters/README.md)
+> 🌐 [English Version](../../../../../internal/adapters/README.md)
 
 ## 定位
 

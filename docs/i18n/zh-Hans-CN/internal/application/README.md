@@ -1,6 +1,6 @@
 # Application Layer（用例层）
 
-> 🌐 [English Version](../../../../internal/application/README.md)
+> 🌐 [English Version](../../../../../internal/application/README.md)
 
 ## 定位
 

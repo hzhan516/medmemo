@@ -1,6 +1,6 @@
 # MedMemo 用户指南
 
-> 🌐 [English Version](./../../../../user-guide/README.md)
+> 🌐 [English Version](./../../../user-guide/README.md)
 
 > 欢迎使用 MedMemo —— 你的私有开源桌面健康助手。本指南帮助你从安装到日常使用，充分发挥 MedMemo 的价值。
 

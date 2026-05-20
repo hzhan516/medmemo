@@ -1,6 +1,6 @@
 # Frequently Asked Questions
 
-> 🌐 [中文版本](./../../i18n/zh-Hans-CN/user-guide/faq.md)
+> 🌐 [中文版本](./../i18n/zh-Hans-CN/user-guide/faq.md)
 
 > Answers to common questions about installing, configuring, and using MedMemo.
 

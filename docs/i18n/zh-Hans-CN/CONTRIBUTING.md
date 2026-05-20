@@ -1,6 +1,6 @@
 # 贡献指南
 
-> 🌐 [English Version](../../CONTRIBUTING.md)
+> 🌐 [English Version](../../../CONTRIBUTING.md)
 
 感谢你对 MedMemo 的兴趣！无论你是 Go 开发者、前端工程师、医学专业人士还是编程新手，我们都欢迎你的参与。
 

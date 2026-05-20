@@ -1,66 +1,68 @@
-# ADR-001: 采用 Clean Architecture 四层目录模型
+# ADR-001: Adopting the Clean Architecture Four-Layer Directory Model
 
-- **状态**: Accepted
-- **日期**: 2026-05
-- **决策者**: 后端技术负责人
+> 🌐 [中文版本](../i18n/zh-Hans-CN/adr/001-clean-architecture.md)
 
-## 背景（Context）
+- **Status**: Accepted
+- **Date**: 2026-05
+- **Deciders**: Backend Tech Lead
 
-MedMemo 是一款桌面端健康咨询工具，核心诉求包括：
-1. **长期可维护性**：健康数据模型（记忆、家族关系、会话）会随版本快速迭代，需要清晰的业务边界。
-2. **可测试性**：医疗合规逻辑（脱敏、拦截、用词校验）必须可独立单元测试，不依赖外部框架。
-3. **可替换性**：本地 AI 推理引擎（ONNX Runtime）、数据库（DuckDB/SQLite）、LLM 供应商均存在替换或降级风险。
+## Context
 
-在项目启动前，团队评估了三种后端架构风格：
+MedMemo is a desktop health information tool with the following core requirements:
+1. **Long-term maintainability**: Health data models (memories, family relations, conversations) evolve rapidly across versions and require clear business boundaries.
+2. **Testability**: Medical compliance logic (de-identification, interception, terminology validation) must be unit-testable in isolation without external frameworks.
+3. **Replaceability**: Local AI inference engines (ONNX Runtime), databases (DuckDB/SQLite), and LLM providers all carry replacement or downgrade risks.
 
-| 架构风格                               | 优点                                     | 缺点                | 适用性                 |
-|------------------------------------|----------------------------------------|-------------------|---------------------|
-| **MVC/三层架构**                       | 简单直观，上手快                               | 业务逻辑与框架耦合，难以单元测试  | ❌ 不满足可测试性           |
-| **Hexagonal Architecture（端口-适配器）** | 明确的输入/输出端口，适配器可替换                      | 目录命名不统一，新成员理解成本高  | ⚠️ 概念抽象，对 Go 生态支持一般 |
-| **Clean Architecture（四层模型）**       | 依赖方向严格向内，domain 层可纯 Go 测试，与 Go 包机制天然契合 | 目录层级较多，小功能改动可能跨多层 | ✅ 最契合 MedMemo 需求    |
+Before project kickoff, the team evaluated three backend architecture styles:
 
-## 决策（Decision）
+| Architecture Style | Pros | Cons | Suitability |
+|:-------------------|:-----|:-----|:------------|
+| **MVC / Three-Layer** | Simple and intuitive, quick onboarding | Business logic coupled with frameworks, hard to unit-test | ❌ Does not meet testability requirements |
+| **Hexagonal Architecture (Ports & Adapters)** | Clear input/output ports, adapters replaceable | Non-uniform directory naming, steep learning curve for new members | ⚠️ Abstract concepts, limited Go ecosystem support |
+| **Clean Architecture (Four-Layer)** | Strict inward dependency direction, domain layer testable with pure Go, naturally fits Go package mechanism | More directory levels, small features may span multiple layers | ✅ Best fit for MedMemo |
 
-采用 **Robert C. Martin 的 Clean Architecture 四层模型**，映射到 Go 包结构如下：
+## Decision
+
+Adopt **Robert C. Martin's Clean Architecture four-layer model**, mapped to Go package structure as follows:
 
 ```
 internal/
-├── domain/         # Entities 层 — 核心业务实体与规则
-├── application/    # Use Cases 层 — 用例编排与端口定义
-├── adapters/       # Interface Adapters 层 — 外部系统适配实现
-└── infrastructure/ # Frameworks & Drivers 层 — 技术框架封装
+├── domain/         # Entities Layer — core business entities and rules
+├── application/    # Use Cases Layer — use case orchestration and port definitions
+├── adapters/       # Interface Adapters Layer — external system adapter implementations
+└── infrastructure/ # Frameworks & Drivers Layer — technical framework encapsulation
 ```
 
-### 关键约束
+### Key Constraints
 
-1. **domain 层零外部依赖**：仅允许导入 Go 标准库和 `pkg/models/`。违反此规则将导致 CI 的 depguard 检查阻断合并。
-2. **application 层不直接调用 adapter 实现**：通过接口（Port）解耦，adapter 层负责实现 application 层定义的接口。
-3. **infrastructure 层不知道业务存在**：仅封装第三方框架（Wails、DuckDB、ONNX Runtime），不导入任何业务包。
-4. **依赖注入通过 Wire 编译期完成**：禁止运行时反射注入，确保冷启动速度和编译期安全。
+1. **Zero external dependencies in the domain layer**: Only Go standard library and `pkg/models/` are allowed. Violations will be blocked by CI depguard checks.
+2. **Application layer does not directly call adapter implementations**: Decoupled via interfaces (Ports); the adapter layer implements interfaces defined by the application layer.
+3. **Infrastructure layer knows nothing about business logic**: Only encapsulates third-party frameworks (Wails, DuckDB, ONNX Runtime); does not import any business packages.
+4. **Dependency injection completed at compile time via Wire**: Runtime reflection injection is prohibited to ensure cold-start speed and compile-time safety.
 
-## 后果（Consequences）
+## Consequences
 
-### 积极影响
+### Positive Impacts
 
-- **domain 层 100% 可单元测试**：纯 Go 标准库，无需 Mock 外部依赖。
-- **技术栈替换成本可控**：更换数据库或 AI 推理引擎时，只需重写 adapter/infrastructure 层，domain/application 层不受影响。
-- **新成员 onboarding 有章可循**：四层目录本身就是一种架构文档，配合各层 README 可快速定位代码。
+- **100% unit-testable domain layer**: Pure Go standard library, no need to mock external dependencies.
+- **Controlled technology replacement cost**: When replacing databases or AI inference engines, only the adapter/infrastructure layers need rewriting; domain/application layers remain unaffected.
+- **New-member onboarding is guided by structure**: The four-layer directories themselves serve as architecture documentation; combined with per-layer READMEs, new developers can quickly locate code.
 
-### 消极影响
+### Negative Impacts
 
-- **小功能改动可能涉及 4+ 个文件**：新增一个实体需要修改 domain（实体定义）、application（用例）、adapter（仓库实现）、infrastructure（数据库表），开发效率略低于 MVC。
-- **过度设计风险**：对于简单的 CRUD 操作，四层拆分显得冗余。缓解措施：允许 application 层直接透传简单查询，不强制每个操作都经过领域服务。
+- **Small feature changes may touch 4+ files**: Adding an entity requires changes to domain (entity definition), application (use case), adapter (repository implementation), and infrastructure (database table), which is slightly less efficient than MVC.
+- **Over-engineering risk**: For simple CRUD operations, four-layer splitting feels redundant. Mitigation: application layer is allowed to passthrough simple queries directly without forcing every operation through a domain service.
 
-## 替代方案记录
+## Alternatives Considered
 
-| 替代方案 | 否决理由 |
-|---------|---------|
-| 传统三层架构（Controller-Service-DAO） | 业务逻辑与框架耦合，难以在桌面端离线场景下对合规引擎进行纯单元测试 |
-| 按功能模块划分（feature-based） | MedMemo 的模块间存在强交叉（记忆池 ↔ 家族图谱 ↔ 合规引擎），按功能划分会导致循环依赖 |
+| Alternative | Rejection Reason |
+|:------------|:-----------------|
+| Traditional Three-Layer (Controller-Service-DAO) | Business logic coupled with frameworks; difficult to perform pure unit tests on the compliance engine in an offline desktop scenario |
+| Feature-Based Partitioning | MedMemo modules have strong cross-cutting concerns (memory pool ↔ family graph ↔ compliance engine); feature-based partitioning would create circular dependencies |
 
-## 相关文档
+## Related Documents
 
-- [docs/DEVELOPMENT.md](../DEVELOPMENT.md) — 开发规范与依赖规则详解
+- [docs/DEVELOPMENT.md](../DEVELOPMENT.md) — Detailed development standards and dependency rules
 - [internal/domain/README.md](../../internal/domain/README.md)
 - [internal/application/README.md](../../internal/application/README.md)
 - [internal/adapters/README.md](../../internal/adapters/README.md)

@@ -1,6 +1,6 @@
 # 快速入门
 
-> 🌐 [English Version](./../../../../user-guide/getting-started.md)
+> 🌐 [English Version](./../../../user-guide/getting-started.md)
 
 > 学习 MedMemo 的核心功能：对话、会话管理、设置配置和快捷键使用。
 

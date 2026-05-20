@@ -1,6 +1,6 @@
 # Troubleshooting
 
-> 🌐 [中文版本](./../../i18n/zh-Hans-CN/user-guide/troubleshooting.md)
+> 🌐 [中文版本](./../i18n/zh-Hans-CN/user-guide/troubleshooting.md)
 
 > Common issues and their solutions. If your problem isn't listed here, please [open a GitHub issue](https://github.com/hzhan516/medmemo/issues).
 

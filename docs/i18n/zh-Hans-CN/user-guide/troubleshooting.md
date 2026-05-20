@@ -1,6 +1,6 @@
 # 故障排查
 
-> 🌐 [English Version](./../../../../user-guide/troubleshooting.md)
+> 🌐 [English Version](./../../../user-guide/troubleshooting.md)
 
 > 常见问题及解决方案。如你的问题未在此列出，请 [提交 GitHub Issue](https://github.com/hzhan516/medmemo/issues)。
 

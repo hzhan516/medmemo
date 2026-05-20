@@ -1,6 +1,6 @@
 # Privacy Policy
 
-> 🌐 [中文版本](./../../i18n/zh-Hans-CN/user-guide/privacy-policy.md)
+> 🌐 [中文版本](./../i18n/zh-Hans-CN/user-guide/privacy-policy.md)
 
 > This document explains how MedMemo handles your data. MedMemo is designed with a **privacy-first, local-first** philosophy.
 

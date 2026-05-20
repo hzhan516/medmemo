@@ -1,6 +1,6 @@
 # Installation Guide
 
-> 🌐 [中文版本](./../../i18n/zh-Hans-CN/user-guide/installation.md)
+> 🌐 [中文版本](./../i18n/zh-Hans-CN/user-guide/installation.md)
 
 > This guide walks you through installing MedMemo on Windows, macOS, and Linux.
 
