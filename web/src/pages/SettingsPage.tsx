@@ -1,48 +1,157 @@
-import { useState } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useOnboardingStore } from '@/stores/onboardingStore'
 import { useProviderStore } from '@/stores/providerStore'
 import { useTheme } from '@/hooks/useTheme'
 import { useWails } from '@/hooks/useWails'
 import { Card, CardContent } from '@/components/ui/card'
-import { ProviderTemplateList, ProviderAddDialog } from '@/components/provider'
-import type { ProviderTemplate } from '@/types/provider'
-import { Monitor, Moon, Sun, Check, Bell, BellDot, BellOff, RefreshCw, Shield, FlaskConical, ShieldCheck, ShieldOff, Eye, Trash2, RotateCcw, Cloud, Server, Trash } from 'lucide-react'
+import {
+  ProviderTemplateList,
+  ProviderAddDialog,
+  ProviderCustomDialog,
+  ProviderGroupList,
+  DeleteConfirmDialog,
+} from '@/components/provider'
+import type { ProviderTemplate, ProviderConfig } from '@/types/provider'
+import {
+  Monitor, Moon, Sun, Check, Bell, BellDot, BellOff,
+  RefreshCw, Shield, FlaskConical, ShieldCheck, ShieldOff,
+  Eye, Trash2, RotateCcw, Plus,
+} from 'lucide-react'
 
 /**
- * 设置页面：支持主题切换、模型选择与合规提示条模式。
+ * 设置页面：支持主题切换、模型选择、Provider 管理与合规提示条模式。
  * 使用 shadcn/ui 组件验证 light/dark 主题兼容性。
  */
 export function SettingsPage() {
   const { theme, setTheme } = useTheme()
-  const { selectedModel, setSelectedModel, complianceBarMode, setComplianceBarMode, autoCheckUpdate, setAutoCheckUpdate, updateChannel, setUpdateChannel, desensitizationLevel, setDesensitizationLevel, dataRetentionDays, setDataRetentionDays } = useSettingsStore()
+  const {
+    selectedModel, setSelectedModel,
+    complianceBarMode, setComplianceBarMode,
+    autoCheckUpdate, setAutoCheckUpdate,
+    updateChannel, setUpdateChannel,
+    desensitizationLevel, setDesensitizationLevel,
+    dataRetentionDays, setDataRetentionDays,
+    activeProviderId, setActiveProviderId,
+  } = useSettingsStore()
   const onboardingCompleted = useOnboardingStore((s) => s.completed)
   const analytics = useOnboardingStore((s) => s.analytics)
   const resetOnboarding = useOnboardingStore((s) => s.reset)
   const clearAnalytics = useOnboardingStore((s) => s.clearAnalytics)
   const [showAnalytics, setShowAnalytics] = useState(false)
+
+  // 模板添加弹窗状态
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [selectedTemplate, setSelectedTemplate] = useState<ProviderTemplate | null>(null)
 
+  // 自定义表单弹窗状态
+  const [customDialogOpen, setCustomDialogOpen] = useState(false)
+  const [customDialogMode, setCustomDialogMode] = useState<'custom' | 'edit'>('custom')
+  const [editingProvider, setEditingProvider] = useState<ProviderConfig | null>(null)
+
+  // 删除确认弹窗状态
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deletingProvider, setDeletingProvider] = useState<ProviderConfig | null>(null)
+
   const providers = useProviderStore((s) => s.providers)
   const addProvider = useProviderStore((s) => s.addProvider)
+  const updateProvider = useProviderStore((s) => s.updateProvider)
   const removeProvider = useProviderStore((s) => s.removeProvider)
   const hasProvider = useProviderStore((s) => s.hasProvider)
   const { saveAPIKey } = useWails()
+
+  // 已有分组列表
+  const existingGroups = useMemo(() => {
+    const groups = new Set<string>()
+    for (const p of providers) {
+      groups.add(p.group)
+    }
+    return Array.from(groups).sort()
+  }, [providers])
 
   const handleSelectTemplate = (template: ProviderTemplate) => {
     setSelectedTemplate(template)
     setShowAddDialog(true)
   }
 
-  const handleSaveProvider = (config: Parameters<typeof addProvider>[0]) => {
-    addProvider(config)
+  const handleSaveTemplateProvider = (config: Parameters<typeof addProvider>[0]) => {
+    const newProvider = addProvider(config)
+    // 第一个 Provider 自动设为活跃
+    if (providers.length === 0) {
+      setActiveProviderId(newProvider.id)
+    }
     if (config.apiKey) {
       saveAPIKey(config.templateId, config.apiKey).catch((err) => {
         console.error('Failed to save API key:', err)
       })
     }
   }
+
+  const handleOpenCustomDialog = useCallback(() => {
+    setCustomDialogMode('custom')
+    setEditingProvider(null)
+    setCustomDialogOpen(true)
+  }, [])
+
+  const handleEditProvider = useCallback((provider: ProviderConfig) => {
+    setCustomDialogMode('edit')
+    setEditingProvider(provider)
+    setCustomDialogOpen(true)
+  }, [])
+
+  const handleSaveCustom = useCallback(
+    (data: {
+      name: string
+      apiHost: string
+      apiKey: string
+      modelId: string
+      temperature: number
+      timeoutMs: number
+      maxRetries: number
+      group: string
+      enabled: boolean
+      id?: string
+      createdAt?: number
+    }) => {
+      if (customDialogMode === 'edit' && data.id) {
+        updateProvider({
+          ...editingProvider!,
+          ...data,
+          id: data.id,
+          createdAt: data.createdAt ?? editingProvider!.createdAt,
+          updatedAt: Date.now(),
+        })
+      } else {
+        const newProvider = addProvider({
+          templateId: 'custom',
+          ...data,
+          sortOrder: 0,
+        })
+        // 第一个 Provider 自动设为活跃
+        if (providers.length === 0) {
+          setActiveProviderId(newProvider.id)
+        }
+      }
+    },
+    [customDialogMode, editingProvider, addProvider, updateProvider, providers.length, setActiveProviderId]
+  )
+
+  const handleDeleteClick = useCallback((provider: ProviderConfig) => {
+    setDeletingProvider(provider)
+    setDeleteDialogOpen(true)
+  }, [])
+
+  const handleConfirmDelete = useCallback(() => {
+    if (deletingProvider) {
+      removeProvider(deletingProvider.id)
+      // 如果删除的是活跃 Provider，清空 activeProviderId
+      if (activeProviderId === deletingProvider.id) {
+        setActiveProviderId(null)
+      }
+      setDeleteDialogOpen(false)
+      setDeletingProvider(null)
+    }
+  }, [deletingProvider, removeProvider, activeProviderId, setActiveProviderId])
 
   const models = [
     { id: 'kimi-lite', name: 'Kimi Lite', provider: 'kimi' },
@@ -168,42 +277,34 @@ export function SettingsPage() {
             <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
               模型提供商
             </h2>
+            <button
+              onClick={handleOpenCustomDialog}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border border-border hover:bg-accent transition-colors"
+              data-testid="add-custom-provider-btn"
+            >
+              <Plus className="w-3 h-3" />
+              自定义
+            </button>
           </div>
 
-          {/* 已添加的 Provider 列表 */}
-          {providers.length > 0 && (
-            <div className="space-y-2 mb-4">
-              {providers.map((p) => (
-                <Card key={p.id} className="border-border">
-                  <CardContent className="p-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className={`shrink-0 w-7 h-7 rounded-md flex items-center justify-center ${p.group === '本地' ? 'bg-amber-500/10 text-amber-600' : 'bg-blue-500/10 text-blue-600'}`}>
-                        {p.group === '本地' ? <Server className="w-3.5 h-3.5" /> : <Cloud className="w-3.5 h-3.5" />}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium text-foreground truncate">{p.name}</div>
-                        <div className="text-[11px] text-muted-foreground truncate">{p.modelId || '未选择模型'}</div>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => removeProvider(p.id)}
-                      className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
-                      title="删除"
-                      aria-label={`删除 ${p.name}`}
-                    >
-                      <Trash className="w-3.5 h-3.5" />
-                    </button>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
+          {/* 已添加的 Provider 列表（按分组折叠） */}
+          <div className="mb-4">
+            <ProviderGroupList
+              providers={providers}
+              activeProviderId={activeProviderId}
+              onEdit={handleEditProvider}
+              onDelete={handleDeleteClick}
+            />
+          </div>
 
-          {/* 模板列表 */}
-          <ProviderTemplateList
-            onSelectTemplate={handleSelectTemplate}
-            isAddedCheck={(templateId) => hasProvider(templateId)}
-          />
+          {/* 从模板添加 */}
+          <div className="border-t border-border pt-4">
+            <p className="text-xs text-muted-foreground mb-3">从预置模板快速添加</p>
+            <ProviderTemplateList
+              onSelectTemplate={handleSelectTemplate}
+              isAddedCheck={(templateId) => hasProvider(templateId)}
+            />
+          </div>
         </section>
 
         {/* 合规提示条设置 */}
@@ -470,11 +571,31 @@ export function SettingsPage() {
         </section>
       </div>
 
+      {/* 模板添加弹窗 */}
       <ProviderAddDialog
         template={selectedTemplate}
         open={showAddDialog}
         onClose={() => setShowAddDialog(false)}
-        onSave={handleSaveProvider}
+        onSave={handleSaveTemplateProvider}
+      />
+
+      {/* 自定义表单弹窗 */}
+      <ProviderCustomDialog
+        mode={customDialogMode}
+        provider={editingProvider}
+        existingGroups={existingGroups.length > 0 ? existingGroups : ['默认']}
+        open={customDialogOpen}
+        onClose={() => setCustomDialogOpen(false)}
+        onSave={handleSaveCustom}
+      />
+
+      {/* 删除确认弹窗 */}
+      <DeleteConfirmDialog
+        provider={deletingProvider}
+        isActiveProvider={deletingProvider ? activeProviderId === deletingProvider.id : false}
+        open={deleteDialogOpen}
+        onClose={() => setDeleteDialogOpen(false)}
+        onConfirm={handleConfirmDelete}
       />
     </div>
   )

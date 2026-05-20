@@ -3,6 +3,8 @@ import { cleanup } from '@testing-library/react'
 import { afterEach, beforeEach, vi } from 'vitest'
 import { registerGlobalWailsMock, resetWailsMock } from './mocks/wails'
 import { useChatStore } from '@/stores/chatStore'
+import { useProviderStore } from '@/stores/providerStore'
+import { useSettingsStore } from '@/stores/settingsStore'
 
 // Mock @wails/runtime 模块，使组件导入指向我们的 mock
 vi.mock('@wails/runtime', () => import('@/test/mocks/wails'))
@@ -30,6 +32,8 @@ beforeEach(() => {
     emergencyAlert: null,
     emergencyWarningAcknowledged: false,
   })
+  useProviderStore.setState({ providers: [] })
+  useSettingsStore.setState({ activeProviderId: null })
 })
 
 // 每个测试后清理

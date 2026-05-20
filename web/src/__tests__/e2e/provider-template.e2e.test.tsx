@@ -196,8 +196,15 @@ describe('E2E: Provider 模板列表', () => {
     // 验证已添加列表中存在（使用 aria-label 定位删除按钮来间接验证）
     const deleteBtn = await waitFor(() => screen.getByLabelText('删除 OpenAI'))
 
-    // 点击删除按钮
+    // 点击删除按钮 → 弹出确认
     await user.click(deleteBtn)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('delete-confirm-dialog')).toBeInTheDocument()
+    })
+
+    // 确认删除
+    await user.click(screen.getByTestId('delete-confirm-btn'))
 
     // 验证已删除
     await waitFor(() => {

@@ -14,6 +14,7 @@ interface SettingsState {
   updateChannel: UpdateChannel
   desensitizationLevel: DesensitizationLevel
   dataRetentionDays: number
+  activeProviderId: string | null
 
   setTheme: (theme: Theme) => void
   setSelectedModel: (model: string) => void
@@ -22,6 +23,7 @@ interface SettingsState {
   setUpdateChannel: (channel: UpdateChannel) => void
   setDesensitizationLevel: (level: DesensitizationLevel) => void
   setDataRetentionDays: (days: number) => void
+  setActiveProviderId: (id: string | null) => void
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -34,6 +36,7 @@ export const useSettingsStore = create<SettingsState>()(
       updateChannel: 'beta',
       desensitizationLevel: 'standard',
       dataRetentionDays: 30,
+      activeProviderId: null,
 
       setTheme: (theme) => set({ theme }),
       setSelectedModel: (model) => set({ selectedModel: model }),
@@ -42,6 +45,7 @@ export const useSettingsStore = create<SettingsState>()(
       setUpdateChannel: (channel) => set({ updateChannel: channel }),
       setDesensitizationLevel: (level) => set({ desensitizationLevel: level }),
       setDataRetentionDays: (days) => set({ dataRetentionDays: days }),
+      setActiveProviderId: (id) => set({ activeProviderId: id }),
     }),
     {
       name: 'medmemo-settings',
