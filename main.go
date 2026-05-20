@@ -92,6 +92,9 @@ func NewApp(wa *WailsApp, sqlite *database.SQLCipherConnector, _ *pipeline.Deide
 	}
 
 	cleanup := func() {
+		if wa.tokenRefreshSvc != nil {
+			wa.tokenRefreshSvc.Shutdown()
+		}
 		if healthChecker != nil {
 			healthChecker.Stop()
 		}

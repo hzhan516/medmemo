@@ -123,6 +123,75 @@ func TestReadCLITokenFromFile_ExpandHome(t *testing.T) {
 	assert.NotContains(t, err.Error(), "~/")
 }
 
+// TestReadCLICredentials_Kimi_Full 验证 Kimi 格式完整字段解析。
+func TestReadCLICredentials_Kimi_Full(t *testing.T) {
+	tmpDir := t.TempDir()
+	credPath := filepath.Join(tmpDir, "kimi-code.json")
+	content := `{"access_token":"acc_123","refresh_token":"rt_456","client_id":"cid_789","client_secret":"cs_abc","expires_at":1735689600}`
+	require.NoError(t, os.WriteFile(credPath, []byte(content), 0600))
+
+	creds, err := ReadCLICredentials(credPath)
+	require.NoError(t, err)
+	assert.Equal(t, "acc_123", creds.AccessToken)
+	assert.Equal(t, "rt_456", creds.RefreshToken)
+	assert.Equal(t, "cid_789", creds.ClientID)
+	assert.Equal(t, "cs_abc", creds.ClientSecret)
+	assert.Equal(t, int64(1735689600), creds.ExpiresAt)
+	assert.Empty(t, creds.ProviderHint)
+}
+
+// TestReadCLICredentials_Kimi_RefreshOnly 验证 Kimi 格式只有 refresh_token。
+func TestReadCLICredentials_Kimi_RefreshOnly(t *testing.T) {
+	tmpDir := t.TempDir()
+	credPath := filepath.Join(tmpDir, "kimi-code.json")
+	content := `{"refresh_token":"rt_only","client_id":"cid","client_secret":"secret","expires_at":1735689600}`
+	require.NoError(t, os.WriteFile(credPath, []byte(content), 0600))
+
+	creds, err := ReadCLICredentials(credPath)
+	require.NoError(t, err)
+	assert.Empty(t, creds.AccessToken)
+	assert.Equal(t, "rt_only", creds.RefreshToken)
+	assert.Equal(t, "cid", creds.ClientID)
+	assert.Equal(t, "secret", creds.ClientSecret)
+	assert.Equal(t, "refresh_token", creds.ProviderHint)
+}
+
+// TestReadCLICredentials_ADC_Full 验证 gcloud ADC 格式完整字段解析。
+func TestReadCLICredentials_ADC_Full(t *testing.T) {
+	tmpDir := t.TempDir()
+	credPath := filepath.Join(tmpDir, "adc.json")
+	content := `{"client_id":"gcp_cid","client_secret":"gcp_cs","refresh_token":"1//refresh","type":"authorized_user"}`
+	require.NoError(t, os.WriteFile(credPath, []byte(content), 0600))
+
+	creds, err := ReadCLICredentials(credPath)
+	require.NoError(t, err)
+	assert.Empty(t, creds.AccessToken)
+	assert.Equal(t, "1//refresh", creds.RefreshToken)
+	assert.Equal(t, "gcp_cid", creds.ClientID)
+	assert.Equal(t, "gcp_cs", creds.ClientSecret)
+	assert.Equal(t, "refresh_token", creds.ProviderHint)
+}
+
+// TestReadCLICredentials_PlainText 验证纯文本兜底。
+func TestReadCLICredentials_PlainText(t *testing.T) {
+	tmpDir := t.TempDir()
+	credPath := filepath.Join(tmpDir, "plain.txt")
+	require.NoError(t, os.WriteFile(credPath, []byte("sk-plain"), 0600))
+
+	creds, err := ReadCLICredentials(credPath)
+	require.NoError(t, err)
+	assert.Equal(t, "sk-plain", creds.AccessToken)
+	assert.Empty(t, creds.RefreshToken)
+	assert.Empty(t, creds.ProviderHint)
+}
+
+// TestReadCLICredentials_EmptyPath 验证空路径返回错误。
+func TestReadCLICredentials_EmptyPath(t *testing.T) {
+	_, err := ReadCLICredentials("")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cli credential path is empty")
+}
+
 // TestExpandPath 验证路径展开逻辑。
 func TestExpandPath(t *testing.T) {
 	home, _ := os.UserHomeDir()

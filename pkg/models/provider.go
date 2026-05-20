@@ -158,10 +158,15 @@ func (p *ProviderConfig) ResolveAuthToken() (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("failed to resolve cli token: %w", err)
 		}
-		if hint == "refresh_token" {
-			return "", fmt.Errorf("refresh_token requires TASK-045 to exchange for access_token")
+		if hint == "" {
+			// 文件直接包含可用的 access_token
+			return token, nil
 		}
-		return token, nil
+		// hint == "refresh_token"，检查内存缓存的 access_token
+		if p.AuthParams.OAuthAccessToken != "" && p.AuthParams.OAuthExpiresAt > time.Now().Unix() {
+			return p.AuthParams.OAuthAccessToken, nil
+		}
+		return "", fmt.Errorf("access_token expired, refresh required")
 	case AuthMethodOAuthDevice:
 		return "", fmt.Errorf("oauth_device auth not yet implemented (TASK-046)")
 	case AuthMethodServiceAccount:

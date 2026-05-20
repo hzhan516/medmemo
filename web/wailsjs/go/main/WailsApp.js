@@ -100,3 +100,15 @@ export function DetectCLIToken(arg1) {
 export function BuildCLIProvider(arg1, arg2) {
   return window['go']['main']['WailsApp']['BuildCLIProvider'](arg1, arg2);
 }
+
+export function RefreshToken(arg1) {
+  return window['go']['main']['WailsApp']['RefreshToken'](arg1);
+}
+
+export function EnableAutoRefresh(arg1) {
+  return window['go']['main']['WailsApp']['EnableAutoRefresh'](arg1);
+}
+
+export function DisableAutoRefresh(arg1) {
+  return window['go']['main']['WailsApp']['DisableAutoRefresh'](arg1);
+}

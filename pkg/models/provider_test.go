@@ -222,7 +222,7 @@ func TestProviderConfig_ResolveAuthToken_CLIToken_MissingFile(t *testing.T) {
 	assert.Contains(t, err.Error(), "failed to resolve cli token")
 }
 
-// TestProviderConfig_ResolveAuthToken_CLIToken_RefreshTokenHint 验证检测到 refresh_token 时返回提示。
+// TestProviderConfig_ResolveAuthToken_CLIToken_RefreshTokenHint 验证检测到 refresh_token 且缓存过期时返回错误。
 func TestProviderConfig_ResolveAuthToken_CLIToken_RefreshTokenHint(t *testing.T) {
 	tmpDir := t.TempDir()
 	credPath := filepath.Join(tmpDir, "adc.json")
@@ -236,7 +236,28 @@ func TestProviderConfig_ResolveAuthToken_CLIToken_RefreshTokenHint(t *testing.T)
 
 	_, err := p.ResolveAuthToken()
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "TASK-045")
+	assert.Contains(t, err.Error(), "access_token expired, refresh required")
+}
+
+// TestProviderConfig_ResolveAuthToken_CLIToken_CachedAccessToken 验证 refresh_token 场景下缓存的 access_token 可用。
+func TestProviderConfig_ResolveAuthToken_CLIToken_CachedAccessToken(t *testing.T) {
+	tmpDir := t.TempDir()
+	credPath := filepath.Join(tmpDir, "adc.json")
+	content := `{"refresh_token":"1//refresh","type":"authorized_user"}`
+	require.NoError(t, os.WriteFile(credPath, []byte(content), 0600))
+
+	p := newValidProviderConfig()
+	p.AuthMethod = AuthMethodCLIToken
+	p.APIKey = ""
+	p.AuthParams = AuthParams{
+		CLICredentialPath: credPath,
+		OAuthAccessToken:  "cached_acc_token",
+		OAuthExpiresAt:    time.Now().Add(1 * time.Hour).Unix(),
+	}
+
+	token, err := p.ResolveAuthToken()
+	assert.NoError(t, err)
+	assert.Equal(t, "cached_acc_token", token)
 }
 
 // TestProviderConfig_ResolveAuthToken_OAuthDevice 验证 oauth_device 方式返回未实现错误。

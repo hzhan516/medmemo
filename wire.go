@@ -6,6 +6,7 @@ package main
 import (
 	"github.com/google/wire"
 	"github.com/medmemo/medmemo/internal/adapters/ai"
+	"github.com/medmemo/medmemo/internal/adapters/auth"
 	"github.com/medmemo/medmemo/internal/adapters/detector"
 	"github.com/medmemo/medmemo/internal/adapters/repository"
 	adapterUpdater "github.com/medmemo/medmemo/internal/adapters/updater"
@@ -39,6 +40,7 @@ func InitializeApp() (*App, func(), error) {
 		wire.Bind(new(port.HealthChecker), new(*healthcheck.HealthEngine)),
 		healthcheck.NewHealthEngine,
 		ai.ProviderSet,
+		auth.TokenRefreshProviderSet,
 		repository.RepositorySet,
 		detector.ProviderSet,
 		detector.ONNXNERSet,

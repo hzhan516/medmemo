@@ -57,6 +57,16 @@ export interface CLIDetectResult {
 }
 
 /**
+ * 认证降级事件，对应后端 runtime.EventsEmit("auth:degraded", ...)。
+ */
+export interface AuthDegradedEvent {
+  /** 触发降级的 Provider ID */
+  providerID: string
+  /** 降级原因 */
+  reason: string
+}
+
+/**
  * 用户已添加的 Provider 配置。
  * 由 ProviderTemplate + 用户输入（认证配置、自定义参数）构成。
  */

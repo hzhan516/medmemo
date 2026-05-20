@@ -110,26 +110,26 @@ func (s *CLITokenService) Detect(providerType string) (*CLIDetectResult, error) 
 // ReadToken 从指定路径读取 CLI token。
 //
 // 若 credentialPath 为空，使用 providerType 对应的默认路径。
-// 对 Gemini 的 refresh_token 返回错误，提示需要 TASK-045。
-func (s *CLITokenService) ReadToken(providerType, credentialPath string) (string, error) {
+// 返回值 needsRefresh 为 true 时表示读取到的是 refresh_token，需要调用 TokenRefreshService 刷新。
+func (s *CLITokenService) ReadToken(providerType, credentialPath string) (token string, needsRefresh bool, err error) {
 	if credentialPath == "" {
 		if path, ok := defaultCredentialPaths[providerType]; ok {
 			credentialPath = path
 		} else {
-			return "", fmt.Errorf("unsupported cli provider type: %s", providerType)
+			return "", false, fmt.Errorf("unsupported cli provider type: %s", providerType)
 		}
 	}
 
 	token, hint, err := models.ReadCLITokenFromFile(credentialPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to read %s cli token: %w", providerType, err)
+		return "", false, fmt.Errorf("failed to read %s cli token: %w", providerType, err)
 	}
 
 	if hint == "refresh_token" {
-		return "", fmt.Errorf("refresh_token requires TASK-045 to exchange for access_token")
+		return token, true, nil
 	}
 
-	return token, nil
+	return token, false, nil
 }
 
 // ValidateToken 调用厂商 /v1/models 端点验证 token 有效性。

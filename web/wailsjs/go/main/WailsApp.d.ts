@@ -112,3 +112,9 @@ export interface CLIDetectResult {
 export function DetectCLIToken(arg1: string): Promise<CLIDetectResult>;
 
 export function BuildCLIProvider(arg1: string, arg2: string): Promise<ProviderConfig>;
+
+export function RefreshToken(arg1: string): Promise<void>;
+
+export function EnableAutoRefresh(arg1: string): Promise<void>;
+
+export function DisableAutoRefresh(arg1: string): Promise<void>;

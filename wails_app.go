@@ -36,6 +36,7 @@ type WailsApp struct {
 	titleGen         *usecase.TitleGenerator
 	updaterSvc       *updater.Service
 	secretStore      secret.Store
+	tokenRefreshSvc  *auth.TokenRefreshService
 	streamMu         sync.Mutex
 	streamCancel     context.CancelFunc
 }
@@ -53,6 +54,7 @@ func NewWailsApp(
 	titleGen *usecase.TitleGenerator,
 	updaterSvc *updater.Service,
 	secretStore secret.Store,
+	tokenRefreshSvc *auth.TokenRefreshService,
 ) *WailsApp {
 	return &WailsApp{
 		chatOrchestrator: chat,
@@ -66,12 +68,23 @@ func NewWailsApp(
 		titleGen:         titleGen,
 		updaterSvc:       updaterSvc,
 		secretStore:      secretStore,
+		tokenRefreshSvc:  tokenRefreshSvc,
 	}
 }
 
 // Startup 是 Wails 启动回调，在前端加载完成后调用。
 func (a *WailsApp) Startup(ctx context.Context) {
 	a.ctx = ctx
+
+	// 初始化 token 刷新降级回调
+	if a.tokenRefreshSvc != nil {
+		a.tokenRefreshSvc.SetOnDegraded(func(providerID, reason string) {
+			runtime.EventsEmit(a.ctx, "auth:degraded", map[string]string{
+				"provider_id": providerID,
+				"reason":      reason,
+			})
+		})
+	}
 
 	// 启动健康检测引擎
 	if a.healthChecker != nil {
@@ -84,6 +97,40 @@ func (a *WailsApp) Startup(ctx context.Context) {
 	// 启动时异步检测更新（不阻塞首屏）
 	if a.config.UpdateCheckEnabled && a.updaterSvc != nil {
 		go a.checkUpdateAsync()
+	}
+
+	// 启动时扫描 cli_token / oauth_device provider，安排自动刷新
+	if a.tokenRefreshSvc != nil {
+		go a.scheduleAutoRefreshesAsync()
+	}
+}
+
+// scheduleAutoRefreshesAsync 延迟 3 秒后扫描并安排自动刷新，避免与启动流程竞争。
+func (a *WailsApp) scheduleAutoRefreshesAsync() {
+	time.Sleep(3 * time.Second)
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+
+	list, err := a.providerStore.List(ctx)
+	if err != nil {
+		return
+	}
+
+	for _, p := range list {
+		if !p.Enabled {
+			continue
+		}
+		if p.AuthMethod != models.AuthMethodCLIToken && p.AuthMethod != models.AuthMethodOAuthDevice {
+			continue
+		}
+		creds, err := models.ReadCLICredentials(p.AuthParams.CLICredentialPath)
+		if err != nil {
+			continue
+		}
+		// 只有含 refresh_token 的 provider 才需要自动刷新
+		if creds.RefreshToken != "" || p.AuthParams.OAuthRefreshToken != "" {
+			_ = a.tokenRefreshSvc.ScheduleAutoRefresh(p.ID)
+		}
 	}
 }
 
@@ -720,6 +767,50 @@ func (a *WailsApp) GetProviderHealthStatus(providerID string) (*HealthResultResp
 	}, nil
 }
 
+// RefreshToken 对指定 Provider 手动触发 token 刷新。
+func (a *WailsApp) RefreshToken(providerID string) error {
+	if providerID == "" {
+		return fmt.Errorf("provider_id cannot be empty")
+	}
+	if a.tokenRefreshSvc == nil {
+		return fmt.Errorf("token refresh service not initialized")
+	}
+
+	_, err := a.tokenRefreshSvc.Refresh(providerID)
+	if err != nil {
+		return fmt.Errorf("failed to refresh token for provider %s: %w", providerID, err)
+	}
+	return nil
+}
+
+// EnableAutoRefresh 为指定 Provider 启用自动刷新调度。
+func (a *WailsApp) EnableAutoRefresh(providerID string) error {
+	if providerID == "" {
+		return fmt.Errorf("provider_id cannot be empty")
+	}
+	if a.tokenRefreshSvc == nil {
+		return fmt.Errorf("token refresh service not initialized")
+	}
+
+	if err := a.tokenRefreshSvc.ScheduleAutoRefresh(providerID); err != nil {
+		return fmt.Errorf("failed to schedule auto refresh for provider %s: %w", providerID, err)
+	}
+	return nil
+}
+
+// DisableAutoRefresh 取消指定 Provider 的自动刷新调度。
+func (a *WailsApp) DisableAutoRefresh(providerID string) error {
+	if providerID == "" {
+		return fmt.Errorf("provider_id cannot be empty")
+	}
+	if a.tokenRefreshSvc == nil {
+		return fmt.Errorf("token refresh service not initialized")
+	}
+
+	a.tokenRefreshSvc.CancelAutoRefresh(providerID)
+	return nil
+}
+
 // DetectCLIToken 检测指定类型的 CLI 是否安装并登录。
 // providerType 支持 "kimi" 和 "gemini"。
 func (a *WailsApp) DetectCLIToken(providerType string) (*auth.CLIDetectResult, error) {
@@ -755,7 +846,7 @@ func (a *WailsApp) BuildCLIProvider(providerType, modelID string) (*models.Provi
 	}
 
 	// 2. 读取 token
-	token, err := svc.ReadToken(providerType, detect.CredentialPath)
+	token, needsRefresh, err := svc.ReadToken(providerType, detect.CredentialPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read cli token: %w", err)
 	}
@@ -767,15 +858,29 @@ func (a *WailsApp) BuildCLIProvider(providerType, modelID string) (*models.Provi
 	}
 
 	// 4. 验证 token 有效性（调用厂商 /v1/models）
-	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
-	defer cancel()
+	// 如果读取到的是 refresh_token，先尝试自动刷新
+	if needsRefresh {
+		if a.tokenRefreshSvc != nil {
+			_, err := a.tokenRefreshSvc.RefreshProvider(cfg)
+			if err != nil {
+				return nil, fmt.Errorf("failed to refresh cli token for %s: %w", providerType, err)
+			}
+			// 刷新成功，更新 cfg 中的缓存 token
+			cfg.AuthParams.OAuthAccessToken = "" // 让 ResolveAuthToken 重新读取已更新的文件
+		} else {
+			return nil, fmt.Errorf("cli token for %s is a refresh_token and token refresh service is not available", providerType)
+		}
+	} else {
+		ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+		defer cancel()
 
-	valid, err := svc.ValidateToken(ctx, cfg.APIHost, token)
-	if err != nil {
-		return nil, fmt.Errorf("token validation failed: %w", err)
-	}
-	if !valid {
-		return nil, fmt.Errorf("cli token for %s is invalid or expired", providerType)
+		valid, err := svc.ValidateToken(ctx, cfg.APIHost, token)
+		if err != nil {
+			return nil, fmt.Errorf("token validation failed: %w", err)
+		}
+		if !valid {
+			return nil, fmt.Errorf("cli token for %s is invalid or expired", providerType)
+		}
 	}
 
 	return cfg, nil

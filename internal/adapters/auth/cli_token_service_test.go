@@ -81,9 +81,10 @@ func TestCLITokenService_ReadToken_Kimi(t *testing.T) {
 	require.NoError(t, os.WriteFile(credPath, []byte(`{"access_token":"tk_123"}`), 0600))
 
 	svc := NewCLITokenService()
-	token, err := svc.ReadToken("kimi", credPath)
+	token, needsRefresh, err := svc.ReadToken("kimi", credPath)
 	assert.NoError(t, err)
 	assert.Equal(t, "tk_123", token)
+	assert.False(t, needsRefresh)
 }
 
 // TestCLITokenService_ReadToken_DefaultPath 验证空路径时使用默认路径。
@@ -97,21 +98,23 @@ func TestCLITokenService_ReadToken_DefaultPath(t *testing.T) {
 	require.NoError(t, os.WriteFile(credPath, []byte(`{"access_token":"tk_default"}`), 0600))
 
 	svc := NewCLITokenService()
-	token, err := svc.ReadToken("kimi", "")
+	token, needsRefresh, err := svc.ReadToken("kimi", "")
 	assert.NoError(t, err)
 	assert.Equal(t, "tk_default", token)
+	assert.False(t, needsRefresh)
 }
 
-// TestCLITokenService_ReadToken_Gemini_RefreshHint 验证 Gemini refresh_token 返回错误提示。
+// TestCLITokenService_ReadToken_Gemini_RefreshHint 验证 Gemini refresh_token 返回 needsRefresh=true。
 func TestCLITokenService_ReadToken_Gemini_RefreshHint(t *testing.T) {
 	tmpDir := t.TempDir()
 	credPath := filepath.Join(tmpDir, "adc.json")
 	require.NoError(t, os.WriteFile(credPath, []byte(`{"refresh_token":"1//xyz","type":"authorized_user"}`), 0600))
 
 	svc := NewCLITokenService()
-	_, err := svc.ReadToken("gemini", credPath)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "TASK-045")
+	token, needsRefresh, err := svc.ReadToken("gemini", credPath)
+	assert.NoError(t, err)
+	assert.True(t, needsRefresh)
+	assert.Equal(t, "1//xyz", token)
 }
 
 // TestCLITokenService_ValidateToken_Valid 验证有效 token 返回 true。
@@ -245,9 +248,10 @@ func TestCLITokenService_Integration(t *testing.T) {
 	assert.True(t, result.LoggedIn)
 
 	// 2. ReadToken
-	token, err := svc.ReadToken("kimi", "")
+	token, needsRefresh, err := svc.ReadToken("kimi", "")
 	require.NoError(t, err)
 	assert.Equal(t, "tk_integration", token)
+	assert.False(t, needsRefresh)
 
 	// 3. ValidateToken（使用模拟端点）
 	valid, err := svc.ValidateToken(context.Background(), server.URL, token)
