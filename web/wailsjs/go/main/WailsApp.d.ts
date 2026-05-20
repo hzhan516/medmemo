@@ -125,6 +125,7 @@ export interface DeviceFlowStartResponse {
   device_code: string;
   expires_in: number;
   interval: number;
+  redirect_uri?: string;
 }
 
 export interface DeviceFlowStatusResponse {

@@ -92,6 +92,7 @@ func NewApp(wa *WailsApp, sqlite *database.SQLCipherConnector, _ *pipeline.Deide
 	}
 
 	cleanup := func() {
+		wa.shutdownCallbackServers()
 		if wa.deviceFlowSvc != nil {
 			wa.deviceFlowSvc.Shutdown()
 		}

@@ -608,3 +608,164 @@ func TestOAuthDeviceFlowService_SetRefreshService(t *testing.T) {
 	svc.SetRefreshService(refreshSvc)
 	assert.NotNil(t, svc.refreshSvc)
 }
+
+// TestOAuthDeviceFlowService_TriggerPoll 验证 TriggerPoll 触发立即轮询。
+func TestOAuthDeviceFlowService_TriggerPoll(t *testing.T) {
+	tokenPollCount := 0
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/device/auth" {
+			_ = json.NewEncoder(w).Encode(DeviceAuthResponse{
+				DeviceCode:      "dev_trigger",
+				UserCode:        "USER-TRIGGER",
+				VerificationURI: "https://auth.example.com/verify",
+				ExpiresIn:       600,
+				Interval:        300, // 设置很长间隔，确保 ticker 不会自然触发
+			})
+			return
+		}
+		if r.URL.Path == "/token" {
+			tokenPollCount++
+			_ = json.NewEncoder(w).Encode(DeviceTokenResponse{
+				AccessToken: "acc_trigger",
+				ExpiresIn:   3600,
+			})
+		}
+	}))
+	defer server.Close()
+
+	origConfig := deviceFlowConfigs["testprovider"]
+	deviceFlowConfigs["testprovider"] = struct {
+		DeviceAuthURL string
+		TokenURL      string
+		ClientID      string
+		Scope         string
+	}{
+		DeviceAuthURL: server.URL + "/device/auth",
+		TokenURL:      server.URL + "/token",
+		ClientID:      "test-client",
+		Scope:         "test-scope",
+	}
+	defer func() {
+		if origConfig.DeviceAuthURL == "" {
+			delete(deviceFlowConfigs, "testprovider")
+		} else {
+			deviceFlowConfigs["testprovider"] = origConfig
+		}
+	}()
+
+	store := newMockProviderStore()
+	svc := NewOAuthDeviceFlowServiceWithClient(store, nil, server.Client())
+
+	var successEvent *models.ProviderConfig
+	svc.SetCallbacks(
+		func(_, _ string, cfg *models.ProviderConfig) { successEvent = cfg },
+		func(_, _ string, _ error) {},
+		func(_, _ string) {},
+		func(_, _ string, _ int) {},
+	)
+
+	// 启动 Flow，间隔设为 300 秒，确保不会自然触发
+	result, err := svc.StartFlow("testprovider")
+	require.NoError(t, err)
+	assert.Equal(t, "dev_trigger", result.DeviceCode)
+
+	// 等待一小段时间确认 ticker 未触发
+	time.Sleep(200 * time.Millisecond)
+	assert.Equal(t, 0, tokenPollCount, "ticker 不应在短间隔内触发")
+
+	// 调用 TriggerPoll 触发立即轮询
+	err = svc.TriggerPoll("dev_trigger")
+	require.NoError(t, err)
+
+	// 等待轮询完成
+	require.Eventually(t, func() bool {
+		return successEvent != nil
+	}, 3*time.Second, 100*time.Millisecond, "TriggerPoll 应触发成功")
+
+	assert.Equal(t, 1, tokenPollCount, "TriggerPoll 应只触发一次轮询")
+	assert.Equal(t, "acc_trigger", successEvent.AuthParams.OAuthAccessToken)
+}
+
+// TestOAuthDeviceFlowService_TriggerPoll_SessionNotFound 验证无效 deviceCode。
+func TestOAuthDeviceFlowService_TriggerPoll_SessionNotFound(t *testing.T) {
+	store := newMockProviderStore()
+	svc := NewOAuthDeviceFlowServiceWithClient(store, nil, &http.Client{Timeout: 5 * time.Second})
+
+	err := svc.TriggerPoll("non_existent_code")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "session not found")
+}
+
+// TestOAuthDeviceFlowService_TriggerPoll_NonPendingSession 验证非 pending 状态不触发。
+func TestOAuthDeviceFlowService_TriggerPoll_NonPendingSession(t *testing.T) {
+	tokenPollCount := 0
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/device/auth" {
+			_ = json.NewEncoder(w).Encode(DeviceAuthResponse{
+				DeviceCode:      "dev_nonpending",
+				UserCode:        "USER-NP",
+				VerificationURI: "https://auth.example.com/verify",
+				ExpiresIn:       600,
+				Interval:        1,
+			})
+			return
+		}
+		if r.URL.Path == "/token" {
+			tokenPollCount++
+			_ = json.NewEncoder(w).Encode(DeviceTokenResponse{
+				AccessToken: "acc_np",
+				ExpiresIn:   3600,
+			})
+		}
+	}))
+	defer server.Close()
+
+	origConfig := deviceFlowConfigs["testprovider"]
+	deviceFlowConfigs["testprovider"] = struct {
+		DeviceAuthURL string
+		TokenURL      string
+		ClientID      string
+		Scope         string
+	}{
+		DeviceAuthURL: server.URL + "/device/auth",
+		TokenURL:      server.URL + "/token",
+		ClientID:      "test-client",
+		Scope:         "test-scope",
+	}
+	defer func() {
+		if origConfig.DeviceAuthURL == "" {
+			delete(deviceFlowConfigs, "testprovider")
+		} else {
+			deviceFlowConfigs["testprovider"] = origConfig
+		}
+	}()
+
+	store := newMockProviderStore()
+	svc := NewOAuthDeviceFlowServiceWithClient(store, nil, server.Client())
+
+	svc.SetCallbacks(
+		func(_, _ string, _ *models.ProviderConfig) {},
+		func(_, _ string, _ error) {},
+		func(_, _ string) {},
+		func(_, _ string, _ int) {},
+	)
+
+	// 启动 Flow 并等待完成
+	result, err := svc.StartFlow("testprovider")
+	require.NoError(t, err)
+
+	require.Eventually(t, func() bool {
+		st := svc.GetStatus("dev_nonpending")
+		return st != nil && st.Status == DeviceFlowStatusSuccess
+	}, 5*time.Second, 100*time.Millisecond)
+
+	// 完成后再次 TriggerPoll，应无错误且不触发额外轮询
+	prevCount := tokenPollCount
+	err = svc.TriggerPoll(result.DeviceCode)
+	assert.NoError(t, err)
+
+	time.Sleep(200 * time.Millisecond)
+	assert.Equal(t, prevCount, tokenPollCount, "成功后的 TriggerPoll 不应触发额外轮询")
+}

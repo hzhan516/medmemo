@@ -77,6 +77,7 @@ type deviceFlowSession struct {
 	expiresAt    time.Time // 设备码过期时间
 	cancel       context.CancelFunc
 	done         chan struct{} // 轮询结束信号
+	triggerCh    chan struct{} // 外部触发立即轮询的通道（如本地回调服务器通知）
 	result       *DeviceTokenResponse
 	err          error
 	status       DeviceFlowStatus
@@ -197,6 +198,7 @@ func (s *OAuthDeviceFlowService) StartFlow(providerType string) (*DeviceFlowStar
 		expiresAt:    time.Now().Add(time.Duration(expiresIn) * time.Second),
 		cancel:       cancel,
 		done:         make(chan struct{}),
+		triggerCh:    make(chan struct{}, 1),
 		status:       DeviceFlowStatusPending,
 	}
 
@@ -308,6 +310,34 @@ func (s *OAuthDeviceFlowService) requestDeviceCode(deviceAuthURL, clientID, scop
 	return &result, nil
 }
 
+// TriggerPoll 触发指定 deviceCode 的立即轮询。
+// 由本地回调服务器在收到授权回调后调用，实现轮询提前终止。
+func (s *OAuthDeviceFlowService) TriggerPoll(deviceCode string) error {
+	s.mu.Lock()
+	session, ok := s.sessions[deviceCode]
+	s.mu.Unlock()
+
+	if !ok {
+		return fmt.Errorf("session not found for device code: %s", deviceCode)
+	}
+
+	session.mu.Lock()
+	status := session.status
+	session.mu.Unlock()
+
+	if status != DeviceFlowStatusPending {
+		// 非 pending 状态无需触发
+		return nil
+	}
+
+	// 非阻塞发送，若 channel 已满则丢弃（已有未处理的触发）
+	select {
+	case session.triggerCh <- struct{}{}:
+	default:
+	}
+	return nil
+}
+
 // pollLoop 后台轮询 token 端点。
 func (s *OAuthDeviceFlowService) pollLoop(ctx context.Context, session *deviceFlowSession) {
 	defer close(session.done)
@@ -323,80 +353,93 @@ func (s *OAuthDeviceFlowService) pollLoop(ctx context.Context, session *deviceFl
 			session.mu.Unlock()
 			return
 
+		case <-session.triggerCh:
+			// 本地回调服务器通知：立即执行一次轮询
+			if s.executePoll(session, ticker) {
+				return
+			}
+
 		case <-ticker.C:
-			// 检查设备码是否已过期
-			if time.Now().After(session.expiresAt) {
-				session.mu.Lock()
-				session.status = DeviceFlowStatusError
-				session.err = fmt.Errorf("device code expired")
-				session.mu.Unlock()
-				s.emitError(session)
+			if s.executePoll(session, ticker) {
 				return
 			}
-
-			tokenResp, err := s.pollTokenEndpoint(session)
-			if err != nil {
-				// 根据错误类型处理
-				switch {
-				case strings.Contains(err.Error(), "authorization_pending"):
-					s.emitPending(session)
-					continue
-
-				case strings.Contains(err.Error(), "slow_down"):
-					// 延长轮询间隔（按服务器要求或默认翻倍）
-					session.mu.Lock()
-					session.interval += 5
-					newInterval := session.interval
-					session.status = DeviceFlowStatusSlowDown
-					session.mu.Unlock()
-					ticker.Reset(time.Duration(newInterval) * time.Second)
-					s.emitSlowDown(session, newInterval)
-					continue
-
-				case strings.Contains(err.Error(), "access_denied"):
-					session.mu.Lock()
-					session.status = DeviceFlowStatusError
-					session.err = fmt.Errorf("user denied authorization")
-					session.mu.Unlock()
-					s.emitError(session)
-					return
-
-				case strings.Contains(err.Error(), "expired_token"):
-					session.mu.Lock()
-					session.status = DeviceFlowStatusError
-					session.err = fmt.Errorf("device code expired")
-					session.mu.Unlock()
-					s.emitError(session)
-					return
-
-				default:
-					// 其他网络或服务器错误，继续轮询（但总超时由 expiresAt 控制）
-					s.emitPending(session)
-					continue
-				}
-			}
-
-			// 成功获取 token
-			session.mu.Lock()
-			session.result = tokenResp
-			session.status = DeviceFlowStatusSuccess
-			session.mu.Unlock()
-
-			// 保存 ProviderConfig 并注册自动刷新
-			cfg, saveErr := s.saveProviderConfig(session, tokenResp)
-			if saveErr != nil {
-				session.mu.Lock()
-				session.err = saveErr
-				session.status = DeviceFlowStatusError
-				session.mu.Unlock()
-				s.emitError(session)
-				return
-			}
-
-			s.emitSuccess(session, cfg)
-			return
 		}
 	}
+}
+
+// executePoll 执行一次 token 端点轮询，返回 true 表示轮询已结束（成功或错误）。
+func (s *OAuthDeviceFlowService) executePoll(session *deviceFlowSession, ticker *time.Ticker) bool {
+	// 检查设备码是否已过期
+	if time.Now().After(session.expiresAt) {
+		session.mu.Lock()
+		session.status = DeviceFlowStatusError
+		session.err = fmt.Errorf("device code expired")
+		session.mu.Unlock()
+		s.emitError(session)
+		return true
+	}
+
+	tokenResp, err := s.pollTokenEndpoint(session)
+	if err != nil {
+		// 根据错误类型处理
+		switch {
+		case strings.Contains(err.Error(), "authorization_pending"):
+			s.emitPending(session)
+			return false
+
+		case strings.Contains(err.Error(), "slow_down"):
+			// 延长轮询间隔（按服务器要求或默认翻倍）
+			session.mu.Lock()
+			session.interval += 5
+			newInterval := session.interval
+			session.status = DeviceFlowStatusSlowDown
+			session.mu.Unlock()
+			ticker.Reset(time.Duration(newInterval) * time.Second)
+			s.emitSlowDown(session, newInterval)
+			return false
+
+		case strings.Contains(err.Error(), "access_denied"):
+			session.mu.Lock()
+			session.status = DeviceFlowStatusError
+			session.err = fmt.Errorf("user denied authorization")
+			session.mu.Unlock()
+			s.emitError(session)
+			return true
+
+		case strings.Contains(err.Error(), "expired_token"):
+			session.mu.Lock()
+			session.status = DeviceFlowStatusError
+			session.err = fmt.Errorf("device code expired")
+			session.mu.Unlock()
+			s.emitError(session)
+			return true
+
+		default:
+			// 其他网络或服务器错误，继续轮询（但总超时由 expiresAt 控制）
+			s.emitPending(session)
+			return false
+		}
+	}
+
+	// 成功获取 token
+	session.mu.Lock()
+	session.result = tokenResp
+	session.status = DeviceFlowStatusSuccess
+	session.mu.Unlock()
+
+	// 保存 ProviderConfig 并注册自动刷新
+	cfg, saveErr := s.saveProviderConfig(session, tokenResp)
+	if saveErr != nil {
+		session.mu.Lock()
+		session.err = saveErr
+		session.status = DeviceFlowStatusError
+		session.mu.Unlock()
+		s.emitError(session)
+		return true
+	}
+
+	s.emitSuccess(session, cfg)
+	return true
 }
 
 // pollTokenEndpoint 执行一次 token 端点轮询。

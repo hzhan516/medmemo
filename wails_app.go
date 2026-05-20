@@ -40,6 +40,10 @@ type WailsApp struct {
 	deviceFlowSvc    *auth.OAuthDeviceFlowService
 	streamMu         sync.Mutex
 	streamCancel     context.CancelFunc
+
+	// 本地回调服务器管理（每个 Device Flow 会话对应一个）
+	callbackServers map[string]*auth.LocalCallbackServer
+	callbackMu      sync.Mutex
 }
 
 // NewWailsApp 构造函数，供 Wire 调用。
@@ -72,6 +76,7 @@ func NewWailsApp(
 		secretStore:      secretStore,
 		tokenRefreshSvc:  tokenRefreshSvc,
 		deviceFlowSvc:    deviceFlowSvc,
+		callbackServers:  make(map[string]*auth.LocalCallbackServer),
 	}
 }
 
@@ -933,6 +938,7 @@ type DeviceFlowStartResponse struct {
 	DeviceCode      string `json:"device_code"`
 	ExpiresIn       int    `json:"expires_in"`
 	Interval        int    `json:"interval"`
+	RedirectURI     string `json:"redirect_uri,omitempty"` // 本地回调服务器地址（可选）
 }
 
 // DeviceFlowStatusResponse 查询轮询状态。
@@ -944,6 +950,7 @@ type DeviceFlowStatusResponse struct {
 }
 
 // StartOAuthDeviceFlow 对指定厂商启动 OAuth Device Flow。
+// 同时启动本地回调服务器作为授权完成的本地通知通道。
 func (a *WailsApp) StartOAuthDeviceFlow(providerType string) (*DeviceFlowStartResponse, error) {
 	if providerType == "" {
 		return nil, fmt.Errorf("provider_type cannot be empty")
@@ -957,13 +964,38 @@ func (a *WailsApp) StartOAuthDeviceFlow(providerType string) (*DeviceFlowStartRe
 		return nil, fmt.Errorf("failed to start device flow for %s: %w", providerType, err)
 	}
 
-	return &DeviceFlowStartResponse{
+	// 启动本地回调服务器，作为 Device Flow 的本地通知通道
+	callbackServer := auth.NewLocalCallbackServer()
+	_, callbackErr := callbackServer.Start()
+	if callbackErr == nil {
+		a.callbackMu.Lock()
+		a.callbackServers[result.DeviceCode] = callbackServer
+		a.callbackMu.Unlock()
+
+		// 后台等待回调，收到后触发立即轮询
+		go func(deviceCode string, server *auth.LocalCallbackServer) {
+			res, err := server.WaitForCallback(15 * time.Minute)
+			if err == nil && res.Error == "" {
+				_ = a.deviceFlowSvc.TriggerPoll(deviceCode)
+			}
+			_ = server.Stop()
+			a.callbackMu.Lock()
+			delete(a.callbackServers, deviceCode)
+			a.callbackMu.Unlock()
+		}(result.DeviceCode, callbackServer)
+	}
+
+	resp := &DeviceFlowStartResponse{
 		UserCode:        result.UserCode,
 		VerificationURI: result.VerificationURI,
 		DeviceCode:      result.DeviceCode,
 		ExpiresIn:       result.ExpiresIn,
 		Interval:        result.Interval,
-	}, nil
+	}
+	if callbackErr == nil {
+		resp.RedirectURI = callbackServer.GetRedirectURI()
+	}
+	return resp, nil
 }
 
 // CancelOAuthDeviceFlow 取消指定 deviceCode 的轮询。
@@ -976,6 +1008,18 @@ func (a *WailsApp) CancelOAuthDeviceFlow(deviceCode string) error {
 	}
 
 	a.deviceFlowSvc.CancelFlow(deviceCode)
+
+	// 同时停止对应的本地回调服务器
+	a.callbackMu.Lock()
+	server, ok := a.callbackServers[deviceCode]
+	if ok {
+		delete(a.callbackServers, deviceCode)
+	}
+	a.callbackMu.Unlock()
+	if ok {
+		_ = server.Stop()
+	}
+
 	return nil
 }
 
@@ -999,4 +1043,20 @@ func (a *WailsApp) GetOAuthDeviceFlowStatus(deviceCode string) (*DeviceFlowStatu
 		Status:       string(status.Status),
 		Error:        status.Error,
 	}, nil
+}
+
+// shutdownCallbackServers 停止所有运行中的本地回调服务器。
+// 在应用退出时由 NewApp.cleanup 调用，确保端口释放。
+func (a *WailsApp) shutdownCallbackServers() {
+	a.callbackMu.Lock()
+	servers := make([]*auth.LocalCallbackServer, 0, len(a.callbackServers))
+	for _, s := range a.callbackServers {
+		servers = append(servers, s)
+	}
+	a.callbackServers = make(map[string]*auth.LocalCallbackServer)
+	a.callbackMu.Unlock()
+
+	for _, s := range servers {
+		_ = s.Stop()
+	}
 }

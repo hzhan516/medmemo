@@ -80,6 +80,8 @@ export interface DeviceFlowStartResponse {
   expiresIn: number
   /** 建议轮询间隔（秒） */
   interval: number
+  /** 本地回调服务器地址（可选，用于同设备授权后的自动通知） */
+  redirectURI?: string
 }
 
 /**
