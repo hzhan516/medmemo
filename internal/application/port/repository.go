@@ -7,6 +7,20 @@ import (
 	"github.com/medmemo/medmemo/pkg/models"
 )
 
+// ProviderStore 定义 Provider 配置的持久化接口。
+type ProviderStore interface {
+	// Create 创建新的 Provider 配置。
+	Create(ctx context.Context, provider *models.ProviderConfig) error
+	// Update 更新已有 Provider 配置。
+	Update(ctx context.Context, provider *models.ProviderConfig) error
+	// Delete 删除指定 Provider 配置。
+	Delete(ctx context.Context, id string) error
+	// Get 按 ID 查询 Provider 配置。
+	Get(ctx context.Context, id string) (*models.ProviderConfig, error)
+	// List 查询全部 Provider 配置，按 sort_order ASC, updated_at DESC 排序。
+	List(ctx context.Context) ([]*models.ProviderConfig, error)
+}
+
 // 将领域层定义的仓库接口在应用层重新导出，
 // 符合 Clean Architecture 中"接口由消费者端声明"的原则。
 

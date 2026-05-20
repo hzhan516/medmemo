@@ -310,6 +310,28 @@ func migrateSQLiteSchema(ctx context.Context, db *sql.DB) error {
 			);
 			`,
 		},
+		{
+			version: 5,
+			sql: `
+			CREATE TABLE IF NOT EXISTS providers (
+				id TEXT PRIMARY KEY,
+				name TEXT NOT NULL,
+				api_host TEXT NOT NULL,
+				api_key BLOB NOT NULL,
+				model_id TEXT NOT NULL,
+				temperature REAL DEFAULT 0.7,
+				timeout_ms INTEGER DEFAULT 30000,
+				max_retries INTEGER DEFAULT 3,
+				group_name TEXT DEFAULT '',
+				enabled INTEGER DEFAULT 1,
+				sort_order INTEGER DEFAULT 0,
+				created_at INTEGER NOT NULL,
+				updated_at INTEGER NOT NULL
+			);
+			CREATE INDEX IF NOT EXISTS idx_providers_enabled ON providers(enabled);
+			CREATE INDEX IF NOT EXISTS idx_providers_group ON providers(group_name, sort_order);
+			`,
+		},
 	}
 
 	for _, m := range migrations {

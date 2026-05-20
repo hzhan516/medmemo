@@ -4,23 +4,9 @@ package ai
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/medmemo/medmemo/pkg/models"
 )
-
-// ProviderConfig 表示运行时传入的 Provider 连接配置。
-// 零硬编码：所有字段均由调用方动态提供，不绑定任何厂商默认值。
-type ProviderConfig struct {
-	ID          string        // 唯一标识
-	Name        string        // 显示名称
-	APIHost     string        // API 基础地址，如 https://api.openai.com
-	APIKey      string        // 认证密钥
-	ModelID     string        // 模型标识
-	Temperature float64       // 采样温度，范围 0-2，默认 0.7
-	Timeout     time.Duration // 单次请求超时，默认 30s
-	MaxRetries  int           // 最大重试次数，默认 3
-}
 
 // ChatRequest 表示对话请求 DTO。
 type ChatRequest struct {

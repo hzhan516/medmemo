@@ -34,6 +34,7 @@ func InitializeApp() (*App, func(), error) {
 		wire.Bind(new(port.ConversationRepository), new(*repository.ConversationRepoSQLite)),
 		wire.Bind(new(port.MessageRepository), new(*repository.MessageRepoSQLite)),
 		wire.Bind(new(port.DisclaimerRepository), new(*repository.DisclaimerRepoSQLite)),
+		wire.Bind(new(port.ProviderStore), new(*repository.ProviderRepoSQLite)),
 		ai.ProviderSet,
 		repository.RepositorySet,
 		detector.ProviderSet,

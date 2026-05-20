@@ -29,6 +29,7 @@ type WailsApp struct {
 	convRepo         port.ConversationRepository
 	msgRepo          port.MessageRepository
 	disclaimerRepo   port.DisclaimerRepository
+	providerStore    port.ProviderStore
 	titleGen         *usecase.TitleGenerator
 	updaterSvc       *updater.Service
 	secretStore      secret.Store
@@ -44,6 +45,7 @@ func NewWailsApp(
 	convRepo port.ConversationRepository,
 	msgRepo port.MessageRepository,
 	disclaimerRepo port.DisclaimerRepository,
+	providerStore port.ProviderStore,
 	titleGen *usecase.TitleGenerator,
 	updaterSvc *updater.Service,
 	secretStore secret.Store,
@@ -55,6 +57,7 @@ func NewWailsApp(
 		convRepo:         convRepo,
 		msgRepo:          msgRepo,
 		disclaimerRepo:   disclaimerRepo,
+		providerStore:    providerStore,
 		titleGen:         titleGen,
 		updaterSvc:       updaterSvc,
 		secretStore:      secretStore,
@@ -594,4 +597,54 @@ func (a *WailsApp) HasAPIKey(provider string) (bool, error) {
 // GetVersion 返回当前应用版本号（构建时通过 -ldflags 注入）。
 func (a *WailsApp) GetVersion() string {
 	return version
+}
+
+// CreateProvider 创建新的 Provider 配置。
+func (a *WailsApp) CreateProvider(config models.ProviderConfig) error {
+	ctx, cancel := context.WithTimeout(a.ctx, 5*time.Second)
+	defer cancel()
+
+	if err := a.providerStore.Create(ctx, &config); err != nil {
+		return fmt.Errorf("failed to create provider: %w", err)
+	}
+	return nil
+}
+
+// UpdateProvider 更新已有 Provider 配置。
+func (a *WailsApp) UpdateProvider(config models.ProviderConfig) error {
+	ctx, cancel := context.WithTimeout(a.ctx, 5*time.Second)
+	defer cancel()
+
+	if err := a.providerStore.Update(ctx, &config); err != nil {
+		return fmt.Errorf("failed to update provider: %w", err)
+	}
+	return nil
+}
+
+// DeleteProvider 删除指定 Provider 配置。
+func (a *WailsApp) DeleteProvider(id string) error {
+	ctx, cancel := context.WithTimeout(a.ctx, 5*time.Second)
+	defer cancel()
+
+	if err := a.providerStore.Delete(ctx, id); err != nil {
+		return fmt.Errorf("failed to delete provider: %w", err)
+	}
+	return nil
+}
+
+// ListProviders 获取全部 Provider 配置列表。
+func (a *WailsApp) ListProviders() ([]models.ProviderConfig, error) {
+	ctx, cancel := context.WithTimeout(a.ctx, 5*time.Second)
+	defer cancel()
+
+	list, err := a.providerStore.List(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list providers: %w", err)
+	}
+
+	result := make([]models.ProviderConfig, len(list))
+	for i, p := range list {
+		result[i] = *p
+	}
+	return result, nil
 }

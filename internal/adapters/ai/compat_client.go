@@ -12,6 +12,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/medmemo/medmemo/pkg/models"
 )
 
 // OpenAICompatibleClient 是一个通用的 OpenAI-compatible HTTP 客户端。
@@ -49,7 +51,7 @@ func NewOpenAICompatibleClientWithHTTPClient(c *http.Client) *OpenAICompatibleCl
 //   - 流读取阶段错误（JSON 解析失败、连接中断）通过 channel 发送 ChunkError 后关闭。
 //   - channel 带 1 缓冲，消费者慢时阻塞而非无限缓冲，防止 OOM。
 //   - 返回的 channel 由内部 goroutine 负责关闭，消费者只需 range 读取。
-func (c *OpenAICompatibleClient) Chat(ctx context.Context, req ChatRequest, config ProviderConfig) (<-chan StreamChunk, error) {
+func (c *OpenAICompatibleClient) Chat(ctx context.Context, req ChatRequest, config models.ProviderConfig) (<-chan StreamChunk, error) {
 	if config.APIHost == "" {
 		return nil, &LLMError{Code: "missing_api_host", Message: "APIHost 不能为空", Retryable: false}
 	}
@@ -184,7 +186,7 @@ func (c *OpenAICompatibleClient) readSSE(ctx context.Context, resp *http.Respons
 }
 
 // FetchModels 调用 /v1/models 端点拉取可用模型列表。
-func (c *OpenAICompatibleClient) FetchModels(ctx context.Context, config ProviderConfig) ([]ModelInfo, error) {
+func (c *OpenAICompatibleClient) FetchModels(ctx context.Context, config models.ProviderConfig) ([]ModelInfo, error) {
 	if config.APIHost == "" {
 		return nil, &LLMError{Code: "missing_api_host", Message: "APIHost 不能为空", Retryable: false}
 	}

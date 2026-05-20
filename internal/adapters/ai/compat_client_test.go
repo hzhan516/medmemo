@@ -51,7 +51,7 @@ func TestOpenAICompatibleClient_Chat_Success(t *testing.T) {
 	defer server.Close()
 
 	client := NewOpenAICompatibleClient()
-	cfg := ProviderConfig{
+	cfg := models.ProviderConfig{
 		APIHost:     server.URL,
 		APIKey:      "test-key",
 		ModelID:     "gpt-4o",
@@ -98,7 +98,7 @@ func TestOpenAICompatibleClient_Chat_EmptyContent(t *testing.T) {
 	defer server.Close()
 
 	client := NewOpenAICompatibleClient()
-	cfg := ProviderConfig{APIHost: server.URL, ModelID: "m"}
+	cfg := models.ProviderConfig{APIHost: server.URL, ModelID: "m"}
 	ch, err := client.Chat(context.Background(), ChatRequest{}, cfg)
 	require.NoError(t, err)
 
@@ -124,7 +124,7 @@ func TestOpenAICompatibleClient_Chat_JSONParseError(t *testing.T) {
 	defer server.Close()
 
 	client := NewOpenAICompatibleClient()
-	cfg := ProviderConfig{APIHost: server.URL, ModelID: "m"}
+	cfg := models.ProviderConfig{APIHost: server.URL, ModelID: "m"}
 	ch, err := client.Chat(context.Background(), ChatRequest{}, cfg)
 	require.NoError(t, err)
 
@@ -153,7 +153,7 @@ func TestOpenAICompatibleClient_Chat_ErrorStatus(t *testing.T) {
 	defer server.Close()
 
 	client := NewOpenAICompatibleClient()
-	cfg := ProviderConfig{APIHost: server.URL, APIKey: "bad-key", ModelID: "m"}
+	cfg := models.ProviderConfig{APIHost: server.URL, APIKey: "bad-key", ModelID: "m"}
 	_, err := client.Chat(context.Background(), ChatRequest{}, cfg)
 
 	require.Error(t, err)
@@ -173,7 +173,7 @@ func TestOpenAICompatibleClient_Chat_NetworkTimeout(t *testing.T) {
 	defer server.Close()
 
 	client := NewOpenAICompatibleClient()
-	cfg := ProviderConfig{
+	cfg := models.ProviderConfig{
 		APIHost: server.URL,
 		ModelID: "m",
 		Timeout: 1 * time.Millisecond,
@@ -190,7 +190,7 @@ func TestOpenAICompatibleClient_Chat_NetworkTimeout(t *testing.T) {
 // TestOpenAICompatibleClient_Chat_MissingAPIHost 验证 APIHost 为空时返回错误。
 func TestOpenAICompatibleClient_Chat_MissingAPIHost(t *testing.T) {
 	client := NewOpenAICompatibleClient()
-	cfg := ProviderConfig{ModelID: "m"}
+	cfg := models.ProviderConfig{ModelID: "m"}
 	_, err := client.Chat(context.Background(), ChatRequest{}, cfg)
 
 	require.Error(t, err)
@@ -202,7 +202,7 @@ func TestOpenAICompatibleClient_Chat_MissingAPIHost(t *testing.T) {
 // TestOpenAICompatibleClient_Chat_MissingModelID 验证 ModelID 为空时返回错误。
 func TestOpenAICompatibleClient_Chat_MissingModelID(t *testing.T) {
 	client := NewOpenAICompatibleClient()
-	cfg := ProviderConfig{APIHost: "http://example.com"}
+	cfg := models.ProviderConfig{APIHost: "http://example.com"}
 	_, err := client.Chat(context.Background(), ChatRequest{}, cfg)
 
 	require.Error(t, err)
@@ -228,7 +228,7 @@ func TestOpenAICompatibleClient_Chat_ContextCancelled(t *testing.T) {
 	defer server.Close()
 
 	client := NewOpenAICompatibleClient()
-	cfg := ProviderConfig{APIHost: server.URL, ModelID: "m"}
+	cfg := models.ProviderConfig{APIHost: server.URL, ModelID: "m"}
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 
@@ -256,7 +256,7 @@ func TestOpenAICompatibleClient_Chat_NoAPIKey(t *testing.T) {
 	defer server.Close()
 
 	client := NewOpenAICompatibleClient()
-	cfg := ProviderConfig{APIHost: server.URL, ModelID: "m"}
+	cfg := models.ProviderConfig{APIHost: server.URL, ModelID: "m"}
 	ch, err := client.Chat(context.Background(), ChatRequest{}, cfg)
 	require.NoError(t, err)
 
@@ -282,7 +282,7 @@ func TestOpenAICompatibleClient_Chat_DefaultTemperature(t *testing.T) {
 	defer server.Close()
 
 	client := NewOpenAICompatibleClient()
-	cfg := ProviderConfig{APIHost: server.URL, ModelID: "m"}
+	cfg := models.ProviderConfig{APIHost: server.URL, ModelID: "m"}
 	ch, err := client.Chat(context.Background(), ChatRequest{}, cfg)
 	require.NoError(t, err)
 	for range ch {
@@ -302,7 +302,7 @@ func TestOpenAICompatibleClient_Chat_ZeroTemperatureConfig(t *testing.T) {
 	defer server.Close()
 
 	client := NewOpenAICompatibleClient()
-	cfg := ProviderConfig{APIHost: server.URL, ModelID: "m", Temperature: 0}
+	cfg := models.ProviderConfig{APIHost: server.URL, ModelID: "m", Temperature: 0}
 	ch, err := client.Chat(context.Background(), ChatRequest{Temperature: 0}, cfg)
 	require.NoError(t, err)
 	for range ch {
@@ -320,7 +320,7 @@ func TestOpenAICompatibleClient_Chat_InvalidLinePrefix(t *testing.T) {
 	defer server.Close()
 
 	client := NewOpenAICompatibleClient()
-	cfg := ProviderConfig{APIHost: server.URL, ModelID: "m"}
+	cfg := models.ProviderConfig{APIHost: server.URL, ModelID: "m"}
 	ch, err := client.Chat(context.Background(), ChatRequest{}, cfg)
 	require.NoError(t, err)
 
@@ -344,7 +344,7 @@ func TestOpenAICompatibleClient_Chat_EmptyChoices(t *testing.T) {
 	defer server.Close()
 
 	client := NewOpenAICompatibleClient()
-	cfg := ProviderConfig{APIHost: server.URL, ModelID: "m"}
+	cfg := models.ProviderConfig{APIHost: server.URL, ModelID: "m"}
 	ch, err := client.Chat(context.Background(), ChatRequest{}, cfg)
 	require.NoError(t, err)
 
@@ -370,7 +370,7 @@ func TestOpenAICompatibleClient_Chat_RequestTemperatureOverride(t *testing.T) {
 	defer server.Close()
 
 	client := NewOpenAICompatibleClient()
-	cfg := ProviderConfig{APIHost: server.URL, ModelID: "m", Temperature: 0.5}
+	cfg := models.ProviderConfig{APIHost: server.URL, ModelID: "m", Temperature: 0.5}
 	ch, err := client.Chat(context.Background(), ChatRequest{Temperature: 1.2}, cfg)
 	require.NoError(t, err)
 	for range ch {
@@ -396,7 +396,7 @@ func TestOpenAICompatibleClient_FetchModels_Success(t *testing.T) {
 	defer server.Close()
 
 	client := NewOpenAICompatibleClient()
-	cfg := ProviderConfig{APIHost: server.URL, APIKey: "test-key"}
+	cfg := models.ProviderConfig{APIHost: server.URL, APIKey: "test-key"}
 	models, err := client.FetchModels(context.Background(), cfg)
 	require.NoError(t, err)
 	require.Len(t, models, 2)
@@ -412,7 +412,7 @@ func TestOpenAICompatibleClient_FetchModels_Unauthorized(t *testing.T) {
 	defer server.Close()
 
 	client := NewOpenAICompatibleClient()
-	cfg := ProviderConfig{APIHost: server.URL, APIKey: "bad-key"}
+	cfg := models.ProviderConfig{APIHost: server.URL, APIKey: "bad-key"}
 	_, err := client.FetchModels(context.Background(), cfg)
 
 	require.Error(t, err)
@@ -425,7 +425,7 @@ func TestOpenAICompatibleClient_FetchModels_Unauthorized(t *testing.T) {
 // TestOpenAICompatibleClient_FetchModels_NetworkError 验证网络错误返回 Retryable 错误。
 func TestOpenAICompatibleClient_FetchModels_NetworkError(t *testing.T) {
 	client := NewOpenAICompatibleClient()
-	cfg := ProviderConfig{
+	cfg := models.ProviderConfig{
 		APIHost: "http://127.0.0.1:1",
 		APIKey:  "key",
 		Timeout: 50 * time.Millisecond,
@@ -442,7 +442,7 @@ func TestOpenAICompatibleClient_FetchModels_NetworkError(t *testing.T) {
 // TestOpenAICompatibleClient_FetchModels_MissingAPIHost 验证 APIHost 为空时返回错误。
 func TestOpenAICompatibleClient_FetchModels_MissingAPIHost(t *testing.T) {
 	client := NewOpenAICompatibleClient()
-	_, err := client.FetchModels(context.Background(), ProviderConfig{})
+	_, err := client.FetchModels(context.Background(), models.ProviderConfig{})
 	require.Error(t, err)
 	llmErr, ok := err.(*LLMError)
 	require.True(t, ok)
@@ -459,7 +459,7 @@ func TestOpenAICompatibleClient_FetchModels_EmptyList(t *testing.T) {
 	defer server.Close()
 
 	client := NewOpenAICompatibleClient()
-	models, err := client.FetchModels(context.Background(), ProviderConfig{APIHost: server.URL})
+	models, err := client.FetchModels(context.Background(), models.ProviderConfig{APIHost: server.URL})
 	require.NoError(t, err)
 	assert.Empty(t, models)
 }
@@ -473,7 +473,7 @@ func TestOpenAICompatibleClient_Chat_500Retryable(t *testing.T) {
 	defer server.Close()
 
 	client := NewOpenAICompatibleClient()
-	cfg := ProviderConfig{APIHost: server.URL, ModelID: "m"}
+	cfg := models.ProviderConfig{APIHost: server.URL, ModelID: "m"}
 	_, err := client.Chat(context.Background(), ChatRequest{}, cfg)
 
 	require.Error(t, err)
@@ -491,7 +491,7 @@ func TestOpenAICompatibleClient_Chat_429RateLimit(t *testing.T) {
 	defer server.Close()
 
 	client := NewOpenAICompatibleClient()
-	cfg := ProviderConfig{APIHost: server.URL, ModelID: "m"}
+	cfg := models.ProviderConfig{APIHost: server.URL, ModelID: "m"}
 	_, err := client.Chat(context.Background(), ChatRequest{}, cfg)
 
 	require.Error(t, err)
@@ -512,7 +512,7 @@ func TestOpenAICompatibleClient_Chat_FinishReasonStop(t *testing.T) {
 	defer server.Close()
 
 	client := NewOpenAICompatibleClient()
-	cfg := ProviderConfig{APIHost: server.URL, ModelID: "m"}
+	cfg := models.ProviderConfig{APIHost: server.URL, ModelID: "m"}
 	ch, err := client.Chat(context.Background(), ChatRequest{}, cfg)
 	require.NoError(t, err)
 
@@ -535,7 +535,7 @@ func TestOpenAICompatibleClient_Chat_SSEErrorEvent(t *testing.T) {
 	defer server.Close()
 
 	client := NewOpenAICompatibleClient()
-	cfg := ProviderConfig{APIHost: server.URL, ModelID: "m"}
+	cfg := models.ProviderConfig{APIHost: server.URL, ModelID: "m"}
 	ch, err := client.Chat(context.Background(), ChatRequest{}, cfg)
 	require.NoError(t, err)
 
