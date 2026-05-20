@@ -46,4 +46,6 @@ export interface ProviderConfig {
   createdAt: number
   /** 更新时间戳 */
   updatedAt: number
+  /** 标记 API Key 是否需补全（导入时留空则标记） */
+  needsApiKey?: boolean
 }

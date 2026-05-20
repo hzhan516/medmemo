@@ -11,12 +11,13 @@ import {
   ProviderCustomDialog,
   ProviderGroupList,
   DeleteConfirmDialog,
+  ProviderImportExport,
 } from '@/components/provider'
 import type { ProviderTemplate, ProviderConfig } from '@/types/provider'
 import {
   Monitor, Moon, Sun, Check, Bell, BellDot, BellOff,
   RefreshCw, Shield, FlaskConical, ShieldCheck, ShieldOff,
-  Eye, Trash2, RotateCcw, Plus,
+  Eye, Trash2, RotateCcw, Plus, FileJson,
 } from 'lucide-react'
 
 /**
@@ -52,6 +53,9 @@ export function SettingsPage() {
   // 删除确认弹窗状态
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deletingProvider, setDeletingProvider] = useState<ProviderConfig | null>(null)
+
+  // 导入导出弹窗状态
+  const [importExportOpen, setImportExportOpen] = useState(false)
 
   const providers = useProviderStore((s) => s.providers)
   const addProvider = useProviderStore((s) => s.addProvider)
@@ -277,14 +281,24 @@ export function SettingsPage() {
             <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
               模型提供商
             </h2>
-            <button
-              onClick={handleOpenCustomDialog}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border border-border hover:bg-accent transition-colors"
-              data-testid="add-custom-provider-btn"
-            >
-              <Plus className="w-3 h-3" />
-              自定义
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setImportExportOpen(true)}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border border-border hover:bg-accent transition-colors"
+                data-testid="import-export-btn"
+              >
+                <FileJson className="w-3 h-3" />
+                导入 / 导出
+              </button>
+              <button
+                onClick={handleOpenCustomDialog}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border border-border hover:bg-accent transition-colors"
+                data-testid="add-custom-provider-btn"
+              >
+                <Plus className="w-3 h-3" />
+                自定义
+              </button>
+            </div>
           </div>
 
           {/* 已添加的 Provider 列表（按分组折叠） */}
@@ -596,6 +610,12 @@ export function SettingsPage() {
         open={deleteDialogOpen}
         onClose={() => setDeleteDialogOpen(false)}
         onConfirm={handleConfirmDelete}
+      />
+
+      {/* 导入导出弹窗 */}
+      <ProviderImportExport
+        open={importExportOpen}
+        onClose={() => setImportExportOpen(false)}
       />
     </div>
   )

@@ -2,6 +2,15 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { ProviderConfig } from '@/types/provider'
 
+export type ImportMode = 'merge' | 'overwrite'
+
+export interface ImportResult {
+  added: number
+  skipped: number
+  replaced: number
+  errors: string[]
+}
+
 interface ProviderState {
   providers: ProviderConfig[]
 
@@ -11,6 +20,8 @@ interface ProviderState {
   getProviderById: (id: string) => ProviderConfig | undefined
   getEnabledProviders: () => ProviderConfig[]
   hasProvider: (templateId: string) => boolean
+  importProviders: (configs: Omit<ProviderConfig, 'id' | 'createdAt' | 'updatedAt'>[], mode: ImportMode) => ImportResult
+  replaceAllProviders: (configs: Omit<ProviderConfig, 'id' | 'createdAt' | 'updatedAt'>[]) => ImportResult
 }
 
 function generateId(templateId: string): string {
@@ -60,6 +71,71 @@ export const useProviderStore = create<ProviderState>()(
 
       hasProvider: (templateId) => {
         return get().providers.some((p) => p.templateId === templateId)
+      },
+
+      importProviders: (configs, mode) => {
+        const result: ImportResult = { added: 0, skipped: 0, replaced: 0, errors: [] }
+        if (mode === 'overwrite') {
+          set({ providers: [] })
+        }
+        const existing = get().providers
+        const toAdd: ProviderConfig[] = []
+
+        for (let i = 0; i < configs.length; i++) {
+          const cfg = configs[i]
+          if (!cfg.name || !cfg.apiHost || !cfg.modelId) {
+            result.errors.push(`第 ${i + 1} 条记录缺少必填字段（name/apiHost/modelId）`)
+            continue
+          }
+          if (mode === 'merge') {
+            const dupIndex = existing.findIndex((p) => p.name === cfg.name)
+            if (dupIndex >= 0) {
+              // 合并模式下同名冲突：直接跳过，记录为 skipped
+              result.skipped++
+              continue
+            }
+          }
+          const now = Date.now()
+          const newProvider: ProviderConfig = {
+            ...cfg,
+            id: generateId(cfg.templateId || 'custom'),
+            createdAt: now,
+            updatedAt: now,
+            needsApiKey: !cfg.apiKey || cfg.apiKey === '',
+          }
+          toAdd.push(newProvider)
+          result.added++
+        }
+
+        set((state) => ({
+          providers: [...state.providers, ...toAdd],
+        }))
+        return result
+      },
+
+      replaceAllProviders: (configs) => {
+        const result: ImportResult = { added: 0, skipped: 0, replaced: 0, errors: [] }
+        const toAdd: ProviderConfig[] = []
+
+        for (let i = 0; i < configs.length; i++) {
+          const cfg = configs[i]
+          if (!cfg.name || !cfg.apiHost || !cfg.modelId) {
+            result.errors.push(`第 ${i + 1} 条记录缺少必填字段（name/apiHost/modelId）`)
+            continue
+          }
+          const now = Date.now()
+          toAdd.push({
+            ...cfg,
+            id: generateId(cfg.templateId || 'custom'),
+            createdAt: now,
+            updatedAt: now,
+            needsApiKey: !cfg.apiKey || cfg.apiKey === '',
+          })
+          result.added++
+        }
+
+        set({ providers: toAdd })
+        return result
       },
     }),
     {
