@@ -159,3 +159,21 @@ export function PullOllamaModel(arg1: string): Promise<void>;
 export function EnsureOllamaAndSmolLM2(): Promise<OllamaDetectResult>;
 
 export function CreateOllamaProvider(): Promise<ProviderConfig>;
+
+export interface AuthMethodDetectStatus {
+  method: string;
+  available: boolean;
+  connected: boolean;
+  tier: number;
+  provider_type?: string;
+  detail?: string;
+  error?: string;
+}
+
+export interface AuthDetectResult {
+  results: Array<AuthMethodDetectStatus>;
+  recommended: string;
+  all_unavailable: boolean;
+}
+
+export function DetectAuthMethods(): Promise<AuthDetectResult>;

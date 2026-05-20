@@ -1227,3 +1227,281 @@ func (a *WailsApp) CreateOllamaProvider() (*models.ProviderConfig, error) {
 
 	return cfg, nil
 }
+
+// --- 认证方式智能检测 ---
+
+// AuthMethodDetectStatus 表示单种认证方式的检测结果。
+type AuthMethodDetectStatus struct {
+	Method       string `json:"method"`                  // "cli_token" | "oauth_device" | "api_key" | "local"
+	Available    bool   `json:"available"`               // 该方式是否可用
+	Connected    bool   `json:"connected"`               // 是否已连接/认证成功
+	Tier         int    `json:"tier"`                    // 1-4
+	ProviderType string `json:"provider_type,omitempty"` // 检测到的厂商类型
+	Detail       string `json:"detail,omitempty"`        // 状态描述文本
+	Error        string `json:"error,omitempty"`         // 不可用原因
+}
+
+// AuthDetectResult 认证方式统一检测结果。
+type AuthDetectResult struct {
+	Results        []AuthMethodDetectStatus `json:"results"`
+	Recommended    string                   `json:"recommended"`     // 推荐的方法
+	AllUnavailable bool                     `json:"all_unavailable"` // 是否全部不可用
+}
+
+// DetectAuthMethods 并行检测四种认证方式，2 秒内返回统一结果。
+// 按 Tier 优先级推荐最佳方式（Tier 1 CLI Token 优先）。
+func (a *WailsApp) DetectAuthMethods() (*AuthDetectResult, error) {
+	ctx, cancel := context.WithTimeout(a.ctx, 2*time.Second)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	results := make([]AuthMethodDetectStatus, 0, 4)
+	var mu sync.Mutex
+
+	// Tier 1: CLI Token（kimi / gemini）
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		status := AuthMethodDetectStatus{
+			Method: "cli_token",
+			Tier:   1,
+		}
+
+		svc := auth.NewCLITokenService()
+		// 优先检测 Kimi CLI
+		kimiResult, err := svc.Detect("kimi")
+		if err == nil && kimiResult.Detected && kimiResult.LoggedIn {
+			status.Available = true
+			status.Connected = true
+			status.ProviderType = "kimi"
+			status.Detail = fmt.Sprintf("已检测到 %s CLI，已登录", kimiResult.ProviderType)
+			mu.Lock()
+			results = append(results, status)
+			mu.Unlock()
+			return
+		}
+		if err == nil && kimiResult.Detected {
+			status.Available = true
+			status.ProviderType = "kimi"
+			status.Detail = fmt.Sprintf("已检测到 %s CLI，未登录", kimiResult.ProviderType)
+			status.Error = "请执行 kimi login 登录"
+			mu.Lock()
+			results = append(results, status)
+			mu.Unlock()
+			return
+		}
+
+		// 降级检测 Gemini CLI
+		geminiResult, err := svc.Detect("gemini")
+		if err == nil && geminiResult.Detected && geminiResult.LoggedIn {
+			status.Available = true
+			status.Connected = true
+			status.ProviderType = "gemini"
+			status.Detail = fmt.Sprintf("已检测到 %s CLI，已登录", geminiResult.ProviderType)
+			mu.Lock()
+			results = append(results, status)
+			mu.Unlock()
+			return
+		}
+		if err == nil && geminiResult.Detected {
+			status.Available = true
+			status.ProviderType = "gemini"
+			status.Detail = fmt.Sprintf("已检测到 %s CLI，未登录", geminiResult.ProviderType)
+			status.Error = "请执行 gcloud auth login 登录"
+			mu.Lock()
+			results = append(results, status)
+			mu.Unlock()
+			return
+		}
+
+		status.Detail = "未检测到 Kimi 或 Gemini CLI 工具"
+		status.Error = "未安装 CLI 工具"
+		mu.Lock()
+		results = append(results, status)
+		mu.Unlock()
+	}()
+
+	// Tier 2: OAuth Device Flow
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		status := AuthMethodDetectStatus{
+			Method: "oauth_device",
+			Tier:   2,
+		}
+
+		if a.deviceFlowSvc == nil {
+			status.Detail = "OAuth Device Flow 服务未初始化"
+			status.Error = "服务不可用"
+			mu.Lock()
+			results = append(results, status)
+			mu.Unlock()
+			return
+		}
+
+		// OAuth Device Flow 服务已初始化即视为可用
+		// 实际是否已授权需通过 ListProviders 检查是否有 oauth_device 类型的 provider
+		status.Available = true
+		status.Detail = "支持 OAuth Device Flow 授权"
+
+		// 检查是否已有 oauth_device 类型的 provider
+		providers, err := a.providerStore.List(ctx)
+		if err == nil {
+			for _, p := range providers {
+				if p.AuthMethod == models.AuthMethodOAuthDevice {
+					status.Connected = true
+					status.ProviderType = string(p.ModelID)
+					status.Detail = fmt.Sprintf("已配置 OAuth Device Flow（%s）", p.Name)
+					break
+				}
+			}
+		}
+
+		mu.Lock()
+		results = append(results, status)
+		mu.Unlock()
+	}()
+
+	// Tier 3: API Key
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		status := AuthMethodDetectStatus{
+			Method: "api_key",
+			Tier:   3,
+		}
+
+		// API Key 方式始终可用（用户可手动输入）
+		status.Available = true
+		status.Detail = "可手动输入 API Key"
+
+		// 检查是否已有 API Key 配置
+		providers := []string{"kimi", "openai", "deepseek", "claude", "qwen"}
+		for _, provider := range providers {
+			key := fmt.Sprintf("apikey:%s", provider)
+			_, err := a.secretStore.Get(key)
+			if err == nil {
+				status.Connected = true
+				status.ProviderType = provider
+				status.Detail = fmt.Sprintf("已配置 %s 的 API Key", provider)
+				break
+			}
+		}
+
+		mu.Lock()
+		results = append(results, status)
+		mu.Unlock()
+	}()
+
+	// Tier 4: Local Model (Ollama)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		status := AuthMethodDetectStatus{
+			Method: "local",
+			Tier:   4,
+		}
+
+		detector := ai.NewOllamaDetector()
+		d := detector.Detect()
+
+		if !d.Installed {
+			status.Detail = "未检测到 Ollama"
+			status.Error = "Ollama 未安装"
+			mu.Lock()
+			results = append(results, status)
+			mu.Unlock()
+			return
+		}
+
+		status.Available = true
+		if d.Running && d.HasSmolLM2 {
+			status.Connected = true
+			status.Detail = "Ollama 运行中，SmolLM2 已就绪"
+		} else if d.Running {
+			status.Detail = "Ollama 运行中，SmolLM2 未下载"
+			status.Error = "模型未下载"
+		} else {
+			status.Detail = "Ollama 已安装，服务未运行"
+			status.Error = "服务未运行"
+		}
+
+		mu.Lock()
+		results = append(results, status)
+		mu.Unlock()
+	}()
+
+	// 等待所有检测完成或超时
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// 全部完成
+	case <-ctx.Done():
+		// 超时，使用已有结果
+	}
+
+	// 按 Tier 排序
+	for i := range results {
+		if results[i].Method == "" {
+			results[i].Method = methodFromTier(results[i].Tier)
+		}
+	}
+
+	// 计算推荐：按 Tier 顺序找第一个 available && connected 的
+	recommended := ""
+	allUnavailable := true
+	for tier := 1; tier <= 4; tier++ {
+		for _, r := range results {
+			if r.Tier == tier {
+				if r.Available {
+					allUnavailable = false
+				}
+				if r.Available && r.Connected && recommended == "" {
+					recommended = r.Method
+				}
+			}
+		}
+	}
+
+	// 如果没有已连接的，推荐第一个 available 的
+	if recommended == "" && !allUnavailable {
+		for tier := 1; tier <= 4; tier++ {
+			for _, r := range results {
+				if r.Tier == tier && r.Available && recommended == "" {
+					recommended = r.Method
+				}
+			}
+		}
+	}
+
+	// 全部不可用时兜底推荐 local
+	if recommended == "" {
+		recommended = "local"
+	}
+
+	return &AuthDetectResult{
+		Results:        results,
+		Recommended:    recommended,
+		AllUnavailable: allUnavailable,
+	}, nil
+}
+
+func methodFromTier(tier int) string {
+	switch tier {
+	case 1:
+		return "cli_token"
+	case 2:
+		return "oauth_device"
+	case 3:
+		return "api_key"
+	case 4:
+		return "local"
+	default:
+		return ""
+	}
+}

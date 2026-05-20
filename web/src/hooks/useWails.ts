@@ -12,7 +12,8 @@ import type {
   UpdateSettingsResponse,
 } from '@wails/go/main/WailsApp'
 
-import { SaveAPIKey, HasAPIKey, GetVersion } from '@wails/go/main/WailsApp'
+import { SaveAPIKey, HasAPIKey, GetVersion, DetectAuthMethods } from '@wails/go/main/WailsApp'
+import type { AuthDetectResult } from '@wails/go/main/WailsApp'
 
 /**
  * Wails 后端绑定方法封装 Hook。
@@ -113,6 +114,10 @@ export function useWails() {
     return await GetVersion()
   }, [])
 
+  const detectAuthMethods = useCallback(async (): Promise<AuthDetectResult> => {
+    return await DetectAuthMethods()
+  }, [])
+
   return {
     sendMessage,
     sendMessageStream,
@@ -136,5 +141,6 @@ export function useWails() {
     saveAPIKey,
     hasAPIKey,
     getVersion,
+    detectAuthMethods,
   }
 }

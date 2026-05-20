@@ -13,6 +13,8 @@ import {
   DeleteConfirmDialog,
   ProviderImportExport,
 } from '@/components/provider'
+import { AuthSelector } from '@/components/auth/AuthSelector'
+import { useAuth } from '@/hooks/useAuth'
 import type { ProviderTemplate, ProviderConfig, AuthMethod, AuthParams } from '@/types/provider'
 import {
   Monitor, Moon, Sun, Check, Bell, BellDot, BellOff,
@@ -63,6 +65,8 @@ export function SettingsPage() {
   const removeProvider = useProviderStore((s) => s.removeProvider)
   const hasProvider = useProviderStore((s) => s.hasProvider)
   const { saveAPIKey } = useWails()
+  const auth = useAuth()
+  const [showAuthSelector, setShowAuthSelector] = useState(false)
 
   // 已有分组列表
   const existingGroups = useMemo(() => {
@@ -275,6 +279,69 @@ export function SettingsPage() {
               )
             })}
           </div>
+        </section>
+
+        {/* 认证方式 */}
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+              认证方式
+            </h2>
+            <button
+              onClick={() => setShowAuthSelector(!showAuthSelector)}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border border-border hover:bg-accent transition-colors"
+            >
+              <Shield className="w-3 h-3" />
+              {showAuthSelector ? '收起' : '配置'}
+            </button>
+          </div>
+          {showAuthSelector && (
+            <AuthSelector
+              result={auth.result}
+              detecting={auth.detecting}
+              error={auth.error}
+              expandedPanel={auth.expandedPanel}
+              ollamaPulling={auth.ollamaPulling}
+              ollamaPullProgress={auth.ollamaPullProgress}
+              ollamaServerStarting={auth.ollamaServerStarting}
+              onDetect={auth.detect}
+              onSelectMethod={auth.selectMethod}
+              onProviderCreated={addProvider}
+            />
+          )}
+          {!showAuthSelector && auth.result && (
+            <div className="flex flex-wrap gap-2">
+              {auth.result.results.map((r) => (
+                <div
+                  key={r.method}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border ${
+                    r.connected
+                      ? 'bg-green-500/5 border-green-500/20 text-green-700'
+                      : r.available
+                        ? 'bg-amber-500/5 border-amber-500/20 text-amber-700'
+                        : 'bg-muted border-border text-muted-foreground'
+                  }`}
+                >
+                  {r.connected ? (
+                    <Check className="w-3 h-3" />
+                  ) : r.available ? (
+                    <Shield className="w-3 h-3" />
+                  ) : (
+                    <ShieldOff className="w-3 h-3" />
+                  )}
+                  {r.method === 'cli_token' && 'CLI'}
+                  {r.method === 'oauth_device' && 'OAuth'}
+                  {r.method === 'api_key' && 'API Key'}
+                  {r.method === 'local' && '本地'}
+                </div>
+              ))}
+            </div>
+          )}
+          {!showAuthSelector && !auth.result && !auth.detecting && (
+            <p className="text-xs text-muted-foreground">
+              点击「配置」检测并设置认证方式
+            </p>
+          )}
         </section>
 
         {/* 模型提供商 */}

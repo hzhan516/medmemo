@@ -47,8 +47,11 @@ export function OnboardingWizard({ onClose }: OnboardingWizardProps) {
   }, [onboarding])
 
   const handleModelComplete = useCallback(
-    async (model: string, apiKey: string) => {
-      await onboarding.saveModelConfig(model, apiKey)
+    async (providers: import('@/types/provider').ProviderConfig[]) => {
+      // 将创建的 Provider 添加到 store
+      for (const provider of providers) {
+        await onboarding.saveModelConfig(provider.modelId, provider.apiKey)
+      }
       onboarding.complete()
       onClose()
     },
@@ -98,7 +101,6 @@ export function OnboardingWizard({ onClose }: OnboardingWizardProps) {
           )}
           {onboarding.currentStep === 3 && (
             <ModelConfigStep
-              initialModel={settings.selectedModel}
               onComplete={handleModelComplete}
               onBack={handleModelBack}
               onSkipAPIKey={handleSkipAPIKey}

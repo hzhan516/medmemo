@@ -144,3 +144,7 @@ export function EnsureOllamaAndSmolLM2() {
 export function CreateOllamaProvider() {
   return window['go']['main']['WailsApp']['CreateOllamaProvider']();
 }
+
+export function DetectAuthMethods() {
+  return window['go']['main']['WailsApp']['DetectAuthMethods']();
+}

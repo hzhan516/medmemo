@@ -121,13 +121,45 @@ export interface OllamaDetectResult {
   /** 11434 端口是否响应 */
   running: boolean
   /** smollm2:135m 模型是否已下载 */
-  hasSmolLM2: boolean
+  has_smollm2: boolean
   /** 未安装时返回的安装引导文本 */
-  installGuide?: string
+  install_guide?: string
   /** 正在后台启动服务 */
-  serverStarting?: boolean
+  server_starting?: boolean
   /** 模型下载进度文本 */
-  pullProgress?: string
+  pull_progress?: string
+}
+
+/**
+ * 单种认证方式的检测结果，对应后端 AuthMethodDetectStatus。
+ */
+export interface AuthMethodDetectStatus {
+  /** 认证方式：cli_token | oauth_device | api_key | local */
+  method: string
+  /** 该方式是否可用 */
+  available: boolean
+  /** 是否已连接/认证成功 */
+  connected: boolean
+  /** Tier 优先级 1-4 */
+  tier: number
+  /** 检测到的厂商类型 */
+  provider_type?: string
+  /** 状态描述文本 */
+  detail?: string
+  /** 不可用原因 */
+  error?: string
+}
+
+/**
+ * 认证方式统一检测结果，对应后端 AuthDetectResult。
+ */
+export interface AuthDetectResult {
+  /** 各认证方式检测状态列表 */
+  results: AuthMethodDetectStatus[]
+  /** 推荐的方法 */
+  recommended: string
+  /** 是否全部不可用 */
+  all_unavailable: boolean
 }
 
 /**

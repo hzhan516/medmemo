@@ -203,6 +203,109 @@ const defaultGetVersion = async (): Promise<string> => {
   return '0.5.0-test'
 }
 
+const defaultDetectAuthMethods = async (): Promise<any> => {
+  return {
+    results: [
+      { method: 'cli_token', available: false, connected: false, tier: 1, detail: '未检测到 CLI 工具' },
+      { method: 'oauth_device', available: true, connected: false, tier: 2, detail: '支持 OAuth Device Flow' },
+      { method: 'api_key', available: true, connected: false, tier: 3, detail: '可手动输入 API Key' },
+      { method: 'local', available: false, connected: false, tier: 4, detail: '未检测到 Ollama' },
+    ],
+    recommended: 'oauth_device',
+    all_unavailable: false,
+  }
+}
+
+const defaultDetectCLIToken = async (_providerType: string): Promise<any> => {
+  return {
+    provider_type: _providerType,
+    detected: false,
+    credential_path: '',
+    logged_in: false,
+  }
+}
+
+const defaultBuildCLIProvider = async (_providerType: string, _modelID: string): Promise<any> => {
+  return {
+    id: `${_providerType}_cli_${Date.now()}`,
+    templateId: _providerType,
+    name: `${_providerType} (CLI)`,
+    apiHost: _providerType === 'kimi' ? 'https://api.moonshot.cn' : 'https://generativelanguage.googleapis.com',
+    apiKey: '',
+    modelId: _modelID,
+    temperature: 0.7,
+    timeoutMs: 30000,
+    maxRetries: 3,
+    group: 'CLI',
+    enabled: true,
+    sortOrder: 0,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    authMethod: 'cli_token',
+    authParams: {},
+  }
+}
+
+const defaultStartOAuthDeviceFlow = async (_providerType: string): Promise<any> => {
+  return {
+    user_code: 'ABCD-EFGH',
+    verification_uri: 'https://platform.moonshot.cn/device',
+    device_code: 'mock-device-code',
+    expires_in: 600,
+    interval: 5,
+  }
+}
+
+const defaultCancelOAuthDeviceFlow = async (_deviceCode: string): Promise<void> => {}
+
+const defaultGetOAuthDeviceFlowStatus = async (_deviceCode: string): Promise<any> => {
+  return {
+    device_code: _deviceCode,
+    provider_type: 'kimi',
+    status: 'pending',
+  }
+}
+
+const defaultDetectOllama = async (): Promise<any> => {
+  return {
+    installed: false,
+    running: false,
+    has_smollm2: false,
+    install_guide: 'curl -fsSL https://ollama.com/install.sh | sh',
+  }
+}
+
+const defaultStartOllamaServer = async (): Promise<void> => {}
+const defaultPullOllamaModel = async (_modelName: string): Promise<void> => {}
+const defaultEnsureOllamaAndSmolLM2 = async (): Promise<any> => {
+  return {
+    installed: false,
+    running: false,
+    has_smollm2: false,
+    install_guide: 'curl -fsSL https://ollama.com/install.sh | sh',
+  }
+}
+const defaultCreateOllamaProvider = async (): Promise<any> => {
+  return {
+    id: `ollama_local_${Date.now()}`,
+    templateId: 'ollama',
+    name: 'Ollama (本地)',
+    apiHost: 'http://localhost:11434',
+    apiKey: '',
+    modelId: 'smollm2:135m',
+    temperature: 0.7,
+    timeoutMs: 30000,
+    maxRetries: 3,
+    group: '本地',
+    enabled: true,
+    sortOrder: 0,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    authMethod: 'api_key',
+    authParams: {},
+  }
+}
+
 // --- window.go.main.WailsApp 聚合对象 ---
 
 export const MockWailsApp = {
@@ -229,6 +332,17 @@ export const MockWailsApp = {
   SaveAPIKey: (provider: string, apiKey: string) => resolveHandler('SaveAPIKey', defaultSaveAPIKey)(provider, apiKey),
   HasAPIKey: (provider: string) => resolveHandler('HasAPIKey', defaultHasAPIKey)(provider),
   GetVersion: () => resolveHandler('GetVersion', defaultGetVersion)(),
+  DetectAuthMethods: () => resolveHandler('DetectAuthMethods', defaultDetectAuthMethods)(),
+  DetectCLIToken: (providerType: string) => resolveHandler('DetectCLIToken', defaultDetectCLIToken)(providerType),
+  BuildCLIProvider: (providerType: string, modelID: string) => resolveHandler('BuildCLIProvider', defaultBuildCLIProvider)(providerType, modelID),
+  StartOAuthDeviceFlow: (providerType: string) => resolveHandler('StartOAuthDeviceFlow', defaultStartOAuthDeviceFlow)(providerType),
+  CancelOAuthDeviceFlow: (deviceCode: string) => resolveHandler('CancelOAuthDeviceFlow', defaultCancelOAuthDeviceFlow)(deviceCode),
+  GetOAuthDeviceFlowStatus: (deviceCode: string) => resolveHandler('GetOAuthDeviceFlowStatus', defaultGetOAuthDeviceFlowStatus)(deviceCode),
+  DetectOllama: () => resolveHandler('DetectOllama', defaultDetectOllama)(),
+  StartOllamaServer: () => resolveHandler('StartOllamaServer', defaultStartOllamaServer)(),
+  PullOllamaModel: (modelName: string) => resolveHandler('PullOllamaModel', defaultPullOllamaModel)(modelName),
+  EnsureOllamaAndSmolLM2: () => resolveHandler('EnsureOllamaAndSmolLM2', defaultEnsureOllamaAndSmolLM2)(),
+  CreateOllamaProvider: () => resolveHandler('CreateOllamaProvider', defaultCreateOllamaProvider)(),
 }
 
 // --- 辅助工具函数 ---
