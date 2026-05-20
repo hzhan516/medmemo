@@ -6,6 +6,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"strconv"
 	"sync"
 	"time"
@@ -705,6 +708,101 @@ func (a *WailsApp) HasAPIKey(provider string) (bool, error) {
 		return false, nil
 	}
 	return true, nil
+}
+
+// TestAPIKeyResult 表示 API Key 验证结果。
+type TestAPIKeyResult struct {
+	Valid   bool     `json:"valid"`
+	Message string   `json:"message"`
+	Models  []string `json:"models,omitempty"`
+}
+
+// defaultAPIHosts 定义各厂商的默认 API 主机地址。
+var defaultAPIHosts = map[string]string{
+	"openai":   "https://api.openai.com",
+	"kimi":     "https://api.moonshot.cn",
+	"deepseek": "https://api.deepseek.com",
+	"claude":   "https://api.anthropic.com",
+	"gemini":   "https://generativelanguage.googleapis.com/v1beta/openai",
+}
+
+// TestAPIKey 验证指定厂商的 API Key 是否有效。
+// 通过调用厂商的 /v1/models 接口（Gemini 使用原生 API）进行连通性验证。
+func (a *WailsApp) TestAPIKey(providerType string, apiKey string, apiHost string) (*TestAPIKeyResult, error) {
+	if providerType == "" {
+		return nil, fmt.Errorf("provider type cannot be empty")
+	}
+	if apiKey == "" {
+		return nil, fmt.Errorf("api key cannot be empty")
+	}
+
+	if apiHost == "" {
+		if h, ok := defaultAPIHosts[providerType]; ok {
+			apiHost = h
+		} else {
+			return nil, fmt.Errorf("unknown provider type: %s", providerType)
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+
+	// Gemini 使用原生 API 验证
+	if providerType == "gemini" {
+		return a.testGeminiAPIKey(ctx, apiKey)
+	}
+
+	// 其他厂商使用 OpenAI 兼容格式 /v1/models
+	adapter := ai.NewOpenAIAdapter(apiKey, apiHost, "")
+	ok, msg := adapter.CheckAvailability(ctx)
+	if ok {
+		return &TestAPIKeyResult{
+			Valid:   true,
+			Message: "API Key 验证通过，可正常使用",
+		}, nil
+	}
+	return &TestAPIKeyResult{
+		Valid:   false,
+		Message: msg,
+	}, nil
+}
+
+// testGeminiAPIKey 使用 Gemini 原生 API 验证 Key 有效性。
+func (a *WailsApp) testGeminiAPIKey(ctx context.Context, apiKey string) (*TestAPIKeyResult, error) {
+	reqURL := "https://generativelanguage.googleapis.com/v1beta/models?key=" + url.QueryEscape(apiKey)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create gemini test request: %w", err)
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return &TestAPIKeyResult{
+			Valid:   false,
+			Message: fmt.Sprintf("连接失败: %v", err),
+		}, nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		return &TestAPIKeyResult{
+			Valid:   true,
+			Message: "API Key 验证通过，可正常使用",
+		}, nil
+	}
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		return &TestAPIKeyResult{
+			Valid:   false,
+			Message: "API Key 无效或权限不足",
+		}, nil
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	return &TestAPIKeyResult{
+		Valid:   false,
+		Message: fmt.Sprintf("验证失败，HTTP %d: %s", resp.StatusCode, string(body)),
+	}, nil
 }
 
 // GetVersion 返回当前应用版本号（构建时通过 -ldflags 注入）。

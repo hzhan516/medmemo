@@ -1,7 +1,9 @@
-import { useState, useCallback } from 'react'
-import { KeyRound, Eye, EyeOff, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
-import { SaveAPIKey } from '@wails/go/main/WailsApp'
+import { useState, useCallback, useEffect } from 'react'
+import { KeyRound, Eye, EyeOff, CheckCircle2, XCircle, Loader2, AlertTriangle } from 'lucide-react'
+import { SaveAPIKey, TestAPIKey } from '@wails/go/main/WailsApp'
+import { BrowserOpenURL } from '@wails/runtime'
 import type { AuthMethodDetectStatus, ProviderConfig } from '@/types/provider'
+import { APIKeyGuide } from './APIKeyGuide'
 
 interface APIKeyPanelProps {
   status: AuthMethodDetectStatus | undefined
@@ -13,33 +15,80 @@ const providers = [
   { id: 'kimi', name: 'Kimi (Moonshot)', host: 'https://api.moonshot.cn', model: 'moonshot-v1-8k' },
   { id: 'deepseek', name: 'DeepSeek', host: 'https://api.deepseek.com', model: 'deepseek-chat' },
   { id: 'claude', name: 'Claude', host: 'https://api.anthropic.com', model: 'claude-3-5-sonnet' },
-  { id: 'qwen', name: '通义千问', host: 'https://dashscope.aliyuncs.com', model: 'qwen-turbo' },
+  { id: 'gemini', name: 'Gemini', host: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-1.5-flash' },
 ]
 
 const keyPrefixPatterns: Record<string, RegExp> = {
-  openai: /^sk-/,
-  kimi: /^sk-/,
-  deepseek: /^sk-/,
-  claude: /^sk-ant-/,
-  qwen: /^sk-/,
+  openai: /^sk-(proj-)?[A-Za-z0-9]{20,}$/,
+  kimi: /^sk-[a-f0-9]{48}$/,
+  deepseek: /^sk-[a-f0-9]{32}$/,
+  claude: /^sk-ant-[a-zA-Z0-9]{32,}$/,
+  gemini: /^AIza[A-Za-z0-9_-]{35,}$/,
+}
+
+const clipboardKeyPatterns: Record<string, RegExp> = {
+  openai: /^sk-(proj-)?[A-Za-z0-9]{20,}$/,
+  kimi: /^sk-[a-f0-9]{48}$/,
+  deepseek: /^sk-[a-f0-9]{32}$/,
+  claude: /^sk-ant-[a-zA-Z0-9]{32,}$/,
+  gemini: /^AIza[A-Za-z0-9_-]{35,}$/,
 }
 
 /**
  * API Key 配置面板。
- * 输入 API Key、厂商选择、格式校验、保存到密钥环保管。
+ * 输入 API Key、厂商选择、格式校验、获取引导、智能粘贴、连通性验证、保存到密钥环保管。
  */
 export function APIKeyPanel({ status, onProviderCreated }: APIKeyPanelProps) {
   const [selectedProvider, setSelectedProvider] = useState('kimi')
   const [apiKey, setApiKey] = useState('')
   const [showKey, setShowKey] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<{ valid: boolean; message: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [pasteHint, setPasteHint] = useState<string | null>(null)
 
   const provider = providers.find((p) => p.id === selectedProvider)!
   const prefixValid = apiKey ? (keyPrefixPatterns[selectedProvider]?.test(apiKey) ?? true) : true
   const lengthValid = apiKey.length >= 8
 
-  const handleSave = useCallback(async () => {
+  // 智能粘贴：监听窗口聚焦时读取剪贴板
+  useEffect(() => {
+    const handleFocus = async () => {
+      try {
+        const text = await navigator.clipboard.readText()
+        if (!text || apiKey) return
+
+        // 检测是否匹配当前选中厂商的 API Key 格式
+        const pattern = clipboardKeyPatterns[selectedProvider]
+        if (pattern && pattern.test(text.trim())) {
+          setApiKey(text.trim())
+          setPasteHint(`已从剪贴板自动填充 ${provider.name} 的 API Key`)
+          setTimeout(() => setPasteHint(null), 4000)
+          return
+        }
+
+        // 也检测其他厂商格式，自动切换厂商
+        for (const [pid, pat] of Object.entries(clipboardKeyPatterns)) {
+          if (pid !== selectedProvider && pat.test(text.trim())) {
+            setSelectedProvider(pid)
+            setApiKey(text.trim())
+            const pName = providers.find((p) => p.id === pid)?.name ?? pid
+            setPasteHint(`检测到 ${pName} 的 API Key，已自动切换并填充`)
+            setTimeout(() => setPasteHint(null), 4000)
+            break
+          }
+        }
+      } catch {
+        // 静默失败：权限拒绝或无剪贴板访问时不报错
+      }
+    }
+
+    window.addEventListener('focus', handleFocus)
+    return () => window.removeEventListener('focus', handleFocus)
+  }, [selectedProvider, apiKey, provider.name])
+
+  const handleTestAndSave = useCallback(async (forceSave = false) => {
     if (!apiKey.trim()) {
       setError('请输入 API Key')
       return
@@ -49,8 +98,29 @@ export function APIKeyPanel({ status, onProviderCreated }: APIKeyPanelProps) {
       return
     }
 
-    setLoading(true)
     setError(null)
+    setTestResult(null)
+
+    // 强制保存时跳过验证
+    if (!forceSave) {
+      setTesting(true)
+      try {
+        const result = await TestAPIKey(selectedProvider, apiKey.trim(), provider.host)
+        setTestResult({ valid: result.valid, message: result.message })
+        if (!result.valid) {
+          setTesting(false)
+          return
+        }
+      } catch (err) {
+        setTestResult({ valid: false, message: err instanceof Error ? err.message : '验证失败' })
+        setTesting(false)
+        return
+      }
+      setTesting(false)
+    }
+
+    // 保存到密钥环
+    setSaving(true)
     try {
       await SaveAPIKey(selectedProvider, apiKey.trim())
 
@@ -74,12 +144,17 @@ export function APIKeyPanel({ status, onProviderCreated }: APIKeyPanelProps) {
       }
       onProviderCreated(newProvider)
       setApiKey('')
+      setTestResult(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存失败')
     } finally {
-      setLoading(false)
+      setSaving(false)
     }
   }, [apiKey, selectedProvider, prefixValid, provider, onProviderCreated])
+
+  const handleOpenURL = useCallback((url: string) => {
+    BrowserOpenURL(url)
+  }, [])
 
   if (!status) {
     return (
@@ -115,6 +190,8 @@ export function APIKeyPanel({ status, onProviderCreated }: APIKeyPanelProps) {
           onChange={(e) => {
             setSelectedProvider(e.target.value)
             setError(null)
+            setTestResult(null)
+            setApiKey('')
           }}
           className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
         >
@@ -136,6 +213,7 @@ export function APIKeyPanel({ status, onProviderCreated }: APIKeyPanelProps) {
             onChange={(e) => {
               setApiKey(e.target.value)
               setError(null)
+              setTestResult(null)
             }}
             placeholder={`${provider.name} 的 API Key`}
             className="w-full px-3 py-2 pr-10 rounded-lg border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -154,19 +232,53 @@ export function APIKeyPanel({ status, onProviderCreated }: APIKeyPanelProps) {
         {apiKey && prefixValid && !lengthValid && (
           <p className="text-xs text-amber-600">API Key 长度不足</p>
         )}
+        {pasteHint && (
+          <p className="text-xs text-green-600 flex items-center gap-1">
+            <CheckCircle2 className="w-3 h-3" />
+            {pasteHint}
+          </p>
+        )}
         <p className="text-xs text-muted-foreground">
           API Key 将通过系统密钥环保管，不会以明文存储在本地文件中。
         </p>
       </div>
 
+      {/* API Key 获取引导 */}
+      <APIKeyGuide providerId={selectedProvider} onOpenURL={handleOpenURL} />
+
+      {/* 验证结果提示 */}
+      {testResult && !testResult.valid && (
+        <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-amber-800 dark:text-amber-200 font-medium">API Key 验证失败</p>
+            <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">{testResult.message}</p>
+            <button
+              type="button"
+              onClick={() => handleTestAndSave(true)}
+              disabled={saving}
+              className="mt-2 text-xs text-amber-800 dark:text-amber-200 underline hover:no-underline disabled:opacity-50"
+            >
+              仍然保存（跳过验证）
+            </button>
+          </div>
+        </div>
+      )}
+      {testResult && testResult.valid && (
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+          <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+          <p className="text-sm text-green-800 dark:text-green-200">{testResult.message}</p>
+        </div>
+      )}
+
       {/* 保存按钮 */}
       <button
-        onClick={handleSave}
-        disabled={loading || !apiKey.trim()}
+        onClick={() => handleTestAndSave(false)}
+        disabled={testing || saving || !apiKey.trim()}
         className="w-full py-2.5 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
       >
-        {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
-        {loading ? '保存中…' : '保存 API Key'}
+        {testing || saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
+        {testing ? '验证中…' : saving ? '保存中…' : '保存并验证'}
       </button>
 
       {error && <p className="text-xs text-destructive">{error}</p>}

@@ -199,6 +199,10 @@ const defaultHasAPIKey = async (_provider: string): Promise<boolean> => {
   return false
 }
 
+const defaultTestAPIKey = async (_provider: string, _apiKey: string, _apiHost: string): Promise<any> => {
+  return { valid: true, message: '验证通过', models: ['gpt-4o'] }
+}
+
 const defaultGetVersion = async (): Promise<string> => {
   return '0.5.0-test'
 }
@@ -331,6 +335,7 @@ export const MockWailsApp = {
   OpenDownloadURL: (url: string) => resolveHandler('OpenDownloadURL', defaultOpenDownloadURL)(url),
   SaveAPIKey: (provider: string, apiKey: string) => resolveHandler('SaveAPIKey', defaultSaveAPIKey)(provider, apiKey),
   HasAPIKey: (provider: string) => resolveHandler('HasAPIKey', defaultHasAPIKey)(provider),
+  TestAPIKey: (provider: string, apiKey: string, apiHost: string) => resolveHandler('TestAPIKey', defaultTestAPIKey)(provider, apiKey, apiHost),
   GetVersion: () => resolveHandler('GetVersion', defaultGetVersion)(),
   DetectAuthMethods: () => resolveHandler('DetectAuthMethods', defaultDetectAuthMethods)(),
   DetectCLIToken: (providerType: string) => resolveHandler('DetectCLIToken', defaultDetectCLIToken)(providerType),

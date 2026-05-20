@@ -202,6 +202,51 @@ func TestDetectAuthMethods_Timeout(t *testing.T) {
 	require.NotNil(t, result)
 }
 
+// TestTestAPIKey_UnknownProvider 验证未知厂商返回错误。
+func TestTestAPIKey_UnknownProvider(t *testing.T) {
+	ctx := t.Context()
+	app := &WailsApp{ctx: ctx}
+
+	result, err := app.TestAPIKey("unknown", "sk-test", "")
+	require.Error(t, err)
+	assert.Nil(t, result)
+}
+
+// TestTestAPIKey_EmptyKey 验证空 API Key 返回错误。
+func TestTestAPIKey_EmptyKey(t *testing.T) {
+	ctx := t.Context()
+	app := &WailsApp{ctx: ctx}
+
+	result, err := app.TestAPIKey("openai", "", "")
+	require.Error(t, err)
+	assert.Nil(t, result)
+}
+
+// TestTestAPIKey_DefaultHost 验证未传 apiHost 时使用默认 host。
+func TestTestAPIKey_DefaultHost(t *testing.T) {
+	ctx := t.Context()
+	app := &WailsApp{ctx: ctx}
+
+	// 使用一个无效的 key，期望返回验证失败但不报错
+	result, err := app.TestAPIKey("openai", "sk-invalid-test-key-12345", "")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.Valid)
+	assert.NotEmpty(t, result.Message)
+}
+
+// TestTestAPIKey_GeminiInvalidKey 验证 Gemini 使用原生 API 且 Key 无效时返回失败。
+func TestTestAPIKey_GeminiInvalidKey(t *testing.T) {
+	ctx := t.Context()
+	app := &WailsApp{ctx: ctx}
+
+	result, err := app.TestAPIKey("gemini", "invalid-key", "")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.Valid)
+	assert.NotEmpty(t, result.Message)
+}
+
 func findMethod(results []AuthMethodDetectStatus, method string) *AuthMethodDetectStatus {
 	for i := range results {
 		if results[i].Method == method {

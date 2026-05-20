@@ -176,4 +176,12 @@ export interface AuthDetectResult {
   all_unavailable: boolean;
 }
 
+export interface TestAPIKeyResult {
+  valid: boolean;
+  message: string;
+  models?: Array<string>;
+}
+
+export function TestAPIKey(arg1: string, arg2: string, arg3: string): Promise<TestAPIKeyResult>;
+
 export function DetectAuthMethods(): Promise<AuthDetectResult>;

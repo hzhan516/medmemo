@@ -145,6 +145,10 @@ export function CreateOllamaProvider() {
   return window['go']['main']['WailsApp']['CreateOllamaProvider']();
 }
 
+export function TestAPIKey(arg1, arg2, arg3) {
+  return window['go']['main']['WailsApp']['TestAPIKey'](arg1, arg2, arg3);
+}
+
 export function DetectAuthMethods() {
   return window['go']['main']['WailsApp']['DetectAuthMethods']();
 }
