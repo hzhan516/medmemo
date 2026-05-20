@@ -1,5 +1,6 @@
 import { Moon, Sun } from 'lucide-react'
 import { useTheme } from '@/hooks/useTheme'
+import { ModelSwitcher } from '@/components/provider/ModelSwitcher'
 
 /**
  * 顶部标题栏（56px）。
@@ -17,7 +18,10 @@ export function Header() {
         </span>
       </div>
 
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-2">
+        {/* 模型切换器 */}
+        <ModelSwitcher />
+
         {/* 主题切换 */}
         <button
           onClick={() => {

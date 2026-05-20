@@ -5,6 +5,7 @@ type Theme = 'light' | 'dark' | 'system'
 type ComplianceBarMode = 'always' | 'first' | 'off'
 type UpdateChannel = 'stable' | 'beta'
 type DesensitizationLevel = 'standard' | 'strict' | 'off'
+export type ProviderHealthStatus = 'green' | 'yellow' | 'red' | 'unknown'
 
 interface SettingsState {
   theme: Theme
@@ -15,6 +16,8 @@ interface SettingsState {
   desensitizationLevel: DesensitizationLevel
   dataRetentionDays: number
   activeProviderId: string | null
+  providerHealthStatus: Record<string, ProviderHealthStatus>
+  lastSelectedProviderId: string | null
 
   setTheme: (theme: Theme) => void
   setSelectedModel: (model: string) => void
@@ -24,6 +27,8 @@ interface SettingsState {
   setDesensitizationLevel: (level: DesensitizationLevel) => void
   setDataRetentionDays: (days: number) => void
   setActiveProviderId: (id: string | null) => void
+  setProviderHealthStatus: (id: string, status: ProviderHealthStatus) => void
+  setLastSelectedProviderId: (id: string | null) => void
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -37,6 +42,8 @@ export const useSettingsStore = create<SettingsState>()(
       desensitizationLevel: 'standard',
       dataRetentionDays: 30,
       activeProviderId: null,
+      providerHealthStatus: {},
+      lastSelectedProviderId: null,
 
       setTheme: (theme) => set({ theme }),
       setSelectedModel: (model) => set({ selectedModel: model }),
@@ -46,9 +53,26 @@ export const useSettingsStore = create<SettingsState>()(
       setDesensitizationLevel: (level) => set({ desensitizationLevel: level }),
       setDataRetentionDays: (days) => set({ dataRetentionDays: days }),
       setActiveProviderId: (id) => set({ activeProviderId: id }),
+      setProviderHealthStatus: (id, status) =>
+        set((state) => ({
+          providerHealthStatus: { ...state.providerHealthStatus, [id]: status },
+        })),
+      setLastSelectedProviderId: (id) => set({ lastSelectedProviderId: id }),
     }),
     {
       name: 'medmemo-settings',
+      partialize: (state) => ({
+        theme: state.theme,
+        selectedModel: state.selectedModel,
+        complianceBarMode: state.complianceBarMode,
+        autoCheckUpdate: state.autoCheckUpdate,
+        updateChannel: state.updateChannel,
+        desensitizationLevel: state.desensitizationLevel,
+        dataRetentionDays: state.dataRetentionDays,
+        activeProviderId: state.activeProviderId,
+        lastSelectedProviderId: state.lastSelectedProviderId,
+        // providerHealthStatus 不持久化（运行时状态）
+      }),
     }
   )
 )

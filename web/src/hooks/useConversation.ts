@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useChatStore } from '@/stores/chatStore'
+import { useSettingsStore } from '@/stores/settingsStore'
+import { useProviderStore } from '@/stores/providerStore'
 import { useWails } from './useWails'
 import { EventsOn } from '@wails/runtime/runtime'
 
@@ -27,6 +29,20 @@ export function useConversation() {
     setEmergencyAlert,
     acknowledgeEmergencyWarning,
   } = useChatStore()
+
+  // 当前活跃 Provider 及健康状态
+  const activeProviderId = useSettingsStore((s) => s.activeProviderId)
+  const healthStatus = useSettingsStore((s) => s.providerHealthStatus)
+  const setActiveProviderId = useSettingsStore((s) => s.setActiveProviderId)
+  const providers = useProviderStore((s) => s.providers)
+
+  const activeProvider = providers.find((p) => p.id === activeProviderId)
+  const activeStatus = activeProvider ? (healthStatus[activeProvider.id] ?? 'unknown') : 'unknown'
+
+  // 获取第一个可用的 green Provider（用于回退）
+  const fallbackProvider = providers.find(
+    (p) => p.enabled && (healthStatus[p.id] ?? 'unknown') === 'green'
+  )
 
   const [error, setError] = useState<string | null>(null)
 
@@ -158,6 +174,16 @@ export function useConversation() {
       })
       setStreaming(true)
 
+      // 活跃 Provider 不可用时的回退逻辑
+      let targetProvider = activeProvider
+      if (!targetProvider || activeStatus === 'red') {
+        if (fallbackProvider) {
+          targetProvider = fallbackProvider
+          setActiveProviderId(fallbackProvider.id)
+        }
+        // 若仍无可用 Provider，继续使用默认模型（向后兼容）
+      }
+
       try {
         // 构造对话请求并启动流式生成
         const history = messages.map((m) => ({
@@ -168,7 +194,7 @@ export function useConversation() {
         await wails.sendMessageStream({
           conversation_id: convId,
           messages: [...history, { role: 'user', content: content.trim() }],
-          model: 'kimi-lite',
+          model: targetProvider?.modelId ?? 'kimi-lite',
         })
 
         // 首条用户消息后异步生成标题（不阻塞流式输出）

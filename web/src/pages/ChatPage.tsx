@@ -8,6 +8,8 @@ import { EmergencyAlertModal } from '@/components/EmergencyAlertModal'
 import { EmergencyWarningBanner } from '@/components/EmergencyWarningBanner'
 import { useConversation } from '@/hooks/useConversation'
 import { useChatStore } from '@/stores/chatStore'
+import { useSettingsStore } from '@/stores/settingsStore'
+import { useProviderStore } from '@/stores/providerStore'
 import { Undo2 } from 'lucide-react'
 
 /**
@@ -35,17 +37,59 @@ export function ChatPage() {
   const selectConversation = useChatStore((s) => s.selectConversation)
   const [showUndo, setShowUndo] = useState(false)
 
+  // Provider 快捷键切换
+  const activeProviderId = useSettingsStore((s) => s.activeProviderId)
+  const setActiveProviderId = useSettingsStore((s) => s.setActiveProviderId)
+  const setLastSelectedProviderId = useSettingsStore((s) => s.setLastSelectedProviderId)
+  const healthStatus = useSettingsStore((s) => s.providerHealthStatus)
+  const providers = useProviderStore((s) => s.providers)
+
+  const switchToNextProvider = useCallback(
+    (direction: 'prev' | 'next') => {
+      const greenProviders = providers.filter(
+        (p) => p.enabled && (healthStatus[p.id] ?? 'unknown') === 'green'
+      )
+      if (greenProviders.length === 0) return
+      const currentIdx = greenProviders.findIndex((p) => p.id === activeProviderId)
+      let nextIdx: number
+      if (currentIdx === -1) {
+        nextIdx = 0
+      } else if (direction === 'next') {
+        nextIdx = (currentIdx + 1) % greenProviders.length
+      } else {
+        nextIdx = (currentIdx - 1 + greenProviders.length) % greenProviders.length
+      }
+      const next = greenProviders[nextIdx]
+      if (next) {
+        setActiveProviderId(next.id)
+        setLastSelectedProviderId(next.id)
+      }
+    },
+    [providers, healthStatus, activeProviderId, setActiveProviderId, setLastSelectedProviderId]
+  )
+
   // 监听全局快捷键
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
         e.preventDefault()
         startNewConversation()
+        return
+      }
+      if (e.ctrlKey && e.shiftKey && e.key === 'ArrowUp') {
+        e.preventDefault()
+        switchToNextProvider('prev')
+        return
+      }
+      if (e.ctrlKey && e.shiftKey && e.key === 'ArrowDown') {
+        e.preventDefault()
+        switchToNextProvider('next')
+        return
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [startNewConversation])
+  }, [startNewConversation, switchToNextProvider])
 
   // 显示撤销提示
   useEffect(() => {

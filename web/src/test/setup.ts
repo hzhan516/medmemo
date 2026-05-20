@@ -33,7 +33,11 @@ beforeEach(() => {
     emergencyWarningAcknowledged: false,
   })
   useProviderStore.setState({ providers: [] })
-  useSettingsStore.setState({ activeProviderId: null })
+  useSettingsStore.setState({
+    activeProviderId: null,
+    providerHealthStatus: {},
+    lastSelectedProviderId: null,
+  })
 })
 
 // 每个测试后清理
