@@ -1,9 +1,13 @@
 import { useState } from 'react'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useOnboardingStore } from '@/stores/onboardingStore'
+import { useProviderStore } from '@/stores/providerStore'
 import { useTheme } from '@/hooks/useTheme'
+import { useWails } from '@/hooks/useWails'
 import { Card, CardContent } from '@/components/ui/card'
-import { Monitor, Moon, Sun, Check, Bell, BellDot, BellOff, RefreshCw, Shield, FlaskConical, ShieldCheck, ShieldOff, Eye, Trash2, RotateCcw } from 'lucide-react'
+import { ProviderTemplateList, ProviderAddDialog } from '@/components/provider'
+import type { ProviderTemplate } from '@/types/provider'
+import { Monitor, Moon, Sun, Check, Bell, BellDot, BellOff, RefreshCw, Shield, FlaskConical, ShieldCheck, ShieldOff, Eye, Trash2, RotateCcw, Cloud, Server, Trash } from 'lucide-react'
 
 /**
  * 设置页面：支持主题切换、模型选择与合规提示条模式。
@@ -17,6 +21,28 @@ export function SettingsPage() {
   const resetOnboarding = useOnboardingStore((s) => s.reset)
   const clearAnalytics = useOnboardingStore((s) => s.clearAnalytics)
   const [showAnalytics, setShowAnalytics] = useState(false)
+  const [showAddDialog, setShowAddDialog] = useState(false)
+  const [selectedTemplate, setSelectedTemplate] = useState<ProviderTemplate | null>(null)
+
+  const providers = useProviderStore((s) => s.providers)
+  const addProvider = useProviderStore((s) => s.addProvider)
+  const removeProvider = useProviderStore((s) => s.removeProvider)
+  const hasProvider = useProviderStore((s) => s.hasProvider)
+  const { saveAPIKey } = useWails()
+
+  const handleSelectTemplate = (template: ProviderTemplate) => {
+    setSelectedTemplate(template)
+    setShowAddDialog(true)
+  }
+
+  const handleSaveProvider = (config: Parameters<typeof addProvider>[0]) => {
+    addProvider(config)
+    if (config.apiKey) {
+      saveAPIKey(config.templateId, config.apiKey).catch((err) => {
+        console.error('Failed to save API key:', err)
+      })
+    }
+  }
 
   const models = [
     { id: 'kimi-lite', name: 'Kimi Lite', provider: 'kimi' },
@@ -134,6 +160,50 @@ export function SettingsPage() {
               )
             })}
           </div>
+        </section>
+
+        {/* 模型提供商 */}
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+              模型提供商
+            </h2>
+          </div>
+
+          {/* 已添加的 Provider 列表 */}
+          {providers.length > 0 && (
+            <div className="space-y-2 mb-4">
+              {providers.map((p) => (
+                <Card key={p.id} className="border-border">
+                  <CardContent className="p-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className={`shrink-0 w-7 h-7 rounded-md flex items-center justify-center ${p.group === '本地' ? 'bg-amber-500/10 text-amber-600' : 'bg-blue-500/10 text-blue-600'}`}>
+                        {p.group === '本地' ? <Server className="w-3.5 h-3.5" /> : <Cloud className="w-3.5 h-3.5" />}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-foreground truncate">{p.name}</div>
+                        <div className="text-[11px] text-muted-foreground truncate">{p.modelId || '未选择模型'}</div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => removeProvider(p.id)}
+                      className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
+                      title="删除"
+                      aria-label={`删除 ${p.name}`}
+                    >
+                      <Trash className="w-3.5 h-3.5" />
+                    </button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {/* 模板列表 */}
+          <ProviderTemplateList
+            onSelectTemplate={handleSelectTemplate}
+            isAddedCheck={(templateId) => hasProvider(templateId)}
+          />
         </section>
 
         {/* 合规提示条设置 */}
@@ -399,6 +469,13 @@ export function SettingsPage() {
           </div>
         </section>
       </div>
+
+      <ProviderAddDialog
+        template={selectedTemplate}
+        open={showAddDialog}
+        onClose={() => setShowAddDialog(false)}
+        onSave={handleSaveProvider}
+      />
     </div>
   )
 }

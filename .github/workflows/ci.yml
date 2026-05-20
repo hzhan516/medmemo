@@ -35,6 +35,9 @@ jobs:
       - name: Frontend typecheck
         run: cd web && npx tsc --noEmit
 
+      - name: Validate provider templates JSON
+        run: node scripts/validate-provider-templates.js
+
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v4
         with:
