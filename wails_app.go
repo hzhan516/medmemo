@@ -30,6 +30,7 @@ type WailsApp struct {
 	msgRepo          port.MessageRepository
 	disclaimerRepo   port.DisclaimerRepository
 	providerStore    port.ProviderStore
+	healthChecker    port.HealthChecker
 	titleGen         *usecase.TitleGenerator
 	updaterSvc       *updater.Service
 	secretStore      secret.Store
@@ -46,6 +47,7 @@ func NewWailsApp(
 	msgRepo port.MessageRepository,
 	disclaimerRepo port.DisclaimerRepository,
 	providerStore port.ProviderStore,
+	healthChecker port.HealthChecker,
 	titleGen *usecase.TitleGenerator,
 	updaterSvc *updater.Service,
 	secretStore secret.Store,
@@ -58,6 +60,7 @@ func NewWailsApp(
 		msgRepo:          msgRepo,
 		disclaimerRepo:   disclaimerRepo,
 		providerStore:    providerStore,
+		healthChecker:    healthChecker,
 		titleGen:         titleGen,
 		updaterSvc:       updaterSvc,
 		secretStore:      secretStore,
@@ -67,6 +70,14 @@ func NewWailsApp(
 // Startup 是 Wails 启动回调，在前端加载完成后调用。
 func (a *WailsApp) Startup(ctx context.Context) {
 	a.ctx = ctx
+
+	// 启动健康检测引擎
+	if a.healthChecker != nil {
+		a.healthChecker.SetOnChange(func(result port.HealthResult) {
+			runtime.EventsEmit(a.ctx, "provider:health_changed", result)
+		})
+		a.healthChecker.Start(a.ctx)
+	}
 
 	// 启动时异步检测更新（不阻塞首屏）
 	if a.config.UpdateCheckEnabled && a.updaterSvc != nil {
@@ -647,4 +658,56 @@ func (a *WailsApp) ListProviders() ([]models.ProviderConfig, error) {
 		result[i] = *p
 	}
 	return result, nil
+}
+
+// HealthResultResponse 健康检测结果响应（供前端序列化）。
+type HealthResultResponse struct {
+	ProviderID string `json:"provider_id"`
+	Status     string `json:"status"`
+	LatencyMs  int64  `json:"latency_ms"`
+	CheckedAt  string `json:"checked_at"`
+	Error      string `json:"error,omitempty"`
+}
+
+// CheckProviderHealth 对指定 Provider 执行一次即时健康检测。
+func (a *WailsApp) CheckProviderHealth(providerID string) (*HealthResultResponse, error) {
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+
+	if a.healthChecker == nil {
+		return nil, fmt.Errorf("health checker not initialized")
+	}
+
+	result, err := a.healthChecker.CheckNow(ctx, providerID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check provider health: %w", err)
+	}
+
+	return &HealthResultResponse{
+		ProviderID: result.ProviderID,
+		Status:     string(result.Status),
+		LatencyMs:  result.LatencyMs,
+		CheckedAt:  result.CheckedAt.Format(time.RFC3339),
+		Error:      result.Error,
+	}, nil
+}
+
+// GetProviderHealthStatus 查询指定 Provider 的缓存健康状态（无需网络请求）。
+func (a *WailsApp) GetProviderHealthStatus(providerID string) (*HealthResultResponse, error) {
+	if a.healthChecker == nil {
+		return nil, fmt.Errorf("health checker not initialized")
+	}
+
+	result, ok := a.healthChecker.GetStatus(providerID)
+	if !ok {
+		return nil, fmt.Errorf("provider %s health status not available", providerID)
+	}
+
+	return &HealthResultResponse{
+		ProviderID: result.ProviderID,
+		Status:     string(result.Status),
+		LatencyMs:  result.LatencyMs,
+		CheckedAt:  result.CheckedAt.Format(time.RFC3339),
+		Error:      result.Error,
+	}, nil
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/medmemo/medmemo/internal/adapters/detector"
 	"github.com/medmemo/medmemo/internal/adapters/repository"
 	adapterUpdater "github.com/medmemo/medmemo/internal/adapters/updater"
+	"github.com/medmemo/medmemo/internal/application/healthcheck"
 	"github.com/medmemo/medmemo/internal/application/pipeline"
 	"github.com/medmemo/medmemo/internal/application/port"
 	"github.com/medmemo/medmemo/internal/application/updater"
@@ -35,6 +36,8 @@ func InitializeApp() (*App, func(), error) {
 		wire.Bind(new(port.MessageRepository), new(*repository.MessageRepoSQLite)),
 		wire.Bind(new(port.DisclaimerRepository), new(*repository.DisclaimerRepoSQLite)),
 		wire.Bind(new(port.ProviderStore), new(*repository.ProviderRepoSQLite)),
+		wire.Bind(new(port.HealthChecker), new(*healthcheck.HealthEngine)),
+		healthcheck.NewHealthEngine,
 		ai.ProviderSet,
 		repository.RepositorySet,
 		detector.ProviderSet,

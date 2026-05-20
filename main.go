@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/medmemo/medmemo/internal/application/pipeline"
+	"github.com/medmemo/medmemo/internal/application/port"
 	"github.com/medmemo/medmemo/internal/domain/entity"
 	"github.com/medmemo/medmemo/internal/infrastructure/database"
 	"github.com/medmemo/medmemo/internal/infrastructure/onnx"
@@ -83,7 +84,7 @@ func NewEngineConfig(cfg *entity.AppConfig) onnx.EngineConfig {
 // NewApp 构造函数，供 Wire 调用。
 // 启动时执行数据库迁移，返回 cleanup 回调用于关闭连接池。
 // pipeline 参数当前仅作为 Wire 依赖 consumer，由 TASK-024 端云协同时正式启用。
-func NewApp(wa *WailsApp, sqlite *database.SQLCipherConnector, _ *pipeline.DeidentifyPipeline) (*App, func(), error) {
+func NewApp(wa *WailsApp, sqlite *database.SQLCipherConnector, _ *pipeline.DeidentifyPipeline, healthChecker port.HealthChecker) (*App, func(), error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := sqlite.Migrate(ctx); err != nil {
@@ -91,6 +92,9 @@ func NewApp(wa *WailsApp, sqlite *database.SQLCipherConnector, _ *pipeline.Deide
 	}
 
 	cleanup := func() {
+		if healthChecker != nil {
+			healthChecker.Stop()
+		}
 		if err := sqlite.Close(); err != nil {
 			fmt.Fprintf(os.Stderr, "failed to close database: %v\n", err)
 		}
