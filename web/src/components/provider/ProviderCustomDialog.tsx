@@ -18,7 +18,7 @@ import {
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import type { ProviderConfig } from '@/types/provider'
+import type { ProviderConfig, AuthMethod, AuthParams } from '@/types/provider'
 
 const providerFormSchema = z.object({
   name: z.string().min(1, '名称不能为空'),
@@ -49,7 +49,7 @@ interface ProviderCustomDialogProps {
   existingGroups: string[]
   open: boolean
   onClose: () => void
-  onSave: (data: ProviderFormData & { id?: string; createdAt?: number }) => void
+  onSave: (data: ProviderFormData & { id?: string; createdAt?: number; authMethod: AuthMethod; authParams: AuthParams }) => void
 }
 
 const defaultValues: ProviderFormData = {
@@ -63,6 +63,13 @@ const defaultValues: ProviderFormData = {
   group: '默认',
   enabled: true,
 }
+
+const authMethodOptions: { value: AuthMethod; label: string }[] = [
+  { value: 'api_key', label: 'API Key' },
+  { value: 'cli_token', label: 'CLI Token' },
+  { value: 'oauth_device', label: 'OAuth Device Flow' },
+  { value: 'service_account', label: 'Service Account' },
+]
 
 /**
  * 格式化相对时间（"刚刚"、"N秒前"、"N分钟前"）。
@@ -92,6 +99,10 @@ export function ProviderCustomDialog({
   const [showKey, setShowKey] = useState(false)
   const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
   const [groupInputMode, setGroupInputMode] = useState<'select' | 'input'>('select')
+
+  // 认证方式相关状态
+  const [authMethod, setAuthMethod] = useState<AuthMethod>('api_key')
+  const [authParams, setAuthParams] = useState<AuthParams>({})
 
   // 测试连接相关状态
   const [testStatus, setTestStatus] = useState<TestStatus>('idle')
@@ -139,8 +150,12 @@ export function ProviderCustomDialog({
           group: provider.group,
           enabled: provider.enabled,
         })
+        setAuthMethod(provider.authMethod || 'api_key')
+        setAuthParams(provider.authParams || {})
       } else {
         reset(defaultValues)
+        setAuthMethod('api_key')
+        setAuthParams({})
       }
     }
   }, [open, mode, provider, reset])
@@ -286,13 +301,13 @@ export function ProviderCustomDialog({
   const onSubmit = useCallback(
     (data: ProviderFormData) => {
       if (mode === 'edit' && provider) {
-        onSave({ ...data, id: provider.id, createdAt: provider.createdAt })
+        onSave({ ...data, id: provider.id, createdAt: provider.createdAt, authMethod, authParams })
       } else {
-        onSave(data)
+        onSave({ ...data, authMethod, authParams })
       }
       onClose()
     },
-    [mode, provider, onSave, onClose]
+    [mode, provider, onSave, onClose, authMethod, authParams]
   )
 
   const title = mode === 'edit' ? '编辑 Provider' : '添加自定义 Provider'
@@ -393,31 +408,145 @@ export function ProviderCustomDialog({
             )}
           </div>
 
-          {/* API Key */}
+          {/* 认证方式 */}
           <div className="space-y-1.5">
-            <Label htmlFor="pc-key">API Key</Label>
-            <div className="relative">
-              <Input
-                id="pc-key"
-                type={showKey ? 'text' : 'password'}
-                {...register('apiKey')}
-                placeholder="sk-..."
-                className="pr-10"
-                data-testid="pc-key-input"
-              />
-              <button
-                type="button"
-                onClick={() => setShowKey(!showKey)}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                aria-label={showKey ? '隐藏 API Key' : '显示 API Key'}
-              >
-                {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-            <p className="text-[11px] text-muted-foreground">
-              本地模型可留空。API Key 由系统密钥环保管，不以明文存储。
-            </p>
+            <Label htmlFor="pc-auth-method">认证方式</Label>
+            <select
+              id="pc-auth-method"
+              value={authMethod}
+              onChange={(e) => {
+                setAuthMethod(e.target.value as AuthMethod)
+                setAuthParams({})
+              }}
+              className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              data-testid="pc-auth-method-select"
+            >
+              {authMethodOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
           </div>
+
+          {/* API Key（api_key 方式） */}
+          {authMethod === 'api_key' && (
+            <div className="space-y-1.5">
+              <Label htmlFor="pc-key">API Key</Label>
+              <div className="relative">
+                <Input
+                  id="pc-key"
+                  type={showKey ? 'text' : 'password'}
+                  {...register('apiKey')}
+                  placeholder="sk-..."
+                  className="pr-10"
+                  data-testid="pc-key-input"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowKey(!showKey)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label={showKey ? '隐藏 API Key' : '显示 API Key'}
+                >
+                  {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                API Key 由系统密钥环保管，不以明文存储。
+              </p>
+            </div>
+          )}
+
+          {/* CLI Token 凭证路径（cli_token 方式） */}
+          {authMethod === 'cli_token' && (
+            <div className="space-y-1.5">
+              <Label htmlFor="pc-cli-path">CLI 凭证路径 <span className="text-destructive">*</span></Label>
+              <Input
+                id="pc-cli-path"
+                value={authParams.cliCredentialPath || ''}
+                onChange={(e) => setAuthParams((prev) => ({ ...prev, cliCredentialPath: e.target.value }))}
+                placeholder="~/.kimi/credentials/kimi-code.json"
+                data-testid="pc-cli-path-input"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                指向 CLI 工具缓存的 OAuth token 文件路径。
+              </p>
+            </div>
+          )}
+
+          {/* OAuth Device Flow 配置（oauth_device 方式） */}
+          {authMethod === 'oauth_device' && (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="pc-oauth-client-id">Client ID <span className="text-destructive">*</span></Label>
+                <Input
+                  id="pc-oauth-client-id"
+                  value={authParams.oauthClientId || ''}
+                  onChange={(e) => setAuthParams((prev) => ({ ...prev, oauthClientId: e.target.value }))}
+                  placeholder="your-client-id"
+                  data-testid="pc-oauth-client-id-input"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="pc-oauth-auth-url">Auth URL</Label>
+                <Input
+                  id="pc-oauth-auth-url"
+                  value={authParams.oauthAuthUrl || ''}
+                  onChange={(e) => setAuthParams((prev) => ({ ...prev, oauthAuthUrl: e.target.value }))}
+                  placeholder="https://auth.example.com/authorize"
+                  data-testid="pc-oauth-auth-url-input"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="pc-oauth-token-url">Token URL <span className="text-destructive">*</span></Label>
+                <Input
+                  id="pc-oauth-token-url"
+                  value={authParams.oauthTokenUrl || ''}
+                  onChange={(e) => setAuthParams((prev) => ({ ...prev, oauthTokenUrl: e.target.value }))}
+                  placeholder="https://auth.example.com/token"
+                  data-testid="pc-oauth-token-url-input"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Service Account 配置（service_account 方式） */}
+          {authMethod === 'service_account' && (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="pc-sa-project">GCP Project ID <span className="text-destructive">*</span></Label>
+                <Input
+                  id="pc-sa-project"
+                  value={authParams.gcpProjectId || ''}
+                  onChange={(e) => setAuthParams((prev) => ({ ...prev, gcpProjectId: e.target.value }))}
+                  placeholder="my-project-123"
+                  data-testid="pc-sa-project-input"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="pc-sa-region">Region</Label>
+                <Input
+                  id="pc-sa-region"
+                  value={authParams.gcpRegion || ''}
+                  onChange={(e) => setAuthParams((prev) => ({ ...prev, gcpRegion: e.target.value }))}
+                  placeholder="us-central1"
+                  data-testid="pc-sa-region-input"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="pc-sa-json">Service Account JSON <span className="text-destructive">*</span></Label>
+                <textarea
+                  id="pc-sa-json"
+                  value={authParams.saJson || ''}
+                  onChange={(e) => setAuthParams((prev) => ({ ...prev, saJson: e.target.value }))}
+                  placeholder='{"type":"service_account","project_id":"..."}'
+                  rows={4}
+                  className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-y font-mono"
+                  data-testid="pc-sa-json-input"
+                />
+              </div>
+            </div>
+          )}
 
           {/* 测试连接 */}
           <div className="space-y-2">

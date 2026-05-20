@@ -523,3 +523,134 @@ func TestProviderRepo_MasterKey_Cached(t *testing.T) {
 	assert.Equal(t, p.APIKey, got.APIKey)
 	_ = conn.Close()
 }
+
+// TestProviderRepo_CreateAndGet_CLIToken 验证 cli_token 认证方式的序列化/反序列化。
+func TestProviderRepo_CreateAndGet_CLIToken(t *testing.T) {
+	repo, cleanup := setupProviderRepo(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	p := &models.ProviderConfig{
+		ID:          "cli-001",
+		Name:        "Kimi CLI",
+		APIHost:     "https://api.moonshot.cn",
+		APIKey:      "", // cli_token 方式 api_key 可为空
+		ModelID:     "moonshot-v1-8k",
+		Temperature: 0.7,
+		Timeout:     30 * time.Second,
+		MaxRetries:  3,
+		GroupName:   "cli",
+		Enabled:     true,
+		AuthMethod:  models.AuthMethodCLIToken,
+		AuthParams:  models.AuthParams{CLICredentialPath: "~/.kimi/credentials/kimi-code.json"},
+	}
+	require.NoError(t, repo.Create(ctx, p))
+
+	got, err := repo.Get(ctx, p.ID)
+	require.NoError(t, err)
+	assert.Equal(t, models.AuthMethodCLIToken, got.AuthMethod)
+	assert.Equal(t, "~/.kimi/credentials/kimi-code.json", got.AuthParams.CLICredentialPath)
+	assert.Empty(t, got.APIKey) // 空 api_key 解密后仍为空
+}
+
+// TestProviderRepo_CreateAndGet_OAuthDevice 验证 oauth_device 认证方式的序列化/反序列化。
+func TestProviderRepo_CreateAndGet_OAuthDevice(t *testing.T) {
+	repo, cleanup := setupProviderRepo(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	p := &models.ProviderConfig{
+		ID:          "oauth-001",
+		Name:        "OAuth Provider",
+		APIHost:     "https://api.example.com",
+		APIKey:      "",
+		ModelID:     "gpt-4o",
+		Temperature: 0.7,
+		Timeout:     30 * time.Second,
+		MaxRetries:  3,
+		GroupName:   "oauth",
+		Enabled:     true,
+		AuthMethod:  models.AuthMethodOAuthDevice,
+		AuthParams: models.AuthParams{
+			OAuthClientID:     "client-123",
+			OAuthAuthURL:      "https://auth.example.com/authorize",
+			OAuthTokenURL:     "https://auth.example.com/token",
+			OAuthRefreshToken: "refresh-abc",
+			OAuthAccessToken:  "access-xyz",
+			OAuthExpiresAt:    1234567890,
+		},
+	}
+	require.NoError(t, repo.Create(ctx, p))
+
+	got, err := repo.Get(ctx, p.ID)
+	require.NoError(t, err)
+	assert.Equal(t, models.AuthMethodOAuthDevice, got.AuthMethod)
+	assert.Equal(t, "client-123", got.AuthParams.OAuthClientID)
+	assert.Equal(t, "https://auth.example.com/authorize", got.AuthParams.OAuthAuthURL)
+	assert.Equal(t, "https://auth.example.com/token", got.AuthParams.OAuthTokenURL)
+	assert.Equal(t, "refresh-abc", got.AuthParams.OAuthRefreshToken)
+	assert.Equal(t, "access-xyz", got.AuthParams.OAuthAccessToken)
+	assert.Equal(t, int64(1234567890), got.AuthParams.OAuthExpiresAt)
+}
+
+// TestProviderRepo_CreateAndGet_ServiceAccount 验证 service_account 认证方式的序列化/反序列化。
+func TestProviderRepo_CreateAndGet_ServiceAccount(t *testing.T) {
+	repo, cleanup := setupProviderRepo(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	p := &models.ProviderConfig{
+		ID:          "sa-001",
+		Name:        "GCP Service Account",
+		APIHost:     "https://us-central1-aiplatform.googleapis.com",
+		APIKey:      "",
+		ModelID:     "gemini-pro",
+		Temperature: 0.7,
+		Timeout:     30 * time.Second,
+		MaxRetries:  3,
+		GroupName:   "gcp",
+		Enabled:     true,
+		AuthMethod:  models.AuthMethodServiceAccount,
+		AuthParams: models.AuthParams{
+			GCPProjectID: "my-project-123",
+			GCPRegion:    "us-central1",
+			SAJSON:       `{"type":"service_account","project_id":"my-project-123"}`,
+		},
+	}
+	require.NoError(t, repo.Create(ctx, p))
+
+	got, err := repo.Get(ctx, p.ID)
+	require.NoError(t, err)
+	assert.Equal(t, models.AuthMethodServiceAccount, got.AuthMethod)
+	assert.Equal(t, "my-project-123", got.AuthParams.GCPProjectID)
+	assert.Equal(t, "us-central1", got.AuthParams.GCPRegion)
+	assert.Equal(t, `{"type":"service_account","project_id":"my-project-123"}`, got.AuthParams.SAJSON)
+}
+
+// TestProviderRepo_BackwardCompatibility 验证旧数据（无 auth_method）向后兼容。
+func TestProviderRepo_BackwardCompatibility(t *testing.T) {
+	repo, cleanup := setupProviderRepo(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// 模拟旧数据：不设置 AuthMethod 和 AuthParams
+	p := &models.ProviderConfig{
+		ID:          "legacy-001",
+		Name:        "Legacy Provider",
+		APIHost:     "https://api.legacy.com",
+		APIKey:      "sk-legacy-key",
+		ModelID:     "legacy-model",
+		Temperature: 0.7,
+		Timeout:     30 * time.Second,
+		MaxRetries:  3,
+		GroupName:   "default",
+		Enabled:     true,
+	}
+	require.NoError(t, repo.Create(ctx, p))
+
+	got, err := repo.Get(ctx, p.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "sk-legacy-key", got.APIKey)
+	assert.Equal(t, models.AuthMethod(""), got.AuthMethod) // 旧数据反序列化后为空
+	assert.Empty(t, got.AuthParams.CLICredentialPath)
+}

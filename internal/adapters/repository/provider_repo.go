@@ -9,7 +9,6 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
-	"net/url"
 	"time"
 
 	"github.com/medmemo/medmemo/internal/domain/entity"
@@ -52,13 +51,18 @@ func (r *ProviderRepoSQLite) Create(ctx context.Context, provider *models.Provid
 		return fmt.Errorf("failed to encrypt api key: %w", err)
 	}
 
+	authParamsJSON, err := provider.MarshalAuthParams()
+	if err != nil {
+		return fmt.Errorf("failed to marshal auth params: %w", err)
+	}
+
 	now := time.Now().UnixMilli()
 	_, err = r.db.ExecContext(ctx, `
-		INSERT INTO providers (id, name, api_host, api_key, model_id, temperature, timeout_ms, max_retries, group_name, enabled, sort_order, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO providers (id, name, api_host, api_key, model_id, temperature, timeout_ms, max_retries, group_name, enabled, sort_order, created_at, updated_at, auth_method, auth_params)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, provider.ID, provider.Name, provider.APIHost, encryptedKey, provider.ModelID, provider.Temperature,
 		int64(provider.Timeout.Milliseconds()), provider.MaxRetries, provider.GroupName, boolToInt(provider.Enabled),
-		provider.SortOrder, now, now)
+		provider.SortOrder, now, now, string(provider.AuthMethod), authParamsJSON)
 
 	if err != nil {
 		// SQLite 约束冲突（重复主键）
@@ -81,15 +85,20 @@ func (r *ProviderRepoSQLite) Update(ctx context.Context, provider *models.Provid
 		return fmt.Errorf("failed to encrypt api key: %w", err)
 	}
 
+	authParamsJSON, err := provider.MarshalAuthParams()
+	if err != nil {
+		return fmt.Errorf("failed to marshal auth params: %w", err)
+	}
+
 	now := time.Now().UnixMilli()
 	res, err := r.db.ExecContext(ctx, `
 		UPDATE providers SET
 			name = ?, api_host = ?, api_key = ?, model_id = ?, temperature = ?,
-			timeout_ms = ?, max_retries = ?, group_name = ?, enabled = ?, sort_order = ?, updated_at = ?
+			timeout_ms = ?, max_retries = ?, group_name = ?, enabled = ?, sort_order = ?, updated_at = ?, auth_method = ?, auth_params = ?
 		WHERE id = ?
 	`, provider.Name, provider.APIHost, encryptedKey, provider.ModelID, provider.Temperature,
 		int64(provider.Timeout.Milliseconds()), provider.MaxRetries, provider.GroupName, boolToInt(provider.Enabled),
-		provider.SortOrder, now, provider.ID)
+		provider.SortOrder, now, string(provider.AuthMethod), authParamsJSON, provider.ID)
 
 	if err != nil {
 		return fmt.Errorf("failed to update provider %s: %w", provider.ID, err)
@@ -125,7 +134,7 @@ func (r *ProviderRepoSQLite) Delete(ctx context.Context, id string) error {
 // Get 按 ID 查询 Provider 配置。
 func (r *ProviderRepoSQLite) Get(ctx context.Context, id string) (*models.ProviderConfig, error) {
 	row := r.db.QueryRowContext(ctx, `
-		SELECT id, name, api_host, api_key, model_id, temperature, timeout_ms, max_retries, group_name, enabled, sort_order, created_at, updated_at
+		SELECT id, name, api_host, api_key, model_id, temperature, timeout_ms, max_retries, group_name, enabled, sort_order, created_at, updated_at, auth_method, auth_params
 		FROM providers WHERE id = ?
 	`, id)
 
@@ -135,7 +144,7 @@ func (r *ProviderRepoSQLite) Get(ctx context.Context, id string) (*models.Provid
 // List 查询全部 Provider 配置，按 sort_order ASC, updated_at DESC 排序。
 func (r *ProviderRepoSQLite) List(ctx context.Context) ([]*models.ProviderConfig, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, name, api_host, api_key, model_id, temperature, timeout_ms, max_retries, group_name, enabled, sort_order, created_at, updated_at
+		SELECT id, name, api_host, api_key, model_id, temperature, timeout_ms, max_retries, group_name, enabled, sort_order, created_at, updated_at, auth_method, auth_params
 		FROM providers
 		ORDER BY sort_order ASC, updated_at DESC
 	`)
@@ -166,9 +175,10 @@ func (r *ProviderRepoSQLite) scanProvider(scanner interface {
 	var encryptedKey []byte
 	var timeoutMs, createdAt, updatedAt int64
 	var enabledInt int
+	var authMethodStr, authParamsJSON string
 
 	if err := scanner.Scan(&p.ID, &p.Name, &p.APIHost, &encryptedKey, &p.ModelID, &p.Temperature,
-		&timeoutMs, &p.MaxRetries, &p.GroupName, &enabledInt, &p.SortOrder, &createdAt, &updatedAt); err != nil {
+		&timeoutMs, &p.MaxRetries, &p.GroupName, &enabledInt, &p.SortOrder, &createdAt, &updatedAt, &authMethodStr, &authParamsJSON); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("provider not found: %w", entity.ErrNotFound)
 		}
@@ -185,33 +195,19 @@ func (r *ProviderRepoSQLite) scanProvider(scanner interface {
 	p.Enabled = enabledInt != 0
 	p.CreatedAt = time.UnixMilli(createdAt)
 	p.UpdatedAt = time.UnixMilli(updatedAt)
+	p.AuthMethod = models.AuthMethod(authMethodStr)
+	if err := p.UnmarshalAuthParams(authParamsJSON); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal auth params for provider %s: %w", p.ID, err)
+	}
 
 	return &p, nil
 }
 
 // validateProvider 校验 Provider 配置字段合法性。
+// 委托 ProviderConfig.Validate() 进行认证方式相关的校验。
 func validateProvider(p *models.ProviderConfig) error {
-	if p.ID == "" {
-		return fmt.Errorf("provider id is required: %w", entity.ErrInvalidConfig)
-	}
-	if p.Name == "" {
-		return fmt.Errorf("provider name is required: %w", entity.ErrInvalidConfig)
-	}
-	if p.APIHost == "" {
-		return fmt.Errorf("provider api_host is required: %w", entity.ErrInvalidConfig)
-	}
-	u, err := url.Parse(p.APIHost)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
-		return fmt.Errorf("provider api_host must be a valid http(s) URL: %w", entity.ErrInvalidConfig)
-	}
-	if p.APIKey == "" {
-		return fmt.Errorf("provider api_key is required: %w", entity.ErrInvalidConfig)
-	}
-	if p.ModelID == "" {
-		return fmt.Errorf("provider model_id is required: %w", entity.ErrInvalidConfig)
-	}
-	if p.Temperature < 0 || p.Temperature > 2 {
-		return fmt.Errorf("provider temperature must be in range [0, 2]: %w", entity.ErrInvalidConfig)
+	if err := p.Validate(); err != nil {
+		return fmt.Errorf("%w: %v", entity.ErrInvalidConfig, err)
 	}
 	return nil
 }

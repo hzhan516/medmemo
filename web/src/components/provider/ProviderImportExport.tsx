@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { X, Upload, Download, FileJson, AlertTriangle, CheckCircle, AlertCircle } from 'lucide-react'
 import { useProviderStore, type ImportResult, type ImportMode } from '@/stores/providerStore'
-import type { ProviderConfig } from '@/types/provider'
+import type { ProviderConfig, AuthMethod } from '@/types/provider'
 
 interface ProviderImportExportProps {
   open: boolean
@@ -194,6 +194,8 @@ export function ProviderImportExport({ open, onClose }: ProviderImportExportProp
       group: (p.group as string) || '默认',
       enabled: typeof p.enabled === 'boolean' ? p.enabled : true,
       sortOrder: typeof p.sortOrder === 'number' ? p.sortOrder : 0,
+      authMethod: (p.authMethod as AuthMethod) || 'api_key',
+      authParams: (p.authParams as Record<string, unknown>) || {},
     }))
 
     let result: ImportResult

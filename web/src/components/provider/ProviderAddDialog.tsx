@@ -53,6 +53,8 @@ export function ProviderAddDialog({ template, open, onClose, onSave }: ProviderA
       group: isLocal ? '本地' : '云端',
       enabled: true,
       sortOrder: 0,
+      authMethod: 'api_key',
+      authParams: {},
     })
 
     onClose()

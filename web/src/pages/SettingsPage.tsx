@@ -13,7 +13,7 @@ import {
   DeleteConfirmDialog,
   ProviderImportExport,
 } from '@/components/provider'
-import type { ProviderTemplate, ProviderConfig } from '@/types/provider'
+import type { ProviderTemplate, ProviderConfig, AuthMethod, AuthParams } from '@/types/provider'
 import {
   Monitor, Moon, Sun, Check, Bell, BellDot, BellOff,
   RefreshCw, Shield, FlaskConical, ShieldCheck, ShieldOff,
@@ -116,6 +116,8 @@ export function SettingsPage() {
       enabled: boolean
       id?: string
       createdAt?: number
+      authMethod: AuthMethod
+      authParams: AuthParams
     }) => {
       if (customDialogMode === 'edit' && data.id) {
         updateProvider({

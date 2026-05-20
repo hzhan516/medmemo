@@ -635,3 +635,90 @@ func TestProviderFactory(t *testing.T) {
 	client3 := ProviderFactory(cfg3)
 	require.NotNil(t, client3)
 }
+
+// TestOpenAICompatibleClient_Chat_AuthMethod_APIKey 验证 api_key 方式发送正确 Authorization。
+func TestOpenAICompatibleClient_Chat_AuthMethod_APIKey(t *testing.T) {
+	var authHeader string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authHeader = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"ok\"},\"finish_reason\":\"stop\"}]}\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	defer server.Close()
+
+	client := NewOpenAICompatibleClient()
+	cfg := models.ProviderConfig{
+		APIHost:     server.URL,
+		APIKey:      "sk-auth-test",
+		ModelID:     "gpt-4o",
+		AuthMethod:  models.AuthMethodAPIToken,
+		Temperature: 0.5,
+	}
+
+	ch, err := client.Chat(context.Background(), ChatRequest{Messages: []models.Message{{Role: models.RoleUser, Content: "hi"}}}, cfg)
+	require.NoError(t, err)
+	for range ch {
+	} // 消费完 channel
+
+	assert.Equal(t, "Bearer sk-auth-test", authHeader)
+}
+
+// TestOpenAICompatibleClient_Chat_AuthMethod_NoAPIKey 验证空 api_key 不发送 Authorization。
+func TestOpenAICompatibleClient_Chat_AuthMethod_NoAPIKey(t *testing.T) {
+	var authHeader string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authHeader = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"ok\"},\"finish_reason\":\"stop\"}]}\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	defer server.Close()
+
+	client := NewOpenAICompatibleClient()
+	cfg := models.ProviderConfig{
+		APIHost:     server.URL,
+		APIKey:      "",
+		ModelID:     "llama3",
+		AuthMethod:  models.AuthMethodAPIToken,
+		Temperature: 0.5,
+	}
+
+	ch, err := client.Chat(context.Background(), ChatRequest{Messages: []models.Message{{Role: models.RoleUser, Content: "hi"}}}, cfg)
+	require.NoError(t, err)
+	for range ch {
+	}
+
+	assert.Empty(t, authHeader)
+}
+
+// TestOpenAICompatibleClient_Chat_AuthMethod_CLIToken 验证 cli_token 方式返回认证错误（不发送网络请求）。
+func TestOpenAICompatibleClient_Chat_AuthMethod_CLIToken(t *testing.T) {
+	client := NewOpenAICompatibleClient()
+	cfg := models.ProviderConfig{
+		APIHost:    "https://api.example.com",
+		ModelID:    "gpt-4o",
+		AuthMethod: models.AuthMethodCLIToken,
+	}
+
+	_, err := client.Chat(context.Background(), ChatRequest{Messages: []models.Message{{Role: models.RoleUser, Content: "hi"}}}, cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "auth_failed")
+	assert.Contains(t, err.Error(), "TASK-044")
+}
+
+// TestOpenAICompatibleClient_FetchModels_AuthMethod_OAuthDevice 验证 oauth_device 方式返回认证错误（不发送网络请求）。
+func TestOpenAICompatibleClient_FetchModels_AuthMethod_OAuthDevice(t *testing.T) {
+	client := NewOpenAICompatibleClient()
+	cfg := models.ProviderConfig{
+		APIHost:    "https://api.example.com",
+		AuthMethod: models.AuthMethodOAuthDevice,
+	}
+
+	_, err := client.FetchModels(context.Background(), cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "auth_failed")
+	assert.Contains(t, err.Error(), "TASK-046")
+}

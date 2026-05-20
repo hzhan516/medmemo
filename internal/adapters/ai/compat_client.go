@@ -87,8 +87,12 @@ func (c *OpenAICompatibleClient) Chat(ctx context.Context, req ChatRequest, conf
 
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "text/event-stream")
-	if config.APIKey != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+config.APIKey)
+	authToken, err := config.ResolveAuthToken()
+	if err != nil {
+		return nil, &LLMError{Code: "auth_failed", Message: fmt.Sprintf("认证失败: %v", err), Retryable: false}
+	}
+	if authToken != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+authToken)
 	}
 
 	// 应用自定义超时
@@ -197,8 +201,12 @@ func (c *OpenAICompatibleClient) FetchModels(ctx context.Context, config models.
 		return nil, &LLMError{Code: "request_failed", Message: fmt.Sprintf("构造请求失败: %v", err), Retryable: false}
 	}
 
-	if config.APIKey != "" {
-		req.Header.Set("Authorization", "Bearer "+config.APIKey)
+	authToken, err := config.ResolveAuthToken()
+	if err != nil {
+		return nil, &LLMError{Code: "auth_failed", Message: fmt.Sprintf("认证失败: %v", err), Retryable: false}
+	}
+	if authToken != "" {
+		req.Header.Set("Authorization", "Bearer "+authToken)
 	}
 
 	client := c.client

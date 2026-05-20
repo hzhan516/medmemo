@@ -146,8 +146,18 @@ func (e *HealthEngine) checkOne(ctx context.Context, p *models.ProviderConfig) p
 		}
 	}
 
-	if p.APIKey != "" {
-		req.Header.Set("Authorization", "Bearer "+p.APIKey)
+	authToken, err := p.ResolveAuthToken()
+	if err != nil {
+		return port.HealthResult{
+			ProviderID: p.ID,
+			Status:     port.HealthRed,
+			LatencyMs:  time.Since(start).Milliseconds(),
+			CheckedAt:  start,
+			Error:      fmt.Sprintf("认证令牌解析失败: %v", err),
+		}
+	}
+	if authToken != "" {
+		req.Header.Set("Authorization", "Bearer "+authToken)
 	}
 
 	resp, err := e.client.Do(req)

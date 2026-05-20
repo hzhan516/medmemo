@@ -28,6 +28,19 @@ function generateId(templateId: string): string {
   return `${templateId}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
 }
 
+/**
+ * 填充 ProviderConfig 默认值，确保向后兼容旧格式数据。
+ */
+function normalizeProviderConfig(
+  config: Omit<ProviderConfig, 'id' | 'createdAt' | 'updatedAt'>
+): Omit<ProviderConfig, 'id' | 'createdAt' | 'updatedAt'> {
+  return {
+    ...config,
+    authMethod: config.authMethod || 'api_key',
+    authParams: config.authParams || {},
+  }
+}
+
 export const useProviderStore = create<ProviderState>()(
   persist(
     (set, get) => ({
@@ -35,8 +48,9 @@ export const useProviderStore = create<ProviderState>()(
 
       addProvider: (config) => {
         const now = Date.now()
+        const normalized = normalizeProviderConfig(config)
         const newProvider: ProviderConfig = {
-          ...config,
+          ...normalized,
           id: generateId(config.templateId),
           createdAt: now,
           updatedAt: now,
@@ -82,7 +96,7 @@ export const useProviderStore = create<ProviderState>()(
         const toAdd: ProviderConfig[] = []
 
         for (let i = 0; i < configs.length; i++) {
-          const cfg = configs[i]
+          const cfg = normalizeProviderConfig(configs[i])
           if (!cfg.name || !cfg.apiHost || !cfg.modelId) {
             result.errors.push(`第 ${i + 1} 条记录缺少必填字段（name/apiHost/modelId）`)
             continue
@@ -118,7 +132,7 @@ export const useProviderStore = create<ProviderState>()(
         const toAdd: ProviderConfig[] = []
 
         for (let i = 0; i < configs.length; i++) {
-          const cfg = configs[i]
+          const cfg = normalizeProviderConfig(configs[i])
           if (!cfg.name || !cfg.apiHost || !cfg.modelId) {
             result.errors.push(`第 ${i + 1} 条记录缺少必填字段（name/apiHost/modelId）`)
             continue

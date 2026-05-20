@@ -442,3 +442,72 @@ func TestHealthEngine_CheckNow_NoAPIKey(t *testing.T) {
 	assert.Equal(t, port.HealthGreen, result.Status)
 	assert.Empty(t, authHeader) // 不应发送 Authorization header
 }
+
+// TestHealthEngine_CheckNow_CLIToken_NotImplemented 验证 cli_token 方式返回 Red。
+func TestHealthEngine_CheckNow_CLIToken_NotImplemented(t *testing.T) {
+	store := newMockProviderStore()
+	_ = store.Create(context.Background(), &models.ProviderConfig{
+		ID:         "cli-p1",
+		APIHost:    "https://api.example.com",
+		APIKey:     "",
+		ModelID:    "gpt-4o",
+		Enabled:    true,
+		AuthMethod: models.AuthMethodCLIToken,
+		AuthParams: models.AuthParams{CLICredentialPath: "~/.kimi/credentials/kimi-code.json"},
+	})
+
+	engine := NewHealthEngine(store)
+	result, err := engine.CheckNow(context.Background(), "cli-p1")
+	require.NoError(t, err)
+
+	assert.Equal(t, port.HealthRed, result.Status)
+	assert.Contains(t, result.Error, "TASK-044")
+}
+
+// TestHealthEngine_CheckNow_OAuthDevice_NotImplemented 验证 oauth_device 方式返回 Red。
+func TestHealthEngine_CheckNow_OAuthDevice_NotImplemented(t *testing.T) {
+	store := newMockProviderStore()
+	_ = store.Create(context.Background(), &models.ProviderConfig{
+		ID:         "oauth-p1",
+		APIHost:    "https://api.example.com",
+		APIKey:     "",
+		ModelID:    "gpt-4o",
+		Enabled:    true,
+		AuthMethod: models.AuthMethodOAuthDevice,
+		AuthParams: models.AuthParams{
+			OAuthClientID: "client-123",
+			OAuthTokenURL: "https://auth.example.com/token",
+		},
+	})
+
+	engine := NewHealthEngine(store)
+	result, err := engine.CheckNow(context.Background(), "oauth-p1")
+	require.NoError(t, err)
+
+	assert.Equal(t, port.HealthRed, result.Status)
+	assert.Contains(t, result.Error, "TASK-046")
+}
+
+// TestHealthEngine_CheckNow_ServiceAccount_NotImplemented 验证 service_account 方式返回 Red。
+func TestHealthEngine_CheckNow_ServiceAccount_NotImplemented(t *testing.T) {
+	store := newMockProviderStore()
+	_ = store.Create(context.Background(), &models.ProviderConfig{
+		ID:         "sa-p1",
+		APIHost:    "https://us-central1-aiplatform.googleapis.com",
+		APIKey:     "",
+		ModelID:    "gemini-pro",
+		Enabled:    true,
+		AuthMethod: models.AuthMethodServiceAccount,
+		AuthParams: models.AuthParams{
+			GCPProjectID: "my-project",
+			SAJSON:       `{"type":"service_account"}`,
+		},
+	})
+
+	engine := NewHealthEngine(store)
+	result, err := engine.CheckNow(context.Background(), "sa-p1")
+	require.NoError(t, err)
+
+	assert.Equal(t, port.HealthRed, result.Status)
+	assert.Contains(t, result.Error, "not yet implemented")
+}

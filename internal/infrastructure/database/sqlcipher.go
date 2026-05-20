@@ -332,6 +332,13 @@ func migrateSQLiteSchema(ctx context.Context, db *sql.DB) error {
 			CREATE INDEX IF NOT EXISTS idx_providers_group ON providers(group_name, sort_order);
 			`,
 		},
+		{
+			version: 6,
+			sql: `
+			ALTER TABLE providers ADD COLUMN auth_method TEXT DEFAULT 'api_key';
+			ALTER TABLE providers ADD COLUMN auth_params TEXT DEFAULT '{}';
+			`,
+		},
 	}
 
 	for _, m := range migrations {
