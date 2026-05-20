@@ -2,7 +2,20 @@ import { useState, useEffect, useCallback } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Eye, EyeOff, X, AlertTriangle, Pencil, Plus } from 'lucide-react'
+import {
+  Eye,
+  EyeOff,
+  X,
+  AlertTriangle,
+  Pencil,
+  Plus,
+  PlugZap,
+  Loader2,
+  CheckCircle,
+  XCircle,
+  ChevronDown,
+  Clock,
+} from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { ProviderConfig } from '@/types/provider'
@@ -20,6 +33,15 @@ const providerFormSchema = z.object({
 })
 
 type ProviderFormData = z.infer<typeof providerFormSchema>
+
+type TestStatus = 'idle' | 'testing' | 'green' | 'yellow' | 'red'
+
+interface TestRecord {
+  status: Exclude<TestStatus, 'idle' | 'testing'>
+  latencyMs: number
+  error?: string
+  checkedAt: number
+}
 
 interface ProviderCustomDialogProps {
   mode: 'custom' | 'edit'
@@ -43,9 +65,21 @@ const defaultValues: ProviderFormData = {
 }
 
 /**
+ * 格式化相对时间（"刚刚"、"N秒前"、"N分钟前"）。
+ */
+function formatRelativeTime(ts: number): string {
+  const diff = Math.floor((Date.now() - ts) / 1000)
+  if (diff < 5) return '刚刚'
+  if (diff < 60) return `${diff} 秒前`
+  if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`
+  return `${Math.floor(diff / 3600)} 小时前`
+}
+
+/**
  * 自定义 Provider 表单弹窗。
  * 支持从零创建（custom 模式）或编辑已有 Provider（edit 模式）。
  * 使用 react-hook-form + zod 做实时验证。
+ * 集成测试连接功能：fetch /v1/models 验证连通性并拉取模型列表。
  */
 export function ProviderCustomDialog({
   mode,
@@ -59,12 +93,21 @@ export function ProviderCustomDialog({
   const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
   const [groupInputMode, setGroupInputMode] = useState<'select' | 'input'>('select')
 
+  // 测试连接相关状态
+  const [testStatus, setTestStatus] = useState<TestStatus>('idle')
+  const [testLatencyMs, setTestLatencyMs] = useState(0)
+  const [testError, setTestError] = useState('')
+  const [fetchedModels, setFetchedModels] = useState<Array<{ id: string; name: string }>>([])
+  const [modelSelectMode, setModelSelectMode] = useState<'dropdown' | 'manual'>('manual')
+  const [testHistory, setTestHistory] = useState<TestRecord[]>([])
+
   const {
     register,
     handleSubmit,
     watch,
     setValue,
     reset,
+    getValues,
     formState: { errors, isDirty, isValid },
   } = useForm<ProviderFormData>({
     resolver: zodResolver(providerFormSchema),
@@ -72,12 +115,18 @@ export function ProviderCustomDialog({
     mode: 'onChange',
   })
 
-  // 弹窗打开时初始化表单
+  // 弹窗打开时初始化表单与测试状态
   useEffect(() => {
     if (open) {
       setShowKey(false)
       setShowUnsavedWarning(false)
       setGroupInputMode('select')
+      setTestStatus('idle')
+      setTestLatencyMs(0)
+      setTestError('')
+      setFetchedModels([])
+      setModelSelectMode('manual')
+      setTestHistory([])
       if (mode === 'edit' && provider) {
         reset({
           name: provider.name,
@@ -98,6 +147,109 @@ export function ProviderCustomDialog({
 
   const temperature = watch('temperature')
   const group = watch('group')
+  const currentModelId = watch('modelId')
+
+  // 测试连接
+  const handleTestConnection = useCallback(async () => {
+    const apiHost = getValues('apiHost')
+    const apiKey = getValues('apiKey')
+
+    if (!apiHost || !/^https?:\/\//.test(apiHost)) {
+      setTestStatus('red')
+      setTestError('请先填写有效的 API Host（以 http:// 或 https:// 开头）')
+      return
+    }
+
+    setTestStatus('testing')
+    setTestError('')
+
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 2000)
+    const startTime = Date.now()
+
+    let finalStatus: Exclude<TestStatus, 'idle' | 'testing'> = 'red'
+    let finalLatency = 0
+    let finalError = ''
+    let finalModels: Array<{ id: string; name: string }> = []
+    let finalSelectMode: 'dropdown' | 'manual' = 'manual'
+
+    try {
+      const resp = await fetch(`${apiHost.replace(/\/$/, '')}/v1/models`, {
+        headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
+        signal: controller.signal,
+      })
+      clearTimeout(timeoutId)
+      const latency = Date.now() - startTime
+      finalLatency = latency
+
+      if (resp.status === 200) {
+        const data = await resp.json()
+        const models = (data.data || []).map((m: { id?: string; name?: string }) => ({
+          id: m.id || '',
+          name: m.name || m.id || '',
+        }))
+        finalModels = models
+
+        if (latency >= 1000) {
+          finalStatus = 'yellow'
+        } else {
+          finalStatus = 'green'
+        }
+
+        if (models.length > 0) {
+          finalSelectMode = 'dropdown'
+          // 若当前 Model ID 为空，自动填入第一个
+          if (!getValues('modelId')) {
+            setValue('modelId', models[0].id, { shouldValidate: true })
+          }
+        }
+      } else if (resp.status === 404) {
+        finalStatus = 'green'
+        finalError = '该 Provider 不支持自动获取模型列表，请手动输入 Model ID'
+      } else if (resp.status === 401 || resp.status === 403) {
+        finalStatus = 'red'
+        finalError = 'API Key 无效，请检查密钥是否正确'
+      } else {
+        finalStatus = 'red'
+        finalError = `连接失败（HTTP ${resp.status}），请检查 API Host`
+      }
+    } catch (err) {
+      clearTimeout(timeoutId)
+      if (err instanceof Error && err.name === 'AbortError') {
+        finalStatus = 'red'
+        finalError = '连接超时，请检查网络或 API Host 是否正确'
+      } else {
+        finalStatus = 'red'
+        finalError = '连接失败，请检查网络或 API Host 是否正确'
+      }
+    }
+
+    setTestStatus(finalStatus)
+    setTestLatencyMs(finalLatency)
+    setTestError(finalError)
+    setFetchedModels(finalModels)
+    setModelSelectMode(finalSelectMode)
+    setTestHistory((prev) =>
+      [
+        {
+          status: finalStatus,
+          latencyMs: finalLatency,
+          error: finalError || undefined,
+          checkedAt: Date.now(),
+        },
+        ...prev,
+      ].slice(0, 3)
+    )
+  }, [getValues, setValue])
+
+  // 从下拉选择模型
+  const handleSelectModel = useCallback(
+    (e: React.ChangeEvent<HTMLSelectElement>) => {
+      const val = e.target.value
+      setValue('modelId', val, { shouldValidate: true })
+    },
+    [setValue]
+  )
 
   // 分组选择变更
   const handleGroupChange = useCallback(
@@ -145,6 +297,13 @@ export function ProviderCustomDialog({
 
   const title = mode === 'edit' ? '编辑 Provider' : '添加自定义 Provider'
   const Icon = mode === 'edit' ? Pencil : Plus
+
+  // 状态卡片样式映射
+  const statusCardStyles = {
+    green: 'border-emerald-500 bg-emerald-50 text-emerald-700',
+    yellow: 'border-amber-500 bg-amber-50 text-amber-700',
+    red: 'border-red-500 bg-red-50 text-red-700',
+  }
 
   if (!open) return null
 
@@ -260,17 +419,153 @@ export function ProviderCustomDialog({
             </p>
           </div>
 
+          {/* 测试连接 */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm">连接测试</Label>
+              <button
+                type="button"
+                onClick={handleTestConnection}
+                disabled={testStatus === 'testing'}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                data-testid="pc-test-connection-btn"
+              >
+                {testStatus === 'testing' ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    测试中…
+                  </>
+                ) : (
+                  <>
+                    <PlugZap className="w-3.5 h-3.5" />
+                    测试连接
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* 结果卡片 */}
+            {testStatus !== 'idle' && testStatus !== 'testing' && (
+              <div
+                className={`rounded-lg border p-3 text-sm ${statusCardStyles[testStatus]}`}
+                data-testid="pc-test-result-card"
+                data-test-status={testStatus}
+              >
+                <div className="flex items-center gap-2">
+                  {testStatus === 'green' && <CheckCircle className="w-4 h-4 shrink-0" />}
+                  {testStatus === 'yellow' && <AlertTriangle className="w-4 h-4 shrink-0" />}
+                  {testStatus === 'red' && <XCircle className="w-4 h-4 shrink-0" />}
+                  <span className="font-medium">
+                    {testStatus === 'green' && `连通，延迟 ${testLatencyMs}ms`}
+                    {testStatus === 'yellow' && `连通但延迟较高，${testLatencyMs}ms`}
+                    {testStatus === 'red' && (testError || '无法连接')}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* 测试历史 */}
+            {testHistory.length > 0 && (
+              <div className="space-y-1.5" data-testid="pc-test-history">
+                <p className="text-[11px] text-muted-foreground font-medium">最近测试结果</p>
+                <div className="space-y-1">
+                  {testHistory.map((record, idx) => (
+                    <div
+                      key={`${record.checkedAt}-${idx}`}
+                      className="flex items-center gap-2 text-xs"
+                      data-testid={`pc-test-history-item-${idx}`}
+                    >
+                      <span
+                        className={`w-2 h-2 rounded-full shrink-0 ${
+                          record.status === 'green'
+                            ? 'bg-emerald-500'
+                            : record.status === 'yellow'
+                              ? 'bg-amber-500'
+                              : 'bg-red-500'
+                        }`}
+                      />
+                      <span className="text-muted-foreground">
+                        {record.status === 'green' && `连通 ${record.latencyMs}ms`}
+                        {record.status === 'yellow' && `延迟高 ${record.latencyMs}ms`}
+                        {record.status === 'red' && (record.error || '无法连接')}
+                      </span>
+                      <span className="text-muted-foreground/60 ml-auto flex items-center gap-0.5">
+                        <Clock className="w-3 h-3" />
+                        {formatRelativeTime(record.checkedAt)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Model ID */}
           <div className="space-y-1.5">
-            <Label htmlFor="pc-model">
-              Model ID <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="pc-model"
-              {...register('modelId')}
-              placeholder="例如：gpt-4o"
-              data-testid="pc-model-input"
-            />
+            <div className="flex items-center justify-between">
+              <Label htmlFor="pc-model">
+                Model ID <span className="text-destructive">*</span>
+              </Label>
+              {fetchedModels.length > 0 && (
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setModelSelectMode('dropdown')}
+                    className={`text-[11px] px-1.5 py-0.5 rounded transition-colors ${
+                      modelSelectMode === 'dropdown'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:bg-accent'
+                    }`}
+                    data-testid="pc-model-mode-dropdown"
+                  >
+                    列表选择
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModelSelectMode('manual')}
+                    className={`text-[11px] px-1.5 py-0.5 rounded transition-colors ${
+                      modelSelectMode === 'manual'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:bg-accent'
+                    }`}
+                    data-testid="pc-model-mode-manual"
+                  >
+                    手动输入
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {modelSelectMode === 'dropdown' && fetchedModels.length > 0 ? (
+              <div className="relative">
+                <select
+                  id="pc-model"
+                  value={currentModelId}
+                  onChange={handleSelectModel}
+                  className="w-full h-9 px-3 pr-8 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring appearance-none"
+                  data-testid="pc-model-select"
+                >
+                  <option value="">请选择模型</option>
+                  {fetchedModels.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name} ({m.id})
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+              </div>
+            ) : (
+              <Input
+                id="pc-model"
+                {...register('modelId')}
+                placeholder={
+                  testStatus === 'green' && fetchedModels.length === 0
+                    ? '该 Provider 不支持自动获取，请手动输入'
+                    : '例如：gpt-4o'
+                }
+                data-testid="pc-model-input"
+              />
+            )}
             {errors.modelId && (
               <p className="text-xs text-destructive">{errors.modelId.message}</p>
             )}
