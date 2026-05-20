@@ -87,10 +87,11 @@ const defaultSendMessageStream = async (req: SendMessageRequest): Promise<void> 
   await new Promise((r) => setTimeout(r, 150))
   const chunks = ['这是', '一个', '模拟的', '流式', '回复。']
   let accumulated = ''
+  EventsEmit('chat:stream_chunk', { type: 'start', payload: '', metadata: { model: 'kimi-lite' } })
   for (const chunk of chunks) {
     accumulated += chunk
     await new Promise((r) => setTimeout(r, 10))
-    EventsEmit('chat:stream:token', chunk)
+    EventsEmit('chat:stream_chunk', { type: 'content', payload: chunk })
   }
   if (!mockMessages[req.conversation_id]) {
     mockMessages[req.conversation_id] = []
@@ -99,11 +100,11 @@ const defaultSendMessageStream = async (req: SendMessageRequest): Promise<void> 
     { role: 'user', content: req.messages[req.messages.length - 1]?.content ?? '' },
     { role: 'assistant', content: accumulated }
   )
-  EventsEmit('chat:stream:end', null)
+  EventsEmit('chat:stream_chunk', { type: 'done', payload: '', metadata: { latency_ms: 50 } })
 }
 
 const defaultStopGeneration = async (): Promise<void> => {
-  EventsEmit('chat:stream:interrupted', null)
+  EventsEmit('chat:stream_chunk', { type: 'error', payload: '生成已中断' })
 }
 
 const defaultGetConversations = async (): Promise<ConversationSummary[]> => {
@@ -272,12 +273,13 @@ export async function mockStreamResponse(
   options: { delayMs?: number; emitEnd?: boolean } = {}
 ): Promise<void> {
   const { delayMs = 10, emitEnd = true } = options
+  EventsEmit('chat:stream_chunk', { type: 'start', payload: '' })
   for (const chunk of chunks) {
     await new Promise((r) => setTimeout(r, delayMs))
-    EventsEmit('chat:stream:token', chunk)
+    EventsEmit('chat:stream_chunk', { type: 'content', payload: chunk })
   }
   if (emitEnd) {
-    EventsEmit('chat:stream:end', null)
+    EventsEmit('chat:stream_chunk', { type: 'done', payload: '' })
   }
 }
 

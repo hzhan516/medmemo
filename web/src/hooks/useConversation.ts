@@ -19,7 +19,6 @@ export function useConversation() {
     setLastMessageError,
     setLastMessageWarnings,
     setLastMessageReplacedTerms,
-    abortLastMessage,
     setStreaming,
     setConversationId,
     addConversation,
@@ -33,30 +32,33 @@ export function useConversation() {
 
   // 注册 Wails 流式事件监听
   useEffect(() => {
-    const removeToken = EventsOn('chat:stream:token', (chunk: string) => {
-      appendToLastMessage(chunk)
-    })
-    const removeEnd = EventsOn('chat:stream:end', () => {
-      setStreaming(false)
-      // 流式结束后更新当前会话的预览和时间
-      if (currentConversationId) {
-        const lastMsg = useChatStore.getState().messages
-        const lastAssistant = [...lastMsg].reverse().find((m) => m.role === 'assistant')
-        if (lastAssistant) {
-          updateConversation(currentConversationId, {
-            preview: lastAssistant.content.slice(0, 60),
-            updatedAt: Date.now(),
-          })
-        }
+    const removeStreamChunk = EventsOn('chat:stream_chunk', (chunk: { type: 'start' | 'content' | 'done' | 'error'; payload: string; metadata?: { model?: string; provider_id?: string; latency_ms?: number; token_count?: number } }) => {
+      switch (chunk.type) {
+        case 'start':
+          // start chunk 仅携带 metadata，无需 UI 操作
+          break
+        case 'content':
+          appendToLastMessage(chunk.payload)
+          break
+        case 'done':
+          setStreaming(false)
+          // 流式结束后更新当前会话的预览和时间
+          if (currentConversationId) {
+            const lastMsg = useChatStore.getState().messages
+            const lastAssistant = [...lastMsg].reverse().find((m) => m.role === 'assistant')
+            if (lastAssistant) {
+              updateConversation(currentConversationId, {
+                preview: lastAssistant.content.slice(0, 60),
+                updatedAt: Date.now(),
+              })
+            }
+          }
+          break
+        case 'error':
+          setLastMessageError(chunk.payload)
+          setStreaming(false)
+          break
       }
-    })
-    const removeError = EventsOn('chat:stream:error', (err: string) => {
-      setLastMessageError(err)
-      setStreaming(false)
-    })
-    const removeInterrupted = EventsOn('chat:stream:interrupted', () => {
-      abortLastMessage()
-      setStreaming(false)
     })
     const removeCompliance = EventsOn('chat:stream:compliance', (payload: { level: string; warning: string; notice: string; replacedTerms?: string[]; matchedRule?: string }) => {
       const warnings: string[] = [payload.level]
@@ -73,14 +75,11 @@ export function useConversation() {
     })
 
     return () => {
-      removeToken()
-      removeEnd()
-      removeError()
-      removeInterrupted()
+      removeStreamChunk()
       removeCompliance()
       removeTitle()
     }
-  }, [appendToLastMessage, setLastMessageError, setLastMessageWarnings, abortLastMessage, setStreaming, currentConversationId, updateConversation])
+  }, [appendToLastMessage, setLastMessageError, setLastMessageWarnings, setStreaming, currentConversationId, updateConversation])
 
   const sendMessage = useCallback(
     async (content: string) => {

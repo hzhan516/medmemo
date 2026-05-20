@@ -12,6 +12,7 @@ import (
 
 	"github.com/medmemo/medmemo/internal/application"
 	"github.com/medmemo/medmemo/internal/application/port"
+	"github.com/medmemo/medmemo/internal/application/stream"
 	"github.com/medmemo/medmemo/internal/application/updater"
 	"github.com/medmemo/medmemo/internal/application/usecase"
 	"github.com/medmemo/medmemo/internal/domain/entity"
@@ -146,7 +147,7 @@ func (a *WailsApp) SendMessage(req SendMessageRequest) (*SendMessageResponse, er
 	}, nil
 }
 
-// SendMessageStream 发送流式对话请求，通过 Wails Events 实时推送 token。
+// SendMessageStream 发送流式对话请求，通过 Wails Events 实时推送结构化 StreamChunk。
 func (a *WailsApp) SendMessageStream(req SendMessageRequest) error {
 	ctx, cancel := context.WithTimeout(a.ctx, 120*time.Second)
 
@@ -167,22 +168,28 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) error {
 		Model:          models.ProviderType(req.Model),
 	}
 
+	// 统一流式处理层：将原始 callback 包装为结构化 StreamChunk 序列
+	broker := stream.NewBroker(req.Model, "", func(chunk models.StreamChunk) {
+		runtime.EventsEmit(a.ctx, "chat:stream_chunk", chunk)
+	})
+	broker.Start()
+
 	// 收集 AI 完整回复用于持久化
 	var fullReply stringsBuilder
 
 	err := a.chatOrchestrator.StreamExecute(ctx, chatReq, func(chunk string) {
 		fullReply.WriteString(chunk)
-		runtime.EventsEmit(a.ctx, "chat:stream:token", chunk)
+		broker.Content(chunk)
 	})
 
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			runtime.EventsEmit(a.ctx, "chat:stream:interrupted", nil)
+			broker.Error("生成已中断")
 			// 保存已生成的部分内容
 			a.saveMessages(ctx, req.ConversationID, req.Messages, fullReply.String())
 			return nil
 		}
-		runtime.EventsEmit(a.ctx, "chat:stream:error", err.Error())
+		broker.Error(err.Error())
 		return fmt.Errorf("stream failed: %w", err)
 	}
 
@@ -202,7 +209,7 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) error {
 		runtime.EventsEmit(a.ctx, "chat:stream:compliance", payload)
 	}
 
-	runtime.EventsEmit(a.ctx, "chat:stream:end", nil)
+	broker.Done()
 	return nil
 }
 

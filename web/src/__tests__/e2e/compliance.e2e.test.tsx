@@ -75,8 +75,9 @@ describe('E2E: 合规流程', () => {
     setMockHandlers({
       SendMessageStream: async () => {
         // 模拟后端返回 L1 阻断级内容后，通过 compliance event 推送
-        EventsEmit('chat:stream:token', '我无法提供医疗诊断或治疗建议。')
-        EventsEmit('chat:stream:end', null)
+        EventsEmit('chat:stream_chunk', { type: 'start', payload: '' })
+        EventsEmit('chat:stream_chunk', { type: 'content', payload: '我无法提供医疗诊断或治疗建议。' })
+        EventsEmit('chat:stream_chunk', { type: 'done', payload: '' })
         // 流式结束后推送合规事件
         EventsEmit('chat:stream:compliance', {
           level: 'L1_BLOCK',
@@ -85,7 +86,7 @@ describe('E2E: 合规流程', () => {
           replacedTerms: ['DIAGNOSIS_TERM'],
           matchedRule: 'L1_DIAGNOSIS_BLOCK',
         })
-      },
+      }
     })
 
     const user = userEvent.setup()
@@ -107,8 +108,9 @@ describe('E2E: 合规流程', () => {
   it('输入 L2 警告级内容 → 验证橙色高亮警告框 + 免责声明追加', async () => {
     setMockHandlers({
       SendMessageStream: async () => {
-        EventsEmit('chat:stream:token', '这可能是某种健康问题的表现，建议咨询医生确认。')
-        EventsEmit('chat:stream:end', null)
+        EventsEmit('chat:stream_chunk', { type: 'start', payload: '' })
+        EventsEmit('chat:stream_chunk', { type: 'content', payload: '这可能是某种健康问题的表现，建议咨询医生确认。' })
+        EventsEmit('chat:stream_chunk', { type: 'done', payload: '' })
         EventsEmit('chat:stream:compliance', {
           level: 'L2_WARNING',
           warning: '此内容涉及健康风险，仅供参考',

@@ -92,15 +92,16 @@ describe('E2E: 对话流程', () => {
     // 模拟一个缓慢的流式响应
     setMockHandlers({
       SendMessageStream: async () => {
-        EventsEmit('chat:stream:token', '这是')
+        EventsEmit('chat:stream_chunk', { type: 'start', payload: '' })
+        EventsEmit('chat:stream_chunk', { type: 'content', payload: '这是' })
         await new Promise((r) => setTimeout(r, 50))
-        EventsEmit('chat:stream:token', '被中断')
+        EventsEmit('chat:stream_chunk', { type: 'content', payload: '被中断' })
         await new Promise((r) => setTimeout(r, 50))
-        EventsEmit('chat:stream:token', '的内容')
-        // 不发送 end 事件，模拟中断
+        EventsEmit('chat:stream_chunk', { type: 'content', payload: '的内容' })
+        // 不发送 done 事件，模拟中断
       },
       StopGeneration: async () => {
-        EventsEmit('chat:stream:interrupted', null)
+        EventsEmit('chat:stream_chunk', { type: 'error', payload: '生成已中断' })
       },
     })
 
@@ -124,16 +125,16 @@ describe('E2E: 对话流程', () => {
     const stopBtn = screen.getByLabelText('停止生成')
     await user.click(stopBtn)
 
-    // 验证中断标记
+    // 验证中断错误提示
     await waitFor(() => {
-      expect(screen.getByText('[用户中断]')).toBeInTheDocument()
+      expect(screen.getByText('生成已中断')).toBeInTheDocument()
     })
   })
 
   it('发送消息 → 网络异常 → 验证错误提示 + 重试按钮', async () => {
     setMockHandlers({
       SendMessageStream: async () => {
-        EventsEmit('chat:stream:error', '网络连接超时，请检查网络后重试')
+        EventsEmit('chat:stream_chunk', { type: 'error', payload: '网络连接超时，请检查网络后重试' })
       },
     })
 

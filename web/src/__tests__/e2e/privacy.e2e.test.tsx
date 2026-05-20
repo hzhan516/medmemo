@@ -30,8 +30,9 @@ describe('E2E: 隐私与设置流程', () => {
     setMockHandlers({
       SendMessageStream: async () => {
         await new Promise((r) => setTimeout(r, 150))
-        EventsEmit('chat:stream:token', '用户 <NAME_1> 的联系方式是 <PHONE_1>，身份证 <ID_1>。')
-        EventsEmit('chat:stream:end', null)
+        EventsEmit('chat:stream_chunk', { type: 'start', payload: '' })
+        EventsEmit('chat:stream_chunk', { type: 'content', payload: '用户 <NAME_1> 的联系方式是 <PHONE_1>，身份证 <ID_1>。' })
+        EventsEmit('chat:stream_chunk', { type: 'done', payload: '' })
       },
     })
 
