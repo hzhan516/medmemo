@@ -168,7 +168,11 @@ func (p *ProviderConfig) ResolveAuthToken() (string, error) {
 		}
 		return "", fmt.Errorf("access_token expired, refresh required")
 	case AuthMethodOAuthDevice:
-		return "", fmt.Errorf("oauth_device auth not yet implemented (TASK-046)")
+		// 优先检查内存缓存的 access_token
+		if p.AuthParams.OAuthAccessToken != "" && p.AuthParams.OAuthExpiresAt > time.Now().Unix() {
+			return p.AuthParams.OAuthAccessToken, nil
+		}
+		return "", fmt.Errorf("access_token expired, refresh required")
 	case AuthMethodServiceAccount:
 		return "", fmt.Errorf("service_account auth not yet implemented")
 	default:

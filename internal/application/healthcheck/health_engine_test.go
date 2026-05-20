@@ -475,8 +475,8 @@ func TestHealthEngine_CheckNow_CLIToken_Success(t *testing.T) {
 	assert.Empty(t, result.Error)
 }
 
-// TestHealthEngine_CheckNow_OAuthDevice_NotImplemented 验证 oauth_device 方式返回 Red。
-func TestHealthEngine_CheckNow_OAuthDevice_NotImplemented(t *testing.T) {
+// TestHealthEngine_CheckNow_OAuthDevice_CacheExpired 验证 oauth_device 方式缓存过期时返回 Red。
+func TestHealthEngine_CheckNow_OAuthDevice_CacheExpired(t *testing.T) {
 	store := newMockProviderStore()
 	_ = store.Create(context.Background(), &models.ProviderConfig{
 		ID:         "oauth-p1",
@@ -496,7 +496,7 @@ func TestHealthEngine_CheckNow_OAuthDevice_NotImplemented(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, port.HealthRed, result.Status)
-	assert.Contains(t, result.Error, "TASK-046")
+	assert.Contains(t, result.Error, "access_token expired, refresh required")
 }
 
 // TestHealthEngine_CheckNow_ServiceAccount_NotImplemented 验证 service_account 方式返回 Red。

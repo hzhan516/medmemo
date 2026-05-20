@@ -67,6 +67,50 @@ export interface AuthDegradedEvent {
 }
 
 /**
+ * OAuth Device Flow 启动响应，对应后端 DeviceFlowStartResponse。
+ */
+export interface DeviceFlowStartResponse {
+  /** 用户码，供前端展示 */
+  userCode: string
+  /** 验证 URL，供用户浏览器访问 */
+  verificationURI: string
+  /** 设备码，后端轮询用 */
+  deviceCode: string
+  /** 设备码有效期（秒） */
+  expiresIn: number
+  /** 建议轮询间隔（秒） */
+  interval: number
+}
+
+/**
+ * OAuth Device Flow 状态响应，对应后端 DeviceFlowStatusResponse。
+ */
+export interface DeviceFlowStatusResponse {
+  /** 设备码 */
+  deviceCode: string
+  /** 厂商类型 */
+  providerType: string
+  /** 当前状态：pending / slow_down / success / error / cancelled */
+  status: string
+  /** 错误信息 */
+  error?: string
+}
+
+/**
+ * OAuth Device Flow 成功事件，对应后端 runtime.EventsEmit("oauth:success", ...)。
+ */
+export interface OAuthSuccessEvent {
+  /** 设备码 */
+  deviceCode: string
+  /** 厂商类型 */
+  providerType: string
+  /** 新创建的 Provider ID */
+  providerID: string
+  /** Provider 显示名称 */
+  providerName: string
+}
+
+/**
  * 用户已添加的 Provider 配置。
  * 由 ProviderTemplate + 用户输入（认证配置、自定义参数）构成。
  */

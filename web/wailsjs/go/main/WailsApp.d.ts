@@ -118,3 +118,24 @@ export function RefreshToken(arg1: string): Promise<void>;
 export function EnableAutoRefresh(arg1: string): Promise<void>;
 
 export function DisableAutoRefresh(arg1: string): Promise<void>;
+
+export interface DeviceFlowStartResponse {
+  user_code: string;
+  verification_uri: string;
+  device_code: string;
+  expires_in: number;
+  interval: number;
+}
+
+export interface DeviceFlowStatusResponse {
+  device_code: string;
+  provider_type: string;
+  status: string;
+  error?: string;
+}
+
+export function StartOAuthDeviceFlow(arg1: string): Promise<DeviceFlowStartResponse>;
+
+export function CancelOAuthDeviceFlow(arg1: string): Promise<void>;
+
+export function GetOAuthDeviceFlowStatus(arg1: string): Promise<DeviceFlowStatusResponse | null>;

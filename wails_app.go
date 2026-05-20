@@ -37,6 +37,7 @@ type WailsApp struct {
 	updaterSvc       *updater.Service
 	secretStore      secret.Store
 	tokenRefreshSvc  *auth.TokenRefreshService
+	deviceFlowSvc    *auth.OAuthDeviceFlowService
 	streamMu         sync.Mutex
 	streamCancel     context.CancelFunc
 }
@@ -55,6 +56,7 @@ func NewWailsApp(
 	updaterSvc *updater.Service,
 	secretStore secret.Store,
 	tokenRefreshSvc *auth.TokenRefreshService,
+	deviceFlowSvc *auth.OAuthDeviceFlowService,
 ) *WailsApp {
 	return &WailsApp{
 		chatOrchestrator: chat,
@@ -69,6 +71,7 @@ func NewWailsApp(
 		updaterSvc:       updaterSvc,
 		secretStore:      secretStore,
 		tokenRefreshSvc:  tokenRefreshSvc,
+		deviceFlowSvc:    deviceFlowSvc,
 	}
 }
 
@@ -102,6 +105,41 @@ func (a *WailsApp) Startup(ctx context.Context) {
 	// 启动时扫描 cli_token / oauth_device provider，安排自动刷新
 	if a.tokenRefreshSvc != nil {
 		go a.scheduleAutoRefreshesAsync()
+	}
+
+	// 初始化 Device Flow 事件回调
+	if a.deviceFlowSvc != nil {
+		a.deviceFlowSvc.SetRefreshService(a.tokenRefreshSvc)
+		a.deviceFlowSvc.SetCallbacks(
+			func(deviceCode, providerType string, cfg *models.ProviderConfig) {
+				runtime.EventsEmit(a.ctx, "oauth:success", map[string]any{
+					"device_code":   deviceCode,
+					"provider_type": providerType,
+					"provider_id":   cfg.ID,
+					"provider_name": cfg.Name,
+				})
+			},
+			func(deviceCode, providerType string, err error) {
+				runtime.EventsEmit(a.ctx, "oauth:error", map[string]any{
+					"device_code":   deviceCode,
+					"provider_type": providerType,
+					"error":         err.Error(),
+				})
+			},
+			func(deviceCode, providerType string) {
+				runtime.EventsEmit(a.ctx, "oauth:pending", map[string]any{
+					"device_code":   deviceCode,
+					"provider_type": providerType,
+				})
+			},
+			func(deviceCode, providerType string, newInterval int) {
+				runtime.EventsEmit(a.ctx, "oauth:slow_down", map[string]any{
+					"device_code":   deviceCode,
+					"provider_type": providerType,
+					"new_interval":  newInterval,
+				})
+			},
+		)
 	}
 }
 
@@ -884,4 +922,81 @@ func (a *WailsApp) BuildCLIProvider(providerType, modelID string) (*models.Provi
 	}
 
 	return cfg, nil
+}
+
+// --- OAuth Device Flow 绑定方法 ---
+
+// DeviceFlowStartResponse 前端展示用。
+type DeviceFlowStartResponse struct {
+	UserCode        string `json:"user_code"`
+	VerificationURI string `json:"verification_uri"`
+	DeviceCode      string `json:"device_code"`
+	ExpiresIn       int    `json:"expires_in"`
+	Interval        int    `json:"interval"`
+}
+
+// DeviceFlowStatusResponse 查询轮询状态。
+type DeviceFlowStatusResponse struct {
+	DeviceCode   string `json:"device_code"`
+	ProviderType string `json:"provider_type"`
+	Status       string `json:"status"`
+	Error        string `json:"error,omitempty"`
+}
+
+// StartOAuthDeviceFlow 对指定厂商启动 OAuth Device Flow。
+func (a *WailsApp) StartOAuthDeviceFlow(providerType string) (*DeviceFlowStartResponse, error) {
+	if providerType == "" {
+		return nil, fmt.Errorf("provider_type cannot be empty")
+	}
+	if a.deviceFlowSvc == nil {
+		return nil, fmt.Errorf("device flow service not initialized")
+	}
+
+	result, err := a.deviceFlowSvc.StartFlow(providerType)
+	if err != nil {
+		return nil, fmt.Errorf("failed to start device flow for %s: %w", providerType, err)
+	}
+
+	return &DeviceFlowStartResponse{
+		UserCode:        result.UserCode,
+		VerificationURI: result.VerificationURI,
+		DeviceCode:      result.DeviceCode,
+		ExpiresIn:       result.ExpiresIn,
+		Interval:        result.Interval,
+	}, nil
+}
+
+// CancelOAuthDeviceFlow 取消指定 deviceCode 的轮询。
+func (a *WailsApp) CancelOAuthDeviceFlow(deviceCode string) error {
+	if deviceCode == "" {
+		return fmt.Errorf("device_code cannot be empty")
+	}
+	if a.deviceFlowSvc == nil {
+		return fmt.Errorf("device flow service not initialized")
+	}
+
+	a.deviceFlowSvc.CancelFlow(deviceCode)
+	return nil
+}
+
+// GetOAuthDeviceFlowStatus 查询指定 deviceCode 的当前轮询状态。
+func (a *WailsApp) GetOAuthDeviceFlowStatus(deviceCode string) (*DeviceFlowStatusResponse, error) {
+	if deviceCode == "" {
+		return nil, fmt.Errorf("device_code cannot be empty")
+	}
+	if a.deviceFlowSvc == nil {
+		return nil, fmt.Errorf("device flow service not initialized")
+	}
+
+	status := a.deviceFlowSvc.GetStatus(deviceCode)
+	if status == nil {
+		return nil, nil
+	}
+
+	return &DeviceFlowStatusResponse{
+		DeviceCode:   status.DeviceCode,
+		ProviderType: status.ProviderType,
+		Status:       string(status.Status),
+		Error:        status.Error,
+	}, nil
 }

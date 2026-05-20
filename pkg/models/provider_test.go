@@ -260,13 +260,29 @@ func TestProviderConfig_ResolveAuthToken_CLIToken_CachedAccessToken(t *testing.T
 	assert.Equal(t, "cached_acc_token", token)
 }
 
-// TestProviderConfig_ResolveAuthToken_OAuthDevice 验证 oauth_device 方式返回未实现错误。
+// TestProviderConfig_ResolveAuthToken_OAuthDevice 验证 oauth_device 方式缓存过期时返回错误。
 func TestProviderConfig_ResolveAuthToken_OAuthDevice(t *testing.T) {
 	p := newValidProviderConfig()
 	p.AuthMethod = AuthMethodOAuthDevice
 	_, err := p.ResolveAuthToken()
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "TASK-046")
+	assert.Contains(t, err.Error(), "access_token expired, refresh required")
+}
+
+// TestProviderConfig_ResolveAuthToken_OAuthDevice_CachedAccessToken 验证 oauth_device 方式缓存命中时正确返回 token。
+func TestProviderConfig_ResolveAuthToken_OAuthDevice_CachedAccessToken(t *testing.T) {
+	p := newValidProviderConfig()
+	p.AuthMethod = AuthMethodOAuthDevice
+	p.AuthParams = AuthParams{
+		OAuthClientID:    "client-123",
+		OAuthTokenURL:    "https://auth.example.com/token",
+		OAuthAccessToken: "oauth_cached_token",
+		OAuthExpiresAt:   time.Now().Add(1 * time.Hour).Unix(),
+	}
+
+	token, err := p.ResolveAuthToken()
+	assert.NoError(t, err)
+	assert.Equal(t, "oauth_cached_token", token)
 }
 
 // TestProviderConfig_ResolveAuthToken_ServiceAccount 验证 service_account 方式返回未实现错误。

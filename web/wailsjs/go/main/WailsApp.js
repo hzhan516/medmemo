@@ -112,3 +112,15 @@ export function EnableAutoRefresh(arg1) {
 export function DisableAutoRefresh(arg1) {
   return window['go']['main']['WailsApp']['DisableAutoRefresh'](arg1);
 }
+
+export function StartOAuthDeviceFlow(arg1) {
+  return window['go']['main']['WailsApp']['StartOAuthDeviceFlow'](arg1);
+}
+
+export function CancelOAuthDeviceFlow(arg1) {
+  return window['go']['main']['WailsApp']['CancelOAuthDeviceFlow'](arg1);
+}
+
+export function GetOAuthDeviceFlowStatus(arg1) {
+  return window['go']['main']['WailsApp']['GetOAuthDeviceFlowStatus'](arg1);
+}

@@ -742,5 +742,5 @@ func TestOpenAICompatibleClient_FetchModels_AuthMethod_OAuthDevice(t *testing.T)
 	_, err := client.FetchModels(context.Background(), cfg)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "auth_failed")
-	assert.Contains(t, err.Error(), "TASK-046")
+	assert.Contains(t, err.Error(), "access_token expired, refresh required")
 }

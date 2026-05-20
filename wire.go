@@ -41,6 +41,7 @@ func InitializeApp() (*App, func(), error) {
 		healthcheck.NewHealthEngine,
 		ai.ProviderSet,
 		auth.TokenRefreshProviderSet,
+		auth.OAuthDeviceFlowProviderSet,
 		repository.RepositorySet,
 		detector.ProviderSet,
 		detector.ONNXNERSet,
