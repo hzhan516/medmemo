@@ -48,12 +48,6 @@ type chatRequest struct {
 	Stream   bool      `json:"stream,omitempty"`
 }
 
-// message 表示单条对话消息。
-type message struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
 // chatResponse 表示 OpenAI Chat Completion 非流式响应。
 type chatResponse struct {
 	Choices []choice  `json:"choices"`
@@ -81,22 +75,6 @@ type streamChoice struct {
 // delta 表示流式响应中的内容增量。
 type delta struct {
 	Content string `json:"content"`
-}
-
-// apiError 表示 API 返回的错误信息。
-type apiError struct {
-	Message string `json:"message"`
-	Type    string `json:"type"`
-	Param   string `json:"param"`
-	Code    string `json:"code"`
-}
-
-// Error 实现 error 接口，便于上层 errors.As 识别。
-func (e *apiError) Error() string {
-	if e.Code != "" {
-		return fmt.Sprintf("api error [%s]: %s", e.Code, e.Message)
-	}
-	return fmt.Sprintf("api error: %s", e.Message)
 }
 
 // toMessages 将领域消息转换为 OpenAI 消息格式。

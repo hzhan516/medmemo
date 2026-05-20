@@ -1,0 +1,39 @@
+# MedMemo CODEOWNERS
+# 按 Clean Architecture 分层定义代码审查责任人
+# 参考: docs/ARCHITECTURE.md, AGENTS.md
+
+# 全局兜底
+* @hzhan516
+
+# ── Domain 层（核心业务实体，零外部依赖，最严格审查） ──
+/internal/domain/ @hzhan516
+
+# ── Application 层（用例编排） ──
+/internal/application/ @hzhan516
+
+# ── Adapters 层（外部系统适配） ──
+/internal/adapters/ @hzhan516
+
+# ── Infrastructure 层（技术框架封装） ──
+/internal/infrastructure/ @hzhan516
+
+# ── 公共库 ──
+/pkg/ @hzhan516
+
+# ── 前端 ──
+/web/ @hzhan516
+
+# ── 入口与依赖注入 ──
+/cmd/ @hzhan516
+
+# ── CI/CD & 构建脚本 ──
+/.github/ @hzhan516
+/build/ @hzhan516
+/Makefile @hzhan516
+/scripts/build/ @hzhan516
+
+# ── 文档 ──
+/docs/ @hzhan516
+/README.md @hzhan516
+/CONTRIBUTING.md @hzhan516
+/LICENSE @hzhan516

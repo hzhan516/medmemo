@@ -1,0 +1,46 @@
+name: Stale Bot
+
+on:
+  schedule:
+    # 每天 UTC 00:00 执行
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    name: Mark and close stale issues/PRs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          # Issue 配置
+          stale-issue-message: |
+            此 Issue 已 30 天无活动，被标记为过期。
+            如果问题仍然存在，请回复以重新激活；否则将在 7 天后自动关闭。
+          close-issue-message: |
+            此 Issue 因过期后仍无活动而自动关闭。
+            如果问题仍然存在，请重新打开或创建新 Issue。
+          stale-issue-label: 'stale'
+          exempt-issue-labels: 'pinned,security,bug,help wanted'
+          days-before-issue-stale: 30
+          days-before-issue-close: 7
+
+          # PR 配置
+          stale-pr-message: |
+            此 PR 已 30 天无活动，被标记为过期。
+            如果仍在开发中，请推送新提交或回复说明状态；否则将在 7 天后自动关闭。
+          close-pr-message: |
+            此 PR 因过期后仍无活动而自动关闭。
+            如果仍需合并，请重新打开或创建新 PR。
+          stale-pr-label: 'stale'
+          exempt-pr-labels: 'pinned,WIP,blocked'
+          days-before-pr-stale: 30
+          days-before-pr-close: 7
+
+          # 通用
+          operations-per-run: 30
+          remove-stale-when-updated: true
