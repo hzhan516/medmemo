@@ -124,3 +124,23 @@ export function CancelOAuthDeviceFlow(arg1) {
 export function GetOAuthDeviceFlowStatus(arg1) {
   return window['go']['main']['WailsApp']['GetOAuthDeviceFlowStatus'](arg1);
 }
+
+export function DetectOllama() {
+  return window['go']['main']['WailsApp']['DetectOllama']();
+}
+
+export function StartOllamaServer() {
+  return window['go']['main']['WailsApp']['StartOllamaServer']();
+}
+
+export function PullOllamaModel(arg1) {
+  return window['go']['main']['WailsApp']['PullOllamaModel'](arg1);
+}
+
+export function EnsureOllamaAndSmolLM2() {
+  return window['go']['main']['WailsApp']['EnsureOllamaAndSmolLM2']();
+}
+
+export function CreateOllamaProvider() {
+  return window['go']['main']['WailsApp']['CreateOllamaProvider']();
+}

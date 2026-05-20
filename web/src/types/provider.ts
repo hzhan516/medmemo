@@ -113,6 +113,24 @@ export interface OAuthSuccessEvent {
 }
 
 /**
+ * Ollama 环境检测结果，对应后端 OllamaDetectResult。
+ */
+export interface OllamaDetectResult {
+  /** ollama 命令是否存在于 PATH */
+  installed: boolean
+  /** 11434 端口是否响应 */
+  running: boolean
+  /** smollm2:135m 模型是否已下载 */
+  hasSmolLM2: boolean
+  /** 未安装时返回的安装引导文本 */
+  installGuide?: string
+  /** 正在后台启动服务 */
+  serverStarting?: boolean
+  /** 模型下载进度文本 */
+  pullProgress?: string
+}
+
+/**
  * 用户已添加的 Provider 配置。
  * 由 ProviderTemplate + 用户输入（认证配置、自定义参数）构成。
  */

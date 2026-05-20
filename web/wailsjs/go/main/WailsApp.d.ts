@@ -140,3 +140,22 @@ export function StartOAuthDeviceFlow(arg1: string): Promise<DeviceFlowStartRespo
 export function CancelOAuthDeviceFlow(arg1: string): Promise<void>;
 
 export function GetOAuthDeviceFlowStatus(arg1: string): Promise<DeviceFlowStatusResponse | null>;
+
+export interface OllamaDetectResult {
+  installed: boolean;
+  running: boolean;
+  has_smollm2: boolean;
+  install_guide?: string;
+  server_starting?: boolean;
+  pull_progress?: string;
+}
+
+export function DetectOllama(): Promise<OllamaDetectResult>;
+
+export function StartOllamaServer(): Promise<void>;
+
+export function PullOllamaModel(arg1: string): Promise<void>;
+
+export function EnsureOllamaAndSmolLM2(): Promise<OllamaDetectResult>;
+
+export function CreateOllamaProvider(): Promise<ProviderConfig>;
