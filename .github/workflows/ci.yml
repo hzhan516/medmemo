@@ -41,6 +41,9 @@ jobs:
       - name: Validate provider templates JSON
         run: node scripts/validate-provider-templates.js
 
+      - name: Build frontend
+        run: cd web && npm run build
+
       - name: Install golangci-lint
         run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 
