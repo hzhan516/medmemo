@@ -160,6 +160,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish Release
-        run: gh release edit "${{ needs.version.outputs.version }}" --draft=false
+        run: gh release edit "${{ needs.version.outputs.version }}" --draft=false --repo "${{ github.repository }}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
