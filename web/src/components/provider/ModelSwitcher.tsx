@@ -37,7 +37,6 @@ export function ModelSwitcher() {
   // 首次加载时刷新健康状态
   useEffect(() => {
     refreshHealth()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // 构建所有已启用的模型列表

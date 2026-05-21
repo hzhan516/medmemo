@@ -9,7 +9,6 @@
 *.dylib
 *.test
 *.out
-wire_gen.go
 
 # === Wails ===
 /build/bin/

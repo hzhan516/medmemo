@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -43,14 +44,14 @@ func TestOAuthDeviceFlowService_StartFlow_MissingClientID(t *testing.T) {
 
 // TestOAuthDeviceFlowService_FullFlow_Success 验证完整 Device Flow 成功链路。
 func TestOAuthDeviceFlowService_FullFlow_Success(t *testing.T) {
-	deviceAuthCalled := false
-	tokenPollCount := 0
+	var deviceAuthCalled atomic.Bool
+	var tokenPollCount atomic.Int32
 
 	// 模拟厂商服务器
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/device/auth":
-			deviceAuthCalled = true
+			deviceAuthCalled.Store(true)
 			assert.Equal(t, http.MethodPost, r.Method)
 			assert.Equal(t, "application/x-www-form-urlencoded", r.Header.Get("Content-Type"))
 
@@ -68,14 +69,14 @@ func TestOAuthDeviceFlowService_FullFlow_Success(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(resp)
 
 		case "/token":
-			tokenPollCount++
+			cnt := tokenPollCount.Add(1)
 			r.ParseForm()
 			assert.Equal(t, "test-client", r.PostForm.Get("client_id"))
 			assert.Equal(t, "dev_abc123", r.PostForm.Get("device_code"))
 			assert.Equal(t, "urn:ietf:params:oauth:grant-type:device_code", r.PostForm.Get("grant_type"))
 
 			// 第 1 次返回 authorization_pending，第 2 次成功
-			if tokenPollCount < 2 {
+			if cnt < 2 {
 				w.WriteHeader(http.StatusBadRequest)
 				_ = json.NewEncoder(w).Encode(map[string]string{"error": "authorization_pending"})
 				return
@@ -141,7 +142,7 @@ func TestOAuthDeviceFlowService_FullFlow_Success(t *testing.T) {
 	// 1. 启动 Flow
 	result, err := svc.StartFlow("testprovider")
 	require.NoError(t, err)
-	assert.True(t, deviceAuthCalled)
+	assert.True(t, deviceAuthCalled.Load())
 	assert.Equal(t, "USER-CODE", result.UserCode)
 	assert.Equal(t, "https://auth.example.com/verify", result.VerificationURI)
 	assert.Equal(t, "dev_abc123", result.DeviceCode)
@@ -169,7 +170,7 @@ func TestOAuthDeviceFlowService_FullFlow_Success(t *testing.T) {
 	assert.Equal(t, "acc_token_xyz", list[0].AuthParams.OAuthAccessToken)
 
 	// 5. 验证轮询了多次
-	assert.GreaterOrEqual(t, tokenPollCount, 2)
+	assert.GreaterOrEqual(t, tokenPollCount.Load(), int32(2))
 
 	// 6. 验证状态查询
 	status := svc.GetStatus("dev_abc123")
@@ -179,7 +180,8 @@ func TestOAuthDeviceFlowService_FullFlow_Success(t *testing.T) {
 
 // TestOAuthDeviceFlowService_SlowDown 验证 slow_down 处理。
 func TestOAuthDeviceFlowService_SlowDown(t *testing.T) {
-	tokenPollCount := 0
+	var tokenPollCount atomic.Int32
+	var slowDownInterval atomic.Int32
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/device/auth" {
@@ -193,8 +195,8 @@ func TestOAuthDeviceFlowService_SlowDown(t *testing.T) {
 			return
 		}
 		if r.URL.Path == "/token" {
-			tokenPollCount++
-			if tokenPollCount < 2 {
+			cnt := tokenPollCount.Add(1)
+			if cnt < 2 {
 				w.WriteHeader(http.StatusBadRequest)
 				_ = json.NewEncoder(w).Encode(map[string]string{"error": "slow_down"})
 				return
@@ -230,12 +232,11 @@ func TestOAuthDeviceFlowService_SlowDown(t *testing.T) {
 	store := newMockProviderStore()
 	svc := NewOAuthDeviceFlowServiceWithClient(store, nil, server.Client())
 
-	var slowDownInterval int
 	svc.SetCallbacks(
 		func(_, _ string, _ *models.ProviderConfig) {},
 		func(_, _ string, _ error) {},
 		func(_, _ string) {},
-		func(_, _ string, interval int) { slowDownInterval = interval },
+		func(_, _ string, interval int) { slowDownInterval.Store(int32(interval)) },
 	)
 
 	_, err := svc.StartFlow("testprovider")
@@ -247,8 +248,8 @@ func TestOAuthDeviceFlowService_SlowDown(t *testing.T) {
 		return st != nil && st.Status == DeviceFlowStatusSuccess
 	}, 10*time.Second, 200*time.Millisecond)
 
-	assert.GreaterOrEqual(t, tokenPollCount, 2)
-	assert.GreaterOrEqual(t, slowDownInterval, 6) // 初始 1 + slow_down 增加 5
+	assert.GreaterOrEqual(t, tokenPollCount.Load(), int32(2))
+	assert.GreaterOrEqual(t, slowDownInterval.Load(), int32(6)) // 初始 1 + slow_down 增加 5
 }
 
 // TestOAuthDeviceFlowService_AccessDenied 验证用户拒绝授权。
@@ -294,10 +295,10 @@ func TestOAuthDeviceFlowService_AccessDenied(t *testing.T) {
 	store := newMockProviderStore()
 	svc := NewOAuthDeviceFlowServiceWithClient(store, nil, server.Client())
 
-	var errEvent error
+	var errEvent atomic.Pointer[error]
 	svc.SetCallbacks(
 		func(_, _ string, _ *models.ProviderConfig) {},
-		func(_, _ string, err error) { errEvent = err },
+		func(_, _ string, err error) { errEvent.Store(&err) },
 		func(_, _ string) {},
 		func(_, _ string, _ int) {},
 	)
@@ -306,10 +307,11 @@ func TestOAuthDeviceFlowService_AccessDenied(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Eventually(t, func() bool {
-		return errEvent != nil
+		return errEvent.Load() != nil
 	}, 5*time.Second, 100*time.Millisecond)
 
-	assert.Contains(t, errEvent.Error(), "user denied authorization")
+	eventErr := *errEvent.Load()
+	assert.Contains(t, eventErr.Error(), "user denied authorization")
 
 	status := svc.GetStatus("dev_deny")
 	require.NotNil(t, status)
@@ -359,10 +361,10 @@ func TestOAuthDeviceFlowService_ExpiredToken(t *testing.T) {
 	store := newMockProviderStore()
 	svc := NewOAuthDeviceFlowServiceWithClient(store, nil, server.Client())
 
-	var errEvent error
+	var errEvent atomic.Pointer[error]
 	svc.SetCallbacks(
 		func(_, _ string, _ *models.ProviderConfig) {},
-		func(_, _ string, err error) { errEvent = err },
+		func(_, _ string, err error) { errEvent.Store(&err) },
 		func(_, _ string) {},
 		func(_, _ string, _ int) {},
 	)
@@ -371,15 +373,16 @@ func TestOAuthDeviceFlowService_ExpiredToken(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Eventually(t, func() bool {
-		return errEvent != nil
+		return errEvent.Load() != nil
 	}, 10*time.Second, 200*time.Millisecond)
 
-	assert.Contains(t, errEvent.Error(), "device code expired")
+	eventErr := *errEvent.Load()
+	assert.Contains(t, eventErr.Error(), "device code expired")
 }
 
 // TestOAuthDeviceFlowService_CancelFlow 验证取消轮询。
 func TestOAuthDeviceFlowService_CancelFlow(t *testing.T) {
-	pollCount := 0
+	var pollCount atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/device/auth" {
 			_ = json.NewEncoder(w).Encode(DeviceAuthResponse{
@@ -392,7 +395,7 @@ func TestOAuthDeviceFlowService_CancelFlow(t *testing.T) {
 			return
 		}
 		if r.URL.Path == "/token" {
-			pollCount++
+			pollCount.Add(1)
 			w.WriteHeader(http.StatusBadRequest)
 			_ = json.NewEncoder(w).Encode(map[string]string{"error": "authorization_pending"})
 		}
@@ -427,7 +430,7 @@ func TestOAuthDeviceFlowService_CancelFlow(t *testing.T) {
 
 	// 等待至少一次轮询
 	time.Sleep(1500 * time.Millisecond)
-	require.GreaterOrEqual(t, pollCount, 1)
+	require.GreaterOrEqual(t, pollCount.Load(), int32(1))
 
 	// 取消
 	svc.CancelFlow("dev_cancel")
@@ -618,7 +621,8 @@ func TestOAuthDeviceFlowService_SetRefreshService(t *testing.T) {
 
 // TestOAuthDeviceFlowService_TriggerPoll 验证 TriggerPoll 触发立即轮询。
 func TestOAuthDeviceFlowService_TriggerPoll(t *testing.T) {
-	tokenPollCount := 0
+	var tokenPollCount atomic.Int32
+	var successEvent atomic.Pointer[models.ProviderConfig]
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/device/auth" {
@@ -632,7 +636,7 @@ func TestOAuthDeviceFlowService_TriggerPoll(t *testing.T) {
 			return
 		}
 		if r.URL.Path == "/token" {
-			tokenPollCount++
+			tokenPollCount.Add(1)
 			_ = json.NewEncoder(w).Encode(DeviceTokenResponse{
 				AccessToken: "acc_trigger",
 				ExpiresIn:   3600,
@@ -664,9 +668,8 @@ func TestOAuthDeviceFlowService_TriggerPoll(t *testing.T) {
 	store := newMockProviderStore()
 	svc := NewOAuthDeviceFlowServiceWithClient(store, nil, server.Client())
 
-	var successEvent *models.ProviderConfig
 	svc.SetCallbacks(
-		func(_, _ string, cfg *models.ProviderConfig) { successEvent = cfg },
+		func(_, _ string, cfg *models.ProviderConfig) { successEvent.Store(cfg) },
 		func(_, _ string, _ error) {},
 		func(_, _ string) {},
 		func(_, _ string, _ int) {},
@@ -679,7 +682,7 @@ func TestOAuthDeviceFlowService_TriggerPoll(t *testing.T) {
 
 	// 等待一小段时间确认 ticker 未触发
 	time.Sleep(200 * time.Millisecond)
-	assert.Equal(t, 0, tokenPollCount, "ticker 不应在短间隔内触发")
+	assert.Equal(t, int32(0), tokenPollCount.Load(), "ticker 不应在短间隔内触发")
 
 	// 调用 TriggerPoll 触发立即轮询
 	err = svc.TriggerPoll("dev_trigger")
@@ -687,11 +690,11 @@ func TestOAuthDeviceFlowService_TriggerPoll(t *testing.T) {
 
 	// 等待轮询完成
 	require.Eventually(t, func() bool {
-		return successEvent != nil
+		return successEvent.Load() != nil
 	}, 3*time.Second, 100*time.Millisecond, "TriggerPoll 应触发成功")
 
-	assert.Equal(t, 1, tokenPollCount, "TriggerPoll 应只触发一次轮询")
-	assert.Equal(t, "acc_trigger", successEvent.AuthParams.OAuthAccessToken)
+	assert.Equal(t, int32(1), tokenPollCount.Load(), "TriggerPoll 应只触发一次轮询")
+	assert.Equal(t, "acc_trigger", successEvent.Load().AuthParams.OAuthAccessToken)
 }
 
 // TestOAuthDeviceFlowService_TriggerPoll_SessionNotFound 验证无效 deviceCode。
@@ -706,7 +709,7 @@ func TestOAuthDeviceFlowService_TriggerPoll_SessionNotFound(t *testing.T) {
 
 // TestOAuthDeviceFlowService_TriggerPoll_NonPendingSession 验证非 pending 状态不触发。
 func TestOAuthDeviceFlowService_TriggerPoll_NonPendingSession(t *testing.T) {
-	tokenPollCount := 0
+	var tokenPollCount atomic.Int32
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/device/auth" {
@@ -720,7 +723,7 @@ func TestOAuthDeviceFlowService_TriggerPoll_NonPendingSession(t *testing.T) {
 			return
 		}
 		if r.URL.Path == "/token" {
-			tokenPollCount++
+			tokenPollCount.Add(1)
 			_ = json.NewEncoder(w).Encode(DeviceTokenResponse{
 				AccessToken: "acc_np",
 				ExpiresIn:   3600,
@@ -769,10 +772,10 @@ func TestOAuthDeviceFlowService_TriggerPoll_NonPendingSession(t *testing.T) {
 	}, 5*time.Second, 100*time.Millisecond)
 
 	// 完成后再次 TriggerPoll，应无错误且不触发额外轮询
-	prevCount := tokenPollCount
+	prevCount := tokenPollCount.Load()
 	err = svc.TriggerPoll(result.DeviceCode)
 	assert.NoError(t, err)
 
 	time.Sleep(200 * time.Millisecond)
-	assert.Equal(t, prevCount, tokenPollCount, "成功后的 TriggerPoll 不应触发额外轮询")
+	assert.Equal(t, prevCount, tokenPollCount.Load(), "成功后的 TriggerPoll 不应触发额外轮询")
 }
