@@ -1,0 +1,64 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # 每周一 UTC 00:00 执行
+    - cron: '0 0 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  govulncheck:
+    name: Go Vulnerability Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: govulncheck
+        uses: golang/govulncheck-action@v1
+        with:
+          go-version-file: 'go.mod'
+          go-package: ./...
+
+  npm-audit:
+    name: npm Audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run npm audit
+        run: npm audit --audit-level=high
+        # 若 audit 失败不阻断 CI，仅作为安全预警（部分前端漏洞可能无法立即修复）
+        continue-on-error: true
+
+  secret-scan:
+    name: Secret Detection
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Secret scanning
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD

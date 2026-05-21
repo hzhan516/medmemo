@@ -1,0 +1,11 @@
+{
+  "name": "url",
+  "entity_type": "URL",
+  "patterns": [
+    "https?://[^\\s<>\"{}|\\^\\[\\]]+"
+  ],
+  "keywords": ["http://", "https://"],
+  "min_digits": 0,
+  "level": "P2",
+  "placeholder": "URL"
+}

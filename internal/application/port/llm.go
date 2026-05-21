@@ -15,10 +15,27 @@ type LLMClient interface {
 	Chat(ctx context.Context, messages []models.Message) (string, error)
 
 	// StreamChat 发送流式对话请求，通过 callback 逐块推送内容。
-	StreamChat(ctx context.Context, messages []models.Message, callback func(chunk string)) error
+	// 流式结束后返回 TokenUsage（若 Provider 未返回 usage 则为 nil）。
+	StreamChat(ctx context.Context, messages []models.Message, callback func(chunk string)) (*models.TokenUsage, error)
 
 	// CheckAvailability 检查当前模型是否可用，返回状态与原因。
 	CheckAvailability(ctx context.Context) (bool, string)
+}
+
+// LLMClientFactory 根据 ProviderConfig 动态创建 LLMClient。
+// 支持运行时根据用户配置的 provider 创建对应的适配器。
+type LLMClientFactory interface {
+	// CreateClient 根据 ProviderConfig 创建对应的 LLMClient。
+	CreateClient(providerConfig *models.ProviderConfig) (LLMClient, error)
+}
+
+// NERDetector 定义命名实体识别检测端口。
+// 实现者基于 DistilBERT-ONNX 等深度学习模型识别人名、地点、机构名等实体。
+type NERDetector interface {
+	// Predict 对文本执行 NER 推理，返回识别到的实体列表。
+	Predict(ctx context.Context, text string) ([]models.SensitiveEntity, error)
+	// IsAvailable 返回 NER 引擎是否已就绪（模型、动态库、Session 均初始化成功）。
+	IsAvailable() bool
 }
 
 // RecordStore 定义记录存储端口（适配多种底层存储）。

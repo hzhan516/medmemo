@@ -1,5 +1,9 @@
 .PHONY: all dev build test lint wire clean install-tools
 
+# 版本号（默认从 Git 标签读取，无标签时显示 dev）
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+LDFLAGS := -ldflags "-s -w -X main.version=$(VERSION)"
+
 # 默认目标
 all: build
 
@@ -13,7 +17,7 @@ dev:
 # 先手动构建前端，再调用 wails build（Wails v2.12 在 frontend.dir != frontend 时可能跳过前端构建）
 build:
 	cd web && npm install && npm run build
-	wails build -clean -tags webkit2_41
+	wails build -clean -tags webkit2_41 $(LDFLAGS)
 
 # 运行测试
 test:
@@ -60,12 +64,21 @@ clean:
 # 交叉编译（需对应平台环境）
 build-darwin:
 	cd web && npm install && npm run build
-	wails build -platform darwin/universal -clean -tags webkit2_41
+	wails build -platform darwin/universal -clean $(LDFLAGS)
 
 build-windows:
 	cd web && npm install && npm run build
-	wails build -platform windows/amd64 -clean -tags webkit2_41
+	wails build -platform windows/amd64 -clean $(LDFLAGS)
 
 build-linux:
 	cd web && npm install && npm run build
-	wails build -platform linux/amd64 -clean -tags webkit2_41
+	wails build -platform linux/amd64 -clean -tags webkit2_41 $(LDFLAGS)
+
+# 本地完整打包（当前平台，含版本注入与平台安装包）
+release-local:
+	./scripts/build/wails-build.sh $(shell go env GOOS) $(VERSION)
+
+# GoReleaser 本地快照验证（不发布，仅验证配置与归档）
+release-dry-run:
+	cd web && npm ci && npm run build
+	PLATFORM=local goreleaser release --snapshot --clean

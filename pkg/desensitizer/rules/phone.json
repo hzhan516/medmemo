@@ -1,0 +1,11 @@
+{
+  "name": "phone",
+  "entity_type": "手机号",
+  "patterns": [
+    "(?:(?:\\+?86)?1[3-9]\\d{9}|\\b1[3-9]\\d{9}\\b)"
+  ],
+  "keywords": ["+86"],
+  "min_digits": 11,
+  "level": "P3",
+  "placeholder": "PHONE"
+}

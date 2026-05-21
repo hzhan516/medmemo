@@ -1,0 +1,84 @@
+name: 🐛 Bug 报告
+description: 报告 MedMemo 的缺陷或异常行为
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢报告问题！请尽量详细填写，帮助我们快速定位和修复。
+
+  - type: input
+    id: version
+    attributes:
+      label: 版本号
+      description: 你正在使用的 MedMemo 版本（如 v0.1.0）
+      placeholder: v0.1.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: 操作系统
+      options:
+        - macOS (Intel)
+        - macOS (Apple Silicon)
+        - Windows 10/11
+        - Linux (Ubuntu)
+        - Linux (其他发行版)
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      description: 请提供从启动应用到触发问题的完整步骤
+      placeholder: |
+        1. 打开 MedMemo
+        2. 点击 xxx
+        3. 输入 xxx
+        4. 出现错误
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+      description: 你期望发生什么？
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+      description: 实际发生了什么？请附带截图或录屏（如有）
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志输出
+      description: 如有终端或控制台日志，请粘贴在此处
+      render: shell
+
+  - type: dropdown
+    id: module
+    attributes:
+      label: 相关模块
+      description: 如果知道问题涉及哪个模块，请选择
+      options:
+        - 不确定
+        - M01 Chatbox 对话引擎
+        - M02 多模型自由切换
+        - M03 分层长期记忆池
+        - M04 家族关系网图谱
+        - M05 可视化记忆管理台
+        - M06 端云协同
+        - M07 合规与隐私保护
+        - 构建/打包/安装
+        - 其他
