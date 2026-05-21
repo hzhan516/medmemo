@@ -144,14 +144,22 @@ jobs:
           echo "Release assets:"
           ls -la release-assets/
 
-      - name: Create Release
+      # 先以 draft 创建 release 并上传资产，避免 immutable release 仓库
+      # 在 prerelease 状态下拒绝后续资产上传的问题。
+      - name: Create Draft Release
         uses: softprops/action-gh-release@v2
         with:
           name: MedMemo ${{ needs.version.outputs.version }}
           tag_name: ${{ needs.version.outputs.version }}
           prerelease: ${{ needs.version.outputs.prerelease == 'true' }}
+          draft: true
           files: release-assets/*
           generate_release_notes: true
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish Release
+        run: gh release edit "${{ needs.version.outputs.version }}" --draft=false
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
