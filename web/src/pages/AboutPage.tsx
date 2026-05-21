@@ -119,14 +119,12 @@ export function AboutPage({ onOpenFeedback }: AboutPageProps) {
             <p>
               MedMemo 采用 MIT License 开源协议发布。任何人都可以自由使用、修改和分发本软件。
             </p>
-            <a
-              href="https://github.com/hzhan516/medmemo"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-primary hover:underline"
+            <span
+              onClick={() => window.open('https://github.com/hzhan516/medmemo', '_blank')}
+              className="inline-flex items-center gap-1 text-primary hover:underline cursor-pointer"
             >
               访问 GitHub 仓库 <ExternalLink size={12} />
-            </a>
+            </span>
           </div>
         </section>
 
