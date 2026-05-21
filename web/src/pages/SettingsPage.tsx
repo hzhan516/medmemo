@@ -28,7 +28,7 @@ export function SettingsPage() {
   const {
     complianceBarMode, setComplianceBarMode,
     autoCheckUpdate, setAutoCheckUpdate,
-    updateChannel, setUpdateChannel,
+    updateChannel, setUpdateChannel: setUpdateChannelStore,
     desensitizationLevel, setDesensitizationLevel,
     dataRetentionDays, setDataRetentionDays,
     activeProviderId, setActiveProviderId,
@@ -57,11 +57,30 @@ export function SettingsPage() {
   const updateProvider = useProviderStore((s) => s.updateProvider)
   const removeProvider = useProviderStore((s) => s.removeProvider)
   const hasProvider = useProviderStore((s) => s.hasProvider)
-  const { saveAPIKey, createProvider, updateProvider: updateProviderApi, deleteProvider: deleteProviderApi } = useWails()
+  const { saveAPIKey, createProvider, updateProvider: updateProviderApi, deleteProvider: deleteProviderApi, setUpdateSettings } = useWails()
   const showToast = useCallback((message: string) => {
     // 简单 toast：使用 alert 降级，后续可接入全局 toast 系统
     console.error('[Toast]', message)
   }, [])
+
+  /**
+   * 切换更新通道时同步到后端 updater 服务。
+   */
+  const setUpdateChannel = useCallback(
+    async (channel: 'stable' | 'beta') => {
+      setUpdateChannelStore(channel)
+      try {
+        await setUpdateSettings({
+          check_enabled: autoCheckUpdate,
+          channel,
+          skip_version: '',
+        })
+      } catch (err) {
+        console.error('Failed to sync update channel to backend:', err)
+      }
+    },
+    [setUpdateChannelStore, setUpdateSettings, autoCheckUpdate]
+  )
 
   // 已有分组列表
   const existingGroups = useMemo(() => {

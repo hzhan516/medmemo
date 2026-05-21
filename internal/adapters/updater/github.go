@@ -45,9 +45,10 @@ func NewGitHubUpdater() *GitHubUpdater {
 // Ensure GitHubUpdater 实现了 port.Updater 接口。
 var _ port.Updater = (*GitHubUpdater)(nil)
 
-// FetchLatest 查询 GitHub Releases API 获取最新版本。
+// FetchLatest 查询 GitHub Releases API 获取适合当前通道的最新版本。
+// stable 通道过滤掉 prerelease，beta 通道包含全部。
 func (g *GitHubUpdater) FetchLatest(ctx context.Context, channel entity.UpdateChannel) (*entity.UpdateInfo, error) {
-	url := fmt.Sprintf("%s/repos/%s/%s/releases/latest", githubAPIBase, githubRepoOwner, githubRepoName)
+	url := fmt.Sprintf("%s/repos/%s/%s/releases?per_page=30", githubAPIBase, githubRepoOwner, githubRepoName)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -67,36 +68,39 @@ func (g *GitHubUpdater) FetchLatest(ctx context.Context, channel entity.UpdateCh
 		return nil, fmt.Errorf("github api returned %d: %s", resp.StatusCode, string(body))
 	}
 
-	var release githubRelease
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+	var releases []githubRelease
+	if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
 		return nil, fmt.Errorf("failed to decode github response: %w", err)
 	}
 
-	// 通道过滤：stable 通道跳过 prerelease
-	if channel == entity.ChannelStable && release.Prerelease {
-		// 如果最新 release 是 prerelease，尝试获取上一个正式 release
-		// MVP 阶段简化处理：直接返回错误提示用户当前无稳定版可用
-		return nil, fmt.Errorf("no stable release available, latest is prerelease %s", release.TagName)
+	// 遍历 releases 列表，找到适合当前通道且包含当前平台产物的第一个 release
+	for _, release := range releases {
+		// 通道过滤：stable 通道跳过 prerelease
+		if channel == entity.ChannelStable && release.Prerelease {
+			continue
+		}
+
+		// 匹配当前平台的资产文件
+		asset, checksum := g.matchPlatformAsset(release.Assets)
+		if asset == nil {
+			continue
+		}
+
+		info := &entity.UpdateInfo{
+			Version:     release.TagName,
+			Name:        release.Name,
+			Body:        release.Body,
+			PublishedAt: release.PublishedAt,
+			DownloadURL: asset.BrowserDownloadURL,
+			Checksum:    checksum,
+			Mandatory:   g.isMandatory(release),
+			Channel:     channel,
+		}
+
+		return info, nil
 	}
 
-	// 匹配当前平台的资产文件
-	asset, checksum := g.matchPlatformAsset(release.Assets)
-	if asset == nil {
-		return nil, fmt.Errorf("no asset found for platform %s/%s", runtime.GOOS, runtime.GOARCH)
-	}
-
-	info := &entity.UpdateInfo{
-		Version:     release.TagName,
-		Name:        release.Name,
-		Body:        release.Body,
-		PublishedAt: release.PublishedAt,
-		DownloadURL: asset.BrowserDownloadURL,
-		Checksum:    checksum,
-		Mandatory:   g.isMandatory(release),
-		Channel:     channel,
-	}
-
-	return info, nil
+	return nil, fmt.Errorf("no suitable release found for channel %s on platform %s/%s", channel, runtime.GOOS, runtime.GOARCH)
 }
 
 // Download 下载指定 URL 的资产到本地路径，支持进度回调。
