@@ -138,7 +138,8 @@ make build
 
 ### 卸载
 
-直接删除 AppImage 文件即可。用户数据存储在 `~/.local/share/medmemo`。
+1. 删除 AppImage 文件
+2. （可选）删除用户数据 `~/.medmemo/data`
 
 ---
 

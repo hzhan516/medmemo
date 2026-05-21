@@ -138,7 +138,8 @@ The binary will be at `build/bin/medmemo`.
 
 ### Uninstall
 
-Simply delete the AppImage file. User data is stored at `~/.local/share/medmemo`.
+1. Delete the AppImage file
+2. (Optional) Remove user data at `~/.medmemo/data`
 
 ---
 

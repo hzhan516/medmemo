@@ -54,11 +54,11 @@ if [ -z "$HOME" ]; then
     HOME="$(getent passwd "$(id -u)" | cut -d: -f6 2>/dev/null)" || HOME="/tmp"
     export HOME
 fi
+export MEDMEMO_DATA_DIR="${HOME}/.medmemo/data"
 
-# 切换到用户主目录，避免在只读挂载点创建 .medmemo
-cd "$HOME" || exit 1
-
-exec "${HERE}/usr/bin/MedMemo" "$@"
+# 保持在 AppImage 内部目录，确保相对路径资源（resources/）可正确加载
+cd "${HERE}/usr/bin" || exit 1
+exec ./MedMemo "$@"
 EOF
 chmod +x "$APPDIR/AppRun"
 
