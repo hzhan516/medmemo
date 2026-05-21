@@ -7,6 +7,9 @@ on:
     branches: [main, develop]
   workflow_dispatch:
 
+env:
+  GOPROXY: https://proxy.golang.org,https://goproxy.cn,direct
+
 jobs:
   lint:
     name: Lint
@@ -38,12 +41,11 @@ jobs:
       - name: Validate provider templates JSON
         run: node scripts/validate-provider-templates.js
 
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v4
-        with:
-          version: latest
-          args: --timeout=10m
-          skip-cache: true
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
+      - name: Run golangci-lint
+        run: golangci-lint run --timeout=10m ./...
 
   unit-test:
     name: Unit Test
