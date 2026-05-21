@@ -198,3 +198,4 @@ MedMemo is licensed under [MIT License](./LICENSE). Free to use, modify, and dis
 ---
 
 *Last updated: 2026-05-19*
+
