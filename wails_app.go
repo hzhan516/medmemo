@@ -686,6 +686,7 @@ func (a *WailsApp) SkipUpdateVersion(v string) error {
 
 // OpenDownloadURL 通过系统浏览器打开指定 URL。
 func (a *WailsApp) OpenDownloadURL(url string) {
+	fmt.Println("[DEBUG] OpenDownloadURL called with:", url)
 	runtime.BrowserOpenURL(a.ctx, url)
 }
 

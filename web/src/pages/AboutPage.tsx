@@ -3,6 +3,7 @@ import { Info, Github, Heart, Shield, ExternalLink, BookOpen, Bug } from 'lucide
 import { Button } from '@/components/ui/button'
 import { VersionNotesModal } from '@/components/VersionNotesModal'
 import { useWails } from '@/hooks/useWails'
+import { LogPrint } from '@wails/runtime'
 import type { VersionNote } from '@/hooks/useVersionNotes'
 
 /**
@@ -121,7 +122,7 @@ export function AboutPage({ onOpenFeedback }: AboutPageProps) {
             </p>
             <button
               onClick={() => {
-                console.log('[AboutPage] Opening GitHub repo URL')
+                LogPrint('[AboutPage] GitHub repo button clicked')
                 openDownloadURL('https://github.com/hzhan516/medmemo')
               }}
               className="inline-flex items-center gap-1 text-primary hover:underline bg-transparent border-none p-0 cursor-pointer"
