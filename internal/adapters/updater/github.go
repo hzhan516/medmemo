@@ -195,12 +195,26 @@ func (g *GitHubUpdater) matchPlatformAsset(assets []githubAsset) (*githubAsset, 
 				targetAsset = a
 			}
 		case "windows":
-			if strings.Contains(name, "installer") && strings.HasSuffix(name, ".exe") {
+			// 第一轮：优先匹配 setup/installer 安装程序
+			if strings.HasSuffix(name, ".exe") &&
+				(strings.Contains(name, "setup") || strings.Contains(name, "installer")) {
 				targetAsset = a
 			}
 		}
 		if targetAsset != nil {
 			break
+		}
+	}
+
+	// Windows 第二轮：若未匹配到 setup/installer，回退到任意 exe
+	if targetAsset == nil && goos == "windows" {
+		for i := range assets {
+			a := &assets[i]
+			name := strings.ToLower(a.Name)
+			if strings.HasSuffix(name, ".exe") {
+				targetAsset = a
+				break
+			}
 		}
 	}
 
