@@ -113,6 +113,12 @@ func (a *WailsApp) Startup(ctx context.Context) {
 
 	// 启动时异步检测更新（不阻塞首屏）
 	if a.config.UpdateCheckEnabled && a.updaterSvc != nil {
+		// 将配置文件中的更新通道同步到 updater 服务
+		a.updaterSvc.SetSettings(&entity.UpdateSettings{
+			CheckEnabled: a.config.UpdateCheckEnabled,
+			Channel:      a.config.UpdateChannel,
+			SkipVersion:  "",
+		})
 		go a.checkUpdateAsync()
 	}
 

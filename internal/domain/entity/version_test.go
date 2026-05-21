@@ -27,8 +27,12 @@ func TestHasUpdate(t *testing.T) {
 		{"two segment remote", "v1.0.0", "v1.1", true, false},
 		{"one segment current", "v1", "v1.0.1", true, false},
 		{"one segment same major", "v1", "v1", false, false},
-		{"with prerelease tag", "v1.0.0-alpha", "v1.0.0", false, false},
+		{"with prerelease tag", "v1.0.0-alpha", "v1.0.0", true, false},
 		{"with prerelease tag remote newer", "v1.0.0", "v1.0.1-beta", true, false},
+		{"same version different build", "0.1.0-build.10", "0.1.0-build.20", true, false},
+		{"same version same build", "0.1.0-build.10", "0.1.0-build.10", false, false},
+		{"stable to pre-release same core", "0.1.0", "0.1.0-Pre-release-build.5", true, false},
+		{"pre-release to stable same core", "0.1.0-Pre-release-build.5", "0.1.0", true, false},
 	}
 
 	for _, tt := range tests {

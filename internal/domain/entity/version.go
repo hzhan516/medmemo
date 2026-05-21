@@ -32,6 +32,7 @@ type UpdateInfo struct {
 
 // HasUpdate 语义化版本比较：remote 是否比 current 更新。
 // 支持 "v" 前缀，比较 Major.Minor.Patch 三段式版本号。
+// 当核心版本号相同时，若完整版本字符串不同（如不同 build 号），也视为有更新。
 func HasUpdate(current, remote string) (bool, error) {
 	cv, err := parseSemver(current)
 	if err != nil {
@@ -50,7 +51,15 @@ func HasUpdate(current, remote string) (bool, error) {
 			return false, nil
 		}
 	}
-	return false, nil // 版本相同
+
+	// 核心版本号相同，比较完整字符串（去掉 v 前缀）
+	// 不同 build 号或预发布标签视为有更新
+	currentClean := strings.TrimPrefix(current, "v")
+	remoteClean := strings.TrimPrefix(remote, "v")
+	if currentClean == remoteClean {
+		return false, nil // 完全相同，无需更新
+	}
+	return true, nil
 }
 
 // semver 内部表示三段式版本号 [Major, Minor, Patch]。
