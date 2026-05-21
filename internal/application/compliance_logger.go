@@ -43,9 +43,15 @@ type ComplianceLogger struct {
 
 // NewComplianceLogger 创建合规日志记录器。
 // logDir 为日志目录，若不存在则自动创建。
+// 当 logDir 为相对路径且 MEDMEMO_DATA_DIR 环境变量已设置时，以前者为前缀。
 func NewComplianceLogger(logDir string) *ComplianceLogger {
 	if logDir == "" {
 		logDir = "data"
+	}
+	if !filepath.IsAbs(logDir) {
+		if baseDir := os.Getenv("MEDMEMO_DATA_DIR"); baseDir != "" {
+			logDir = filepath.Join(baseDir, logDir)
+		}
 	}
 	return &ComplianceLogger{
 		logPath:      filepath.Join(logDir, "compliance_logs.jsonl"),

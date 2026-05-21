@@ -42,9 +42,7 @@ type SQLiteConnector struct {
 
 // NewSQLiteConnector 创建 SQLite 连接并配置连接池。
 func NewSQLiteConnector(dataDir string) (*SQLiteConnector, error) {
-	if dataDir == "" {
-		dataDir = ".medmemo/data"
-	}
+	dataDir = resolveDataDir(dataDir)
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create data directory: %w", err)
 	}
