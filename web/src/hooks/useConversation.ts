@@ -59,7 +59,7 @@ export function useConversation() {
         case 'content':
           appendToLastMessage(chunk.payload)
           break
-        case 'done':
+        case 'done': {
           setStreaming(false)
           // 流式结束后更新当前会话的预览和时间
           if (currentConversationId) {
@@ -81,6 +81,7 @@ export function useConversation() {
             )
           }
           break
+        }
         case 'error':
           setLastMessageError(chunk.payload)
           setStreaming(false)
