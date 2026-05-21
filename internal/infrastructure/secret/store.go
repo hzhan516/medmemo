@@ -222,10 +222,6 @@ func (s *FileStore) encrypt(plaintext []byte) ([]byte, error) {
 	return gcm.Seal(nonce, nonce, plaintext, nil), nil
 }
 
-func (s *FileStore) decrypt(ciphertext []byte) ([]byte, error) {
-	return s.decryptWithKey(ciphertext, s.key)
-}
-
 func (s *FileStore) decryptWithKey(ciphertext, key []byte) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {

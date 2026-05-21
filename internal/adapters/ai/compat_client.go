@@ -282,10 +282,7 @@ func isNetworkError(err error) bool {
 		}
 		// TLS 证书错误不可重试
 		var tlsErr *tls.CertificateVerificationError
-		if errors.As(urlErr.Err, &tlsErr) {
-			return false
-		}
-		return true
+		return !errors.As(urlErr.Err, &tlsErr)
 	}
 	return errors.Is(err, context.DeadlineExceeded)
 }

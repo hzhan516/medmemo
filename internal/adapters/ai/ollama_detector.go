@@ -26,9 +26,6 @@ const defaultCheckTimeout = 2 * time.Second
 // defaultWaitInterval 等待服务就绪的轮询间隔。
 const defaultWaitInterval = 500 * time.Millisecond
 
-// defaultWaitTimeout 等待服务就绪的最大时间。
-const defaultWaitTimeout = 30 * time.Second
-
 // OllamaDetector 负责检测本地 Ollama 运行时环境的状态，
 // 并在缺失时引导启动或下载模型。
 type OllamaDetector struct {

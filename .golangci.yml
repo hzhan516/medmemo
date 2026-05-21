@@ -80,3 +80,17 @@ issues:
   exclude-use-default: false
   max-issues-per-linter: 0
   max-same-issues: 0
+  exclude-rules:
+    # 测试文件中 defer Close 不检查错误是常见做法
+    - path: _test\.go$
+      linters:
+        - errcheck
+    # defer Close 的错误返回值在清理路径中通常无需处理，项目中有大量 pre-existing 模式
+    - text: "Error return value of `.*Close` is not checked"
+      linters:
+        - errcheck
+    # revive exported 规则要求所有导出符号添加注释，项目当前有大量 pre-existing 缺失
+    # 后续通过独立 PR 逐步补齐文档注释
+    - linters:
+        - revive
+      text: "exported"

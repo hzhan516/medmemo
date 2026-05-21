@@ -538,7 +538,7 @@ func (a *WailsApp) DeclineDisclaimer() {
 
 // ShowEmergencyDialog 触发紧急症状弹窗（供前端调用）。
 func (a *WailsApp) ShowEmergencyDialog(title, message string) {
-	runtime.MessageDialog(a.ctx, runtime.MessageDialogOptions{
+	_, _ = runtime.MessageDialog(a.ctx, runtime.MessageDialogOptions{
 		Type:    runtime.WarningDialog,
 		Title:   title,
 		Message: message,
@@ -1578,7 +1578,7 @@ func (a *WailsApp) DetectAuthMethods() (*AuthDetectResult, error) {
 			for _, p := range providers {
 				if p.AuthMethod == models.AuthMethodOAuthDevice {
 					status.Connected = true
-					status.ProviderType = string(p.ModelID)
+					status.ProviderType = p.ModelID
 					status.Detail = fmt.Sprintf("已配置 OAuth Device Flow（%s）", p.Name)
 					break
 				}
@@ -1674,13 +1674,14 @@ func (a *WailsApp) DetectAuthMethods() (*AuthDetectResult, error) {
 		}
 
 		status.Available = true
-		if d.Running && d.HasSmolLM2 {
+		switch {
+		case d.Running && d.HasSmolLM2:
 			status.Connected = true
 			status.Detail = "Ollama 运行中，SmolLM2 已就绪"
-		} else if d.Running {
+		case d.Running:
 			status.Detail = "Ollama 运行中，SmolLM2 未下载"
 			status.Error = "模型未下载"
-		} else {
+		default:
 			status.Detail = "Ollama 已安装，服务未运行"
 			status.Error = "服务未运行"
 		}

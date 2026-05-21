@@ -201,7 +201,7 @@ func (s *TokenRefreshService) scheduleForProvider(p *models.ProviderConfig) {
 			return
 		}
 		// 刷新成功，重新调度
-		s.ScheduleAutoRefresh(p.ID)
+		_ = s.ScheduleAutoRefresh(p.ID)
 	})
 }
 
@@ -395,16 +395,6 @@ func inferProviderType(p *models.ProviderConfig) string {
 	default:
 		return ""
 	}
-}
-
-// refreshHTTPError 标记 HTTP 错误状态码。
-type refreshHTTPError struct {
-	StatusCode int
-	Body       string
-}
-
-func (e *refreshHTTPError) Error() string {
-	return fmt.Sprintf("refresh endpoint returned status %d: %s", e.StatusCode, e.Body)
 }
 
 // TokenRefreshProviderSet 是 TokenRefreshService 的 Wire ProviderSet。

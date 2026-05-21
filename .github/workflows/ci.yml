@@ -58,6 +58,19 @@ jobs:
       - name: Install SQLCipher
         run: sudo apt-get update && sudo apt-get install -y libsqlcipher-dev
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install frontend dependencies
+        run: cd web && npm ci
+
+      - name: Build frontend
+        run: cd web && npm run build
+
       - name: Run unit tests
         run: go test -race -coverprofile=coverage.out ./...
 
@@ -81,6 +94,19 @@ jobs:
       - name: Install SQLCipher
         run: sudo apt-get update && sudo apt-get install -y libsqlcipher-dev
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install frontend dependencies
+        run: cd web && npm ci
+
+      - name: Build frontend
+        run: cd web && npm run build
+
       - name: Run integration tests
         run: go test -race -tags=integration ./...
 
@@ -97,6 +123,9 @@ jobs:
 
       - name: Install SQLCipher
         run: sudo apt-get update && sudo apt-get install -y libsqlcipher-dev
+
+      - name: Install Wails Linux dependencies
+        run: sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -165,6 +194,10 @@ jobs:
       - name: Install SQLCipher (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libsqlcipher-dev
+
+      - name: Install Wails Linux dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
 
       - name: Install SQLCipher (macOS)
         if: runner.os == 'macOS'
