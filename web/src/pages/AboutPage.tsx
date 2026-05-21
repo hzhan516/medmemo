@@ -98,7 +98,7 @@ export function AboutPage({ onOpenFeedback }: AboutPageProps) {
                 if (onOpenFeedback) {
                   onOpenFeedback()
                 } else {
-                  window.open('https://github.com/medmemo/medmemo/issues', '_blank')
+                  window.open('https://github.com/hzhan516/medmemo/issues', '_blank')
                 }
               }}
               className="gap-1.5"
@@ -120,7 +120,7 @@ export function AboutPage({ onOpenFeedback }: AboutPageProps) {
               MedMemo 采用 MIT License 开源协议发布。任何人都可以自由使用、修改和分发本软件。
             </p>
             <a
-              href="https://github.com/medmemo/health-assistant"
+              href="https://github.com/hzhan516/medmemo"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 text-primary hover:underline"

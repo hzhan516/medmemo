@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	githubIssueBaseURL = "https://github.com/medmemo/medmemo/issues/new"
+	githubIssueBaseURL = "https://github.com/hzhan516/medmemo/issues/new"
 	maxLogLines        = 100
 )
 
