@@ -47,13 +47,13 @@ func (m *mockLLMClient) Chat(ctx context.Context, messages []models.Message) (st
 	return m.chatReply, m.chatErr
 }
 
-func (m *mockLLMClient) StreamChat(ctx context.Context, messages []models.Message, callback func(chunk string)) error {
+func (m *mockLLMClient) StreamChat(ctx context.Context, messages []models.Message, callback func(chunk string)) (*models.TokenUsage, error) {
 	m.lastMessages = messages
 	for _, chunk := range m.streamChunks {
 		callback(chunk)
 		m.streamCallbacks = append(m.streamCallbacks, chunk)
 	}
-	return m.streamErr
+	return nil, m.streamErr
 }
 
 func (m *mockLLMClient) CheckAvailability(ctx context.Context) (bool, string) {
@@ -61,6 +61,43 @@ func (m *mockLLMClient) CheckAvailability(ctx context.Context) (bool, string) {
 }
 
 var _ port.LLMClient = (*mockLLMClient)(nil)
+
+// mockLLMClientFactory 实现 port.LLMClientFactory。
+type mockLLMClientFactory struct {
+	client port.LLMClient
+}
+
+func (m *mockLLMClientFactory) CreateClient(providerConfig *models.ProviderConfig) (port.LLMClient, error) {
+	return m.client, nil
+}
+
+var _ port.LLMClientFactory = (*mockLLMClientFactory)(nil)
+
+// mockProviderStore 实现 port.ProviderStore。
+type mockProviderStore struct {
+	provider *models.ProviderConfig
+}
+
+func (m *mockProviderStore) Create(ctx context.Context, provider *models.ProviderConfig) error {
+	return nil
+}
+func (m *mockProviderStore) Update(ctx context.Context, provider *models.ProviderConfig) error {
+	return nil
+}
+func (m *mockProviderStore) Delete(ctx context.Context, id string) error {
+	return nil
+}
+func (m *mockProviderStore) Get(ctx context.Context, id string) (*models.ProviderConfig, error) {
+	if m.provider == nil {
+		return &models.ProviderConfig{ID: id, APIHost: "https://api.example.com", ModelID: "test-model"}, nil
+	}
+	return m.provider, nil
+}
+func (m *mockProviderStore) List(ctx context.Context) ([]*models.ProviderConfig, error) {
+	return []*models.ProviderConfig{}, nil
+}
+
+var _ port.ProviderStore = (*mockProviderStore)(nil)
 
 // mockDeidentifier 实现 Deidentifier 接口。
 type mockDeidentifier struct {
@@ -88,7 +125,9 @@ var _ MemoryQuerier = (*mockMemoryQuerier)(nil)
 
 // newTestOrchestrator 创建带有全量 Mock 依赖的 ChatOrchestrator。
 func newTestOrchestrator(mock *mockLLMClient, comp *RuleComplianceChecker, deid Deidentifier, retriever MemoryQuerier) *ChatOrchestrator {
-	return NewChatOrchestrator(mock, nil, nil, comp, deid, retriever)
+	factory := &mockLLMClientFactory{client: mock}
+	store := &mockProviderStore{}
+	return NewChatOrchestrator(factory, store, nil, nil, comp, deid, retriever)
 }
 
 // TestChatOrchestrator_Execute_Success 验证非流式对话正常返回。
@@ -101,6 +140,7 @@ func TestChatOrchestrator_Execute_Success(t *testing.T) {
 		ConversationID: "conv-1",
 		Messages:       []models.Message{{Role: models.RoleUser, Content: "你好"}},
 		Model:          models.ProviderKimi,
+		ProviderID:     "test-provider",
 	}
 
 	resp, err := orch.Execute(context.Background(), req)
@@ -115,8 +155,9 @@ func TestChatOrchestrator_Execute_Error(t *testing.T) {
 	orch := newTestOrchestrator(mock, comp, nil, nil)
 
 	req := ChatRequest{
-		Messages: []models.Message{{Role: models.RoleUser, Content: "test"}},
-		Model:    models.ProviderKimi,
+		Messages:   []models.Message{{Role: models.RoleUser, Content: "test"}},
+		Model:      models.ProviderKimi,
+		ProviderID: "test-provider",
 	}
 
 	_, err := orch.Execute(context.Background(), req)
@@ -138,8 +179,9 @@ func TestChatOrchestrator_Execute_WithDeidentify(t *testing.T) {
 	orch := newTestOrchestrator(mock, comp, deid, nil)
 
 	req := ChatRequest{
-		Messages: []models.Message{{Role: models.RoleUser, Content: "联系我 test@example.com"}},
-		Model:    models.ProviderKimi,
+		Messages:   []models.Message{{Role: models.RoleUser, Content: "联系我 test@example.com"}},
+		Model:      models.ProviderKimi,
+		ProviderID: "test-provider",
 	}
 
 	resp, err := orch.Execute(context.Background(), req)
@@ -158,8 +200,9 @@ func TestChatOrchestrator_Execute_DeidentifyFallback(t *testing.T) {
 	orch := newTestOrchestrator(mock, comp, deid, nil)
 
 	req := ChatRequest{
-		Messages: []models.Message{{Role: models.RoleUser, Content: "原始内容"}},
-		Model:    models.ProviderKimi,
+		Messages:   []models.Message{{Role: models.RoleUser, Content: "原始内容"}},
+		Model:      models.ProviderKimi,
+		ProviderID: "test-provider",
 	}
 
 	resp, err := orch.Execute(context.Background(), req)
@@ -182,8 +225,9 @@ func TestChatOrchestrator_Execute_WithMemory(t *testing.T) {
 	orch := newTestOrchestrator(mock, comp, nil, retriever)
 
 	req := ChatRequest{
-		Messages: []models.Message{{Role: models.RoleUser, Content: "最近头晕"}},
-		Model:    models.ProviderKimi,
+		Messages:   []models.Message{{Role: models.RoleUser, Content: "最近头晕"}},
+		Model:      models.ProviderKimi,
+		ProviderID: "test-provider",
 	}
 
 	resp, err := orch.Execute(context.Background(), req)
@@ -210,8 +254,9 @@ func TestChatOrchestrator_Execute_Restore(t *testing.T) {
 	orch := newTestOrchestrator(mock, comp, deid, nil)
 
 	req := ChatRequest{
-		Messages: []models.Message{{Role: models.RoleUser, Content: "联系我 test@example.com"}},
-		Model:    models.ProviderKimi,
+		Messages:   []models.Message{{Role: models.RoleUser, Content: "联系我 test@example.com"}},
+		Model:      models.ProviderKimi,
+		ProviderID: "test-provider",
 	}
 
 	resp, err := orch.Execute(context.Background(), req)
@@ -234,8 +279,9 @@ func TestChatOrchestrator_Execute_LocalModelSkipDeid(t *testing.T) {
 	orch := newTestOrchestrator(mock, comp, deid, nil)
 
 	req := ChatRequest{
-		Messages: []models.Message{{Role: models.RoleUser, Content: "联系我 test@example.com"}},
-		Model:    models.ProviderOllama,
+		Messages:   []models.Message{{Role: models.RoleUser, Content: "联系我 test@example.com"}},
+		Model:      models.ProviderOllama,
+		ProviderID: "test-provider",
 	}
 
 	resp, err := orch.Execute(context.Background(), req)
@@ -246,23 +292,25 @@ func TestChatOrchestrator_Execute_LocalModelSkipDeid(t *testing.T) {
 	assert.Equal(t, "联系我 test@example.com", mock.lastMessages[0].Content)
 }
 
-// TestChatOrchestrator_StreamExecute_Success 验证流式对话 callback 被逐 chunk 调用。
+// TestChatOrchestrator_StreamExecute_Success 验证流式对话内容经合规检测后统一推送。
 func TestChatOrchestrator_StreamExecute_Success(t *testing.T) {
 	mock := &mockLLMClient{streamChunks: []string{"你", "好", "！"}}
 	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
 	orch := newTestOrchestrator(mock, comp, nil, nil)
 
 	req := ChatRequest{
-		Messages: []models.Message{{Role: models.RoleUser, Content: "打招呼"}},
-		Model:    models.ProviderKimi,
+		Messages:   []models.Message{{Role: models.RoleUser, Content: "打招呼"}},
+		Model:      models.ProviderKimi,
+		ProviderID: "test-provider",
 	}
 
 	var collected []string
-	err := orch.StreamExecute(context.Background(), req, func(chunk string) {
+	_, err := orch.StreamExecute(context.Background(), req, func(chunk string) {
 		collected = append(collected, chunk)
 	})
 	require.NoError(t, err)
-	assert.Equal(t, []string{"你", "好", "！"}, collected)
+	// 先缓冲完整内容，检测通过后统一推送
+	assert.Equal(t, []string{"你好！"}, collected)
 }
 
 // TestChatOrchestrator_StreamExecute_Error 验证流式错误被正确包装。
@@ -272,11 +320,12 @@ func TestChatOrchestrator_StreamExecute_Error(t *testing.T) {
 	orch := newTestOrchestrator(mock, comp, nil, nil)
 
 	req := ChatRequest{
-		Messages: []models.Message{{Role: models.RoleUser, Content: "test"}},
-		Model:    models.ProviderKimi,
+		Messages:   []models.Message{{Role: models.RoleUser, Content: "test"}},
+		Model:      models.ProviderKimi,
+		ProviderID: "test-provider",
 	}
 
-	err := orch.StreamExecute(context.Background(), req, func(chunk string) {})
+	_, err := orch.StreamExecute(context.Background(), req, func(chunk string) {})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "stream execution failed")
 }
@@ -295,12 +344,13 @@ func TestChatOrchestrator_StreamExecute_WithDeidentify(t *testing.T) {
 	orch := newTestOrchestrator(mock, comp, deid, nil)
 
 	req := ChatRequest{
-		Messages: []models.Message{{Role: models.RoleUser, Content: "邮箱 test@example.com"}},
-		Model:    models.ProviderKimi,
+		Messages:   []models.Message{{Role: models.RoleUser, Content: "邮箱 test@example.com"}},
+		Model:      models.ProviderKimi,
+		ProviderID: "test-provider",
 	}
 
 	var full string
-	err := orch.StreamExecute(context.Background(), req, func(chunk string) {
+	_, err := orch.StreamExecute(context.Background(), req, func(chunk string) {
 		full += chunk
 	})
 	require.NoError(t, err)

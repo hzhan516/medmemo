@@ -56,12 +56,17 @@ func HasUpdate(current, remote string) (bool, error) {
 // semver 内部表示三段式版本号 [Major, Minor, Patch]。
 type semver [3]int
 
-// parseSemver 解析语义化版本字符串，支持 "v" 前缀。
+// parseSemver 解析语义化版本字符串，支持 "v" 前缀、两段式/一段式、预发布标签。
+// 预发布标签（如 -alpha、-beta）仅用于稳定版判断，不参与版本号数值比较。
 func parseSemver(v string) (semver, error) {
 	v = strings.TrimPrefix(v, "v")
+	// 去掉预发布标签和构建元数据，仅保留核心版本号
+	if idx := strings.IndexAny(v, "-+"); idx != -1 {
+		v = v[:idx]
+	}
 	parts := strings.Split(v, ".")
-	if len(parts) != 3 {
-		return semver{}, fmt.Errorf("invalid semver format: expected Major.Minor.Patch, got %q", v)
+	if len(parts) < 1 || len(parts) > 3 {
+		return semver{}, fmt.Errorf("invalid semver format: expected 1~3 segments, got %q", v)
 	}
 	var s semver
 	for i, p := range parts {
@@ -71,7 +76,30 @@ func parseSemver(v string) (semver, error) {
 		}
 		s[i] = n
 	}
+	// 缺失段补 0
 	return s, nil
+}
+
+// IsStableVersion 判断版本是否为稳定版。
+// 三段式纯数字版本（如 v1.0.1）为稳定版；两段式（如 v1.0）、一段式（如 v1）
+// 或含预发布标签（-alpha、-beta、-rc、-SNAPSHOT）均为测试版。
+func IsStableVersion(v string) bool {
+	v = strings.TrimPrefix(v, "v")
+	// 含预发布标签或构建元数据 → 非稳定
+	if strings.ContainsAny(v, "-+") {
+		return false
+	}
+	parts := strings.Split(v, ".")
+	if len(parts) != 3 {
+		return false
+	}
+	// 确保每段都是纯数字
+	for _, p := range parts {
+		if _, err := strconv.Atoi(p); err != nil {
+			return false
+		}
+	}
+	return true
 }
 
 // UpdateSettings 存储用户的更新偏好设置。

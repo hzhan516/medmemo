@@ -30,13 +30,8 @@ export function useOnboarding() {
   )
 
   const saveModelConfig = useCallback(
-    async (model: string, apiKey: string) => {
+    async (model: string, _apiKey: string) => {
       settings.setSelectedModel(model)
-      if (apiKey.trim()) {
-        // 解析 provider 前缀：模型 ID 格式为 "provider-model"
-        const provider = model.split('-')[0] || 'kimi'
-        await WailsApp.SaveAPIKey(provider, apiKey.trim())
-      }
     },
     [settings]
   )

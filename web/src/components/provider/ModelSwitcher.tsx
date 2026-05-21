@@ -4,11 +4,19 @@ import { ChevronDown, Cloud, Server, Plus } from 'lucide-react'
 import { useSettingsStore, type ProviderHealthStatus } from '@/stores/settingsStore'
 import { useProviderStore } from '@/stores/providerStore'
 import { useProviderHealth } from '@/hooks/useProviderHealth'
+interface ModelItem {
+  modelId: string
+  modelName: string
+  providerId: string
+  providerName: string
+  providerGroup: string
+  isLocal: boolean
+}
 
 /**
- * 运行时模型切换器。
- * 集成在 Header 中，展示当前活跃 Provider 名称+状态圆点+下拉箭头。
- * 下拉列表按分组折叠展示，支持 Green/Yellow/Red 状态分类。
+ * 运行时模型切换器（CherryStudio 风格）。
+ * 展示所有已启用的模型，按服务商分组。
+ * 选择模型后自动关联到对应 provider。
  */
 export function ModelSwitcher() {
   const navigate = useNavigate()
@@ -19,7 +27,9 @@ export function ModelSwitcher() {
 
   const providers = useProviderStore((s) => s.providers)
   const activeProviderId = useSettingsStore((s) => s.activeProviderId)
+  const activeModelId = useSettingsStore((s) => s.activeModelId)
   const setActiveProviderId = useSettingsStore((s) => s.setActiveProviderId)
+  const setActiveModelId = useSettingsStore((s) => s.setActiveModelId)
   const setLastSelectedProviderId = useSettingsStore((s) => s.setLastSelectedProviderId)
   const healthStatus = useSettingsStore((s) => s.providerHealthStatus)
   const { refreshHealth } = useProviderHealth()
@@ -30,27 +40,50 @@ export function ModelSwitcher() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const activeProvider = useMemo(() => {
-    return providers.find((p) => p.id === activeProviderId)
-  }, [providers, activeProviderId])
-
-  const activeStatus: ProviderHealthStatus = activeProvider
-    ? (healthStatus[activeProvider.id] ?? 'unknown')
-    : 'unknown'
-
-  // 按分组聚合（仅 enabled 且非 red 状态的 Provider）
-  const dropdownGroups = useMemo(() => {
-    const map = new Map<string, typeof providers>()
+  // 构建所有已启用的模型列表
+  const enabledModels = useMemo((): ModelItem[] => {
+    const items: ModelItem[] = []
     for (const p of providers) {
       if (!p.enabled) continue
       const status = healthStatus[p.id] ?? 'unknown'
       if (status === 'red') continue
-      const list = map.get(p.group) || []
-      list.push(p)
-      map.set(p.group, list)
+      const isLocal =
+        p.group === '本地' || p.apiHost.includes('localhost') || p.apiHost.includes('127.0.0.1')
+      const models = p.models && p.models.length > 0 ? p.models : p.modelId ? [{ id: p.modelId, name: p.modelId, enabled: true }] : []
+      for (const m of models) {
+        if (!m.enabled) continue
+        items.push({
+          modelId: m.id,
+          modelName: m.name || m.id,
+          providerId: p.id,
+          providerName: p.name,
+          providerGroup: p.group,
+          isLocal,
+        })
+      }
+    }
+    return items
+  }, [providers, healthStatus])
+
+  // 按分组聚合模型
+  const dropdownGroups = useMemo(() => {
+    const map = new Map<string, ModelItem[]>()
+    for (const item of enabledModels) {
+      const list = map.get(item.providerGroup) || []
+      list.push(item)
+      map.set(item.providerGroup, list)
     }
     return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b))
-  }, [providers, healthStatus])
+  }, [enabledModels])
+
+  // 当前选中的模型信息
+  const activeItem = useMemo(() => {
+    return enabledModels.find((m) => m.modelId === activeModelId && m.providerId === activeProviderId)
+  }, [enabledModels, activeModelId, activeProviderId])
+
+  const activeStatus: ProviderHealthStatus = activeProviderId
+    ? (healthStatus[activeProviderId] ?? 'unknown')
+    : 'unknown'
 
   const showToast = useCallback((message: string) => {
     setToast({ message, visible: true })
@@ -61,15 +94,16 @@ export function ModelSwitcher() {
   }, [])
 
   const handleSwitch = useCallback(
-    (providerId: string) => {
-      const provider = providers.find((p) => p.id === providerId)
-      if (!provider) return
+    (modelId: string, providerId: string) => {
+      const item = enabledModels.find((m) => m.modelId === modelId && m.providerId === providerId)
+      if (!item) return
+      setActiveModelId(modelId)
       setActiveProviderId(providerId)
       setLastSelectedProviderId(providerId)
       setOpen(false)
-      showToast(`已切换至 ${provider.name}`)
+      showToast(`已切换至 ${item.modelName}`)
     },
-    [providers, setActiveProviderId, setLastSelectedProviderId, showToast]
+    [enabledModels, setActiveModelId, setActiveProviderId, setLastSelectedProviderId, showToast]
   )
 
   // 点击外部关闭下拉
@@ -133,7 +167,7 @@ export function ModelSwitcher() {
           data-testid="ms-status-dot"
         />
         <span className="truncate max-w-[140px]" data-testid="ms-current-name">
-          {activeProvider ? activeProvider.name : '未选择模型'}
+          {activeItem ? activeItem.modelName : '未选择模型'}
         </span>
         <ChevronDown
           className={`w-3 h-3 text-muted-foreground transition-transform shrink-0 ${
@@ -173,34 +207,30 @@ export function ModelSwitcher() {
                     {groupName}
                   </div>
                   <div className="space-y-0.5">
-                    {items.map((p) => {
-                      const status = healthStatus[p.id] ?? 'unknown'
-                      const isActive = activeProviderId === p.id
+                    {items.map((item) => {
+                      const status = healthStatus[item.providerId] ?? 'unknown'
+                      const isActive = activeModelId === item.modelId && activeProviderId === item.providerId
                       const isGreen = status === 'green'
                       const isYellow = status === 'yellow'
-                      const isLocal =
-                        p.group === '本地' ||
-                        p.apiHost.includes('localhost') ||
-                        p.apiHost.includes('127.0.0.1')
 
                       return (
                         <button
-                          key={p.id}
-                          onClick={() => isGreen && handleSwitch(p.id)}
+                          key={`${item.providerId}-${item.modelId}`}
+                          onClick={() => isGreen && handleSwitch(item.modelId, item.providerId)}
                           disabled={!isGreen}
                           className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-left transition-colors
                             ${isActive ? 'bg-primary/10' : 'hover:bg-accent/50'}
                             ${isYellow ? 'opacity-50 cursor-not-allowed' : isGreen ? 'cursor-pointer' : 'cursor-not-allowed'}
                           `}
                           title={isYellow ? '连接缓慢' : isGreen ? '点击切换' : ''}
-                          data-testid={`ms-provider-${p.id}`}
+                          data-testid={`ms-model-${item.providerId}-${item.modelId}`}
                         >
                           <div
                             className={`shrink-0 w-6 h-6 rounded flex items-center justify-center
-                              ${isLocal ? 'bg-amber-500/10 text-amber-600' : 'bg-blue-500/10 text-blue-600'}
+                              ${item.isLocal ? 'bg-amber-500/10 text-amber-600' : 'bg-blue-500/10 text-blue-600'}
                             `}
                           >
-                            {isLocal ? (
+                            {item.isLocal ? (
                               <Server className="w-3 h-3" />
                             ) : (
                               <Cloud className="w-3 h-3" />
@@ -208,7 +238,7 @@ export function ModelSwitcher() {
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5">
-                              <span className="text-sm font-medium truncate">{p.name}</span>
+                              <span className="text-sm font-medium truncate">{item.modelName}</span>
                               {isActive && (
                                 <span className="shrink-0 text-[10px] font-medium px-1 py-0.5 rounded-full bg-green-500/10 text-green-600">
                                   活跃
@@ -216,7 +246,7 @@ export function ModelSwitcher() {
                               )}
                             </div>
                             <div className="text-[11px] text-muted-foreground truncate">
-                              {p.modelId}
+                              {item.providerName}
                             </div>
                           </div>
                           <span
@@ -227,7 +257,7 @@ export function ModelSwitcher() {
                                   ? 'bg-yellow-500'
                                   : 'bg-muted-foreground/50'
                             }`}
-                            data-testid={`ms-provider-dot-${p.id}`}
+                            data-testid={`ms-model-dot-${item.providerId}-${item.modelId}`}
                           />
                         </button>
                       )

@@ -3,6 +3,8 @@ import { KeyRound, Eye, EyeOff, CheckCircle2, XCircle, Loader2, AlertTriangle } 
 import { SaveAPIKey, TestAPIKey } from '@wails/go/main/WailsApp'
 import { BrowserOpenURL } from '@wails/runtime'
 import type { AuthMethodDetectStatus, ProviderConfig } from '@/types/provider'
+import templatesData from '@/data/provider-templates.json'
+import type { ProviderTemplate } from '@/types/provider'
 import { APIKeyGuide } from './APIKeyGuide'
 
 interface APIKeyPanelProps {
@@ -10,20 +12,25 @@ interface APIKeyPanelProps {
   onProviderCreated: (provider: ProviderConfig) => void
 }
 
-const providers = [
-  { id: 'openai', name: 'OpenAI', host: 'https://api.openai.com', model: 'gpt-4o' },
-  { id: 'kimi', name: 'Kimi (Moonshot)', host: 'https://api.moonshot.cn', model: 'moonshot-v1-8k' },
-  { id: 'deepseek', name: 'DeepSeek', host: 'https://api.deepseek.com', model: 'deepseek-chat' },
-  { id: 'claude', name: 'Claude', host: 'https://api.anthropic.com', model: 'claude-3-5-sonnet' },
-  { id: 'gemini', name: 'Gemini', host: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-1.5-flash' },
-]
+// 从模板中提取支持 api_key 的厂商
+const allProviders: ProviderTemplate[] = (templatesData as ProviderTemplate[]).filter((t) =>
+  t.authMethods.includes('api_key')
+)
 
+// API Key 格式校验正则
 const keyPrefixPatterns: Record<string, RegExp> = {
   openai: /^sk-(proj-)?[A-Za-z0-9]{20,}$/,
   kimi: /^sk-[a-f0-9]{48}$/,
   deepseek: /^sk-[a-f0-9]{32}$/,
   claude: /^sk-ant-[a-zA-Z0-9]{32,}$/,
   gemini: /^AIza[A-Za-z0-9_-]{35,}$/,
+  qwen: /^sk-[a-f0-9]{32,}$/,
+  zhipu: /^[a-f0-9]{32}\.[a-f0-9]{16}$/,
+  grok: /^xai-[A-Za-z0-9]{32,}$/,
+  doubao: /^[a-f0-9-]{36,}$/,
+  minimax: /^[A-Za-z0-9]{32,}$/,
+  xiaomi: /^[A-Za-z0-9]{32,}$/,
+  hunyuan: /^[A-Za-z0-9]{32,}$/,
 }
 
 const clipboardKeyPatterns: Record<string, RegExp> = {
@@ -32,14 +39,20 @@ const clipboardKeyPatterns: Record<string, RegExp> = {
   deepseek: /^sk-[a-f0-9]{32}$/,
   claude: /^sk-ant-[a-zA-Z0-9]{32,}$/,
   gemini: /^AIza[A-Za-z0-9_-]{35,}$/,
+  qwen: /^sk-[a-f0-9]{32,}$/,
+  zhipu: /^[a-f0-9]{32}\.[a-f0-9]{16}$/,
+  grok: /^xai-[A-Za-z0-9]{32,}$/,
+  doubao: /^[a-f0-9-]{36,}$/,
+  minimax: /^[A-Za-z0-9]{32,}$/,
+  xiaomi: /^[A-Za-z0-9]{32,}$/,
+  hunyuan: /^[A-Za-z0-9]{32,}$/,
 }
 
-/**
- * API Key 配置面板。
- * 输入 API Key、厂商选择、格式校验、获取引导、智能粘贴、连通性验证、保存到密钥环保管。
- */
+/** API Key 配置面板 */
 export function APIKeyPanel({ status, onProviderCreated }: APIKeyPanelProps) {
-  const [selectedProvider, setSelectedProvider] = useState('kimi')
+  const [selectedProvider, setSelectedProvider] = useState(
+    allProviders.find((p) => p.id === 'kimi')?.id || allProviders[0]?.id || 'openai'
+  )
   const [apiKey, setApiKey] = useState('')
   const [showKey, setShowKey] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -48,7 +61,7 @@ export function APIKeyPanel({ status, onProviderCreated }: APIKeyPanelProps) {
   const [error, setError] = useState<string | null>(null)
   const [pasteHint, setPasteHint] = useState<string | null>(null)
 
-  const provider = providers.find((p) => p.id === selectedProvider)!
+  const provider = allProviders.find((p) => p.id === selectedProvider)!
   const prefixValid = apiKey ? (keyPrefixPatterns[selectedProvider]?.test(apiKey) ?? true) : true
   const lengthValid = apiKey.length >= 8
 
@@ -73,7 +86,7 @@ export function APIKeyPanel({ status, onProviderCreated }: APIKeyPanelProps) {
           if (pid !== selectedProvider && pat.test(text.trim())) {
             setSelectedProvider(pid)
             setApiKey(text.trim())
-            const pName = providers.find((p) => p.id === pid)?.name ?? pid
+            const pName = allProviders.find((p) => p.id === pid)?.name ?? pid
             setPasteHint(`检测到 ${pName} 的 API Key，已自动切换并填充`)
             setTimeout(() => setPasteHint(null), 4000)
             break
@@ -86,7 +99,7 @@ export function APIKeyPanel({ status, onProviderCreated }: APIKeyPanelProps) {
 
     window.addEventListener('focus', handleFocus)
     return () => window.removeEventListener('focus', handleFocus)
-  }, [selectedProvider, apiKey, provider.name])
+  }, [selectedProvider, apiKey, provider?.name])
 
   const handleTestAndSave = useCallback(async (forceSave = false) => {
     if (!apiKey.trim()) {
@@ -105,14 +118,14 @@ export function APIKeyPanel({ status, onProviderCreated }: APIKeyPanelProps) {
     if (!forceSave) {
       setTesting(true)
       try {
-        const result = await TestAPIKey(selectedProvider, apiKey.trim(), provider.host)
+        const result = await TestAPIKey(selectedProvider, apiKey.trim(), provider.apiHost)
         setTestResult({ valid: result.valid, message: result.message })
         if (!result.valid) {
           setTesting(false)
           return
         }
       } catch (err) {
-        setTestResult({ valid: false, message: err instanceof Error ? err.message : '验证失败' })
+        setTestResult({ valid: false, message: typeof err === 'string' ? err : (err instanceof Error ? err.message : '验证失败') })
         setTesting(false)
         return
       }
@@ -128,9 +141,9 @@ export function APIKeyPanel({ status, onProviderCreated }: APIKeyPanelProps) {
         id: `${selectedProvider}_apikey_${Date.now()}`,
         templateId: selectedProvider,
         name: provider.name,
-        apiHost: provider.host,
+        apiHost: provider.apiHost,
         apiKey: apiKey.trim(),
-        modelId: provider.model,
+        modelId: provider.defaultModel,
         temperature: 0.7,
         timeoutMs: 30000,
         maxRetries: 3,
@@ -141,12 +154,13 @@ export function APIKeyPanel({ status, onProviderCreated }: APIKeyPanelProps) {
         updatedAt: Date.now(),
         authMethod: 'api_key',
         authParams: {},
+        models: [{ id: provider.defaultModel, name: provider.defaultModel, enabled: true }],
       }
       onProviderCreated(newProvider)
       setApiKey('')
       setTestResult(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : '保存失败')
+      setError(typeof err === 'string' ? err : (err instanceof Error ? err.message : '保存失败'))
     } finally {
       setSaving(false)
     }
@@ -195,13 +209,37 @@ export function APIKeyPanel({ status, onProviderCreated }: APIKeyPanelProps) {
           }}
           className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
         >
-          {providers.map((p) => (
+          {allProviders.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
             </option>
           ))}
         </select>
       </div>
+
+      {/* 模型选择 */}
+      {provider.models.length > 0 && (
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium">模型</label>
+          <select
+            value={provider.defaultModel}
+            onChange={(e) => {
+              // 更新 provider 的 defaultModel（通过重新选择）
+              const idx = allProviders.findIndex((p) => p.id === selectedProvider)
+              if (idx >= 0) {
+                allProviders[idx] = { ...allProviders[idx], defaultModel: e.target.value }
+              }
+            }}
+            className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+          >
+            {provider.models.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* API Key 输入 */}
       <div className="space-y-1.5">

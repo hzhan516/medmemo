@@ -21,6 +21,7 @@ export function useConversation() {
     setLastMessageError,
     setLastMessageWarnings,
     setLastMessageReplacedTerms,
+    setLastMessageTokenUsage,
     setStreaming,
     setConversationId,
     addConversation,
@@ -32,8 +33,10 @@ export function useConversation() {
 
   // 当前活跃 Provider 及健康状态
   const activeProviderId = useSettingsStore((s) => s.activeProviderId)
+  const activeModelId = useSettingsStore((s) => s.activeModelId)
   const healthStatus = useSettingsStore((s) => s.providerHealthStatus)
   const setActiveProviderId = useSettingsStore((s) => s.setActiveProviderId)
+  const setActiveModelId = useSettingsStore((s) => s.setActiveModelId)
   const providers = useProviderStore((s) => s.providers)
 
   const activeProvider = providers.find((p) => p.id === activeProviderId)
@@ -48,7 +51,7 @@ export function useConversation() {
 
   // 注册 Wails 流式事件监听
   useEffect(() => {
-    const removeStreamChunk = EventsOn('chat:stream_chunk', (chunk: { type: 'start' | 'content' | 'done' | 'error'; payload: string; metadata?: { model?: string; provider_id?: string; latency_ms?: number; token_count?: number } }) => {
+    const removeStreamChunk = EventsOn('chat:stream_chunk', (chunk: { type: 'start' | 'content' | 'done' | 'error'; payload: string; metadata?: { model?: string; provider_id?: string; latency_ms?: number; token_count?: number; prompt_tokens?: number; completion_tokens?: number } }) => {
       switch (chunk.type) {
         case 'start':
           // start chunk 仅携带 metadata，无需 UI 操作
@@ -68,6 +71,14 @@ export function useConversation() {
                 updatedAt: Date.now(),
               })
             }
+          }
+          // 写入 token 用量统计
+          if (chunk.metadata?.prompt_tokens !== undefined && chunk.metadata?.completion_tokens !== undefined) {
+            setLastMessageTokenUsage(
+              chunk.metadata.prompt_tokens,
+              chunk.metadata.completion_tokens,
+              (chunk.metadata.prompt_tokens ?? 0) + (chunk.metadata.completion_tokens ?? 0),
+            )
           }
           break
         case 'error':
@@ -176,10 +187,13 @@ export function useConversation() {
 
       // 活跃 Provider 不可用时的回退逻辑
       let targetProvider = activeProvider
+      let targetModelId = activeModelId
       if (!targetProvider || activeStatus === 'red') {
         if (fallbackProvider) {
           targetProvider = fallbackProvider
+          targetModelId = fallbackProvider.models?.find((m) => m.enabled)?.id || fallbackProvider.modelId
           setActiveProviderId(fallbackProvider.id)
+          setActiveModelId(targetModelId)
         }
         // 若仍无可用 Provider，继续使用默认模型（向后兼容）
       }
@@ -194,8 +208,9 @@ export function useConversation() {
         await wails.sendMessageStream({
           conversation_id: convId,
           messages: [...history, { role: 'user', content: content.trim() }],
-          model: targetProvider?.modelId ?? 'kimi-lite',
-        })
+          model: targetModelId || targetProvider?.modelId || 'kimi-lite',
+          provider_id: targetProvider?.id || '',
+        } as Parameters<typeof wails.sendMessageStream>[0])
 
         // 首条用户消息后异步生成标题（不阻塞流式输出）
         const isFirstMessage = messages.filter((m) => m.role === 'user').length === 0
@@ -218,6 +233,7 @@ export function useConversation() {
       addMessage,
       appendToLastMessage,
       setLastMessageError,
+      setLastMessageTokenUsage,
       setStreaming,
       setConversationId,
       addConversation,
@@ -225,6 +241,8 @@ export function useConversation() {
       updateConversation,
       setEmergencyAlert,
       wails,
+      activeModelId,
+      setActiveModelId,
     ]
   )
 

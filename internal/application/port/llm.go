@@ -15,10 +15,18 @@ type LLMClient interface {
 	Chat(ctx context.Context, messages []models.Message) (string, error)
 
 	// StreamChat 发送流式对话请求，通过 callback 逐块推送内容。
-	StreamChat(ctx context.Context, messages []models.Message, callback func(chunk string)) error
+	// 流式结束后返回 TokenUsage（若 Provider 未返回 usage 则为 nil）。
+	StreamChat(ctx context.Context, messages []models.Message, callback func(chunk string)) (*models.TokenUsage, error)
 
 	// CheckAvailability 检查当前模型是否可用，返回状态与原因。
 	CheckAvailability(ctx context.Context) (bool, string)
+}
+
+// LLMClientFactory 根据 ProviderConfig 动态创建 LLMClient。
+// 支持运行时根据用户配置的 provider 创建对应的适配器。
+type LLMClientFactory interface {
+	// CreateClient 根据 ProviderConfig 创建对应的 LLMClient。
+	CreateClient(providerConfig *models.ProviderConfig) (LLMClient, error)
 }
 
 // NERDetector 定义命名实体识别检测端口。

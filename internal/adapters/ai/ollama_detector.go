@@ -209,20 +209,20 @@ func (d *OllamaDetector) GetInstallGuide() string {
 // BuildProviderConfig 根据检测状态构建 Ollama ProviderConfig。
 // AuthMethod 使用 api_key（Ollama 本地服务无需认证，APIKey 留空）。
 func (d *OllamaDetector) BuildProviderConfig() *models.ProviderConfig {
-	now := time.Now()
+	nowMs := time.Now().UnixMilli()
 	return &models.ProviderConfig{
-		ID:          "ollama-local-" + strconv.FormatInt(now.Unix(), 10),
+		ID:          "ollama-local-" + strconv.FormatInt(nowMs, 10),
 		Name:        "Ollama (本地)",
 		APIHost:     d.endpoint,
 		ModelID:     DefaultModelName,
 		Temperature: 0.7,
-		Timeout:     30 * time.Second,
+		TimeoutMs:   30000,
 		MaxRetries:  3,
 		GroupName:   "本地",
 		Enabled:     true,
 		AuthMethod:  models.AuthMethodAPIToken,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		CreatedAt:   nowMs,
+		UpdatedAt:   nowMs,
 	}
 }
 

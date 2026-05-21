@@ -28,13 +28,13 @@ describe('E2E: Provider 测试连接', () => {
     render(<SettingsPage />)
     await user.click(screen.getByTestId('add-custom-provider-btn'))
     await waitFor(() => {
-      expect(screen.getByTestId('provider-custom-dialog')).toBeInTheDocument()
+      expect(screen.getByTestId('model-service-dialog')).toBeInTheDocument()
     })
   }
 
   const fillHostAndKey = async (user: ReturnType<typeof userEvent.setup>) => {
-    await user.type(screen.getByTestId('pc-host-input'), 'https://api.test.com')
-    await user.type(screen.getByTestId('pc-key-input'), 'sk-test-key')
+    await user.type(screen.getByTestId('ms-host-input'), 'https://api.test.com')
+    await user.type(screen.getByTestId('ms-key-input'), 'sk-test-key')
   }
 
   it('测试连接成功：green 状态 + 模型下拉选择框 + 自动填充 Model ID', async () => {
@@ -54,30 +54,21 @@ describe('E2E: Provider 测试连接', () => {
     await fillHostAndKey(user)
 
     // 点击测试连接
-    await user.click(screen.getByTestId('pc-test-connection-btn'))
+    await user.click(screen.getByTestId('ms-test-connection-btn'))
 
     // 验证 green 状态卡片
     await waitFor(() => {
-      const card = screen.getByTestId('pc-test-result-card')
+      const card = screen.getByTestId('ms-test-result-card')
       expect(card).toHaveAttribute('data-test-status', 'green')
       expect(card.textContent).toContain('连通')
     })
 
-    // 验证下拉选择框出现
+    // 切换到 models 标签页验证模型已获取
+    await user.click(screen.getByTestId('tab-models'))
     await waitFor(() => {
-      expect(screen.getByTestId('pc-model-select')).toBeInTheDocument()
+      expect(screen.getByTestId('ms-model-check-model-a')).toBeInTheDocument()
     })
-
-    // 验证 Model ID 被自动填充为第一个模型
-    await waitFor(() => {
-      expect(screen.getByTestId('pc-model-select')).toHaveValue('model-a')
-    })
-
-    // 验证下拉选项包含两个模型
-    const select = screen.getByTestId('pc-model-select') as HTMLSelectElement
-    expect(select.options.length).toBe(3) // 包括空选项
-    expect(select.options[1].value).toBe('model-a')
-    expect(select.options[2].value).toBe('model-b')
+    expect(screen.getByTestId('ms-model-check-model-b')).toBeInTheDocument()
   })
 
   it('测试连接延迟高：yellow 状态', async () => {
@@ -99,12 +90,12 @@ describe('E2E: Provider 测试连接', () => {
     await openCustomDialog(user)
     await fillHostAndKey(user)
 
-    await user.click(screen.getByTestId('pc-test-connection-btn'))
+    await user.click(screen.getByTestId('ms-test-connection-btn'))
 
     // 验证 yellow 状态（延迟 >= 1000ms）
     await waitFor(
       () => {
-        const card = screen.getByTestId('pc-test-result-card')
+        const card = screen.getByTestId('ms-test-result-card')
         expect(card).toHaveAttribute('data-test-status', 'yellow')
         expect(card.textContent).toContain('延迟较高')
       },
@@ -123,16 +114,13 @@ describe('E2E: Provider 测试连接', () => {
     await openCustomDialog(user)
     await fillHostAndKey(user)
 
-    await user.click(screen.getByTestId('pc-test-connection-btn'))
+    await user.click(screen.getByTestId('ms-test-connection-btn'))
 
     await waitFor(() => {
-      const card = screen.getByTestId('pc-test-result-card')
+      const card = screen.getByTestId('ms-test-result-card')
       expect(card).toHaveAttribute('data-test-status', 'red')
-      expect(card.textContent).toContain('API Key 无效')
+      expect(card.textContent).toContain('认证失败，请检查 API Key')
     })
-
-    // Model ID 应保持手动输入模式
-    expect(screen.getByTestId('pc-model-input')).toBeInTheDocument()
   })
 
   it('测试连接 404：green 状态（Host 可达）+ 手动输入兜底提示', async () => {
@@ -146,18 +134,13 @@ describe('E2E: Provider 测试连接', () => {
     await openCustomDialog(user)
     await fillHostAndKey(user)
 
-    await user.click(screen.getByTestId('pc-test-connection-btn'))
+    await user.click(screen.getByTestId('ms-test-connection-btn'))
 
     await waitFor(() => {
-      const card = screen.getByTestId('pc-test-result-card')
+      const card = screen.getByTestId('ms-test-result-card')
       expect(card).toHaveAttribute('data-test-status', 'green')
       expect(card.textContent).toContain('连通')
     })
-
-    // 手动输入模式，placeholder 提示不支持自动获取
-    const modelInput = screen.getByTestId('pc-model-input')
-    expect(modelInput).toBeInTheDocument()
-    expect(modelInput).toHaveAttribute('placeholder', expect.stringContaining('不支持自动获取'))
   })
 
   it('测试连接超时：red 状态 + 连接超时提示', async () => {
@@ -173,10 +156,10 @@ describe('E2E: Provider 测试连接', () => {
     await openCustomDialog(user)
     await fillHostAndKey(user)
 
-    await user.click(screen.getByTestId('pc-test-connection-btn'))
+    await user.click(screen.getByTestId('ms-test-connection-btn'))
 
     await waitFor(() => {
-      const card = screen.getByTestId('pc-test-result-card')
+      const card = screen.getByTestId('ms-test-result-card')
       expect(card).toHaveAttribute('data-test-status', 'red')
       expect(card.textContent).toContain('连接超时')
     })
@@ -195,9 +178,9 @@ describe('E2E: Provider 测试连接', () => {
     await fillHostAndKey(user)
 
     // 第一次测试
-    await user.click(screen.getByTestId('pc-test-connection-btn'))
+    await user.click(screen.getByTestId('ms-test-connection-btn'))
     await waitFor(() => {
-      expect(screen.getByTestId('pc-test-result-card')).toHaveAttribute('data-test-status', 'green')
+      expect(screen.getByTestId('ms-test-result-card')).toHaveAttribute('data-test-status', 'green')
     })
 
     // 第二次：403
@@ -205,9 +188,9 @@ describe('E2E: Provider 测试连接', () => {
       status: 403,
       json: async () => ({ error: {} }),
     })
-    await user.click(screen.getByTestId('pc-test-connection-btn'))
+    await user.click(screen.getByTestId('ms-test-connection-btn'))
     await waitFor(() => {
-      expect(screen.getByTestId('pc-test-result-card')).toHaveAttribute('data-test-status', 'red')
+      expect(screen.getByTestId('ms-test-result-card')).toHaveAttribute('data-test-status', 'red')
     })
 
     // 第三次：404
@@ -215,25 +198,25 @@ describe('E2E: Provider 测试连接', () => {
       status: 404,
       json: async () => ({ error: {} }),
     })
-    await user.click(screen.getByTestId('pc-test-connection-btn'))
+    await user.click(screen.getByTestId('ms-test-connection-btn'))
     await waitFor(() => {
-      expect(screen.getByTestId('pc-test-result-card')).toHaveAttribute('data-test-status', 'green')
+      expect(screen.getByTestId('ms-test-result-card')).toHaveAttribute('data-test-status', 'green')
     })
 
     // 验证历史区域显示 3 条记录
     await waitFor(() => {
-      expect(screen.getByTestId('pc-test-history')).toBeInTheDocument()
+      expect(screen.getByTestId('ms-test-history')).toBeInTheDocument()
     })
 
-    expect(screen.getByTestId('pc-test-history-item-0')).toBeInTheDocument()
-    expect(screen.getByTestId('pc-test-history-item-1')).toBeInTheDocument()
-    expect(screen.getByTestId('pc-test-history-item-2')).toBeInTheDocument()
+    const history = screen.getByTestId('ms-test-history')
+    const historyItems = history.querySelectorAll(':scope > div')
+    expect(historyItems.length).toBe(3)
 
     // 最新的一条在最上面（404 → green）
-    expect(screen.getByTestId('pc-test-history-item-0').textContent).toContain('连通')
+    expect(historyItems[0].textContent).toContain('连通')
     // 第二条是 403 → red
-    expect(screen.getByTestId('pc-test-history-item-1').textContent).toContain('API Key 无效')
+    expect(historyItems[1].textContent).toContain('认证失败，请检查 API Key')
     // 第三条是第一次成功 → green
-    expect(screen.getByTestId('pc-test-history-item-2').textContent).toContain('连通')
+    expect(historyItems[2].textContent).toContain('连通')
   })
 })

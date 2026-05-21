@@ -11,6 +11,9 @@ export interface ChatMessage {
   warnings?: string[] // 合规检测标记：L2_WARNING / L3_NOTICE
   replacedTerms?: string[] // inline 替换中被替换的用词规则 ID 列表
   complianceFeedback?: 'none' | 'submitted' // 申诉状态
+  promptTokens?: number // 该轮次输入 token 数
+  completionTokens?: number // 该轮次输出 token 数
+  totalTokens?: number // 该轮次总 token 数
 }
 
 export interface EmergencyAlert {
@@ -55,6 +58,7 @@ interface ChatState {
   clearMessages: () => void
   setLastMessageWarnings: (warnings: string[]) => void
   setLastMessageReplacedTerms: (terms: string[]) => void
+  setLastMessageTokenUsage: (promptTokens: number, completionTokens: number, totalTokens: number) => void
 
   setConversations: (conversations: Conversation[]) => void
   addConversation: (conversation: Conversation) => void
@@ -178,6 +182,17 @@ export const useChatStore = create<ChatState>((set) => ({
       const last = msgs[lastIdx]
       if (last.role !== 'assistant') return state
       msgs[lastIdx] = { ...last, replacedTerms: terms }
+      return { messages: msgs }
+    }),
+
+  setLastMessageTokenUsage: (promptTokens, completionTokens, totalTokens) =>
+    set((state) => {
+      const msgs = [...state.messages]
+      if (msgs.length === 0) return state
+      const lastIdx = msgs.length - 1
+      const last = msgs[lastIdx]
+      if (last.role !== 'assistant') return state
+      msgs[lastIdx] = { ...last, promptTokens, completionTokens, totalTokens }
       return { messages: msgs }
     }),
 

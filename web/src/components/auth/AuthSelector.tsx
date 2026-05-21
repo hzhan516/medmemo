@@ -1,11 +1,12 @@
 import { useCallback } from 'react'
-import { Terminal, Smartphone, KeyRound, Monitor, ChevronDown, ChevronUp, Loader2, Sparkles, XCircle, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Terminal, Smartphone, KeyRound, Monitor, Cloud, ChevronDown, ChevronUp, Loader2, Sparkles, XCircle, CheckCircle2, AlertCircle } from 'lucide-react'
 import type { AuthDetectResult, AuthMethodDetectStatus, ProviderConfig } from '@/types/provider'
 import type { AuthPanel } from '@/hooks/useAuth'
 import { CLITokenPanel } from './CLITokenPanel'
 import { OAuthDevicePanel } from './OAuthDevicePanel'
 import { APIKeyPanel } from './APIKeyPanel'
 import { LocalModelPanel } from './LocalModelPanel'
+import { ServiceAccountPanel } from './ServiceAccountPanel'
 
 interface AuthSelectorProps {
   result: AuthDetectResult | null
@@ -25,6 +26,7 @@ const methodMeta: Record<AuthPanel, { label: string; icon: typeof Terminal; tier
   cli_token: { label: 'CLI Token', icon: Terminal, tier: 1 },
   oauth_device: { label: 'OAuth Device Flow', icon: Smartphone, tier: 2 },
   api_key: { label: 'API Key', icon: KeyRound, tier: 3 },
+  service_account: { label: 'Vertex AI', icon: Cloud, tier: 3 },
   local: { label: '本地模型 (Ollama)', icon: Monitor, tier: 4 },
 }
 
@@ -129,7 +131,7 @@ export function AuthSelector({
 
   if (!result) return null
 
-  const methods: AuthPanel[] = ['cli_token', 'oauth_device', 'api_key', 'local']
+  const methods: AuthPanel[] = ['cli_token', 'oauth_device', 'api_key', 'service_account', 'local']
   const recommended = result.recommended as AuthPanel
 
   return (
@@ -201,10 +203,13 @@ export function AuthSelector({
                       <CLITokenPanel status={status} onProviderCreated={onProviderCreated} />
                     )}
                     {method === 'oauth_device' && (
-                      <OAuthDevicePanel status={status} />
+                      <OAuthDevicePanel status={status} onProviderCreated={onProviderCreated} />
                     )}
                     {method === 'api_key' && (
                       <APIKeyPanel status={status} onProviderCreated={onProviderCreated} />
+                    )}
+                    {method === 'service_account' && (
+                      <ServiceAccountPanel status={status} onProviderCreated={onProviderCreated} />
                     )}
                     {method === 'local' && (
                       <LocalModelPanel

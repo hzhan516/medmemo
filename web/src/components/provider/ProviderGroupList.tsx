@@ -129,7 +129,9 @@ export function ProviderGroupList({
                             )}
                           </div>
                           <div className="text-[11px] text-muted-foreground truncate">
-                            {p.modelId} · {p.apiHost}
+                            {p.models && p.models.length > 0
+                              ? `${p.models.filter((m) => m.enabled).length}/${p.models.length} 个模型 · ${p.apiHost}`
+                              : `${p.modelId} · ${p.apiHost}`}
                           </div>
                         </div>
                       </div>

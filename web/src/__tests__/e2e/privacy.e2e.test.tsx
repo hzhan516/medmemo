@@ -98,8 +98,8 @@ describe('E2E: 隐私与设置流程', () => {
     renderSettingsPage()
     await waitFor(() => expect(screen.getByText('设置')).toBeInTheDocument())
 
-    // 验证设置页渲染了模型区域
-    expect(screen.getByText('默认模型')).toBeInTheDocument()
+    // 验证设置页渲染了模型提供商区域
+    expect(screen.getByText('模型提供商')).toBeInTheDocument()
 
     // 直接验证 mock handler 可被调用
     const { MockWailsApp } = await import('@/test/mocks/wails')
@@ -107,27 +107,19 @@ describe('E2E: 隐私与设置流程', () => {
     expect(saveAPIKeyMock).toHaveBeenCalledWith('kimi', 'sk-test-key-12345')
   })
 
-  it('设置页切换模型 → 验证选中状态持久化', async () => {
-    const user = userEvent.setup()
+  it('设置页模型提供商区域渲染正常', async () => {
     renderSettingsPage()
 
     await waitFor(() => expect(screen.getByText('设置')).toBeInTheDocument())
 
-    // 默认选中 Kimi Lite
-    expect(useSettingsStore.getState().selectedModel).toBe('kimi-lite')
+    // 验证模型提供商区域存在
+    expect(screen.getByText('模型提供商')).toBeInTheDocument()
 
-    // 点击 GPT-4o Mini
-    const gptCard = screen.getByText('GPT-4o Mini').closest('[class*="cursor-pointer"]')
-    expect(gptCard).toBeInTheDocument()
-    await user.click(gptCard!)
-
+    // 验证 provider 模板卡片网格存在（至少展示部分模板）
     await waitFor(() => {
-      expect(useSettingsStore.getState().selectedModel).toBe('gpt-4o-mini')
+      expect(screen.getByTestId('provider-card-openai')).toBeInTheDocument()
     })
-
-    // 验证 localStorage 持久化
-    const stored = JSON.parse(localStorage.getItem('medmemo-settings') || '{}')
-    expect(stored.state.selectedModel).toBe('gpt-4o-mini')
+    expect(screen.getByTestId('provider-card-kimi')).toBeInTheDocument()
   })
 
   it('删除会话 → 验证回收站 → 撤销删除 → 验证恢复', async () => {

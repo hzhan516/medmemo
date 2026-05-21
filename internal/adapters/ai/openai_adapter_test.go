@@ -170,11 +170,12 @@ func TestOpenAIAdapter_StreamChat_Success(t *testing.T) {
 	msgs := []models.Message{{Role: models.RoleUser, Content: "打招呼"}}
 
 	var collected strings.Builder
-	err := adapter.StreamChat(context.Background(), msgs, func(chunk string) {
+	usage, err := adapter.StreamChat(context.Background(), msgs, func(chunk string) {
 		collected.WriteString(chunk)
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "你好，世界！", collected.String())
+	assert.Nil(t, usage) // 无 usage 数据时返回 nil
 }
 
 // TestOpenAIAdapter_StreamChat_EmptyContent 验证流式响应中空的 content 不触发回调。
@@ -200,11 +201,12 @@ func TestOpenAIAdapter_StreamChat_EmptyContent(t *testing.T) {
 	msgs := []models.Message{{Role: models.RoleUser, Content: "test"}}
 
 	callCount := 0
-	err := adapter.StreamChat(context.Background(), msgs, func(chunk string) {
+	usage, err := adapter.StreamChat(context.Background(), msgs, func(chunk string) {
 		callCount++
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 1, callCount)
+	assert.Nil(t, usage)
 }
 
 // TestOpenAIAdapter_StreamChat_ErrorStatus 验证流式请求返回错误状态码。
@@ -225,8 +227,9 @@ func TestOpenAIAdapter_StreamChat_ErrorStatus(t *testing.T) {
 	adapter := NewOpenAIAdapter("bad-key", server.URL, "test-model")
 	msgs := []models.Message{{Role: models.RoleUser, Content: "test"}}
 
-	err := adapter.StreamChat(context.Background(), msgs, func(chunk string) {})
+	usage, err := adapter.StreamChat(context.Background(), msgs, func(chunk string) {})
 	require.Error(t, err)
+	assert.Nil(t, usage)
 	assert.Contains(t, err.Error(), "API 认证失败")
 }
 

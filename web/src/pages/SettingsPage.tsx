@@ -7,15 +7,12 @@ import { useWails } from '@/hooks/useWails'
 import { Card, CardContent } from '@/components/ui/card'
 import {
   ProviderTemplateList,
-  ProviderAddDialog,
-  ProviderCustomDialog,
+  ModelServiceDialog,
   ProviderGroupList,
   DeleteConfirmDialog,
   ProviderImportExport,
 } from '@/components/provider'
-import { AuthSelector } from '@/components/auth/AuthSelector'
-import { useAuth } from '@/hooks/useAuth'
-import type { ProviderTemplate, ProviderConfig, AuthMethod, AuthParams } from '@/types/provider'
+import type { ProviderTemplate, ProviderConfig, ProviderModel, AuthParams } from '@/types/provider'
 import {
   Monitor, Moon, Sun, Check, Bell, BellDot, BellOff,
   RefreshCw, Shield, FlaskConical, ShieldCheck, ShieldOff,
@@ -29,7 +26,6 @@ import {
 export function SettingsPage() {
   const { theme, setTheme } = useTheme()
   const {
-    selectedModel, setSelectedModel,
     complianceBarMode, setComplianceBarMode,
     autoCheckUpdate, setAutoCheckUpdate,
     updateChannel, setUpdateChannel,
@@ -43,13 +39,10 @@ export function SettingsPage() {
   const clearAnalytics = useOnboardingStore((s) => s.clearAnalytics)
   const [showAnalytics, setShowAnalytics] = useState(false)
 
-  // 模板添加弹窗状态
-  const [showAddDialog, setShowAddDialog] = useState(false)
-  const [selectedTemplate, setSelectedTemplate] = useState<ProviderTemplate | null>(null)
-
-  // 自定义表单弹窗状态
-  const [customDialogOpen, setCustomDialogOpen] = useState(false)
-  const [customDialogMode, setCustomDialogMode] = useState<'custom' | 'edit'>('custom')
+  // 模型服务弹窗状态（统一处理添加和编辑）
+  const [serviceDialogOpen, setServiceDialogOpen] = useState(false)
+  const [serviceDialogMode, setServiceDialogMode] = useState<'add' | 'edit'>('add')
+  const [serviceDialogTemplate, setServiceDialogTemplate] = useState<ProviderTemplate | null>(null)
   const [editingProvider, setEditingProvider] = useState<ProviderConfig | null>(null)
 
   // 删除确认弹窗状态
@@ -64,9 +57,11 @@ export function SettingsPage() {
   const updateProvider = useProviderStore((s) => s.updateProvider)
   const removeProvider = useProviderStore((s) => s.removeProvider)
   const hasProvider = useProviderStore((s) => s.hasProvider)
-  const { saveAPIKey } = useWails()
-  const auth = useAuth()
-  const [showAuthSelector, setShowAuthSelector] = useState(false)
+  const { saveAPIKey, createProvider, updateProvider: updateProviderApi, deleteProvider: deleteProviderApi } = useWails()
+  const showToast = useCallback((message: string) => {
+    // 简单 toast：使用 alert 降级，后续可接入全局 toast 系统
+    console.error('[Toast]', message)
+  }, [])
 
   // 已有分组列表
   const existingGroups = useMemo(() => {
@@ -78,41 +73,31 @@ export function SettingsPage() {
   }, [providers])
 
   const handleSelectTemplate = (template: ProviderTemplate) => {
-    setSelectedTemplate(template)
-    setShowAddDialog(true)
-  }
-
-  const handleSaveTemplateProvider = (config: Parameters<typeof addProvider>[0]) => {
-    const newProvider = addProvider(config)
-    // 第一个 Provider 自动设为活跃
-    if (providers.length === 0) {
-      setActiveProviderId(newProvider.id)
-    }
-    if (config.apiKey) {
-      saveAPIKey(config.templateId, config.apiKey).catch((err) => {
-        console.error('Failed to save API key:', err)
-      })
-    }
+    setServiceDialogTemplate(template)
+    setServiceDialogMode('add')
+    setEditingProvider(null)
+    setServiceDialogOpen(true)
   }
 
   const handleOpenCustomDialog = useCallback(() => {
-    setCustomDialogMode('custom')
+    setServiceDialogTemplate(null)
+    setServiceDialogMode('add')
     setEditingProvider(null)
-    setCustomDialogOpen(true)
+    setServiceDialogOpen(true)
   }, [])
 
   const handleEditProvider = useCallback((provider: ProviderConfig) => {
-    setCustomDialogMode('edit')
+    setServiceDialogTemplate(null)
+    setServiceDialogMode('edit')
     setEditingProvider(provider)
-    setCustomDialogOpen(true)
+    setServiceDialogOpen(true)
   }, [])
 
-  const handleSaveCustom = useCallback(
-    (data: {
+  const handleSaveService = useCallback(
+    async (data: {
       name: string
       apiHost: string
       apiKey: string
-      modelId: string
       temperature: number
       timeoutMs: number
       maxRetries: number
@@ -120,30 +105,68 @@ export function SettingsPage() {
       enabled: boolean
       id?: string
       createdAt?: number
-      authMethod: AuthMethod
+      authMethod: string
       authParams: AuthParams
+      models: ProviderModel[]
     }) => {
-      if (customDialogMode === 'edit' && data.id) {
-        updateProvider({
+      const providerData = {
+        name: data.name,
+        apiHost: data.apiHost,
+        apiKey: data.apiKey,
+        modelId: data.models[0]?.id || '',
+        models: data.models,
+        temperature: data.temperature,
+        timeoutMs: data.timeoutMs,
+        maxRetries: data.maxRetries,
+        group: data.group,
+        enabled: data.enabled,
+        authMethod: data.authMethod as ProviderConfig['authMethod'],
+        authParams: data.authParams as ProviderConfig['authParams'],
+      }
+      if (serviceDialogMode === 'edit' && data.id) {
+        const updated: ProviderConfig = {
           ...editingProvider!,
-          ...data,
+          ...providerData,
           id: data.id,
           createdAt: data.createdAt ?? editingProvider!.createdAt,
           updatedAt: Date.now(),
-        })
+        }
+        try {
+          await updateProviderApi(updated)
+          updateProvider(updated)
+          showToast('Provider 已更新')
+        } catch (err) {
+          showToast(`更新失败: ${err instanceof Error ? err.message : String(err)}`)
+        }
       } else {
-        const newProvider = addProvider({
-          templateId: 'custom',
-          ...data,
+        const templateId = serviceDialogTemplate?.id || 'custom'
+        const now = Date.now()
+        const newProvider: ProviderConfig = {
+          templateId,
+          ...providerData,
+          id: `${templateId}_${now}_${Math.random().toString(36).slice(2, 6)}`,
           sortOrder: 0,
-        })
-        // 第一个 Provider 自动设为活跃
-        if (providers.length === 0) {
-          setActiveProviderId(newProvider.id)
+          createdAt: now,
+          updatedAt: now,
+        }
+        try {
+          await createProvider(newProvider)
+          addProvider(newProvider)
+          if (providers.length === 0) {
+            setActiveProviderId(newProvider.id)
+          }
+          if (data.apiKey && templateId !== 'custom') {
+            saveAPIKey(templateId, data.apiKey).catch((err) => {
+              console.error('Failed to save API key:', err)
+            })
+          }
+          showToast('Provider 已添加')
+        } catch (err) {
+          showToast(`添加失败: ${err instanceof Error ? err.message : String(err)}`)
         }
       }
     },
-    [customDialogMode, editingProvider, addProvider, updateProvider, providers.length, setActiveProviderId]
+    [serviceDialogMode, editingProvider, addProvider, updateProvider, providers.length, setActiveProviderId, serviceDialogTemplate, saveAPIKey, createProvider, updateProviderApi, showToast]
   )
 
   const handleDeleteClick = useCallback((provider: ProviderConfig) => {
@@ -151,24 +174,23 @@ export function SettingsPage() {
     setDeleteDialogOpen(true)
   }, [])
 
-  const handleConfirmDelete = useCallback(() => {
+  const handleConfirmDelete = useCallback(async () => {
     if (deletingProvider) {
-      removeProvider(deletingProvider.id)
-      // 如果删除的是活跃 Provider，清空 activeProviderId
-      if (activeProviderId === deletingProvider.id) {
-        setActiveProviderId(null)
+      try {
+        await deleteProviderApi(deletingProvider.id)
+        removeProvider(deletingProvider.id)
+        // 如果删除的是活跃 Provider，清空 activeProviderId
+        if (activeProviderId === deletingProvider.id) {
+          setActiveProviderId(null)
+        }
+        showToast('Provider 已删除')
+      } catch (err) {
+        showToast(`删除失败: ${err instanceof Error ? err.message : String(err)}`)
       }
       setDeleteDialogOpen(false)
       setDeletingProvider(null)
     }
-  }, [deletingProvider, removeProvider, activeProviderId, setActiveProviderId])
-
-  const models = [
-    { id: 'kimi-lite', name: 'Kimi Lite', provider: 'kimi' },
-    { id: 'gpt-4o-mini', name: 'GPT-4o Mini', provider: 'openai' },
-    { id: 'qwen-turbo', name: '通义千问 Turbo', provider: 'qwen' },
-    { id: 'llama3.1-8b', name: 'Llama 3.1 8B (本地)', provider: 'ollama' },
-  ]
+  }, [deletingProvider, removeProvider, activeProviderId, setActiveProviderId, deleteProviderApi, showToast])
 
   const themes = [
     { id: 'light' as const, label: '亮色', icon: Sun },
@@ -244,107 +266,7 @@ export function SettingsPage() {
           </div>
         </section>
 
-        {/* 模型设置 */}
-        <section>
-          <h2 className="text-sm font-medium text-muted-foreground mb-3 uppercase tracking-wider">
-            默认模型
-          </h2>
-          <div className="space-y-2">
-            {models.map((m) => {
-              const isActive = selectedModel === m.id
-              return (
-                <Card
-                  key={m.id}
-                  className={`cursor-pointer transition-all ${
-                    isActive
-                      ? 'border-primary bg-primary/5'
-                      : 'border-border hover:border-primary/30 hover:bg-accent'
-                  }`}
-                  onClick={() => setSelectedModel(m.id)}
-                >
-                  <CardContent className="p-4 flex items-center justify-between">
-                    <div>
-                      <div className={`text-sm font-medium ${isActive ? 'text-primary' : 'text-foreground'}`}>
-                        {m.name}
-                      </div>
-                      <div className="text-xs text-muted-foreground capitalize">{m.provider}</div>
-                    </div>
-                    {isActive && (
-                      <div className="w-4 h-4 rounded-full bg-primary flex items-center justify-center">
-                        <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              )
-            })}
-          </div>
-        </section>
-
-        {/* 认证方式 */}
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-              认证方式
-            </h2>
-            <button
-              onClick={() => setShowAuthSelector(!showAuthSelector)}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border border-border hover:bg-accent transition-colors"
-            >
-              <Shield className="w-3 h-3" />
-              {showAuthSelector ? '收起' : '配置'}
-            </button>
-          </div>
-          {showAuthSelector && (
-            <AuthSelector
-              result={auth.result}
-              detecting={auth.detecting}
-              error={auth.error}
-              expandedPanel={auth.expandedPanel}
-              ollamaPulling={auth.ollamaPulling}
-              ollamaPullProgress={auth.ollamaPullProgress}
-              ollamaServerStarting={auth.ollamaServerStarting}
-              onDetect={auth.detect}
-              onSelectMethod={auth.selectMethod}
-              onProviderCreated={addProvider}
-            />
-          )}
-          {!showAuthSelector && auth.result && (
-            <div className="flex flex-wrap gap-2">
-              {auth.result.results.map((r) => (
-                <div
-                  key={r.method}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border ${
-                    r.connected
-                      ? 'bg-green-500/5 border-green-500/20 text-green-700'
-                      : r.available
-                        ? 'bg-amber-500/5 border-amber-500/20 text-amber-700'
-                        : 'bg-muted border-border text-muted-foreground'
-                  }`}
-                >
-                  {r.connected ? (
-                    <Check className="w-3 h-3" />
-                  ) : r.available ? (
-                    <Shield className="w-3 h-3" />
-                  ) : (
-                    <ShieldOff className="w-3 h-3" />
-                  )}
-                  {r.method === 'cli_token' && 'CLI'}
-                  {r.method === 'oauth_device' && 'OAuth'}
-                  {r.method === 'api_key' && 'API Key'}
-                  {r.method === 'local' && '本地'}
-                </div>
-              ))}
-            </div>
-          )}
-          {!showAuthSelector && !auth.result && !auth.detecting && (
-            <p className="text-xs text-muted-foreground">
-              点击「配置」检测并设置认证方式
-            </p>
-          )}
-        </section>
-
-        {/* 模型提供商 */}
+        {/* 模型服务 */}
         <section>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
@@ -654,22 +576,15 @@ export function SettingsPage() {
         </section>
       </div>
 
-      {/* 模板添加弹窗 */}
-      <ProviderAddDialog
-        template={selectedTemplate}
-        open={showAddDialog}
-        onClose={() => setShowAddDialog(false)}
-        onSave={handleSaveTemplateProvider}
-      />
-
-      {/* 自定义表单弹窗 */}
-      <ProviderCustomDialog
-        mode={customDialogMode}
+      {/* 模型服务配置弹窗（CherryStudio 风格） */}
+      <ModelServiceDialog
+        mode={serviceDialogMode}
+        template={serviceDialogTemplate}
         provider={editingProvider}
         existingGroups={existingGroups.length > 0 ? existingGroups : ['默认']}
-        open={customDialogOpen}
-        onClose={() => setCustomDialogOpen(false)}
-        onSave={handleSaveCustom}
+        open={serviceDialogOpen}
+        onClose={() => setServiceDialogOpen(false)}
+        onSave={handleSaveService}
       />
 
       {/* 删除确认弹窗 */}

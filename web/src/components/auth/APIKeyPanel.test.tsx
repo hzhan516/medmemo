@@ -123,8 +123,8 @@ describe('APIKeyPanel', () => {
     fireEvent.change(input, { target: { value: 'sk-test' } })
     expect(input).toHaveValue('sk-test')
 
-    const select = screen.getByRole('combobox')
-    fireEvent.change(select, { target: { value: 'openai' } })
+    const selects = screen.getAllByRole('combobox')
+    fireEvent.change(selects[0], { target: { value: 'openai' } })
 
     expect(screen.getByPlaceholderText(/OpenAI/)).toHaveValue('')
   })

@@ -19,7 +19,7 @@ func TestBroker_Flow(t *testing.T) {
 	b.Start()
 	b.Content("你好")
 	b.Content("世界")
-	b.Done()
+	b.Done(nil)
 
 	assert.Len(t, chunks, 4)
 
@@ -81,7 +81,7 @@ func TestBroker_Latency(t *testing.T) {
 
 	b.Start()
 	time.Sleep(10 * time.Millisecond)
-	b.Done()
+	b.Done(nil)
 
 	assert.Len(t, chunks, 2)
 	assert.Equal(t, models.StreamChunkDone, chunks[1].Type)
@@ -97,7 +97,7 @@ func TestBroker_Metadata(t *testing.T) {
 	})
 
 	b.Start()
-	b.Done()
+	b.Done(nil)
 
 	assert.Len(t, chunks, 2)
 

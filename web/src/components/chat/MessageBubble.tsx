@@ -169,6 +169,17 @@ export function MessageBubble({ message, onRetry, onReportCompliance }: MessageB
               </div>
             )}
 
+            {/* Token 用量统计 */}
+            {!isStreaming && !error && (message.promptTokens !== undefined || message.completionTokens !== undefined) && (
+              <div className="flex items-center justify-end mt-2 pt-2 border-t border-border/50">
+                <span className="text-xs text-muted-foreground">
+                  {message.promptTokens !== undefined && `Input ${message.promptTokens}`}
+                  {message.promptTokens !== undefined && message.completionTokens !== undefined && ' · '}
+                  {message.completionTokens !== undefined && `Output ${message.completionTokens}`}
+                </span>
+              </div>
+            )}
+
             {/* 错误时的操作按钮 */}
             {error && (
               <div className="flex items-center gap-2 mt-2 pt-2 border-t border-destructive/20">

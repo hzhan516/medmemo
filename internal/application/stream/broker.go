@@ -1,6 +1,4 @@
-// Package stream 实现流式响应统一处理层。
-// 将底层适配器输出的原始流式内容包装为结构化的 StreamChunk 序列，
-// 负责元数据附加、latency 计算与错误处理。
+// Package stream 流式响应统一处理层。
 package stream
 
 import (
@@ -9,7 +7,7 @@ import (
 	"github.com/medmemo/medmemo/pkg/models"
 )
 
-// Broker 将原始流式 callback 输出包装为统一 StreamChunk 序列。
+// Broker 将原始流式 callback 包装为统一 StreamChunk 序列。
 type Broker struct {
 	modelID    string
 	providerID string
@@ -19,7 +17,6 @@ type Broker struct {
 }
 
 // NewBroker 创建流式处理 Broker。
-// emit 回调负责将包装后的 StreamChunk 推送到消费者（如 Wails Events）。
 func NewBroker(modelID, providerID string, emit func(models.StreamChunk)) *Broker {
 	return &Broker{
 		modelID:    modelID,
@@ -29,7 +26,6 @@ func NewBroker(modelID, providerID string, emit func(models.StreamChunk)) *Broke
 }
 
 // Start 发送 start chunk，记录开始时间。
-// Metadata 附加 model 与 providerID。
 func (b *Broker) Start() {
 	b.startTime = time.Now()
 	b.started = true
@@ -43,8 +39,7 @@ func (b *Broker) Start() {
 	})
 }
 
-// Content 发送 content chunk。
-// 若 Start 未被显式调用，会自动补发 start chunk，确保序列完整性。
+// Content 发送 content chunk，未调用 Start 时自动补发。
 func (b *Broker) Content(payload string) {
 	if !b.started {
 		b.Start()
@@ -63,14 +58,19 @@ func (b *Broker) Error(err string) {
 	})
 }
 
-// Done 发送 done chunk，附加从开始到结束的 latency 元数据（毫秒）。
-func (b *Broker) Done() {
+// Done 发送 done chunk，附加 latency 与 token 用量元数据。
+func (b *Broker) Done(usage *models.TokenUsage) {
 	latencyMs := time.Since(b.startTime).Milliseconds()
+	meta := models.StreamChunkMetadata{
+		LatencyMs: latencyMs,
+	}
+	if usage != nil {
+		meta.PromptTokens = usage.PromptTokens
+		meta.CompletionTokens = usage.CompletionTokens
+	}
 	b.emit(models.StreamChunk{
-		Type:    models.StreamChunkDone,
-		Payload: "",
-		Metadata: models.StreamChunkMetadata{
-			LatencyMs: latencyMs,
-		},
+		Type:     models.StreamChunkDone,
+		Payload:  "",
+		Metadata: meta,
 	})
 }

@@ -35,7 +35,7 @@ export function LocalModelPanel({
       const result = await DetectOllama()
       setLocalStatus(result)
     } catch (err) {
-      setError(err instanceof Error ? err.message : '检测失败')
+      setError(typeof err === 'string' ? err : (err instanceof Error ? err.message : '检测失败'))
     } finally {
       setLoading(false)
     }
@@ -46,7 +46,7 @@ export function LocalModelPanel({
     try {
       await StartOllamaServer()
     } catch (err) {
-      setError(err instanceof Error ? err.message : '启动失败')
+      setError(typeof err === 'string' ? err : (err instanceof Error ? err.message : '启动失败'))
     }
   }, [])
 
@@ -57,7 +57,7 @@ export function LocalModelPanel({
       const result = await EnsureOllamaAndSmolLM2()
       setLocalStatus(result)
     } catch (err) {
-      setError(err instanceof Error ? err.message : '操作失败')
+      setError(typeof err === 'string' ? err : (err instanceof Error ? err.message : '操作失败'))
     } finally {
       setLoading(false)
     }
@@ -68,9 +68,9 @@ export function LocalModelPanel({
     setError(null)
     try {
       const provider = await CreateOllamaProvider()
-      onProviderCreated(provider)
+      onProviderCreated(provider as unknown as Parameters<typeof onProviderCreated>[0])
     } catch (err) {
-      setError(err instanceof Error ? err.message : '创建 Provider 失败')
+      setError(typeof err === 'string' ? err : (err instanceof Error ? err.message : '创建 Provider 失败'))
     } finally {
       setCreating(false)
     }

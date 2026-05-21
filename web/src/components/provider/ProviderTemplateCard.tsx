@@ -35,7 +35,7 @@ export function ProviderTemplateCard({ template, onClick, isAdded }: ProviderTem
     >
       {/* 顶部：图标 + 名称 + 标签 */}
       <div className="flex items-start justify-between gap-2 mb-2">
-        <div className="flex items-center gap-2.5 min-w-0">
+        <div className="flex items-center gap-2.5 flex-1 min-w-0">
           <div
             className={`shrink-0 w-9 h-9 rounded-lg flex items-center justify-center ${
               template.type === 'local'
@@ -45,8 +45,8 @@ export function ProviderTemplateCard({ template, onClick, isAdded }: ProviderTem
           >
             <ProviderIcon type={template.type} />
           </div>
-          <div className="min-w-0">
-            <h3 className="text-sm font-semibold text-foreground truncate">{template.name}</h3>
+          <div className="min-w-0 flex-1">
+            <h3 className="text-sm font-semibold text-foreground truncate" title={template.name}>{template.name}</h3>
           </div>
         </div>
         <span

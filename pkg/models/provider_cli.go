@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// CLICredentials 表示从 CLI 凭证文件中解析出的完整认证信息。
+// CLICredentials 从 CLI 凭证文件解析出的认证信息。
 type CLICredentials struct {
 	AccessToken  string // 可直接用于 HTTP Bearer 的 access_token
 	RefreshToken string // 用于换取新 access_token 的 refresh_token
@@ -18,12 +18,8 @@ type CLICredentials struct {
 	ProviderHint string // "" 表示 AccessToken 可用；"refresh_token" 表示只有 RefreshToken
 }
 
-// ReadCLICredentials 读取 CLI 凭证文件并解析完整认证信息。
-//
-// 支持格式（按优先级尝试）：
-//  1. Kimi CLI: ~/.kimi/credentials/kimi-code.json
-//  2. gcloud ADC: ~/.config/gcloud/application_default_credentials.json
-//  3. 纯文本: 文件内容直接作为 token 字符串
+// ReadCLICredentials 读取 CLI 凭证文件并解析认证信息。
+// 支持 Kimi CLI、gcloud ADC、纯文本三种格式。
 func ReadCLICredentials(path string) (*CLICredentials, error) {
 	if path == "" {
 		return nil, fmt.Errorf("cli credential path is empty")
@@ -40,7 +36,7 @@ func ReadCLICredentials(path string) (*CLICredentials, error) {
 		return nil, fmt.Errorf("cli credential file %s is empty", path)
 	}
 
-	// 尝试解析为 Kimi 格式
+	// Kimi 格式
 	var kimiCred struct {
 		AccessToken  string `json:"access_token"`
 		RefreshToken string `json:"refresh_token"`
@@ -70,7 +66,7 @@ func ReadCLICredentials(path string) (*CLICredentials, error) {
 		}
 	}
 
-	// 尝试解析为 gcloud ADC 格式
+	// gcloud ADC 格式
 	var adc struct {
 		ClientID     string `json:"client_id"`
 		ClientSecret string `json:"client_secret"`
@@ -86,7 +82,7 @@ func ReadCLICredentials(path string) (*CLICredentials, error) {
 		}, nil
 	}
 
-	// 兜底：纯文本 token（视为 access_token）
+	// 兜底：纯文本 token
 	return &CLICredentials{
 		AccessToken:  trimmed,
 		ProviderHint: "",
@@ -94,12 +90,7 @@ func ReadCLICredentials(path string) (*CLICredentials, error) {
 }
 
 // ReadCLITokenFromFile 读取 CLI 凭证文件并解析 token。
-//
-// 保留此函数以向后兼容；内部委托 ReadCLICredentials。
-//
-// providerHint 取值：
-//   - ""（空字符串）：token 可直接用于 HTTP Bearer 认证
-//   - "refresh_token"：返回的是 refresh_token，需刷新为 access_token
+// 内部委托 ReadCLICredentials。
 func ReadCLITokenFromFile(path string) (token, providerHint string, err error) {
 	creds, err := ReadCLICredentials(path)
 	if err != nil {
@@ -126,7 +117,7 @@ func ExpandPath(path string) string {
 	return filepath.Join(home, path[2:])
 }
 
-// expandPath 是 ExpandPath 的内部别名，保持内部调用一致性。
+// expandPath ExpandPath 的内部别名。
 func expandPath(path string) string {
 	return ExpandPath(path)
 }

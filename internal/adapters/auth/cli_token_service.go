@@ -195,7 +195,7 @@ func (s *CLITokenService) BuildProviderConfig(providerType, modelID string) (*mo
 		APIKey:      "",
 		ModelID:     mID,
 		Temperature: 0.7,
-		Timeout:     30 * time.Second,
+		TimeoutMs:   30000,
 		MaxRetries:  3,
 		GroupName:   "CLI",
 		Enabled:     true,
@@ -203,8 +203,8 @@ func (s *CLITokenService) BuildProviderConfig(providerType, modelID string) (*mo
 		AuthParams: models.AuthParams{
 			CLICredentialPath: credPath,
 		},
-		CreatedAt: now,
-		UpdatedAt: now,
+		CreatedAt: now.UnixMilli(),
+		UpdatedAt: now.UnixMilli(),
 	}, nil
 }
 

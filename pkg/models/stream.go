@@ -17,10 +17,12 @@ const (
 
 // StreamChunkMetadata 表示流式 chunk 的元数据。
 type StreamChunkMetadata struct {
-	Model      string `json:"model,omitempty"`
-	ProviderID string `json:"provider_id,omitempty"`
-	LatencyMs  int64  `json:"latency_ms,omitempty"`
-	TokenCount int    `json:"token_count,omitempty"`
+	Model            string `json:"model,omitempty"`
+	ProviderID       string `json:"provider_id,omitempty"`
+	LatencyMs        int64  `json:"latency_ms,omitempty"`
+	TokenCount       int    `json:"token_count,omitempty"`
+	PromptTokens     int    `json:"prompt_tokens,omitempty"`
+	CompletionTokens int    `json:"completion_tokens,omitempty"`
 }
 
 // StreamChunk 表示 SSE 流式响应的统一输出块。

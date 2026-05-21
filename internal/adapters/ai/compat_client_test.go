@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -175,9 +176,9 @@ func TestOpenAICompatibleClient_Chat_NetworkTimeout(t *testing.T) {
 
 	client := NewOpenAICompatibleClient()
 	cfg := models.ProviderConfig{
-		APIHost: server.URL,
-		ModelID: "m",
-		Timeout: 1 * time.Millisecond,
+		APIHost:   server.URL,
+		ModelID:   "m",
+		TimeoutMs: 1,
 	}
 	_, err := client.Chat(context.Background(), ChatRequest{}, cfg)
 
@@ -427,9 +428,9 @@ func TestOpenAICompatibleClient_FetchModels_Unauthorized(t *testing.T) {
 func TestOpenAICompatibleClient_FetchModels_NetworkError(t *testing.T) {
 	client := NewOpenAICompatibleClient()
 	cfg := models.ProviderConfig{
-		APIHost: "http://127.0.0.1:1",
-		APIKey:  "key",
-		Timeout: 50 * time.Millisecond,
+		APIHost:   "http://127.0.0.1:1",
+		APIKey:    "key",
+		TimeoutMs: 50,
 	}
 	_, err := client.FetchModels(context.Background(), cfg)
 
@@ -603,7 +604,11 @@ func TestClassifyHTTPError(t *testing.T) {
 
 // TestIsNetworkError 验证网络错误判断。
 func TestIsNetworkError(t *testing.T) {
-	assert.True(t, isNetworkError(fmt.Errorf("connection refused")))
+	// 超时错误可重试（context.DeadlineExceeded 触发 url.Error.Timeout()）
+	assert.True(t, isNetworkError(&url.Error{Op: "Post", Err: context.DeadlineExceeded}))
+	// 连接失败可重试
+	assert.True(t, isNetworkError(&url.Error{Op: "Post", Err: fmt.Errorf("connection refused")}))
+	// nil 不可重试
 	assert.False(t, isNetworkError(nil))
 }
 

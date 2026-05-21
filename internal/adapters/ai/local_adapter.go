@@ -8,12 +8,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/medmemo/medmemo/pkg/models"
 )
 
 // LocalAdapter 适配本地 Ollama / llama.cpp 端点。
-// 实现 OpenAI-compatible 的 Chat Completion 接口，通过 HTTP 调用 Ollama REST API。
 type LocalAdapter struct {
 	endpoint string // 如 http://localhost:11434
 	model    string
@@ -25,31 +25,33 @@ func NewLocalAdapter(endpoint, model string) *LocalAdapter {
 	return &LocalAdapter{
 		endpoint: endpoint,
 		model:    model,
-		client:   &http.Client{Timeout: 0}, // 流式请求不设超时，由 context 控制
+		client:   &http.Client{Timeout: 120 * time.Second},
 	}
 }
 
-// ollamaMessage 表示 Ollama API 的消息格式。
+// ollamaMessage Ollama API 消息格式。
 type ollamaMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
 }
 
-// ollamaChatRequest 表示 Ollama /api/chat 请求体。
+// ollamaChatRequest Ollama /api/chat 请求体。
 type ollamaChatRequest struct {
 	Model    string          `json:"model"`
 	Messages []ollamaMessage `json:"messages"`
 	Stream   bool            `json:"stream"`
 }
 
-// ollamaChatResponse 表示 Ollama /api/chat 非流式响应。
+// ollamaChatResponse Ollama /api/chat 响应体。
 type ollamaChatResponse struct {
-	Message ollamaMessage `json:"message"`
-	Done    bool          `json:"done"`
-	Error   string        `json:"error,omitempty"`
+	Message         ollamaMessage `json:"message"`
+	Done            bool          `json:"done"`
+	Error           string        `json:"error,omitempty"`
+	PromptEvalCount int           `json:"prompt_eval_count,omitempty"`
+	EvalCount       int           `json:"eval_count,omitempty"`
 }
 
-// toOllamaMessages 将领域消息转换为 Ollama 消息格式。
+// toOllamaMessages 领域消息转换为 Ollama 消息格式。
 func toOllamaMessages(msgs []models.Message) []ollamaMessage {
 	result := make([]ollamaMessage, len(msgs))
 	for i, m := range msgs {
@@ -61,7 +63,7 @@ func toOllamaMessages(msgs []models.Message) []ollamaMessage {
 	return result
 }
 
-// Chat 实现 port.LLMClient，发送非流式对话请求。
+// Chat 发送非流式对话请求。
 func (a *LocalAdapter) Chat(ctx context.Context, messages []models.Message) (string, error) {
 	reqBody := ollamaChatRequest{
 		Model:    a.model,
@@ -107,9 +109,9 @@ func (a *LocalAdapter) Chat(ctx context.Context, messages []models.Message) (str
 	return result.Message.Content, nil
 }
 
-// StreamChat 实现 port.LLMClient，发送流式对话请求。
-// 逐行读取 Ollama 返回的 NDJSON，通过 callback 推送 content。
-func (a *LocalAdapter) StreamChat(ctx context.Context, messages []models.Message, callback func(chunk string)) error {
+// StreamChat 发送流式对话请求，逐行读取 NDJSON 推送 content。
+// 流式结束后返回 TokenUsage（若响应中未包含 usage 则为 nil）。
+func (a *LocalAdapter) StreamChat(ctx context.Context, messages []models.Message, callback func(chunk string)) (*models.TokenUsage, error) {
 	reqBody := ollamaChatRequest{
 		Model:    a.model,
 		Messages: toOllamaMessages(messages),
@@ -118,26 +120,27 @@ func (a *LocalAdapter) StreamChat(ctx context.Context, messages []models.Message
 
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
-		return fmt.Errorf("failed to marshal ollama stream request: %w", err)
+		return nil, fmt.Errorf("failed to marshal ollama stream request: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, a.endpoint+"/api/chat", bytes.NewReader(jsonBody))
 	if err != nil {
-		return fmt.Errorf("failed to create ollama stream request: %w", err)
+		return nil, fmt.Errorf("failed to create ollama stream request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := a.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to send ollama stream request: %w", err)
+		return nil, fmt.Errorf("failed to send ollama stream request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("ollama stream returned HTTP %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("ollama stream returned HTTP %d: %s", resp.StatusCode, string(body))
 	}
 
+	var tokenUsage *models.TokenUsage
 	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -152,7 +155,7 @@ func (a *LocalAdapter) StreamChat(ctx context.Context, messages []models.Message
 		}
 
 		if chunk.Error != "" {
-			return fmt.Errorf("ollama stream error: %s", chunk.Error)
+			return nil, fmt.Errorf("ollama stream error: %s", chunk.Error)
 		}
 
 		content := chunk.Message.Content
@@ -161,18 +164,26 @@ func (a *LocalAdapter) StreamChat(ctx context.Context, messages []models.Message
 		}
 
 		if chunk.Done {
+			// Ollama 在最后一条中返回 prompt_eval_count / eval_count
+			if chunk.PromptEvalCount > 0 || chunk.EvalCount > 0 {
+				tokenUsage = &models.TokenUsage{
+					PromptTokens:     chunk.PromptEvalCount,
+					CompletionTokens: chunk.EvalCount,
+					TotalTokens:      chunk.PromptEvalCount + chunk.EvalCount,
+				}
+			}
 			break
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("ollama stream interrupted: %w", err)
+		return nil, fmt.Errorf("ollama stream interrupted: %w", err)
 	}
 
-	return nil
+	return tokenUsage, nil
 }
 
-// CheckAvailability 实现 port.LLMClient，探测 Ollama 服务可用性。
+// CheckAvailability 探测 Ollama 服务可用性。
 func (a *LocalAdapter) CheckAvailability(ctx context.Context) (bool, string) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, a.endpoint+"/api/tags", nil)
 	if err != nil {

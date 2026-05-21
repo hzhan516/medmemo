@@ -203,13 +203,13 @@ func TestOllamaDetector_BuildProviderConfig(t *testing.T) {
 	assert.Equal(t, defaultOllamaEndpoint, cfg.APIHost)
 	assert.Equal(t, DefaultModelName, cfg.ModelID)
 	assert.Equal(t, 0.7, cfg.Temperature)
-	assert.Equal(t, 30*time.Second, cfg.Timeout)
+	assert.Equal(t, 30000, cfg.TimeoutMs)
 	assert.Equal(t, 3, cfg.MaxRetries)
 	assert.Equal(t, "本地", cfg.GroupName)
 	assert.True(t, cfg.Enabled)
 	assert.Equal(t, models.AuthMethodAPIToken, cfg.AuthMethod)
-	assert.False(t, cfg.CreatedAt.IsZero())
-	assert.False(t, cfg.UpdatedAt.IsZero())
+	assert.Greater(t, cfg.CreatedAt, int64(0))
+	assert.Greater(t, cfg.UpdatedAt, int64(0))
 }
 
 func TestOllamaDetector_Detect_NotInstalled(t *testing.T) {

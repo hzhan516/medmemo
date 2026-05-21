@@ -246,17 +246,12 @@ func TestPriority_L1BeforeL2(t *testing.T) {
 	assert.Equal(t, "l1-diag-definite-001", res.MatchedRule)
 }
 
-// TestFallback_SafeOnLoadError 验证规则库加载失败时降级放行。
+// TestFallback_SafeOnLoadError 验证规则库加载失败时返回 nil + error。
 func TestFallback_SafeOnLoadError(t *testing.T) {
 	ci, err := NewComplianceInterceptor("/nonexistent/path/rules.json")
-	// 加载失败时返回 error，但仍返回可用的拦截器实例（降级策略）
+	// 加载失败强制返回 nil，避免调用者忽略 error 后使用空规则集
 	require.Error(t, err)
-	require.NotNil(t, ci)
-
-	res, err := ci.Evaluate(context.Background(), "你患有糖尿病。")
-	require.NoError(t, err)
-	assert.False(t, res.Blocked)
-	assert.Equal(t, L4Normal.String(), res.Level)
+	require.Nil(t, ci)
 }
 
 // TestFallback_SafeOnEmptyRules 验证空规则库时直接放行。
@@ -403,8 +398,9 @@ func TestInlineReplace_SingleTerm(t *testing.T) {
 
 	res, err := ci.EvaluateWithInlineReplace(context.Background(), "根据描述，你患有高血压，建议定期监测血压。")
 	require.NoError(t, err)
-	assert.Equal(t, L1Blocked.String(), res.Level)
-	assert.True(t, res.Blocked)
+	// inline 替换后文本不再命中其他规则，正常放行
+	assert.Equal(t, L4Normal.String(), res.Level)
+	assert.False(t, res.Blocked)
 	assert.Contains(t, res.SafeText, "您的情况可能与高血压有关，建议咨询医生确认")
 	assert.Contains(t, res.SafeText, "建议定期监测血压")
 	assert.Contains(t, res.ReplacedTerms, "l1-inline-diag-001")
@@ -418,8 +414,9 @@ func TestInlineReplace_MultipleTerms(t *testing.T) {
 
 	res, err := ci.EvaluateWithInlineReplace(context.Background(), "你患有糖尿病，确诊为二型糖尿病。")
 	require.NoError(t, err)
-	assert.Equal(t, L1Blocked.String(), res.Level)
-	assert.True(t, res.Blocked)
+	// inline 替换后文本不再命中其他规则，正常放行
+	assert.Equal(t, L4Normal.String(), res.Level)
+	assert.False(t, res.Blocked)
 	// 两条 inline 规则都应该被应用
 	assert.Contains(t, res.SafeText, "您的情况可能与糖尿病有关，建议咨询医生确认")
 	assert.Contains(t, res.SafeText, "检查结果可能与二型糖尿病有关，需由医生面诊后确认")
@@ -456,18 +453,17 @@ func TestInlineReplace_NoMatch(t *testing.T) {
 	assert.Len(t, res.ReplacedTerms, 0)
 }
 
-// TestInlineReplace_L2AfterReplace 验证 inline 替换后命中 L2 警告。
+// TestInlineReplace_L2AfterReplace 验证 inline 替换后无其他规则命中时正常放行。
 func TestInlineReplace_L2AfterReplace(t *testing.T) {
 	path := mustWriteRules(t, inlineRules())
 	ci, err := NewComplianceInterceptor(path)
 	require.NoError(t, err)
 
-	// inline 替换消除了 L1 命中，但文本中无 L2/L3 内容，应返回 L4
+	// inline 替换消除了 L1 命中，替换后文本无 L2/L3 内容，应返回 L4
 	res, err := ci.EvaluateWithInlineReplace(context.Background(), "你患有高血压的可能性不大。")
 	require.NoError(t, err)
-	// "你患有高血压" 被 inline 替换，命中了禁止用语，仍标记为 L1
-	assert.Equal(t, L1Blocked.String(), res.Level)
-	assert.True(t, res.Blocked)
+	assert.Equal(t, L4Normal.String(), res.Level)
+	assert.False(t, res.Blocked)
 }
 
 // TestInlineReplace_L3StillWorks 验证 inline 替换不影响 L3 提示。

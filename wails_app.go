@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/medmemo/medmemo/internal/adapters/ai"
 	"github.com/medmemo/medmemo/internal/adapters/auth"
 	"github.com/medmemo/medmemo/internal/application"
+	"github.com/medmemo/medmemo/internal/application/feedback"
 	"github.com/medmemo/medmemo/internal/application/port"
 	"github.com/medmemo/medmemo/internal/application/stream"
 	"github.com/medmemo/medmemo/internal/application/updater"
@@ -213,6 +215,7 @@ type SendMessageRequest struct {
 	ConversationID string           `json:"conversation_id"`
 	Messages       []models.Message `json:"messages"`
 	Model          string           `json:"model"`
+	ProviderID     string           `json:"provider_id"`
 }
 
 // SendMessageResponse 发送消息响应。
@@ -231,6 +234,7 @@ func (a *WailsApp) SendMessage(req SendMessageRequest) (*SendMessageResponse, er
 		ConversationID: models.ConversationID(req.ConversationID),
 		Messages:       req.Messages,
 		Model:          models.ProviderType(req.Model),
+		ProviderID:     req.ProviderID,
 	}
 
 	resp, err := a.chatOrchestrator.Execute(ctx, chatReq)
@@ -264,6 +268,7 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) error {
 		ConversationID: models.ConversationID(req.ConversationID),
 		Messages:       req.Messages,
 		Model:          models.ProviderType(req.Model),
+		ProviderID:     req.ProviderID,
 	}
 
 	// 统一流式处理层：将原始 callback 包装为结构化 StreamChunk 序列
@@ -275,7 +280,7 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) error {
 	// 收集 AI 完整回复用于持久化
 	var fullReply stringsBuilder
 
-	err := a.chatOrchestrator.StreamExecute(ctx, chatReq, func(chunk string) {
+	usage, err := a.chatOrchestrator.StreamExecute(ctx, chatReq, func(chunk string) {
 		fullReply.WriteString(chunk)
 		broker.Content(chunk)
 	})
@@ -307,7 +312,7 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) error {
 		runtime.EventsEmit(a.ctx, "chat:stream:compliance", payload)
 	}
 
-	broker.Done()
+	broker.Done(usage)
 	return nil
 }
 
@@ -719,11 +724,21 @@ type TestAPIKeyResult struct {
 
 // defaultAPIHosts 定义各厂商的默认 API 主机地址。
 var defaultAPIHosts = map[string]string{
-	"openai":   "https://api.openai.com",
-	"kimi":     "https://api.moonshot.cn",
-	"deepseek": "https://api.deepseek.com",
-	"claude":   "https://api.anthropic.com",
-	"gemini":   "https://generativelanguage.googleapis.com/v1beta/openai",
+	"openai":    "https://api.openai.com",
+	"kimi":      "https://api.moonshot.cn",
+	"deepseek":  "https://api.deepseek.com",
+	"claude":    "https://api.anthropic.com",
+	"gemini":    "https://generativelanguage.googleapis.com/v1beta/openai",
+	"microsoft": "https://models.inference.ai.azure.com",
+	"github":    "https://models.inference.ai.azure.com",
+	"qwen":      "https://dashscope.aliyuncs.com/compatible-mode/v1",
+	"zhipu":     "https://open.bigmodel.cn/api/paas/v4",
+	"doubao":    "https://ark.cn-beijing.volces.com/api/v3",
+	"grok":      "https://api.x.ai",
+	"minimax":   "https://api.minimax.chat/v1",
+	"xiaomi":    "https://api.mi.ai",
+	"hunyuan":   "https://hunyuan.tencentcloudapi.com",
+	"vertex":    "https://aiplatform.googleapis.com",
 }
 
 // TestAPIKey 验证指定厂商的 API Key 是否有效。
@@ -808,6 +823,50 @@ func (a *WailsApp) testGeminiAPIKey(ctx context.Context, apiKey string) (*TestAP
 // GetVersion 返回当前应用版本号（构建时通过 -ldflags 注入）。
 func (a *WailsApp) GetVersion() string {
 	return version
+}
+
+// CollectSystemInfo 收集当前运行环境信息，供前端展示。
+func (a *WailsApp) CollectSystemInfo() (*feedback.SystemInfo, error) {
+	reporter := feedback.NewReporter(version, buildTime)
+	return reporter.Collect(), nil
+}
+
+// OpenGitHubIssue 打开系统浏览器到 GitHub Issue 创建页面，预填日志内容。
+// 前端调用后，用户只需在浏览器中点击 Submit 即可创建 Issue。
+func (a *WailsApp) OpenGitHubIssue(userDescription string, errorLog string) error {
+	reporter := feedback.NewReporter(version, buildTime)
+	info := reporter.Collect()
+
+	logContent, err := feedback.ReadAppLogFile("")
+	if err != nil {
+		// 日志读取失败不影响主流程，仅记录
+		logContent = ""
+	}
+
+	// 合并显式传入的错误日志与本地日志文件
+	combinedLog := errorLog
+	if logContent != "" {
+		if combinedLog != "" {
+			combinedLog += "\n\n--- 本地日志 ---\n" + logContent
+		} else {
+			combinedLog = logContent
+		}
+	}
+
+	issueURL := reporter.BuildIssueURL(info, userDescription, combinedLog)
+	runtime.BrowserOpenURL(a.ctx, issueURL)
+	return nil
+}
+
+// GetVersionNotes 返回全部版本提示数据，按版本降序排列（最新在前）。
+func (a *WailsApp) GetVersionNotes() []entity.VersionNote {
+	notes := make([]entity.VersionNote, len(entity.AllVersionNotes))
+	copy(notes, entity.AllVersionNotes)
+	// 倒序：最新版本在前
+	for i, j := 0, len(notes)-1; i < j; i, j = i+1, j-1 {
+		notes[i], notes[j] = notes[j], notes[i]
+	}
+	return notes
 }
 
 // CreateProvider 创建新的 Provider 配置。
@@ -976,7 +1035,7 @@ func (a *WailsApp) DetectCLIToken(providerType string) (*auth.CLIDetectResult, e
 // 验证失败时返回错误，不保存到数据库（由调用方决定是否保存）。
 func (a *WailsApp) BuildCLIProvider(providerType, modelID string) (*models.ProviderConfig, error) {
 	if providerType == "" {
-		return nil, fmt.Errorf("provider_type cannot be empty")
+		return nil, fmt.Errorf("provider 类型不能为空")
 	}
 
 	svc := auth.NewCLITokenService()
@@ -984,22 +1043,22 @@ func (a *WailsApp) BuildCLIProvider(providerType, modelID string) (*models.Provi
 	// 1. 检测 CLI 是否安装
 	detect, err := svc.Detect(providerType)
 	if err != nil {
-		return nil, fmt.Errorf("failed to detect cli: %w", err)
+		return nil, fmt.Errorf("检测 %s CLI 时出错：%v", providerType, err)
 	}
 	if !detect.Detected {
-		return nil, fmt.Errorf("cli %s not detected (credential file not found)", providerType)
+		return nil, fmt.Errorf("未检测到 %s CLI 凭证文件，请先运行 `%s login` 登录", providerType, providerType)
 	}
 
 	// 2. 读取 token
 	token, needsRefresh, err := svc.ReadToken(providerType, detect.CredentialPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read cli token: %w", err)
+		return nil, fmt.Errorf("读取 %s CLI 凭证失败，文件可能已损坏。建议删除凭证文件后重新登录", providerType)
 	}
 
 	// 3. 构建 ProviderConfig
 	cfg, err := svc.BuildProviderConfig(providerType, modelID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build provider config: %w", err)
+		return nil, fmt.Errorf("构建 Provider 配置失败：%v", err)
 	}
 
 	// 4. 验证 token 有效性（调用厂商 /v1/models）
@@ -1008,12 +1067,12 @@ func (a *WailsApp) BuildCLIProvider(providerType, modelID string) (*models.Provi
 		if a.tokenRefreshSvc != nil {
 			_, err := a.tokenRefreshSvc.RefreshProvider(cfg)
 			if err != nil {
-				return nil, fmt.Errorf("failed to refresh cli token for %s: %w", providerType, err)
+				return nil, fmt.Errorf("自动刷新 %s 登录凭证失败，请运行 `%s login` 重新登录后重试", providerType, providerType)
 			}
 			// 刷新成功，更新 cfg 中的缓存 token
 			cfg.AuthParams.OAuthAccessToken = "" // 让 ResolveAuthToken 重新读取已更新的文件
 		} else {
-			return nil, fmt.Errorf("cli token for %s is a refresh_token and token refresh service is not available", providerType)
+			return nil, fmt.Errorf("%s 登录凭证已过期，但自动刷新服务暂不可用。请运行 `%s login` 重新登录", providerType, providerType)
 		}
 	} else {
 		ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
@@ -1021,10 +1080,13 @@ func (a *WailsApp) BuildCLIProvider(providerType, modelID string) (*models.Provi
 
 		valid, err := svc.ValidateToken(ctx, cfg.APIHost, token)
 		if err != nil {
-			return nil, fmt.Errorf("token validation failed: %w", err)
+			if errors.Is(err, context.DeadlineExceeded) {
+				return nil, fmt.Errorf("无法连接到 %s 服务，请求超时。请检查网络连接后重试", providerType)
+			}
+			return nil, fmt.Errorf("无法连接到 %s 服务，请检查网络连接后重试。详情：%v", providerType, err)
 		}
 		if !valid {
-			return nil, fmt.Errorf("cli token for %s is invalid or expired", providerType)
+			return nil, fmt.Errorf("CLI Token 已过期或无效，请运行 `%s login` 重新登录", providerType)
 		}
 	}
 
@@ -1049,6 +1111,17 @@ type DeviceFlowStatusResponse struct {
 	ProviderType string `json:"provider_type"`
 	Status       string `json:"status"`
 	Error        string `json:"error,omitempty"`
+	ProviderID   string `json:"provider_id,omitempty"`
+	ProviderName string `json:"provider_name,omitempty"`
+}
+
+// OAuthDeviceFlowProviderInfo OAuth Device Flow 支持的厂商信息。
+type OAuthDeviceFlowProviderInfo struct {
+	ProviderType string `json:"provider_type"`
+	Name         string `json:"name"`
+	Available    bool   `json:"available"`
+	Configured   bool   `json:"configured"`
+	Detail       string `json:"detail"`
 }
 
 // StartOAuthDeviceFlow 对指定厂商启动 OAuth Device Flow。
@@ -1144,6 +1217,63 @@ func (a *WailsApp) GetOAuthDeviceFlowStatus(deviceCode string) (*DeviceFlowStatu
 		ProviderType: status.ProviderType,
 		Status:       string(status.Status),
 		Error:        status.Error,
+		ProviderID:   status.ProviderID,
+		ProviderName: status.ProviderName,
+	}, nil
+}
+
+// GetOAuthDeviceFlowProviders 返回支持 OAuth Device Flow 的厂商列表及其可用状态。
+// 基于环境变量是否配置判断各厂商的可用性。
+func (a *WailsApp) GetOAuthDeviceFlowProviders() ([]OAuthDeviceFlowProviderInfo, error) {
+	providers := []OAuthDeviceFlowProviderInfo{
+		{ProviderType: "kimi", Name: "Kimi (Moonshot)"},
+		{ProviderType: "gemini", Name: "Gemini (Google)"},
+		{ProviderType: "microsoft", Name: "Microsoft Copilot"},
+		{ProviderType: "github", Name: "GitHub Copilot"},
+	}
+
+	envVars := map[string]string{
+		"kimi":      "MEDMEMO_KIMI_CLIENT_ID",
+		"gemini":    "MEDMEMO_GEMINI_CLIENT_ID",
+		"microsoft": "MEDMEMO_MICROSOFT_CLIENT_ID",
+		"github":    "MEDMEMO_GITHUB_CLIENT_ID",
+	}
+
+	for i := range providers {
+		envVar := envVars[providers[i].ProviderType]
+		if envVar == "" {
+			providers[i].Available = false
+			providers[i].Configured = false
+			providers[i].Detail = "未知厂商"
+			continue
+		}
+
+		if os.Getenv(envVar) != "" {
+			providers[i].Available = true
+			providers[i].Configured = true
+			providers[i].Detail = "已配置 OAuth client_id"
+		} else {
+			providers[i].Available = false
+			providers[i].Configured = false
+			providers[i].Detail = fmt.Sprintf("需配置环境变量 %s", envVar)
+		}
+	}
+
+	return providers, nil
+}
+
+// ParseServiceAccountJSON 解析 Google Service Account JSON 密钥内容。
+// 返回提取后的 project_id、client_email、private_key。
+// 前端应在获取返回值后立即丢弃原始 JSON 字符串。
+func (a *WailsApp) ParseServiceAccountJSON(jsonStr string) (map[string]string, error) {
+	projectID, clientEmail, privateKey, err := auth.ParseServiceAccountJSON(jsonStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse service account JSON: %w", err)
+	}
+	return map[string]string{
+		"project_id":   projectID,
+		"client_email": clientEmail,
+		"private_key":  privateKey,
 	}, nil
 }
 
@@ -1483,6 +1613,37 @@ func (a *WailsApp) DetectAuthMethods() (*AuthDetectResult, error) {
 				status.ProviderType = provider
 				status.Detail = fmt.Sprintf("已配置 %s 的 API Key", provider)
 				break
+			}
+		}
+
+		mu.Lock()
+		results = append(results, status)
+		mu.Unlock()
+	}()
+
+	// Tier 3.5: Service Account (Vertex AI)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		status := AuthMethodDetectStatus{
+			Method: "service_account",
+			Tier:   3,
+		}
+
+		// Service Account 方式始终可用（用户可手动粘贴 JSON）
+		status.Available = true
+		status.Detail = "可手动配置 Vertex AI Service Account"
+
+		// 检查是否已有 service_account 类型的 provider
+		providers, err := a.providerStore.List(ctx)
+		if err == nil {
+			for _, p := range providers {
+				if p.AuthMethod == models.AuthMethodServiceAccount {
+					status.Connected = true
+					status.ProviderType = "vertex"
+					status.Detail = fmt.Sprintf("已配置 Vertex AI Service Account（%s）", p.Name)
+					break
+				}
 			}
 		}
 

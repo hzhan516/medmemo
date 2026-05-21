@@ -1,6 +1,4 @@
-// Package healthcheck 实现 Provider 健康检测引擎。
-// 通过周期性调用 /v1/models 端点验证 Provider 连通性，
-// 并将状态变更通过回调通知上层（由 WailsApp 转发为 Wails Events）。
+// Package healthcheck Provider 健康检测引擎。
 package healthcheck
 
 import (
@@ -14,14 +12,12 @@ import (
 	"github.com/medmemo/medmemo/pkg/models"
 )
 
-// defaultCheckInterval 默认检测周期。
-const defaultCheckInterval = 60 * time.Second
+const (
+	defaultCheckInterval = 60 * time.Second
+	defaultCheckTimeout  = 2 * time.Second
+)
 
-// defaultCheckTimeout 单次检测请求超时。
-const defaultCheckTimeout = 2 * time.Second
-
-// HealthEngine 实现 port.HealthChecker 接口。
-// 使用独立 goroutine 周期性轮询所有已启用的 Provider。
+// HealthEngine 周期性轮询所有已启用 Provider 的健康状态。
 type HealthEngine struct {
 	store        port.ProviderStore
 	client       *http.Client
@@ -37,7 +33,6 @@ type HealthEngine struct {
 }
 
 // NewHealthEngine 创建健康检测引擎。
-// 使用默认 HTTP 客户端和 60 秒检测周期。
 func NewHealthEngine(store port.ProviderStore) *HealthEngine {
 	return &HealthEngine{
 		store:        store,
@@ -47,8 +42,7 @@ func NewHealthEngine(store port.ProviderStore) *HealthEngine {
 	}
 }
 
-// NewHealthEngineWithClient 使用自定义 HTTP 客户端创建引擎。
-// 主要用于测试注入 Mock HTTP Transport。
+// NewHealthEngineWithClient 使用自定义 HTTP 客户端创建引擎（主要用于测试）。
 func NewHealthEngineWithClient(store port.ProviderStore, client *http.Client) *HealthEngine {
 	return &HealthEngine{
 		store:        store,
@@ -73,7 +67,7 @@ func (e *HealthEngine) Start(ctx context.Context) {
 	go e.loop(ctx)
 }
 
-// Stop 优雅停止后台检测 goroutine，等待正在执行的检测完成。
+// Stop 优雅停止后台检测 goroutine。
 func (e *HealthEngine) Stop() {
 	e.mu.Lock()
 	if !e.running {
@@ -113,7 +107,7 @@ func (e *HealthEngine) loop(ctx context.Context) {
 func (e *HealthEngine) checkAll(ctx context.Context) {
 	list, err := e.store.List(ctx)
 	if err != nil {
-		// 存储层错误静默处理，避免日志刷屏；下次轮询重试
+		// 存储层错误静默处理，避免日志刷屏
 		return
 	}
 
@@ -126,8 +120,7 @@ func (e *HealthEngine) checkAll(ctx context.Context) {
 	}
 }
 
-// checkOne 对单个 Provider 执行连通性检测。
-// 发送 GET {APIHost}/v1/models 请求，2 秒超时。
+// checkOne 对单个 Provider 执行连通性检测（2 秒超时）。
 func (e *HealthEngine) checkOne(ctx context.Context, p *models.ProviderConfig) port.HealthResult {
 	start := time.Now()
 
@@ -171,8 +164,7 @@ func (e *HealthEngine) checkOne(ctx context.Context, p *models.ProviderConfig) p
 			Error:      fmt.Sprintf("请求失败: %v", err),
 		}
 	}
-	//nolint:errcheck // Body 不需要读取内容，直接关闭即可
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return port.HealthResult{
@@ -206,13 +198,13 @@ func classifyLatency(d time.Duration) port.HealthStatus {
 	}
 }
 
-// updateResult 将检测结果写入缓存，并在状态变更时触发回调。
+// updateResult 写入缓存并在状态变更时触发回调。
 func (e *HealthEngine) updateResult(result port.HealthResult) {
 	oldValue, existed := e.results.Load(result.ProviderID)
 	e.results.Store(result.ProviderID, result)
 
 	if !existed {
-		// 首次检测，从 Unknown 变为具体状态，触发回调
+		// 首次检测触发回调
 		if e.onChange != nil {
 			e.onChange(result)
 		}

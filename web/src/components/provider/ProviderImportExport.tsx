@@ -182,7 +182,9 @@ export function ProviderImportExport({ open, onClose }: ProviderImportExportProp
 
   const handleImport = useCallback(() => {
     if (!importPreview || importPreview.length === 0) return
-    const configs = importPreview.map((p) => ({
+    const now = Date.now()
+    const configs = importPreview.map((p, i) => ({
+      id: (p.id as string) || `${(p.templateId as string) || 'custom'}_${now}_${i}`,
       templateId: (p.templateId as string) || 'custom',
       name: p.name,
       apiHost: p.apiHost,
@@ -196,6 +198,9 @@ export function ProviderImportExport({ open, onClose }: ProviderImportExportProp
       sortOrder: typeof p.sortOrder === 'number' ? p.sortOrder : 0,
       authMethod: (p.authMethod as AuthMethod) || 'api_key',
       authParams: (p.authParams as Record<string, unknown>) || {},
+      models: p.models || (p.modelId ? [{ id: p.modelId, name: p.modelId, enabled: true }] : []),
+      createdAt: typeof p.createdAt === 'number' ? p.createdAt : now,
+      updatedAt: typeof p.updatedAt === 'number' ? p.updatedAt : now,
     }))
 
     let result: ImportResult

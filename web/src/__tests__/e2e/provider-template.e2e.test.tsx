@@ -80,25 +80,24 @@ describe('E2E: Provider 模板列表', () => {
 
     // 验证弹窗出现
     await waitFor(() => {
-      expect(screen.getByTestId('provider-add-dialog')).toBeInTheDocument()
+      expect(screen.getByTestId('model-service-dialog')).toBeInTheDocument()
     })
 
     // 验证预填字段
     expect(screen.getByDisplayValue('OpenAI')).toBeInTheDocument()
     expect(screen.getByDisplayValue('https://api.openai.com')).toBeInTheDocument()
-    expect(screen.getByDisplayValue('gpt-4o')).toBeInTheDocument()
 
     // 输入 API Key
-    const apiKeyInput = screen.getByTestId('provider-apikey-input')
+    const apiKeyInput = screen.getByTestId('ms-key-input')
     await user.type(apiKeyInput, 'sk-test-key-123')
 
     // 点击保存
-    const saveBtn = screen.getByTestId('provider-save-btn')
+    const saveBtn = screen.getByTestId('ms-save-btn')
     await user.click(saveBtn)
 
     // 验证弹窗关闭
     await waitFor(() => {
-      expect(screen.queryByTestId('provider-add-dialog')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('model-service-dialog')).not.toBeInTheDocument()
     })
 
     // 验证 store 中已添加
@@ -128,14 +127,11 @@ describe('E2E: Provider 模板列表', () => {
     await user.click(ollamaCard)
 
     await waitFor(() => {
-      expect(screen.getByTestId('provider-add-dialog')).toBeInTheDocument()
+      expect(screen.getByTestId('model-service-dialog')).toBeInTheDocument()
     })
 
-    // 不应有 API Key 输入框
-    expect(screen.queryByTestId('provider-apikey-input')).not.toBeInTheDocument()
-
-    // 直接保存
-    const saveBtn = screen.getByTestId('provider-save-btn')
+    // 直接保存（ModelServiceDialog 中 API Key 非必填，本地 provider 可直接保存）
+    const saveBtn = screen.getByTestId('ms-save-btn')
     await user.click(saveBtn)
 
     // 验证添加成功
@@ -146,7 +142,7 @@ describe('E2E: Provider 模板列表', () => {
     })
   })
 
-  it('云端 Provider 未输入 API Key 时保存应提示错误', async () => {
+  it('云端 Provider 未输入 API Key 仍可保存，needsApiKey 自动标记为 true', async () => {
     const user = userEvent.setup()
     render(<SettingsPage />)
 
@@ -157,20 +153,22 @@ describe('E2E: Provider 模板列表', () => {
     await user.click(screen.getByTestId('provider-card-openai'))
 
     await waitFor(() => {
-      expect(screen.getByTestId('provider-add-dialog')).toBeInTheDocument()
+      expect(screen.getByTestId('model-service-dialog')).toBeInTheDocument()
     })
 
-    // 不输入 API Key 直接保存
-    const saveBtn = screen.getByTestId('provider-save-btn')
+    // 不输入 API Key 直接保存（新版 ModelServiceDialog 允许空 API Key）
+    const saveBtn = screen.getByTestId('ms-save-btn')
     await user.click(saveBtn)
 
-    // 验证错误提示
+    // 验证弹窗关闭且添加成功
     await waitFor(() => {
-      expect(screen.getByTestId('provider-add-error')).toHaveTextContent('请输入 API Key')
+      expect(screen.queryByTestId('model-service-dialog')).not.toBeInTheDocument()
     })
 
-    // 验证未添加
-    expect(useProviderStore.getState().providers.length).toBe(0)
+    // 验证已添加，且 needsApiKey 为 true
+    const state = useProviderStore.getState()
+    expect(state.providers.length).toBe(1)
+    expect(state.providers[0].needsApiKey).toBe(true)
   })
 
   it('删除已添加的 Provider', async () => {

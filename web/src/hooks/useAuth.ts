@@ -3,7 +3,7 @@ import { EventsOn } from '@wails/runtime'
 import { DetectAuthMethods } from '@wails/go/main/WailsApp'
 import type { AuthDetectResult } from '@/types/provider'
 
-export type AuthPanel = 'cli_token' | 'oauth_device' | 'api_key' | 'local'
+export type AuthPanel = 'cli_token' | 'oauth_device' | 'api_key' | 'service_account' | 'local'
 
 interface AuthState {
   detecting: boolean

@@ -61,7 +61,7 @@ func (r *ProviderRepoSQLite) Create(ctx context.Context, provider *models.Provid
 		INSERT INTO providers (id, name, api_host, api_key, model_id, temperature, timeout_ms, max_retries, group_name, enabled, sort_order, created_at, updated_at, auth_method, auth_params)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, provider.ID, provider.Name, provider.APIHost, encryptedKey, provider.ModelID, provider.Temperature,
-		int64(provider.Timeout.Milliseconds()), provider.MaxRetries, provider.GroupName, boolToInt(provider.Enabled),
+		int64(provider.TimeoutMs), provider.MaxRetries, provider.GroupName, boolToInt(provider.Enabled),
 		provider.SortOrder, now, now, string(provider.AuthMethod), authParamsJSON)
 
 	if err != nil {
@@ -97,7 +97,7 @@ func (r *ProviderRepoSQLite) Update(ctx context.Context, provider *models.Provid
 			timeout_ms = ?, max_retries = ?, group_name = ?, enabled = ?, sort_order = ?, updated_at = ?, auth_method = ?, auth_params = ?
 		WHERE id = ?
 	`, provider.Name, provider.APIHost, encryptedKey, provider.ModelID, provider.Temperature,
-		int64(provider.Timeout.Milliseconds()), provider.MaxRetries, provider.GroupName, boolToInt(provider.Enabled),
+		int64(provider.TimeoutMs), provider.MaxRetries, provider.GroupName, boolToInt(provider.Enabled),
 		provider.SortOrder, now, string(provider.AuthMethod), authParamsJSON, provider.ID)
 
 	if err != nil {
@@ -191,10 +191,10 @@ func (r *ProviderRepoSQLite) scanProvider(scanner interface {
 	}
 	p.APIKey = decryptedKey
 
-	p.Timeout = time.Duration(timeoutMs) * time.Millisecond
+	p.TimeoutMs = int(timeoutMs)
 	p.Enabled = enabledInt != 0
-	p.CreatedAt = time.UnixMilli(createdAt)
-	p.UpdatedAt = time.UnixMilli(updatedAt)
+	p.CreatedAt = createdAt
+	p.UpdatedAt = updatedAt
 	p.AuthMethod = models.AuthMethod(authMethodStr)
 	if err := p.UnmarshalAuthParams(authParamsJSON); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal auth params for provider %s: %w", p.ID, err)

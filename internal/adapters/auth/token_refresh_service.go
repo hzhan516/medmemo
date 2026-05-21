@@ -30,8 +30,10 @@ type RefreshResult struct {
 
 // 厂商 OAuth2 token endpoint 预置映射。
 var providerTokenEndpoints = map[string]string{
-	"kimi":   "https://api.moonshot.cn/v1/token",
-	"gemini": "https://oauth2.googleapis.com/token",
+	"kimi":      "https://api.moonshot.cn/v1/token",
+	"gemini":    "https://oauth2.googleapis.com/token",
+	"microsoft": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+	"github":    "https://github.com/login/oauth/access_token",
 }
 
 // TokenRefreshService 实现 Token 自动刷新与调度。
@@ -130,7 +132,7 @@ func (s *TokenRefreshService) RefreshProvider(p *models.ProviderConfig) (*Refres
 	p.AuthParams.OAuthAccessToken = result.AccessToken
 	p.AuthParams.OAuthRefreshToken = result.RefreshToken
 	p.AuthParams.OAuthExpiresAt = result.ExpiresAt
-	p.UpdatedAt = time.Now()
+	p.UpdatedAt = time.Now().UnixMilli()
 
 	// 持久化到数据库
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -293,7 +295,7 @@ func (s *TokenRefreshService) doRefresh(providerType string, creds *models.CLICr
 func (s *TokenRefreshService) handleDegradation(p *models.ProviderConfig, reason string) {
 	p.AuthParams.OAuthAccessToken = ""
 	p.Enabled = false
-	p.UpdatedAt = time.Now()
+	p.UpdatedAt = time.Now().UnixMilli()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -386,6 +388,10 @@ func inferProviderType(p *models.ProviderConfig) string {
 		return "kimi"
 	case strings.Contains(host, "google") || strings.Contains(host, "gemini"):
 		return "gemini"
+	case strings.Contains(host, "microsoft") || strings.Contains(host, "azure") || strings.Contains(host, "windows"):
+		return "microsoft"
+	case strings.Contains(host, "github"):
+		return "github"
 	default:
 		return ""
 	}

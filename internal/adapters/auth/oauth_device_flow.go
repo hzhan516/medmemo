@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -65,6 +66,8 @@ type DeviceFlowStatusResult struct {
 	ProviderType string
 	Status       DeviceFlowStatus
 	Error        string
+	ProviderID   string
+	ProviderName string
 }
 
 // deviceFlowSession 表示一个进行中的 Device Flow 会话。
@@ -81,28 +84,42 @@ type deviceFlowSession struct {
 	result       *DeviceTokenResponse
 	err          error
 	status       DeviceFlowStatus
+	providerID   string // 授权成功后生成的 Provider ID
+	providerName string // 授权成功后生成的 Provider 名称
 	mu           sync.Mutex
 }
 
 // 厂商 Device Flow 端点预置配置。
-// client_id 留空表示需要调用方提供（如 Gemini）。
+// client_id 优先从环境变量读取，未设置时需在启动前配置。
 var deviceFlowConfigs = map[string]struct {
 	DeviceAuthURL string
 	TokenURL      string
-	ClientID      string
 	Scope         string
+	EnvClientID   string // 环境变量名，用于读取 client_id
 }{
 	"kimi": {
 		DeviceAuthURL: "https://api.moonshot.cn/v1/token/device",
 		TokenURL:      "https://api.moonshot.cn/v1/token",
-		ClientID:      "",
 		Scope:         "api",
+		EnvClientID:   "MEDMEMO_KIMI_CLIENT_ID",
 	},
 	"gemini": {
 		DeviceAuthURL: "https://oauth2.googleapis.com/device/code",
 		TokenURL:      "https://oauth2.googleapis.com/token",
-		ClientID:      "", // Google Device Flow 需要调用方提供 OAuth client_id
 		Scope:         "https://www.googleapis.com/auth/cloud-platform",
+		EnvClientID:   "MEDMEMO_GEMINI_CLIENT_ID",
+	},
+	"microsoft": {
+		DeviceAuthURL: "https://login.microsoftonline.com/common/oauth2/v2.0/devicecode",
+		TokenURL:      "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+		Scope:         "https://cognitiveservices.azure.com/.default offline_access",
+		EnvClientID:   "MEDMEMO_MICROSOFT_CLIENT_ID",
+	},
+	"github": {
+		DeviceAuthURL: "https://github.com/login/device/code",
+		TokenURL:      "https://github.com/login/oauth/access_token",
+		Scope:         "read:user",
+		EnvClientID:   "MEDMEMO_GITHUB_CLIENT_ID",
 	},
 }
 
@@ -168,12 +185,14 @@ func (s *OAuthDeviceFlowService) StartFlow(providerType string) (*DeviceFlowStar
 		return nil, fmt.Errorf("unsupported provider type for device flow: %s", providerType)
 	}
 
-	if cfg.ClientID == "" {
-		return nil, fmt.Errorf("provider %s requires OAuth client_id to be configured for device flow", providerType)
+	// 从环境变量读取 client_id，未配置则返回友好提示
+	clientID := os.Getenv(cfg.EnvClientID)
+	if clientID == "" {
+		return nil, fmt.Errorf("provider %s 的 Device Flow 需要配置 OAuth client_id，请设置环境变量 %s", providerType, cfg.EnvClientID)
 	}
 
 	// 1. 请求设备码
-	deviceAuth, err := s.requestDeviceCode(cfg.DeviceAuthURL, cfg.ClientID, cfg.Scope)
+	deviceAuth, err := s.requestDeviceCode(cfg.DeviceAuthURL, clientID, cfg.Scope)
 	if err != nil {
 		return nil, fmt.Errorf("failed to request device code for %s: %w", providerType, err)
 	}
@@ -192,7 +211,7 @@ func (s *OAuthDeviceFlowService) StartFlow(providerType string) (*DeviceFlowStar
 	session := &deviceFlowSession{
 		providerType: providerType,
 		deviceCode:   deviceAuth.DeviceCode,
-		clientID:     cfg.ClientID,
+		clientID:     clientID,
 		tokenURL:     cfg.TokenURL,
 		interval:     interval,
 		expiresAt:    time.Now().Add(time.Duration(expiresIn) * time.Second),
@@ -253,6 +272,8 @@ func (s *OAuthDeviceFlowService) GetStatus(deviceCode string) *DeviceFlowStatusR
 		DeviceCode:   session.deviceCode,
 		ProviderType: session.providerType,
 		Status:       session.status,
+		ProviderID:   session.providerID,
+		ProviderName: session.providerName,
 	}
 	if session.err != nil {
 		result.Error = session.err.Error()
@@ -438,6 +459,11 @@ func (s *OAuthDeviceFlowService) executePoll(session *deviceFlowSession, ticker 
 		return true
 	}
 
+	session.mu.Lock()
+	session.providerID = cfg.ID
+	session.providerName = cfg.Name
+	session.mu.Unlock()
+
 	s.emitSuccess(session, cfg)
 	return true
 }
@@ -495,15 +521,15 @@ func (s *OAuthDeviceFlowService) saveProviderConfig(session *deviceFlowSession, 
 	// 根据 providerType 推断 API Host 和默认模型
 	apiHost, modelID, name := s.inferProviderInfo(session.providerType)
 
-	now := time.Now()
+	nowMs := time.Now().UnixMilli()
 	cfg := &models.ProviderConfig{
-		ID:          fmt.Sprintf("oauth-%s-%d", session.providerType, now.Unix()),
+		ID:          fmt.Sprintf("oauth-%s-%d", session.providerType, nowMs),
 		Name:        name,
 		APIHost:     apiHost,
 		APIKey:      "",
 		ModelID:     modelID,
 		Temperature: 0.7,
-		Timeout:     30 * time.Second,
+		TimeoutMs:   30000,
 		MaxRetries:  3,
 		GroupName:   "OAuth",
 		Enabled:     true,
@@ -515,8 +541,8 @@ func (s *OAuthDeviceFlowService) saveProviderConfig(session *deviceFlowSession, 
 			OAuthRefreshToken: tokenResp.RefreshToken,
 			OAuthExpiresAt:    expiresAt,
 		},
-		CreatedAt: now,
-		UpdatedAt: now,
+		CreatedAt: nowMs,
+		UpdatedAt: nowMs,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -540,7 +566,11 @@ func (s *OAuthDeviceFlowService) inferProviderInfo(providerType string) (apiHost
 	case "kimi":
 		return "https://api.moonshot.cn", "moonshot-v1-8k", "Kimi (OAuth)"
 	case "gemini":
-		return "https://generativelanguage.googleapis.com/v1beta/openai/", "gemini-1.5-flash", "Gemini (OAuth)"
+		return "https://generativelanguage.googleapis.com/v1beta/openai", "gemini-1.5-flash", "Gemini (OAuth)"
+	case "microsoft":
+		return "https://models.inference.ai.azure.com", "gpt-4o", "Microsoft (OAuth)"
+	case "github":
+		return "https://models.inference.ai.azure.com", "gpt-4o", "GitHub (OAuth)"
 	default:
 		return "", "", fmt.Sprintf("OAuth %s", providerType)
 	}

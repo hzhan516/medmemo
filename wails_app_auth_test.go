@@ -101,8 +101,8 @@ func TestDetectAuthMethods_Parallel(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
-	// 验证返回了 4 种认证方式
-	assert.Len(t, result.Results, 4)
+	// 验证返回了 5 种认证方式
+	assert.Len(t, result.Results, 5)
 
 	// 验证每种方式都有 method 和 tier
 	methods := make(map[string]int)
@@ -112,6 +112,7 @@ func TestDetectAuthMethods_Parallel(t *testing.T) {
 	assert.Equal(t, 1, methods["cli_token"])
 	assert.Equal(t, 2, methods["oauth_device"])
 	assert.Equal(t, 3, methods["api_key"])
+	assert.Equal(t, 3, methods["service_account"])
 	assert.Equal(t, 4, methods["local"])
 }
 

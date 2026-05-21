@@ -16,8 +16,10 @@ interface SettingsState {
   desensitizationLevel: DesensitizationLevel
   dataRetentionDays: number
   activeProviderId: string | null
+  activeModelId: string | null
   providerHealthStatus: Record<string, ProviderHealthStatus>
   lastSelectedProviderId: string | null
+  lastSeenVersionNotes: string
 
   setTheme: (theme: Theme) => void
   setSelectedModel: (model: string) => void
@@ -27,8 +29,10 @@ interface SettingsState {
   setDesensitizationLevel: (level: DesensitizationLevel) => void
   setDataRetentionDays: (days: number) => void
   setActiveProviderId: (id: string | null) => void
+  setActiveModelId: (id: string | null) => void
   setProviderHealthStatus: (id: string, status: ProviderHealthStatus) => void
   setLastSelectedProviderId: (id: string | null) => void
+  setLastSeenVersionNotes: (version: string) => void
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -42,8 +46,10 @@ export const useSettingsStore = create<SettingsState>()(
       desensitizationLevel: 'standard',
       dataRetentionDays: 30,
       activeProviderId: null,
+      activeModelId: null,
       providerHealthStatus: {},
       lastSelectedProviderId: null,
+      lastSeenVersionNotes: '',
 
       setTheme: (theme) => set({ theme }),
       setSelectedModel: (model) => set({ selectedModel: model }),
@@ -53,11 +59,13 @@ export const useSettingsStore = create<SettingsState>()(
       setDesensitizationLevel: (level) => set({ desensitizationLevel: level }),
       setDataRetentionDays: (days) => set({ dataRetentionDays: days }),
       setActiveProviderId: (id) => set({ activeProviderId: id }),
+      setActiveModelId: (id) => set({ activeModelId: id }),
       setProviderHealthStatus: (id, status) =>
         set((state) => ({
           providerHealthStatus: { ...state.providerHealthStatus, [id]: status },
         })),
       setLastSelectedProviderId: (id) => set({ lastSelectedProviderId: id }),
+      setLastSeenVersionNotes: (version) => set({ lastSeenVersionNotes: version }),
     }),
     {
       name: 'medmemo-settings',
@@ -70,7 +78,9 @@ export const useSettingsStore = create<SettingsState>()(
         desensitizationLevel: state.desensitizationLevel,
         dataRetentionDays: state.dataRetentionDays,
         activeProviderId: state.activeProviderId,
+        activeModelId: state.activeModelId,
         lastSelectedProviderId: state.lastSelectedProviderId,
+        lastSeenVersionNotes: state.lastSeenVersionNotes,
         // providerHealthStatus 不持久化（运行时状态）
       }),
     }

@@ -11,10 +11,7 @@ interface ProviderAddDialogProps {
   onSave: (config: Omit<ProviderConfig, 'id' | 'createdAt' | 'updatedAt'>) => void
 }
 
-/**
- * Provider 一键添加弹窗。
- * 预填模板信息（名称、API Host、Model ID），用户只需输入 API Key。
- */
+/** Provider 一键添加弹窗 */
 export function ProviderAddDialog({ template, open, onClose, onSave }: ProviderAddDialogProps) {
   const [apiKey, setApiKey] = useState('')
   const [showKey, setShowKey] = useState(false)
@@ -55,6 +52,7 @@ export function ProviderAddDialog({ template, open, onClose, onSave }: ProviderA
       sortOrder: 0,
       authMethod: 'api_key',
       authParams: {},
+      models: [{ id: template.defaultModel, name: template.defaultModel, enabled: true }],
     })
 
     onClose()

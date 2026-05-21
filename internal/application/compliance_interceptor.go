@@ -1,4 +1,4 @@
-// Package application 实现应用用例层，编排领域对象完成完整业务流程。
+// Package application 应用用例层，编排领域对象完成完整业务流程。
 package application
 
 import (
@@ -12,17 +12,17 @@ import (
 	"time"
 )
 
-// RiskLevel 表示合规风险等级。
+// RiskLevel 合规风险等级。
 type RiskLevel int
 
 const (
-	L1Blocked RiskLevel = iota + 1 // L1-阻断级：诊断/处方/治疗
-	L2Warning                      // L2-警告级：暗示性诊断/药物推荐
-	L3Notice                       // L3-提示级：严重疾病科普
-	L4Normal                       // L4-正常级：一般健康科普/生活方式
+	L1Blocked RiskLevel = iota + 1 // 阻断级：诊断/处方/治疗
+	L2Warning                      // 警告级：暗示性诊断/药物推荐
+	L3Notice                       // 提示级：严重疾病科普
+	L4Normal                       // 正常级：一般健康科普/生活方式
 )
 
-// String 返回风险等级的可读名称。
+// String 风险等级可读名称。
 func (r RiskLevel) String() string {
 	switch r {
 	case L1Blocked:
@@ -70,14 +70,13 @@ type ComplianceRuleSet struct {
 	Rules       []ComplianceRule `json:"rules"`
 }
 
-// compiledRule 预编译后的规则，用于运行时高效匹配。
+// compiledRule 预编译规则，运行时高效匹配。
 type compiledRule struct {
 	ComplianceRule
 	compiled []*regexp.Regexp
 }
 
-// ComplianceInterceptor 四层合规风险拦截引擎。
-// 支持从本地 JSON 文件加载规则库，运行时热更新。
+// ComplianceInterceptor 四层合规拦截引擎，支持规则库热更新。
 type ComplianceInterceptor struct {
 	mu      sync.RWMutex
 	rules   []compiledRule
@@ -86,11 +85,11 @@ type ComplianceInterceptor struct {
 }
 
 // NewComplianceInterceptor 从指定路径加载规则库并创建拦截器。
+// 加载失败返回 nil，强制调用者显式处理错误，避免静默降级导致拦截失效。
 func NewComplianceInterceptor(rulesPath string) (*ComplianceInterceptor, error) {
 	ci := &ComplianceInterceptor{path: rulesPath}
 	if err := ci.load(); err != nil {
-		// 故障降级：规则库加载失败时返回空规则拦截器，确保业务不中断
-		return ci, fmt.Errorf("failed to load compliance rules from %s: %w", rulesPath, err)
+		return nil, fmt.Errorf("failed to load compliance rules from %s: %w", rulesPath, err)
 	}
 	return ci, nil
 }
@@ -120,7 +119,7 @@ func (ci *ComplianceInterceptor) load() error {
 		compiled = append(compiled, cr)
 	}
 
-	// 按风险等级排序：L1 > L2 > L3，确保高优先级规则先匹配
+	// 按风险等级排序：L1 > L2 > L3，高优先级规则先匹配
 	sort.SliceStable(compiled, func(i, j int) bool {
 		return levelPriority(compiled[i].Level) < levelPriority(compiled[j].Level)
 	})
@@ -133,7 +132,7 @@ func (ci *ComplianceInterceptor) load() error {
 	return nil
 }
 
-// levelPriority 返回风险等级的数值优先级（越小优先级越高）。
+// levelPriority 风险等级数值优先级（越小越高）。
 func levelPriority(level string) int {
 	switch level {
 	case "L1":
@@ -147,27 +146,26 @@ func levelPriority(level string) int {
 	}
 }
 
-// ReloadRules 运行时重新加载规则库，实现热更新。
+// ReloadRules 运行时热更新规则库。
 func (ci *ComplianceInterceptor) ReloadRules() error {
 	return ci.load()
 }
 
-// Version 返回当前加载的规则库版本号。
+// Version 返回当前规则库版本号。
 func (ci *ComplianceInterceptor) Version() string {
 	ci.mu.RLock()
 	defer ci.mu.RUnlock()
 	return ci.version
 }
 
-// Evaluate 评估单条文本的风险等级，返回合规检查结果。
-// 匹配策略：按 L1→L2→L3 优先级顺序匹配，一旦命中立即短路返回。
-// 若无任何规则命中，返回 L4_NORMAL。
+// Evaluate 评估单条文本的风险等级。
+// 按 L1→L2→L3 优先级匹配，命中即短路返回；无命中返回 L4_NORMAL。
 func (ci *ComplianceInterceptor) Evaluate(ctx context.Context, text string) (*ComplianceResult, error) {
 	ci.mu.RLock()
 	rules := ci.rules
 	ci.mu.RUnlock()
 
-	// 无规则时直接放行（降级策略）
+	// 无规则时直接放行
 	if len(rules) == 0 {
 		return &ComplianceResult{Level: L4Normal.String(), SafeText: text}, nil
 	}
@@ -219,10 +217,8 @@ func (ci *ComplianceInterceptor) matchRule(text string, r compiledRule) bool {
 	return false
 }
 
-// EvaluateWithInlineReplace 先对文本执行 inline 用词替换，再执行常规合规评估。
-// 适用于 TASK-019 用词规范实时校验：将高风险用语在文中局部替换为合规表达。
-// inline 替换仅作用于 ReplaceMode == "inline" 的 L1 规则，按优先级顺序依次应用。
-// 替换后的文本再进入常规 Evaluate 流程进行整段阻断/警告/提示检测。
+// EvaluateWithInlineReplace 先执行 inline 用词替换，再评估风险等级。
+// 仅作用于 ReplaceMode == "inline" 的 L1 规则，按优先级依次应用。
 func (ci *ComplianceInterceptor) EvaluateWithInlineReplace(ctx context.Context, text string) (*ComplianceResult, error) {
 	ci.mu.RLock()
 	rules := ci.rules
@@ -231,7 +227,7 @@ func (ci *ComplianceInterceptor) EvaluateWithInlineReplace(ctx context.Context, 
 	replacedText := text
 	var replacedTerms []string
 
-	// 第一步：遍历所有 inline 规则，依次应用文中替换
+	// 遍历 inline 规则，依次替换
 	for _, r := range rules {
 		if r.Level != "L1" || r.ReplaceMode != "inline" || r.Replacement == "" {
 			continue
@@ -245,17 +241,10 @@ func (ci *ComplianceInterceptor) EvaluateWithInlineReplace(ctx context.Context, 
 		}
 	}
 
-	// 第二步：对替换后的文本执行常规合规评估
+	// 对替换后的文本执行常规合规评估
 	result, err := ci.Evaluate(ctx, replacedText)
 	if err != nil {
 		return nil, fmt.Errorf("evaluate after inline replace failed: %w", err)
-	}
-
-	// 若发生了 inline 替换但常规评估仍为 L4_NORMAL，标记为 L1（因替换了禁止用语）
-	if len(replacedTerms) > 0 && result.Level == L4Normal.String() {
-		result.Level = L1Blocked.String()
-		result.Blocked = true
-		result.MatchedRule = replacedTerms[0]
 	}
 
 	result.ReplacedTerms = replacedTerms
@@ -271,6 +260,7 @@ func (ci *ComplianceInterceptor) EvaluateWithTimeout(ctx context.Context, text s
 		res *ComplianceResult
 		err error
 	}
+	// 缓冲 channel 防止超时后子 goroutine 永久阻塞在发送端
 	done := make(chan result, 1)
 
 	go func() {

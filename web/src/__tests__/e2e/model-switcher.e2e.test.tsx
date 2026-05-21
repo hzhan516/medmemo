@@ -69,7 +69,7 @@ describe('E2E: 运行时模型切换器', () => {
   it('渲染顶部选择器：展示当前 Provider 名称+状态圆点+下拉箭头', async () => {
     global.fetch = mockFetchWithStatus(200, 50)
     const provider = createMockProvider({ name: 'Kimi Pro', modelId: 'kimi-pro' })
-    useSettingsStore.setState({ activeProviderId: provider.id })
+    useSettingsStore.setState({ activeProviderId: provider.id, activeModelId: provider.modelId })
 
     render(<ChatPage />)
 
@@ -77,7 +77,7 @@ describe('E2E: 运行时模型切换器', () => {
       expect(screen.getByTestId('ms-trigger')).toBeInTheDocument()
     })
 
-    expect(screen.getByTestId('ms-current-name')).toHaveTextContent('Kimi Pro')
+    expect(screen.getByTestId('ms-current-name')).toHaveTextContent('kimi-pro')
     expect(screen.getByTestId('ms-status-dot')).toBeInTheDocument()
   })
 
@@ -86,7 +86,7 @@ describe('E2E: 运行时模型切换器', () => {
     global.fetch = mockFetchWithStatus(200, 50)
     const p1 = createMockProvider({ name: 'Kimi A', group: '工作' })
     createMockProvider({ name: 'GPT-4', group: '云端', templateId: 'openai', apiHost: 'https://api.openai.com' })
-    useSettingsStore.setState({ activeProviderId: p1.id })
+    useSettingsStore.setState({ activeProviderId: p1.id, activeModelId: p1.modelId })
 
     render(<ChatPage />)
 
@@ -99,7 +99,7 @@ describe('E2E: 运行时模型切换器', () => {
     expect(screen.getByTestId('ms-dropdown')).toBeInTheDocument()
     expect(screen.getByTestId('ms-group-工作')).toBeInTheDocument()
     expect(screen.getByTestId('ms-group-云端')).toBeInTheDocument()
-    expect(screen.getByTestId(`ms-provider-${p1.id}`)).toBeInTheDocument()
+    expect(screen.getByTestId(`ms-model-${p1.id}-${p1.modelId}`)).toBeInTheDocument()
   })
 
   it('切换 Provider：点击 Green Provider 后顶部更新并显示 Toast', async () => {
@@ -120,15 +120,15 @@ describe('E2E: 运行时模型切换器', () => {
     })
 
     await user.click(screen.getByTestId('ms-trigger'))
-    await user.click(screen.getByTestId(`ms-provider-${p2.id}`))
+    await user.click(screen.getByTestId(`ms-model-${p2.id}-${p2.modelId}`))
 
     await waitFor(() => {
-      expect(screen.getByTestId('ms-current-name')).toHaveTextContent('Kimi B')
+      expect(screen.getByTestId('ms-current-name')).toHaveTextContent('kimi-lite')
     })
 
     // Toast 显示
     await waitFor(() => {
-      expect(screen.getByTestId('ms-toast')).toHaveTextContent('已切换至 Kimi B')
+      expect(screen.getByTestId('ms-toast')).toHaveTextContent('已切换至 kimi-lite')
     })
 
     // 下拉关闭
@@ -145,6 +145,7 @@ describe('E2E: 运行时模型切换器', () => {
     const p2 = createMockProvider({ name: 'Kimi Slow', templateId: 'kimi2', apiHost: 'https://slow.moonshot.cn' })
     useSettingsStore.setState({
       activeProviderId: p1.id,
+      activeModelId: p1.modelId,
       providerHealthStatus: { [p1.id]: 'green', [p2.id]: 'yellow' },
     })
 
@@ -156,7 +157,7 @@ describe('E2E: 运行时模型切换器', () => {
 
     await user.click(screen.getByTestId('ms-trigger'))
 
-    const slowItem = screen.getByTestId(`ms-provider-${p2.id}`)
+    const slowItem = screen.getByTestId(`ms-model-${p2.id}-${p2.modelId}`)
     expect(slowItem).toHaveClass('opacity-50')
     expect(slowItem).toHaveAttribute('disabled')
   })
@@ -167,6 +168,7 @@ describe('E2E: 运行时模型切换器', () => {
     const p2 = createMockProvider({ name: 'Kimi Dead', templateId: 'kimi2', apiHost: 'https://dead.moonshot.cn' })
     useSettingsStore.setState({
       activeProviderId: p1.id,
+      activeModelId: p1.modelId,
       providerHealthStatus: { [p1.id]: 'green', [p2.id]: 'red' },
     })
 
@@ -178,8 +180,8 @@ describe('E2E: 运行时模型切换器', () => {
 
     await user.click(screen.getByTestId('ms-trigger'))
 
-    expect(screen.getByTestId(`ms-provider-${p1.id}`)).toBeInTheDocument()
-    expect(screen.queryByTestId(`ms-provider-${p2.id}`)).not.toBeInTheDocument()
+    expect(screen.getByTestId(`ms-model-${p1.id}-${p1.modelId}`)).toBeInTheDocument()
+    expect(screen.queryByTestId(`ms-model-${p2.id}-${p2.modelId}`)).not.toBeInTheDocument()
   })
 
   it('键盘快捷键 Ctrl+Shift+↓ 循环切换可用 Provider', async () => {
@@ -187,13 +189,14 @@ describe('E2E: 运行时模型切换器', () => {
     const p2 = createMockProvider({ name: 'Kimi B', templateId: 'kimi2', apiHost: 'https://api2.moonshot.cn' })
     useSettingsStore.setState({
       activeProviderId: p1.id,
+      activeModelId: p1.modelId,
       providerHealthStatus: { [p1.id]: 'green', [p2.id]: 'green' },
     })
 
     render(<ChatPage />)
 
     await waitFor(() => {
-      expect(screen.getByTestId('ms-current-name')).toHaveTextContent('Kimi A')
+      expect(screen.getByTestId('ms-current-name')).toHaveTextContent('kimi-lite')
     })
 
     // Ctrl+Shift+↓ → 切换到下一个
@@ -239,7 +242,7 @@ describe('E2E: 运行时模型切换器', () => {
     })
 
     await user.click(screen.getByTestId('ms-trigger'))
-    await user.click(screen.getByTestId(`ms-provider-${p2.id}`))
+    await user.click(screen.getByTestId(`ms-model-${p2.id}-${p2.modelId}`))
 
     await waitFor(() => {
       expect(useSettingsStore.getState().lastSelectedProviderId).toBe(p2.id)

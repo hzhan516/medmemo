@@ -1,19 +1,23 @@
 import { useCallback } from 'react'
 import * as WailsApp from '@wails/go/main/WailsApp'
-import type {
-  SendMessageRequest,
-  SendMessageResponse,
-  ConversationSummary,
-  ModelInfo,
-  EmergencyResult,
-  DisclaimerStatus,
-  UpdateInfoResponse,
-  DownloadUpdateRequest,
-  UpdateSettingsResponse,
-} from '@wails/go/main/WailsApp'
+import { main, entity, feedback } from '@wails/go/models'
+import { toWailsProviderConfig, fromWailsProviderConfig } from '@/utils/providerAdapter'
+import type { ProviderConfig } from '@/types/provider'
+
+type SendMessageRequest = main.SendMessageRequest
+type SendMessageResponse = main.SendMessageResponse
+type ConversationSummary = main.ConversationSummary
+type ModelInfo = main.ModelInfo
+type EmergencyResult = main.EmergencyResult
+type DisclaimerStatus = main.DisclaimerStatus
+type UpdateInfoResponse = main.UpdateInfoResponse
+type DownloadUpdateRequest = main.DownloadUpdateRequest
+type UpdateSettingsResponse = main.UpdateSettingsResponse
+type SystemInfo = feedback.SystemInfo
+
+type AuthDetectResult = main.AuthDetectResult
 
 import { SaveAPIKey, HasAPIKey, GetVersion, DetectAuthMethods } from '@wails/go/main/WailsApp'
-import type { AuthDetectResult } from '@wails/go/main/WailsApp'
 
 /**
  * Wails 后端绑定方法封装 Hook。
@@ -118,6 +122,35 @@ export function useWails() {
     return await DetectAuthMethods()
   }, [])
 
+  const getVersionNotes = useCallback(async (): Promise<entity.VersionNote[]> => {
+    return await WailsApp.GetVersionNotes()
+  }, [])
+
+  const collectSystemInfo = useCallback(async (): Promise<SystemInfo> => {
+    return await WailsApp.CollectSystemInfo()
+  }, [])
+
+  const openGitHubIssue = useCallback(async (userDescription: string, errorLog: string): Promise<void> => {
+    return await WailsApp.OpenGitHubIssue(userDescription, errorLog)
+  }, [])
+
+  const createProvider = useCallback(async (config: ProviderConfig): Promise<void> => {
+    return await WailsApp.CreateProvider(toWailsProviderConfig(config))
+  }, [])
+
+  const updateProvider = useCallback(async (config: ProviderConfig): Promise<void> => {
+    return await WailsApp.UpdateProvider(toWailsProviderConfig(config))
+  }, [])
+
+  const deleteProvider = useCallback(async (id: string): Promise<void> => {
+    return await WailsApp.DeleteProvider(id)
+  }, [])
+
+  const listProviders = useCallback(async (): Promise<ProviderConfig[]> => {
+    const list = await WailsApp.ListProviders()
+    return list.map(fromWailsProviderConfig)
+  }, [])
+
   return {
     sendMessage,
     sendMessageStream,
@@ -142,5 +175,12 @@ export function useWails() {
     hasAPIKey,
     getVersion,
     detectAuthMethods,
+    getVersionNotes,
+    collectSystemInfo,
+    openGitHubIssue,
+    createProvider,
+    updateProvider,
+    deleteProvider,
+    listProviders,
   }
 }

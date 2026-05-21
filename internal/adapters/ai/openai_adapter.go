@@ -1,5 +1,4 @@
 // Package ai 实现 AI 模型客户端适配器簇。
-// 适配器实现 application/port 中定义的 LLMClient 接口。
 package ai
 
 import (
@@ -16,7 +15,7 @@ import (
 	"github.com/medmemo/medmemo/pkg/models"
 )
 
-// OpenAIAdapter 适配 OpenAI 兼容 API（含 Kimi、Qwen、SiliconFlow）。
+// OpenAIAdapter 适配 OpenAI 兼容 API。
 type OpenAIAdapter struct {
 	apiKey  string
 	baseURL string
@@ -41,43 +40,51 @@ func NewOpenAIAdapter(apiKey, baseURL, model string) *OpenAIAdapter {
 	}
 }
 
-// chatRequest 表示 OpenAI Chat Completion 请求体。
+// chatRequest OpenAI Chat Completion 请求体。
 type chatRequest struct {
 	Model    string    `json:"model"`
 	Messages []message `json:"messages"`
 	Stream   bool      `json:"stream,omitempty"`
 }
 
-// chatResponse 表示 OpenAI Chat Completion 非流式响应。
+// chatResponse OpenAI Chat Completion 非流式响应。
 type chatResponse struct {
 	Choices []choice  `json:"choices"`
 	Error   *apiError `json:"error,omitempty"`
 }
 
-// choice 表示响应中的选择项。
+// choice 响应选择项。
 type choice struct {
 	Message      message `json:"message"`
 	FinishReason string  `json:"finish_reason"`
 }
 
-// streamChunk 表示 SSE 流式响应的单个数据块。
+// usageInfo 表示 OpenAI 兼容 API 返回的 usage 统计。
+type usageInfo struct {
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+	TotalTokens      int `json:"total_tokens"`
+}
+
+// streamChunk SSE 流式响应数据块。
 type streamChunk struct {
 	Choices []streamChoice `json:"choices"`
+	Usage   *usageInfo     `json:"usage,omitempty"`
 	Error   *apiError      `json:"error,omitempty"`
 }
 
-// streamChoice 表示流式响应中的选择项。
+// streamChoice 流式响应选择项。
 type streamChoice struct {
 	Delta        delta  `json:"delta"`
 	FinishReason string `json:"finish_reason"`
 }
 
-// delta 表示流式响应中的内容增量。
+// delta 流式响应内容增量。
 type delta struct {
 	Content string `json:"content"`
 }
 
-// toMessages 将领域消息转换为 OpenAI 消息格式。
+// toMessages 领域消息转换为 OpenAI 消息格式。
 func toMessages(msgs []models.Message) []message {
 	result := make([]message, len(msgs))
 	for i, m := range msgs {
@@ -89,7 +96,7 @@ func toMessages(msgs []models.Message) []message {
 	return result
 }
 
-// mapAPIError 将 HTTP 状态码和 API 错误映射为用户友好的错误信息。
+// mapAPIError HTTP 状态码和 API 错误映射为用户友好错误。
 func mapAPIError(statusCode int, apiErr *apiError) error {
 	switch statusCode {
 	case http.StatusUnauthorized:
@@ -106,7 +113,7 @@ func mapAPIError(statusCode int, apiErr *apiError) error {
 	}
 }
 
-// Chat 实现 port.LLMClient，发送非流式对话请求。
+// Chat 发送非流式对话请求。
 func (a *OpenAIAdapter) Chat(ctx context.Context, messages []models.Message) (string, error) {
 	reqBody := chatRequest{
 		Model:    a.model,
@@ -156,8 +163,9 @@ func (a *OpenAIAdapter) Chat(ctx context.Context, messages []models.Message) (st
 	return result.Choices[0].Message.Content, nil
 }
 
-// StreamChat 实现 port.LLMClient，发送 SSE 流式对话请求。
-func (a *OpenAIAdapter) StreamChat(ctx context.Context, messages []models.Message, callback func(chunk string)) error {
+// StreamChat 发送 SSE 流式对话请求。
+// 流式结束后返回 TokenUsage（若响应中未包含 usage 则为 nil）。
+func (a *OpenAIAdapter) StreamChat(ctx context.Context, messages []models.Message, callback func(chunk string)) (*models.TokenUsage, error) {
 	reqBody := chatRequest{
 		Model:    a.model,
 		Messages: toMessages(messages),
@@ -166,12 +174,12 @@ func (a *OpenAIAdapter) StreamChat(ctx context.Context, messages []models.Messag
 
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
-		return fmt.Errorf("failed to marshal stream request: %w", err)
+		return nil, fmt.Errorf("failed to marshal stream request: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, a.baseURL+"/v1/chat/completions", bytes.NewReader(jsonBody))
 	if err != nil {
-		return fmt.Errorf("failed to create stream request: %w", err)
+		return nil, fmt.Errorf("failed to create stream request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -180,7 +188,7 @@ func (a *OpenAIAdapter) StreamChat(ctx context.Context, messages []models.Messag
 
 	resp, err := a.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to send stream request: %w", err)
+		return nil, fmt.Errorf("failed to send stream request: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -188,9 +196,10 @@ func (a *OpenAIAdapter) StreamChat(ctx context.Context, messages []models.Messag
 		body, _ := io.ReadAll(resp.Body)
 		var errResp streamChunk
 		_ = json.Unmarshal(body, &errResp)
-		return mapAPIError(resp.StatusCode, errResp.Error)
+		return nil, mapAPIError(resp.StatusCode, errResp.Error)
 	}
 
+	var tokenUsage *models.TokenUsage
 	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -207,12 +216,21 @@ func (a *OpenAIAdapter) StreamChat(ctx context.Context, messages []models.Messag
 		data := line[len("data: "):]
 		var chunk streamChunk
 		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
-			// 忽略无法解析的行，继续处理后续内容
+			// 忽略无法解析的行
 			continue
 		}
 
 		if chunk.Error != nil {
-			return fmt.Errorf("stream error: %w", chunk.Error)
+			return nil, fmt.Errorf("stream error: %w", chunk.Error)
+		}
+
+		// 提取 usage（通常出现在 choices 为空的最后一条 chunk 中）
+		if chunk.Usage != nil {
+			tokenUsage = &models.TokenUsage{
+				PromptTokens:     chunk.Usage.PromptTokens,
+				CompletionTokens: chunk.Usage.CompletionTokens,
+				TotalTokens:      chunk.Usage.TotalTokens,
+			}
 		}
 
 		if len(chunk.Choices) > 0 {
@@ -227,13 +245,13 @@ func (a *OpenAIAdapter) StreamChat(ctx context.Context, messages []models.Messag
 	}
 
 	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("stream interrupted: %w", err)
+		return nil, fmt.Errorf("stream interrupted: %w", err)
 	}
 
-	return nil
+	return tokenUsage, nil
 }
 
-// CheckAvailability 实现 port.LLMClient，轻量级连通性检测。
+// CheckAvailability 轻量级连通性检测。
 func (a *OpenAIAdapter) CheckAvailability(ctx context.Context) (bool, string) {
 	if a.apiKey == "" {
 		return false, "API key not configured"

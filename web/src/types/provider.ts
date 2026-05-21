@@ -11,6 +11,7 @@ export interface ProviderTemplate {
   description: string
   docsUrl: string
   type: 'cloud' | 'local'
+  authMethods: AuthMethod[]
 }
 
 /**
@@ -96,6 +97,26 @@ export interface DeviceFlowStatusResponse {
   status: string
   /** 错误信息 */
   error?: string
+  /** 授权成功后生成的 Provider ID */
+  providerID?: string
+  /** 授权成功后生成的 Provider 名称 */
+  providerName?: string
+}
+
+/**
+ * OAuth Device Flow 支持的厂商信息，对应后端 OAuthDeviceFlowProviderInfo。
+ */
+export interface OAuthDeviceFlowProviderInfo {
+  /** 厂商类型 */
+  providerType: string
+  /** 显示名称 */
+  name: string
+  /** 是否可用（环境变量已配置） */
+  available: boolean
+  /** 环境变量是否已配置 */
+  configured: boolean
+  /** 状态描述 */
+  detail: string
 }
 
 /**
@@ -163,6 +184,18 @@ export interface AuthDetectResult {
 }
 
 /**
+ * 服务商下的单个模型配置。
+ */
+export interface ProviderModel {
+  /** 模型ID */
+  id: string
+  /** 显示名称 */
+  name: string
+  /** 是否启用 */
+  enabled: boolean
+}
+
+/**
  * 用户已添加的 Provider 配置。
  * 由 ProviderTemplate + 用户输入（认证配置、自定义参数）构成。
  */
@@ -177,8 +210,10 @@ export interface ProviderConfig {
   apiHost: string
   /** API 密钥（api_key 方式下使用；内存中短暂存在，持久化由系统密钥环处理） */
   apiKey: string
-  /** 当前选用的模型ID */
+  /** 当前选用的默认模型ID（向后兼容） */
   modelId: string
+  /** 该服务商下的模型列表 */
+  models?: ProviderModel[]
   /** 温度参数，范围 0-2 */
   temperature: number
   /** 请求超时毫秒数 */

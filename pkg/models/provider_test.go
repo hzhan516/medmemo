@@ -19,7 +19,7 @@ func newValidProviderConfig() ProviderConfig {
 		APIKey:      "sk-test-key",
 		ModelID:     "gpt-4o",
 		Temperature: 0.7,
-		Timeout:     30 * time.Second,
+		TimeoutMs:   30000,
 		MaxRetries:  3,
 		Enabled:     true,
 	}
@@ -323,8 +323,9 @@ func TestProviderConfig_MarshalUnmarshalAuthParams(t *testing.T) {
 	assert.NoError(t, p2.UnmarshalAuthParams(jsonStr))
 	assert.Equal(t, "client-123", p2.AuthParams.OAuthClientID)
 	assert.Equal(t, "https://auth.example.com/token", p2.AuthParams.OAuthTokenURL)
-	assert.Equal(t, "refresh-abc", p2.AuthParams.OAuthRefreshToken)
-	assert.Equal(t, "access-xyz", p2.AuthParams.OAuthAccessToken)
+	// OAuthRefreshToken / OAuthAccessToken 标记为 json:"-"，不参与序列化
+	assert.Equal(t, "", p2.AuthParams.OAuthRefreshToken)
+	assert.Equal(t, "", p2.AuthParams.OAuthAccessToken)
 	assert.Equal(t, int64(1234567890), p2.AuthParams.OAuthExpiresAt)
 }
 

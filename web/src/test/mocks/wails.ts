@@ -27,6 +27,7 @@ let mockHandlers: Record<string, (...args: any[]) => any> = {}
 let mockConversations: ConversationSummary[] = []
 let mockMessages: Record<string, Array<{ role: string; content: string }>> = {}
 let mockNextConvId = 1
+let mockProviders: any[] = []
 
 // --- Events 模拟 ---
 
@@ -207,12 +208,25 @@ const defaultGetVersion = async (): Promise<string> => {
   return '0.5.0-test'
 }
 
+const defaultCollectSystemInfo = async (): Promise<any> => {
+  return {
+    app_version: '0.5.0-test',
+    go_version: 'go1.26.0',
+    os: 'darwin',
+    arch: 'arm64',
+    build_time: '',
+  }
+}
+
+const defaultOpenGitHubIssue = async (_userDescription: string, _errorLog: string): Promise<void> => {}
+
 const defaultDetectAuthMethods = async (): Promise<any> => {
   return {
     results: [
       { method: 'cli_token', available: false, connected: false, tier: 1, detail: '未检测到 CLI 工具' },
       { method: 'oauth_device', available: true, connected: false, tier: 2, detail: '支持 OAuth Device Flow' },
       { method: 'api_key', available: true, connected: false, tier: 3, detail: '可手动输入 API Key' },
+      { method: 'service_account', available: true, connected: false, tier: 3, detail: '可手动配置 Vertex AI Service Account' },
       { method: 'local', available: false, connected: false, tier: 4, detail: '未检测到 Ollama' },
     ],
     recommended: 'oauth_device',
@@ -270,6 +284,23 @@ const defaultGetOAuthDeviceFlowStatus = async (_deviceCode: string): Promise<any
   }
 }
 
+const defaultGetOAuthDeviceFlowProviders = async (): Promise<any[]> => {
+  return [
+    { provider_type: 'kimi', name: 'Kimi (Moonshot)', available: true, configured: true, detail: '已配置 OAuth client_id' },
+    { provider_type: 'gemini', name: 'Gemini (Google)', available: true, configured: true, detail: '已配置 OAuth client_id' },
+    { provider_type: 'microsoft', name: 'Microsoft Copilot', available: false, configured: false, detail: '需配置环境变量 MEDMEMO_MICROSOFT_CLIENT_ID' },
+    { provider_type: 'github', name: 'GitHub Copilot', available: false, configured: false, detail: '需配置环境变量 MEDMEMO_GITHUB_CLIENT_ID' },
+  ]
+}
+
+const defaultParseServiceAccountJSON = async (_jsonStr: string): Promise<any> => {
+  return {
+    project_id: 'mock-project-123',
+    client_email: 'mock@mock-project-123.iam.gserviceaccount.com',
+    private_key: '-----BEGIN RSA PRIVATE KEY-----\nMOCK\n-----END RSA PRIVATE KEY-----',
+  }
+}
+
 const defaultDetectOllama = async (): Promise<any> => {
   return {
     installed: false,
@@ -310,6 +341,43 @@ const defaultCreateOllamaProvider = async (): Promise<any> => {
   }
 }
 
+const defaultCreateProvider = async (config: any): Promise<void> => {
+  mockProviders.push(config)
+}
+
+const defaultUpdateProvider = async (config: any): Promise<void> => {
+  const idx = mockProviders.findIndex((p) => p.id === config.id)
+  if (idx >= 0) {
+    mockProviders[idx] = config
+  }
+}
+
+const defaultDeleteProvider = async (id: string): Promise<void> => {
+  mockProviders = mockProviders.filter((p) => p.id !== id)
+}
+
+const defaultListProviders = async (): Promise<any[]> => {
+  return [...mockProviders]
+}
+
+const defaultGetProviderHealthStatus = async (_providerID: string): Promise<any> => {
+  return { provider_id: _providerID, status: 'green', latency_ms: 120, checked_at: new Date().toISOString() }
+}
+
+const defaultCheckProviderHealth = async (_providerID: string): Promise<any> => {
+  return { provider_id: _providerID, status: 'green', latency_ms: 120, checked_at: new Date().toISOString() }
+}
+
+const defaultRefreshToken = async (_providerID: string): Promise<void> => {}
+
+const defaultDisableAutoRefresh = async (_providerID: string): Promise<void> => {}
+
+const defaultEnableAutoRefresh = async (_providerID: string): Promise<void> => {}
+
+const defaultGetVersionNotes = async (): Promise<any[]> => {
+  return []
+}
+
 // --- window.go.main.WailsApp 聚合对象 ---
 
 export const MockWailsApp = {
@@ -343,11 +411,25 @@ export const MockWailsApp = {
   StartOAuthDeviceFlow: (providerType: string) => resolveHandler('StartOAuthDeviceFlow', defaultStartOAuthDeviceFlow)(providerType),
   CancelOAuthDeviceFlow: (deviceCode: string) => resolveHandler('CancelOAuthDeviceFlow', defaultCancelOAuthDeviceFlow)(deviceCode),
   GetOAuthDeviceFlowStatus: (deviceCode: string) => resolveHandler('GetOAuthDeviceFlowStatus', defaultGetOAuthDeviceFlowStatus)(deviceCode),
+  GetOAuthDeviceFlowProviders: () => resolveHandler('GetOAuthDeviceFlowProviders', defaultGetOAuthDeviceFlowProviders)(),
+  ParseServiceAccountJSON: (jsonStr: string) => resolveHandler('ParseServiceAccountJSON', defaultParseServiceAccountJSON)(jsonStr),
   DetectOllama: () => resolveHandler('DetectOllama', defaultDetectOllama)(),
   StartOllamaServer: () => resolveHandler('StartOllamaServer', defaultStartOllamaServer)(),
   PullOllamaModel: (modelName: string) => resolveHandler('PullOllamaModel', defaultPullOllamaModel)(modelName),
   EnsureOllamaAndSmolLM2: () => resolveHandler('EnsureOllamaAndSmolLM2', defaultEnsureOllamaAndSmolLM2)(),
+  CollectSystemInfo: () => resolveHandler('CollectSystemInfo', defaultCollectSystemInfo)(),
+  OpenGitHubIssue: (arg1: string, arg2: string) => resolveHandler('OpenGitHubIssue', defaultOpenGitHubIssue)(arg1, arg2),
   CreateOllamaProvider: () => resolveHandler('CreateOllamaProvider', defaultCreateOllamaProvider)(),
+  CreateProvider: (config: any) => resolveHandler('CreateProvider', defaultCreateProvider)(config),
+  UpdateProvider: (config: any) => resolveHandler('UpdateProvider', defaultUpdateProvider)(config),
+  DeleteProvider: (id: string) => resolveHandler('DeleteProvider', defaultDeleteProvider)(id),
+  ListProviders: () => resolveHandler('ListProviders', defaultListProviders)(),
+  GetProviderHealthStatus: (id: string) => resolveHandler('GetProviderHealthStatus', defaultGetProviderHealthStatus)(id),
+  CheckProviderHealth: (id: string) => resolveHandler('CheckProviderHealth', defaultCheckProviderHealth)(id),
+  RefreshToken: (id: string) => resolveHandler('RefreshToken', defaultRefreshToken)(id),
+  DisableAutoRefresh: (id: string) => resolveHandler('DisableAutoRefresh', defaultDisableAutoRefresh)(id),
+  EnableAutoRefresh: (id: string) => resolveHandler('EnableAutoRefresh', defaultEnableAutoRefresh)(id),
+  GetVersionNotes: () => resolveHandler('GetVersionNotes', defaultGetVersionNotes)(),
 }
 
 // --- 辅助工具函数 ---
@@ -367,6 +449,7 @@ export function resetWailsMock(): void {
   mockConversations = []
   mockMessages = {}
   mockNextConvId = 1
+  mockProviders = []
   listeners.clear()
 }
 

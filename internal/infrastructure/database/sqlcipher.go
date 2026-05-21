@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	"github.com/google/wire"
 	"github.com/medmemo/medmemo/internal/infrastructure/secret"
@@ -17,20 +19,14 @@ import (
 const dbKeyName = "db_key"
 
 // SQLCipherConnector SQLCipher 加密数据库连接管理器。
-// 使用 AES-256-GCM page-level 透明加密，密钥通过 secret.Store 管理。
+// AES-256-GCM page-level 透明加密，密钥通过 secret.Store 管理。
 type SQLCipherConnector struct {
 	db   *sql.DB
 	path string
 }
 
 // NewSQLCipherConnector 创建 SQLCipher 加密数据库连接。
-//
-// 流程：
-//  1. 从 secret.Store 获取/生成 32 字节随机主密钥
-//  2. 检测并自动迁移已有的明文 SQLite 数据库
-//  3. 打开加密数据库（DSN 中通过 _pragma_key 传递密钥）
-//  4. 验证密钥有效性（执行 SELECT count(*) FROM sqlite_master）
-//  5. 启用外键约束、配置连接池
+// 流程：获取主密钥 → 检测明文迁移 → 打开加密库 → 验证密钥 → 配置连接池。
 func NewSQLCipherConnector(dataDir string, store secret.Store) (*SQLCipherConnector, error) {
 	if dataDir == "" {
 		dataDir = ".medmemo/data"
@@ -41,13 +37,13 @@ func NewSQLCipherConnector(dataDir string, store secret.Store) (*SQLCipherConnec
 
 	dbPath := filepath.Join(dataDir, "medmemo.db")
 
-	// 获取或生成数据库主密钥
+	// 获取或生成 32 字节主密钥
 	key, err := getOrCreateKey(store)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get database key: %w", err)
 	}
 
-	// 检测明文迁移
+	// 检测是否需要明文迁移
 	needsMigrate, err := isPlaintextDB(dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check database encryption status: %w", err)
@@ -58,20 +54,20 @@ func NewSQLCipherConnector(dataDir string, store secret.Store) (*SQLCipherConnec
 		}
 	}
 
-	// 打开加密数据库
+	// 打开加密数据库（DSN 中通过 _pragma_key 传递密钥）
 	dsn := fmt.Sprintf("%s?_pragma_key=x'%x'", dbPath, key)
 	db, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open sqlcipher database: %w", err)
 	}
 
-	// 验证密钥：能成功查询 sqlite_master 说明密钥正确
+	// 验证密钥有效性
 	if _, err := db.Exec("SELECT count(*) FROM sqlite_master"); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("database key verification failed: %w", err)
 	}
 
-	// 配置连接池
+	// 连接池配置
 	db.SetMaxOpenConns(10)
 	db.SetMaxIdleConns(5)
 
@@ -81,7 +77,7 @@ func NewSQLCipherConnector(dataDir string, store secret.Store) (*SQLCipherConnec
 		return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
 	}
 
-	// 使用 DELETE journal 模式，避免 WAL 模式下主文件为空导致的密钥验证和迁移问题
+	// DELETE journal 模式，避免 WAL 空主文件导致的密钥验证问题
 	if _, err := db.Exec("PRAGMA journal_mode = DELETE"); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("failed to set journal mode: %w", err)
@@ -90,7 +86,7 @@ func NewSQLCipherConnector(dataDir string, store secret.Store) (*SQLCipherConnec
 	return &SQLCipherConnector{db: db, path: dbPath}, nil
 }
 
-// DB 返回底层的 *sql.DB，供 repository 层使用。
+// DB 返回底层 *sql.DB，供 repository 层使用。
 func (c *SQLCipherConnector) DB() *sql.DB {
 	return c.db
 }
@@ -103,15 +99,14 @@ func (c *SQLCipherConnector) Close() error {
 	return nil
 }
 
-// Migrate 执行版本化数据库迁移。
-// 复用 SQLiteConnector 的迁移逻辑（schema 完全一致）。
+// Migrate 执行版本化数据库迁移，复用 SQLiteConnector 的 schema 逻辑。
 func (c *SQLCipherConnector) Migrate(ctx context.Context) error {
 	// SQLCipher 的 schema 和 SQLite 完全一致，直接复用现有迁移
 	return migrateSQLiteSchema(ctx, c.db)
 }
 
 // getOrCreateKey 从 secret.Store 获取数据库密钥，不存在则生成并存储。
-// 如果密钥已存在但长度不是 32 字节，视为密钥损坏，返回错误。
+// 密钥长度非 32 字节视为损坏，直接返回错误。
 func getOrCreateKey(store secret.Store) ([]byte, error) {
 	key, err := store.Get(dbKeyName)
 	if err == nil {
@@ -134,8 +129,7 @@ func getOrCreateKey(store secret.Store) ([]byte, error) {
 	return key, nil
 }
 
-// isPlaintextDB 检测指定路径的数据库是否为明文 SQLite。
-// 如果文件不存在，返回 false（无需迁移）。
+// isPlaintextDB 检测数据库是否为明文 SQLite。
 func isPlaintextDB(dbPath string) (bool, error) {
 	// 文件不存在 = 新建数据库，无需迁移
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
@@ -148,7 +142,7 @@ func isPlaintextDB(dbPath string) (bool, error) {
 		return false, fmt.Errorf("failed to stat database file: %w", err)
 	}
 
-	// 主文件为空但存在 WAL 文件：活跃的 WAL 模式数据库，不是明文
+	// 主文件为空但存在 WAL：活跃的 WAL 模式数据库，不是明文
 	if info.Size() == 0 {
 		if _, err := os.Stat(dbPath + "-wal"); err == nil {
 			return false, nil
@@ -166,63 +160,64 @@ func isPlaintextDB(dbPath string) (bool, error) {
 	return !encrypted, nil
 }
 
-// migrateFromPlaintext 将明文 SQLite 数据库迁移为 SQLCipher 加密数据库。
-// 使用 SQLCipher 原生 sqlcipher_export() 函数，保证 schema、数据、索引完整复制。
-// 迁移完成后原始文件保留为 .backup，新加密文件替换原路径。
+// migrateFromPlaintext 将明文 SQLite 迁移为 SQLCipher 加密数据库。
+// 使用 sqlcipher_export() 保证 schema、数据、索引完整复制。
+// 原始文件保留为 .backup。
 func migrateFromPlaintext(dbPath string, key []byte) error {
-	// 1. 用 SQLCipher 打开明文数据库（不设置密钥即可打开明文 db）
+	// 用 SQLCipher 打开明文数据库（不设置密钥即可打开明文 db）
 	plainDB, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return fmt.Errorf("failed to open plaintext database: %w", err)
 	}
 
-	// 2. 验证这是有效的 SQLite 数据库
+	// 验证是有效的 SQLite 数据库
 	var count int
 	if err := plainDB.QueryRow("SELECT count(*) FROM sqlite_master").Scan(&count); err != nil {
 		_ = plainDB.Close()
 		return fmt.Errorf("plaintext database verification failed: %w", err)
 	}
 
-	// 3. ATTACH 新的加密数据库
+	// ATTACH 新的加密数据库
 	newPath := dbPath + ".new"
-	// 清理可能残留的上次迁移临时文件
-	_ = os.Remove(newPath)
+	_ = os.Remove(newPath) // 清理可能残留的临时文件
 
-	attachSQL := fmt.Sprintf("ATTACH DATABASE '%s' AS encrypted KEY \"x'%x'\"", newPath, key)
+	// 对路径中的单引号做 SQL 转义，防止注入
+	escapedPath := strings.ReplaceAll(newPath, "'", "''")
+	attachSQL := fmt.Sprintf("ATTACH DATABASE '%s' AS encrypted KEY \"x'%x'\"", escapedPath, key)
 	if _, err := plainDB.Exec(attachSQL); err != nil {
 		_ = plainDB.Close()
 		_ = os.Remove(newPath)
 		return fmt.Errorf("failed to attach encrypted database: %w", err)
 	}
 
-	// 4. 执行 SQLCipher 原生导出
+	// 执行 SQLCipher 原生导出
 	if _, err := plainDB.Exec("SELECT sqlcipher_export('encrypted')"); err != nil {
 		_ = plainDB.Close()
 		_ = os.Remove(newPath)
 		return fmt.Errorf("sqlcipher_export failed: %w", err)
 	}
 
-	// 5. DETACH
+	// DETACH
 	if _, err := plainDB.Exec("DETACH DATABASE encrypted"); err != nil {
 		_ = plainDB.Close()
 		_ = os.Remove(newPath)
 		return fmt.Errorf("failed to detach encrypted database: %w", err)
 	}
 
-	// 6. 关闭明文连接
+	// 关闭明文连接
 	if err := plainDB.Close(); err != nil {
 		_ = os.Remove(newPath)
 		return fmt.Errorf("failed to close plaintext database: %w", err)
 	}
 
-	// 7. 验证加密文件是否生成
+	// 验证加密文件是否生成
 	encrypted, err := sqlite3.IsEncrypted(newPath)
 	if err != nil || !encrypted {
 		_ = os.Remove(newPath)
 		return fmt.Errorf("encrypted database verification failed")
 	}
 
-	// 8. 原子替换：明文 → backup，加密 → 主路径
+	// 原子替换：明文 → backup，加密 → 主路径
 	backupPath := dbPath + ".backup"
 	if err := os.Rename(dbPath, backupPath); err != nil {
 		_ = os.Remove(newPath)
@@ -238,8 +233,7 @@ func migrateFromPlaintext(dbPath string, key []byte) error {
 	return nil
 }
 
-// migrateSQLiteSchema 在 *sql.DB 上执行 SQLite/SQLCipher 共用的 schema 迁移。
-// 被 SQLiteConnector.Migrate 和 SQLCipherConnector.Migrate 共用。
+// migrateSQLiteSchema 执行 SQLite/SQLCipher 共用的 schema 迁移。
 func migrateSQLiteSchema(ctx context.Context, db *sql.DB) error {
 	var version int
 	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
@@ -348,7 +342,9 @@ func migrateSQLiteSchema(ctx context.Context, db *sql.DB) error {
 		if _, err := db.ExecContext(ctx, m.sql); err != nil {
 			return fmt.Errorf("failed to apply migration v%d: %w", m.version, err)
 		}
-		if _, err := db.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", m.version)); err != nil {
+		// PRAGMA 不支持参数化，使用 strconv 避免 fmt.Sprintf 拼接
+		pragmaSQL := "PRAGMA user_version = " + strconv.Itoa(m.version)
+		if _, err := db.ExecContext(ctx, pragmaSQL); err != nil {
 			return fmt.Errorf("failed to update schema version to v%d: %w", m.version, err)
 		}
 		version = m.version

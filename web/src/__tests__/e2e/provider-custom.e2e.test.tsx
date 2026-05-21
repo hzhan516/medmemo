@@ -22,30 +22,27 @@ describe('E2E: Provider 自定义表单', () => {
     const user = userEvent.setup()
     render(<SettingsPage />)
 
-    // 打开自定义表单
     const addCustomBtn = screen.getByTestId('add-custom-provider-btn')
     await user.click(addCustomBtn)
 
     await waitFor(() => {
-      expect(screen.getByTestId('provider-custom-dialog')).toBeInTheDocument()
+      expect(screen.getByTestId('model-service-dialog')).toBeInTheDocument()
     })
 
-    // 填写表单
-    await user.type(screen.getByTestId('pc-name-input'), '我的自定义模型')
-    await user.type(screen.getByTestId('pc-host-input'), 'https://api.custom.com')
-    await user.type(screen.getByTestId('pc-key-input'), 'sk-custom-key')
-    await user.type(screen.getByTestId('pc-model-input'), 'custom-model-v1')
+    await user.type(screen.getByTestId('ms-name-input'), '我的自定义模型')
+    await user.type(screen.getByTestId('ms-host-input'), 'https://api.custom.com')
+    await user.type(screen.getByTestId('ms-key-input'), 'sk-custom-key')
+    await user.click(screen.getByTestId('tab-models'))
+    await user.type(screen.getByTestId('ms-new-model-id'), 'custom-model-v1')
+    await user.click(screen.getByTestId('ms-add-model-btn'))
 
-    // 保存
-    const saveBtn = screen.getByTestId('pc-save-btn')
+    const saveBtn = screen.getByTestId('ms-save-btn')
     await user.click(saveBtn)
 
-    // 验证弹窗关闭
     await waitFor(() => {
-      expect(screen.queryByTestId('provider-custom-dialog')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('model-service-dialog')).not.toBeInTheDocument()
     })
 
-    // 验证 store 中已添加
     await waitFor(() => {
       const state = useProviderStore.getState()
       expect(state.providers.length).toBe(1)
@@ -56,7 +53,6 @@ describe('E2E: Provider 自定义表单', () => {
       expect(state.providers[0].templateId).toBe('custom')
     })
 
-    // 验证分组列表中出现
     await waitFor(() => {
       expect(screen.getByTestId('provider-group-list')).toBeInTheDocument()
     })
@@ -69,22 +65,23 @@ describe('E2E: Provider 自定义表单', () => {
     await user.click(screen.getByTestId('add-custom-provider-btn'))
 
     await waitFor(() => {
-      expect(screen.getByTestId('provider-custom-dialog')).toBeInTheDocument()
+      expect(screen.getByTestId('model-service-dialog')).toBeInTheDocument()
     })
 
-    // 输入无效 URL
-    await user.type(screen.getByTestId('pc-host-input'), 'not-a-url')
-    await user.type(screen.getByTestId('pc-name-input'), '测试')
-    await user.type(screen.getByTestId('pc-model-input'), 'test')
+    await user.type(screen.getByTestId('ms-host-input'), 'not-a-url')
+    await user.type(screen.getByTestId('ms-name-input'), '测试')
+    // 切换到模型标签页添加模型
+    await user.click(screen.getByTestId('tab-models'))
+    await user.type(screen.getByTestId('ms-new-model-id'), 'test')
+    await user.click(screen.getByTestId('ms-add-model-btn'))
 
-    // 触发验证（blur）
-    await user.click(screen.getByTestId('pc-name-input'))
+    await user.click(screen.getByTestId('tab-service'))
 
-    // 保存按钮应被禁用
-    const saveBtn = screen.getByTestId('pc-save-btn')
+    await user.click(screen.getByTestId('ms-name-input'))
+
+    const saveBtn = screen.getByTestId('ms-save-btn')
     expect(saveBtn).toBeDisabled()
 
-    // 验证错误提示
     await waitFor(() => {
       expect(screen.getByText('必须以 http:// 或 https:// 开头')).toBeInTheDocument()
     })
@@ -97,18 +94,16 @@ describe('E2E: Provider 自定义表单', () => {
     await user.click(screen.getByTestId('add-custom-provider-btn'))
 
     await waitFor(() => {
-      expect(screen.getByTestId('provider-custom-dialog')).toBeInTheDocument()
+      expect(screen.getByTestId('model-service-dialog')).toBeInTheDocument()
     })
 
-    // 直接点保存（所有必填为空）
-    const saveBtn = screen.getByTestId('pc-save-btn')
+    const saveBtn = screen.getByTestId('ms-save-btn')
     expect(saveBtn).toBeDisabled()
   })
 
   it('编辑模式：点击编辑 → 表单预填 → 修改保存', async () => {
     const user = userEvent.setup()
 
-    // 预置一个 Provider
     useProviderStore.getState().addProvider({
       templateId: 'custom',
       name: '原始名称',
@@ -125,7 +120,6 @@ describe('E2E: Provider 自定义表单', () => {
 
     render(<SettingsPage />)
 
-    // 展开分组
     await waitFor(() => {
       expect(screen.getByTestId('provider-group-list')).toBeInTheDocument()
     })
@@ -133,28 +127,26 @@ describe('E2E: Provider 自定义表单', () => {
     const state = useProviderStore.getState()
     const providerId = state.providers[0].id
 
-    // 点击编辑
     const editBtn = screen.getByTestId(`provider-edit-btn-${providerId}`)
     await user.click(editBtn)
 
-    // 验证弹窗出现且预填
     await waitFor(() => {
-      expect(screen.getByTestId('provider-custom-dialog')).toBeInTheDocument()
+      expect(screen.getByTestId('model-service-dialog')).toBeInTheDocument()
     })
 
     expect(screen.getByDisplayValue('原始名称')).toBeInTheDocument()
     expect(screen.getByDisplayValue('https://api.original.com')).toBeInTheDocument()
-    expect(screen.getByDisplayValue('original-model')).toBeInTheDocument()
 
-    // 修改名称
-    const nameInput = screen.getByTestId('pc-name-input')
+    await user.click(screen.getByTestId('tab-models'))
+    expect(screen.getByTestId('ms-model-check-original-model')).toBeInTheDocument()
+    await user.click(screen.getByTestId('tab-service'))
+
+    const nameInput = screen.getByTestId('ms-name-input')
     await user.clear(nameInput)
     await user.type(nameInput, '修改后的名称')
 
-    // 保存
-    await user.click(screen.getByTestId('pc-save-btn'))
+    await user.click(screen.getByTestId('ms-save-btn'))
 
-    // 验证更新
     await waitFor(() => {
       const updated = useProviderStore.getState().providers[0]
       expect(updated.name).toBe('修改后的名称')
@@ -165,7 +157,6 @@ describe('E2E: Provider 自定义表单', () => {
   it('分组展示：不同分组的 Provider 按分组折叠', async () => {
     const user = userEvent.setup()
 
-    // 预置两个不同分组的 Provider
     useProviderStore.getState().addProvider({
       templateId: 'custom',
       name: '工作模型A',
@@ -199,11 +190,9 @@ describe('E2E: Provider 自定义表单', () => {
       expect(screen.getByTestId('provider-group-list')).toBeInTheDocument()
     })
 
-    // 验证两个分组头都存在
     expect(screen.getByTestId('group-header-个人')).toBeInTheDocument()
     expect(screen.getByTestId('group-header-工作')).toBeInTheDocument()
 
-    // 验证 Provider 在正确的分组下
     const personalItems = screen.getAllByTestId(/^provider-item-/)
     expect(personalItems.length).toBe(2)
   })
@@ -234,19 +223,15 @@ describe('E2E: Provider 自定义表单', () => {
     const state = useProviderStore.getState()
     const providerId = state.providers[0].id
 
-    // 点击删除
     const deleteBtn = screen.getByTestId(`provider-delete-btn-${providerId}`)
     await user.click(deleteBtn)
 
-    // 确认弹窗出现
     await waitFor(() => {
       expect(screen.getByTestId('delete-confirm-dialog')).toBeInTheDocument()
     })
 
-    // 点击确认删除
     await user.click(screen.getByTestId('delete-confirm-btn'))
 
-    // 验证已删除
     await waitFor(() => {
       expect(useProviderStore.getState().providers.length).toBe(0)
     })
@@ -278,10 +263,8 @@ describe('E2E: Provider 自定义表单', () => {
       expect(screen.getByTestId('provider-group-list')).toBeInTheDocument()
     })
 
-    // 点击删除
     await user.click(screen.getByTestId(`provider-delete-btn-${providerId}`))
 
-    // 确认弹窗出现，且删除按钮被禁用（因是活跃模型）
     await waitFor(() => {
       expect(screen.getByTestId('delete-confirm-dialog')).toBeInTheDocument()
     })
@@ -289,10 +272,8 @@ describe('E2E: Provider 自定义表单', () => {
     const confirmBtn = screen.getByTestId('delete-confirm-btn')
     expect(confirmBtn).toBeDisabled()
 
-    // 关闭弹窗
     await user.click(screen.getByLabelText('关闭'))
 
-    // 验证未删除
     expect(useProviderStore.getState().providers.length).toBe(1)
   })
 
@@ -303,33 +284,34 @@ describe('E2E: Provider 自定义表单', () => {
     await user.click(screen.getByTestId('add-custom-provider-btn'))
 
     await waitFor(() => {
-      expect(screen.getByTestId('provider-custom-dialog')).toBeInTheDocument()
+      expect(screen.getByTestId('model-service-dialog')).toBeInTheDocument()
     })
 
-    // 填写表单
-    await user.type(screen.getByTestId('pc-name-input'), '新分组模型')
-    await user.type(screen.getByTestId('pc-host-input'), 'https://api.new.com')
-    await user.type(screen.getByTestId('pc-model-input'), 'new-model')
+    await user.type(screen.getByTestId('ms-name-input'), '新分组模型')
+    await user.type(screen.getByTestId('ms-host-input'), 'https://api.new.com')
+    // 切换到模型标签页添加模型
+    await user.click(screen.getByTestId('tab-models'))
+    await user.type(screen.getByTestId('ms-new-model-id'), 'new-model')
+    await user.click(screen.getByTestId('ms-add-model-btn'))
 
-    // 切换到创建新分组
-    const groupSelect = screen.getByTestId('pc-group-select')
+    // 切换回 service 标签页配置分组
+    await user.click(screen.getByTestId('tab-service'))
+
+    const groupSelect = screen.getByTestId('ms-group-select')
     await user.selectOptions(groupSelect, '__new__')
 
-    // 输入新分组名
     await waitFor(() => {
-      expect(screen.getByTestId('pc-group-input')).toBeInTheDocument()
+      expect(screen.getByTestId('ms-group-input')).toBeInTheDocument()
     })
 
-    await user.type(screen.getByTestId('pc-group-input'), '我的新分组')
+    await user.type(screen.getByTestId('ms-group-input'), '我的新分组')
 
-    // 保存
-    await user.click(screen.getByTestId('pc-save-btn'))
+    await user.click(screen.getByTestId('ms-save-btn'))
 
     await waitFor(() => {
-      expect(screen.queryByTestId('provider-custom-dialog')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('model-service-dialog')).not.toBeInTheDocument()
     })
 
-    // 验证分组列表中有新分组
     await waitFor(() => {
       expect(screen.getByTestId('group-header-我的新分组')).toBeInTheDocument()
     })

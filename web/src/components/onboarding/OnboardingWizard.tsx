@@ -46,28 +46,19 @@ export function OnboardingWizard({ onClose }: OnboardingWizardProps) {
     onboarding.goToStep(1)
   }, [onboarding])
 
-  const handleModelComplete = useCallback(
-    async (providers: import('@/types/provider').ProviderConfig[]) => {
-      // 将创建的 Provider 添加到 store
-      for (const provider of providers) {
-        await onboarding.saveModelConfig(provider.modelId, provider.apiKey)
-      }
-      onboarding.complete()
-      onClose()
-    },
-    [onboarding, onClose]
-  )
+  const handleModelComplete = useCallback(() => {
+    onboarding.complete()
+    onClose()
+  }, [onboarding, onClose])
 
   const handleModelBack = useCallback(() => {
     onboarding.goToStep(2)
   }, [onboarding])
 
-  const handleSkipAPIKey = useCallback(() => {
-    // 仅保存模型选择，不保存 API Key
-    onboarding.saveModelConfig(settings.selectedModel, '')
+  const handleSkip = useCallback(() => {
     onboarding.complete()
     onClose()
-  }, [onboarding, settings.selectedModel, onClose])
+  }, [onboarding, onClose])
 
   const handleSkipWizard = useCallback(() => {
     onboarding.skip()
@@ -76,7 +67,7 @@ export function OnboardingWizard({ onClose }: OnboardingWizardProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="w-full max-w-md mx-4 bg-card rounded-2xl shadow-2xl border border-border p-6 animate-in fade-in zoom-in-95 duration-200">
+      <div className="w-full max-w-lg mx-4 bg-card rounded-2xl shadow-2xl border border-border p-6 animate-in fade-in zoom-in-95 duration-200">
         {/* 顶部：步骤指示器 + 跳过按钮 */}
         <div className="flex items-center justify-between mb-2">
           <StepIndicator currentStep={onboarding.currentStep} />
@@ -103,7 +94,7 @@ export function OnboardingWizard({ onClose }: OnboardingWizardProps) {
             <ModelConfigStep
               onComplete={handleModelComplete}
               onBack={handleModelBack}
-              onSkipAPIKey={handleSkipAPIKey}
+              onSkip={handleSkip}
             />
           )}
         </div>

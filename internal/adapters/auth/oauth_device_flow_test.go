@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -12,6 +13,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// TestMain 为 Device Flow 测试设置全局环境变量。
+func TestMain(m *testing.M) {
+	os.Setenv("TEST_CLIENT_ID", "test-client")
+	os.Exit(m.Run())
+}
 
 // TestOAuthDeviceFlowService_StartFlow_UnsupportedProvider 验证不支持的厂商类型。
 func TestOAuthDeviceFlowService_StartFlow_UnsupportedProvider(t *testing.T) {
@@ -31,7 +38,7 @@ func TestOAuthDeviceFlowService_StartFlow_MissingClientID(t *testing.T) {
 	// kimi 预置配置中 client_id 为空
 	_, err := svc.StartFlow("kimi")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "requires OAuth client_id")
+	assert.Contains(t, err.Error(), "需要配置 OAuth client_id")
 }
 
 // TestOAuthDeviceFlowService_FullFlow_Success 验证完整 Device Flow 成功链路。
@@ -90,13 +97,13 @@ func TestOAuthDeviceFlowService_FullFlow_Success(t *testing.T) {
 	deviceFlowConfigs["testprovider"] = struct {
 		DeviceAuthURL string
 		TokenURL      string
-		ClientID      string
 		Scope         string
+		EnvClientID   string
 	}{
 		DeviceAuthURL: server.URL + "/device/auth",
 		TokenURL:      server.URL + "/token",
-		ClientID:      "test-client",
 		Scope:         "test-scope",
+		EnvClientID:   "TEST_CLIENT_ID",
 	}
 	defer func() {
 		if origConfig.DeviceAuthURL == "" {
@@ -204,13 +211,13 @@ func TestOAuthDeviceFlowService_SlowDown(t *testing.T) {
 	deviceFlowConfigs["testprovider"] = struct {
 		DeviceAuthURL string
 		TokenURL      string
-		ClientID      string
 		Scope         string
+		EnvClientID   string
 	}{
 		DeviceAuthURL: server.URL + "/device/auth",
 		TokenURL:      server.URL + "/token",
-		ClientID:      "test-client",
 		Scope:         "test-scope",
+		EnvClientID:   "TEST_CLIENT_ID",
 	}
 	defer func() {
 		if origConfig.DeviceAuthURL == "" {
@@ -268,13 +275,13 @@ func TestOAuthDeviceFlowService_AccessDenied(t *testing.T) {
 	deviceFlowConfigs["testprovider"] = struct {
 		DeviceAuthURL string
 		TokenURL      string
-		ClientID      string
 		Scope         string
+		EnvClientID   string
 	}{
 		DeviceAuthURL: server.URL + "/device/auth",
 		TokenURL:      server.URL + "/token",
-		ClientID:      "test-client",
 		Scope:         "test-scope",
+		EnvClientID:   "TEST_CLIENT_ID",
 	}
 	defer func() {
 		if origConfig.DeviceAuthURL == "" {
@@ -333,13 +340,13 @@ func TestOAuthDeviceFlowService_ExpiredToken(t *testing.T) {
 	deviceFlowConfigs["testprovider"] = struct {
 		DeviceAuthURL string
 		TokenURL      string
-		ClientID      string
 		Scope         string
+		EnvClientID   string
 	}{
 		DeviceAuthURL: server.URL + "/device/auth",
 		TokenURL:      server.URL + "/token",
-		ClientID:      "test-client",
 		Scope:         "test-scope",
+		EnvClientID:   "TEST_CLIENT_ID",
 	}
 	defer func() {
 		if origConfig.DeviceAuthURL == "" {
@@ -396,13 +403,13 @@ func TestOAuthDeviceFlowService_CancelFlow(t *testing.T) {
 	deviceFlowConfigs["testprovider"] = struct {
 		DeviceAuthURL string
 		TokenURL      string
-		ClientID      string
 		Scope         string
+		EnvClientID   string
 	}{
 		DeviceAuthURL: server.URL + "/device/auth",
 		TokenURL:      server.URL + "/token",
-		ClientID:      "test-client",
 		Scope:         "test-scope",
+		EnvClientID:   "TEST_CLIENT_ID",
 	}
 	defer func() {
 		if origConfig.DeviceAuthURL == "" {
@@ -454,13 +461,13 @@ func TestOAuthDeviceFlowService_Shutdown(t *testing.T) {
 	deviceFlowConfigs["testprovider"] = struct {
 		DeviceAuthURL string
 		TokenURL      string
-		ClientID      string
 		Scope         string
+		EnvClientID   string
 	}{
 		DeviceAuthURL: server.URL + "/device/auth",
 		TokenURL:      server.URL + "/token",
-		ClientID:      "test-client",
 		Scope:         "test-scope",
+		EnvClientID:   "TEST_CLIENT_ID",
 	}
 	defer func() {
 		if origConfig.DeviceAuthURL == "" {
@@ -512,13 +519,13 @@ func TestOAuthDeviceFlowService_DeviceAuthEndpointError(t *testing.T) {
 	deviceFlowConfigs["testprovider"] = struct {
 		DeviceAuthURL string
 		TokenURL      string
-		ClientID      string
 		Scope         string
+		EnvClientID   string
 	}{
 		DeviceAuthURL: server.URL + "/device/auth",
 		TokenURL:      server.URL + "/token",
-		ClientID:      "test-client",
 		Scope:         "test-scope",
+		EnvClientID:   "TEST_CLIENT_ID",
 	}
 	defer func() {
 		if origConfig.DeviceAuthURL == "" {
@@ -550,13 +557,13 @@ func TestOAuthDeviceFlowService_DeviceAuthMissingDeviceCode(t *testing.T) {
 	deviceFlowConfigs["testprovider"] = struct {
 		DeviceAuthURL string
 		TokenURL      string
-		ClientID      string
 		Scope         string
+		EnvClientID   string
 	}{
 		DeviceAuthURL: server.URL + "/device/auth",
 		TokenURL:      server.URL + "/token",
-		ClientID:      "test-client",
 		Scope:         "test-scope",
+		EnvClientID:   "TEST_CLIENT_ID",
 	}
 	defer func() {
 		if origConfig.DeviceAuthURL == "" {
@@ -586,7 +593,7 @@ func TestOAuthDeviceFlowService_inferProviderInfo(t *testing.T) {
 		wantName     string
 	}{
 		{"kimi", "https://api.moonshot.cn", "moonshot-v1-8k", "Kimi (OAuth)"},
-		{"gemini", "https://generativelanguage.googleapis.com/v1beta/openai/", "gemini-1.5-flash", "Gemini (OAuth)"},
+		{"gemini", "https://generativelanguage.googleapis.com/v1beta/openai", "gemini-1.5-flash", "Gemini (OAuth)"},
 		{"unknown", "", "", "OAuth unknown"},
 	}
 
@@ -638,13 +645,13 @@ func TestOAuthDeviceFlowService_TriggerPoll(t *testing.T) {
 	deviceFlowConfigs["testprovider"] = struct {
 		DeviceAuthURL string
 		TokenURL      string
-		ClientID      string
 		Scope         string
+		EnvClientID   string
 	}{
 		DeviceAuthURL: server.URL + "/device/auth",
 		TokenURL:      server.URL + "/token",
-		ClientID:      "test-client",
 		Scope:         "test-scope",
+		EnvClientID:   "TEST_CLIENT_ID",
 	}
 	defer func() {
 		if origConfig.DeviceAuthURL == "" {
@@ -726,13 +733,13 @@ func TestOAuthDeviceFlowService_TriggerPoll_NonPendingSession(t *testing.T) {
 	deviceFlowConfigs["testprovider"] = struct {
 		DeviceAuthURL string
 		TokenURL      string
-		ClientID      string
 		Scope         string
+		EnvClientID   string
 	}{
 		DeviceAuthURL: server.URL + "/device/auth",
 		TokenURL:      server.URL + "/token",
-		ClientID:      "test-client",
 		Scope:         "test-scope",
+		EnvClientID:   "TEST_CLIENT_ID",
 	}
 	defer func() {
 		if origConfig.DeviceAuthURL == "" {

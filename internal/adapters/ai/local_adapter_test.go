@@ -95,11 +95,12 @@ func TestLocalAdapter_StreamChat_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	err := adapter.StreamChat(ctx, msgs, func(chunk string) {
+	usage, err := adapter.StreamChat(ctx, msgs, func(chunk string) {
 		builder.WriteString(chunk)
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "Hello world!", builder.String())
+	assert.Nil(t, usage) // 无 usage 数据时返回 nil
 }
 
 func TestLocalAdapter_CheckAvailability_Available(t *testing.T) {

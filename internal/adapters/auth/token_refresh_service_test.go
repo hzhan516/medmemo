@@ -83,16 +83,16 @@ func newKimiProvider(id, credPath string) *models.ProviderConfig {
 		AuthParams:  models.AuthParams{CLICredentialPath: credPath},
 		Enabled:     true,
 		Temperature: 0.7,
-		Timeout:     30 * time.Second,
+		TimeoutMs:   30000,
 		MaxRetries:  3,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		CreatedAt:   now.UnixMilli(),
+		UpdatedAt:   now.UnixMilli(),
 	}
 }
 
 // newGeminiProvider 创建一个用于测试的 Gemini CLI Provider。
 func newGeminiProvider(id, credPath string) *models.ProviderConfig {
-	now := time.Now()
+	nowMs := time.Now().UnixMilli()
 	return &models.ProviderConfig{
 		ID:          id,
 		Name:        "Gemini Test",
@@ -102,10 +102,10 @@ func newGeminiProvider(id, credPath string) *models.ProviderConfig {
 		AuthParams:  models.AuthParams{CLICredentialPath: credPath},
 		Enabled:     true,
 		Temperature: 0.7,
-		Timeout:     30 * time.Second,
+		TimeoutMs:   30000,
 		MaxRetries:  3,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		CreatedAt:   nowMs,
+		UpdatedAt:   nowMs,
 	}
 }
 

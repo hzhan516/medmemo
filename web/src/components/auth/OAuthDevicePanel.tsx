@@ -1,18 +1,30 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { Smartphone, CheckCircle2, XCircle, Loader2, Copy, ExternalLink } from 'lucide-react'
-import { StartOAuthDeviceFlow, CancelOAuthDeviceFlow, GetOAuthDeviceFlowStatus } from '@wails/go/main/WailsApp'
+import { Smartphone, CheckCircle2, AlertCircle, XCircle, Loader2, Copy, ExternalLink } from 'lucide-react'
+import { StartOAuthDeviceFlow, CancelOAuthDeviceFlow, GetOAuthDeviceFlowStatus, GetOAuthDeviceFlowProviders } from '@wails/go/main/WailsApp'
 import { BrowserOpenURL } from '@wails/runtime'
-import type { AuthMethodDetectStatus } from '@/types/provider'
+import type { AuthMethodDetectStatus, ProviderConfig, ProviderTemplate } from '@/types/provider'
+import templatesData from '@/data/provider-templates.json'
 
 interface OAuthDevicePanelProps {
   status: AuthMethodDetectStatus | undefined
+  onProviderCreated: (provider: ProviderConfig) => void
 }
+
+// 从模板中提取支持 oauth_device 的厂商
+const oauthProviders: ProviderTemplate[] = (templatesData as ProviderTemplate[]).filter((t) =>
+  t.authMethods.includes('oauth_device')
+)
 
 /**
  * OAuth Device Flow 配置面板。
- * 启动 Device Flow、展示用户码、轮询状态。
+ * 选择厂商 → 选择模型 → 启动 Device Flow → 展示用户码 → 轮询状态 → 成功后回调。
  */
-export function OAuthDevicePanel({ status }: OAuthDevicePanelProps) {
+export function OAuthDevicePanel({ status, onProviderCreated }: OAuthDevicePanelProps) {
+  const [providers, setProviders] = useState<Array<{ provider_type: string; name: string; available: boolean; configured: boolean; detail: string }>>([])
+  const [selectedProvider, setSelectedProvider] = useState('')
+  const [selectedModel, setSelectedModel] = useState('')
+  const [loadingProviders, setLoadingProviders] = useState(true)
+
   const [deviceCode, setDeviceCode] = useState<string | null>(null)
   const [userCode, setUserCode] = useState('')
   const [verificationURI, setVerificationURI] = useState('')
@@ -20,6 +32,49 @@ export function OAuthDevicePanel({ status }: OAuthDevicePanelProps) {
   const [flowStatus, setFlowStatus] = useState<string>('')
   const [error, setError] = useState<string | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const selectedProviderInfo = providers.find((p) => p.provider_type === selectedProvider)
+  const selectedTemplate = oauthProviders.find((p) => p.id === selectedProvider)
+
+  // 加载支持的 OAuth Device Flow 厂商列表
+  useEffect(() => {
+    let cancelled = false
+    setLoadingProviders(true)
+    GetOAuthDeviceFlowProviders()
+      .then((list) => {
+        if (cancelled) return
+        setProviders(list)
+        // 默认选中第一个可用的厂商
+        const firstAvailable = list.find((p) => p.available)
+        if (firstAvailable) {
+          setSelectedProvider(firstAvailable.provider_type)
+          const tmpl = oauthProviders.find((t) => t.id === firstAvailable.provider_type)
+          if (tmpl) setSelectedModel(tmpl.defaultModel)
+        } else if (list.length > 0) {
+          setSelectedProvider(list[0].provider_type)
+          const tmpl = oauthProviders.find((t) => t.id === list[0].provider_type)
+          if (tmpl) setSelectedModel(tmpl.defaultModel)
+        }
+      })
+      .catch(() => {
+        if (cancelled) return
+        setError('加载 OAuth Device Flow 厂商列表失败')
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingProviders(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // 厂商切换时同步更新默认模型
+  useEffect(() => {
+    const tmpl = oauthProviders.find((t) => t.id === selectedProvider)
+    if (tmpl) {
+      setSelectedModel(tmpl.defaultModel)
+    }
+  }, [selectedProvider])
 
   const clearPolling = useCallback(() => {
     if (intervalRef.current) {
@@ -33,11 +88,20 @@ export function OAuthDevicePanel({ status }: OAuthDevicePanelProps) {
   }, [clearPolling])
 
   const handleStart = useCallback(async () => {
+    if (!selectedProvider) {
+      setError('请先选择一个厂商')
+      return
+    }
+    if (selectedProviderInfo && !selectedProviderInfo.available) {
+      setError(`${selectedProviderInfo.name} 的 OAuth 配置不可用：${selectedProviderInfo.detail}`)
+      return
+    }
+
     setError(null)
     setFlowStatus('')
     clearPolling()
     try {
-      const result = await StartOAuthDeviceFlow('kimi')
+      const result = await StartOAuthDeviceFlow(selectedProvider)
       setDeviceCode(result.device_code)
       setUserCode(result.user_code)
       setVerificationURI(result.verification_uri)
@@ -55,7 +119,15 @@ export function OAuthDevicePanel({ status }: OAuthDevicePanelProps) {
             return
           }
           setFlowStatus(s.status)
-          if (s.status === 'success' || s.status === 'error' || s.status === 'cancelled') {
+          if (s.status === 'success') {
+            setPolling(false)
+            clearPolling()
+            // 构造 ProviderConfig 通知上层
+            if (s.provider_id) {
+              const providerConfig = buildProviderConfig(s.provider_type, s.provider_id, s.provider_name || '', selectedModel)
+              onProviderCreated(providerConfig)
+            }
+          } else if (s.status === 'error' || s.status === 'cancelled') {
             setPolling(false)
             clearPolling()
             if (s.error) setError(s.error)
@@ -65,9 +137,9 @@ export function OAuthDevicePanel({ status }: OAuthDevicePanelProps) {
         }
       }, intervalMs)
     } catch (err) {
-      setError(err instanceof Error ? err.message : '启动 Device Flow 失败')
+      setError(typeof err === 'string' ? err : (err instanceof Error ? err.message : '启动 Device Flow 失败'))
     }
-  }, [clearPolling])
+  }, [selectedProvider, selectedProviderInfo, selectedModel, clearPolling, onProviderCreated])
 
   const handleCancel = useCallback(async () => {
     if (deviceCode) {
@@ -169,6 +241,8 @@ export function OAuthDevicePanel({ status }: OAuthDevicePanelProps) {
             <span className="text-sm font-medium">OAuth Device Flow</span>
             {status.connected ? (
               <CheckCircle2 className="w-4 h-4 text-green-500" />
+            ) : status.available ? (
+              <AlertCircle className="w-4 h-4 text-amber-500" />
             ) : (
               <XCircle className="w-4 h-4 text-muted-foreground" />
             )}
@@ -177,10 +251,62 @@ export function OAuthDevicePanel({ status }: OAuthDevicePanelProps) {
         </div>
       </div>
 
+      {/* 厂商选择 */}
+      <div className="space-y-1.5">
+        <label className="text-sm font-medium">厂商</label>
+        {loadingProviders ? (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+            <Loader2 className="w-3 h-3 animate-spin" />
+            加载厂商列表…
+          </div>
+        ) : (
+          <>
+            <select
+              value={selectedProvider}
+              onChange={(e) => {
+                setSelectedProvider(e.target.value)
+                setError(null)
+              }}
+              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+            >
+              {providers.map((p) => (
+                <option key={p.provider_type} value={p.provider_type}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+            {selectedProviderInfo && !selectedProviderInfo.available && (
+              <p className="text-xs text-amber-600">
+                {selectedProviderInfo.detail}
+              </p>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* 模型选择 */}
+      {selectedTemplate && selectedTemplate.models.length > 0 && (
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium">模型</label>
+          <select
+            value={selectedModel}
+            onChange={(e) => setSelectedModel(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+          >
+            {selectedTemplate.models.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {!status.connected && (
         <button
           onClick={handleStart}
-          className="w-full py-2.5 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
+          disabled={loadingProviders || !selectedProvider || (selectedProviderInfo?.available === false)}
+          className="w-full py-2.5 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
         >
           <Smartphone className="w-4 h-4" />
           启动 Device Flow 授权
@@ -196,4 +322,56 @@ export function OAuthDevicePanel({ status }: OAuthDevicePanelProps) {
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   )
+}
+
+/**
+ * 根据 OAuth Device Flow 成功结果构造 ProviderConfig。
+ * 与后端 inferProviderInfo 保持一致。
+ */
+function buildProviderConfig(providerType: string, providerID: string, providerName: string, modelId: string): ProviderConfig {
+  const now = Date.now()
+  const configs: Record<string, { apiHost: string; modelId: string; name: string }> = {
+    kimi: {
+      apiHost: 'https://api.moonshot.cn',
+      modelId: modelId || 'moonshot-v1-8k',
+      name: 'Kimi (OAuth)',
+    },
+    gemini: {
+      apiHost: 'https://generativelanguage.googleapis.com/v1beta/openai',
+      modelId: modelId || 'gemini-1.5-flash',
+      name: 'Gemini (OAuth)',
+    },
+    microsoft: {
+      apiHost: 'https://models.inference.ai.azure.com',
+      modelId: modelId || 'gpt-4o',
+      name: 'Microsoft (OAuth)',
+    },
+    github: {
+      apiHost: 'https://models.inference.ai.azure.com',
+      modelId: modelId || 'gpt-4o',
+      name: 'GitHub (OAuth)',
+    },
+  }
+
+  const cfg = configs[providerType] || { apiHost: '', modelId: modelId || '', name: providerName || `OAuth ${providerType}` }
+
+  return {
+    id: providerID,
+    templateId: providerType,
+    name: providerName || cfg.name,
+    apiHost: cfg.apiHost,
+    apiKey: '',
+    modelId: cfg.modelId,
+    temperature: 0.7,
+    timeoutMs: 30000,
+    maxRetries: 3,
+    group: 'OAuth',
+    enabled: true,
+    sortOrder: 0,
+    createdAt: now,
+    updatedAt: now,
+    authMethod: 'oauth_device',
+    authParams: {},
+    models: [{ id: cfg.modelId, name: cfg.modelId, enabled: true }],
+  }
 }

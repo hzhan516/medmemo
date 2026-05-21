@@ -27,14 +27,21 @@ var assets embed.FS
 // version 由构建时通过 -ldflags -X main.version={{.Version}} 注入。
 var version = "dev"
 
+// buildTime 由构建时通过 -ldflags -X main.buildTime={{.Date}} 注入。
+var buildTime = ""
+
 func main() {
 	// 监听优雅关闭信号
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		<-sigCh
 		fmt.Println("\nreceived shutdown signal, gracefully stopping...")
+		cancel()
 	}()
+
+	_ = ctx // 供后续 graceful shutdown 使用，当前由 cleanup 回调处理资源释放
 
 	// 初始化应用（通过 Wire 生成的 InitializeApp）
 	app, cleanup, err := InitializeApp()

@@ -72,7 +72,7 @@ func newTestProvider(id string) *models.ProviderConfig {
 		APIKey:      "sk-test-key-" + id,
 		ModelID:     "gpt-4o",
 		Temperature: 0.7,
-		Timeout:     30 * time.Second,
+		TimeoutMs:   30000,
 		MaxRetries:  3,
 		GroupName:   "default",
 		Enabled:     true,
@@ -97,13 +97,13 @@ func TestProviderRepo_CreateAndGet(t *testing.T) {
 	assert.Equal(t, p.APIKey, got.APIKey) // 验证解密正确
 	assert.Equal(t, p.ModelID, got.ModelID)
 	assert.InDelta(t, p.Temperature, got.Temperature, 0.001)
-	assert.Equal(t, p.Timeout, got.Timeout)
+	assert.Equal(t, p.TimeoutMs, got.TimeoutMs)
 	assert.Equal(t, p.MaxRetries, got.MaxRetries)
 	assert.Equal(t, p.GroupName, got.GroupName)
 	assert.Equal(t, p.Enabled, got.Enabled)
 	assert.Equal(t, p.SortOrder, got.SortOrder)
-	assert.False(t, got.CreatedAt.IsZero())
-	assert.False(t, got.UpdatedAt.IsZero())
+	assert.Greater(t, got.CreatedAt, int64(0))
+	assert.Greater(t, got.UpdatedAt, int64(0))
 }
 
 // TestProviderRepo_Create_DuplicateID 验证重复 ID 返回错误。
@@ -176,7 +176,7 @@ func TestProviderRepo_Update(t *testing.T) {
 	assert.InDelta(t, 1.2, got.Temperature, 0.001)
 	assert.False(t, got.Enabled)
 	assert.Equal(t, 10, got.SortOrder)
-	assert.True(t, got.UpdatedAt.After(got.CreatedAt) || got.UpdatedAt.Equal(got.CreatedAt),
+	assert.GreaterOrEqual(t, got.UpdatedAt, got.CreatedAt,
 		"updated_at should not be before created_at")
 }
 
@@ -537,7 +537,7 @@ func TestProviderRepo_CreateAndGet_CLIToken(t *testing.T) {
 		APIKey:      "", // cli_token 方式 api_key 可为空
 		ModelID:     "moonshot-v1-8k",
 		Temperature: 0.7,
-		Timeout:     30 * time.Second,
+		TimeoutMs:   30000,
 		MaxRetries:  3,
 		GroupName:   "cli",
 		Enabled:     true,
@@ -566,7 +566,7 @@ func TestProviderRepo_CreateAndGet_OAuthDevice(t *testing.T) {
 		APIKey:      "",
 		ModelID:     "gpt-4o",
 		Temperature: 0.7,
-		Timeout:     30 * time.Second,
+		TimeoutMs:   30000,
 		MaxRetries:  3,
 		GroupName:   "oauth",
 		Enabled:     true,
@@ -588,8 +588,9 @@ func TestProviderRepo_CreateAndGet_OAuthDevice(t *testing.T) {
 	assert.Equal(t, "client-123", got.AuthParams.OAuthClientID)
 	assert.Equal(t, "https://auth.example.com/authorize", got.AuthParams.OAuthAuthURL)
 	assert.Equal(t, "https://auth.example.com/token", got.AuthParams.OAuthTokenURL)
-	assert.Equal(t, "refresh-abc", got.AuthParams.OAuthRefreshToken)
-	assert.Equal(t, "access-xyz", got.AuthParams.OAuthAccessToken)
+	// OAuthRefreshToken / OAuthAccessToken 标记为 json:"-"，不持久化到数据库
+	assert.Equal(t, "", got.AuthParams.OAuthRefreshToken)
+	assert.Equal(t, "", got.AuthParams.OAuthAccessToken)
 	assert.Equal(t, int64(1234567890), got.AuthParams.OAuthExpiresAt)
 }
 
@@ -606,7 +607,7 @@ func TestProviderRepo_CreateAndGet_ServiceAccount(t *testing.T) {
 		APIKey:      "",
 		ModelID:     "gemini-pro",
 		Temperature: 0.7,
-		Timeout:     30 * time.Second,
+		TimeoutMs:   30000,
 		MaxRetries:  3,
 		GroupName:   "gcp",
 		Enabled:     true,
@@ -641,7 +642,7 @@ func TestProviderRepo_BackwardCompatibility(t *testing.T) {
 		APIKey:      "sk-legacy-key",
 		ModelID:     "legacy-model",
 		Temperature: 0.7,
-		Timeout:     30 * time.Second,
+		TimeoutMs:   30000,
 		MaxRetries:  3,
 		GroupName:   "default",
 		Enabled:     true,
