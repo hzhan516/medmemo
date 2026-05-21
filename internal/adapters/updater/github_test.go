@@ -34,7 +34,7 @@ func platformAssetName() string {
 	case "darwin":
 		return "MedMemo.dmg"
 	case "windows":
-		return "MedMemo-amd64-installer.exe"
+		return "MedMemoSetup.exe"
 	default:
 		return "MedMemo"
 	}

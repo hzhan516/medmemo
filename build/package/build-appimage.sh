@@ -48,8 +48,17 @@ cat > "$APPDIR/AppRun" <<'EOF'
 #!/bin/bash
 HERE="$(dirname "$(readlink -f "$0")")"
 export PATH="${HERE}/usr/bin:${PATH}"
-cd "${HERE}/usr/bin" || exit 1
-exec ./MedMemo "$@"
+
+# AppImage 内部为只读文件系统，确保数据目录落在用户可写区域
+if [ -z "$HOME" ]; then
+    HOME="$(getent passwd "$(id -u)" | cut -d: -f6 2>/dev/null)" || HOME="/tmp"
+    export HOME
+fi
+
+# 切换到用户主目录，避免在只读挂载点创建 .medmemo
+cd "$HOME" || exit 1
+
+exec "${HERE}/usr/bin/MedMemo" "$@"
 EOF
 chmod +x "$APPDIR/AppRun"
 
