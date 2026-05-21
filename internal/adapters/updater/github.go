@@ -34,7 +34,11 @@ type GitHubUpdater struct {
 }
 
 // NewGitHubUpdater 构造函数。
-func NewGitHubUpdater() *GitHubUpdater {
+// 测试时可传入自定义 http.Client（如带 mock Transport）以模拟 API 响应。
+func NewGitHubUpdater(client ...*http.Client) *GitHubUpdater {
+	if len(client) > 0 && client[0] != nil {
+		return &GitHubUpdater{client: client[0]}
+	}
 	return &GitHubUpdater{
 		client: &http.Client{
 			Timeout: defaultHTTPTimeout,
