@@ -79,6 +79,7 @@ jobs:
         with:
           files: ./coverage.out
           fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   integration-test:
     name: Integration Test
@@ -148,7 +149,7 @@ jobs:
 
       - name: Check binary size
         run: |
-          SIZE=$(stat -c%s build/bin/medmemo)
+          SIZE=$(stat -c%s build/bin/MedMemo)
           MAX=157286400  # 150MB in bytes
           if [ $SIZE -gt $MAX ]; then
             echo "Binary size $SIZE exceeds limit $MAX"
