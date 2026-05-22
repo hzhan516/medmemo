@@ -348,7 +348,6 @@ export function useConversation() {
     stopGeneration,
     retryMessage,
     startNewConversation,
-    loadConversationMessages,
     handleEmergencyContinue,
     handleEmergencyNotEmergency,
     handleAcknowledgeWarning,
