@@ -25,12 +25,29 @@ type SQLCipherConnector struct {
 	path string
 }
 
+// resolveDataDir 解析数据目录路径。
+// 空值时优先从 MEDMEMO_DATA_DIR 环境变量读取，其次回退到 ~/.medmemo/data。
+// 相对路径会自动解析为绝对路径（以用户主目录为基准）。
+func resolveDataDir(dataDir string) string {
+	if dataDir == "" {
+		if envDir := os.Getenv("MEDMEMO_DATA_DIR"); envDir != "" {
+			dataDir = envDir
+		} else {
+			dataDir = ".medmemo/data"
+		}
+	}
+	if !filepath.IsAbs(dataDir) {
+		if home, err := os.UserHomeDir(); err == nil {
+			dataDir = filepath.Join(home, dataDir)
+		}
+	}
+	return dataDir
+}
+
 // NewSQLCipherConnector 创建 SQLCipher 加密数据库连接。
 // 流程：获取主密钥 → 检测明文迁移 → 打开加密库 → 验证密钥 → 配置连接池。
 func NewSQLCipherConnector(dataDir string, store secret.Store) (*SQLCipherConnector, error) {
-	if dataDir == "" {
-		dataDir = ".medmemo/data"
-	}
+	dataDir = resolveDataDir(dataDir)
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create data directory: %w", err)
 	}

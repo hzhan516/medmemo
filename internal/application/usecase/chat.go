@@ -201,8 +201,8 @@ func (c *ChatOrchestrator) Execute(ctx context.Context, req ChatRequest) (*ChatR
 
 // StreamExecute 执行流式对话用例。
 // 先完整收集流式内容，经还原与合规检测通过后再统一推送。
-// 若命中非 L4 级别则返回 error，由上层拦截替换。
-// 流式正常结束时返回 TokenUsage（若 Provider 未返回 usage 则为 nil）。
+// 仅 L1（阻断级）替换为安全文本并结束流式输出；L2/L3 保留原文，由外层通过
+// chat:stream:compliance 事件追加标签。流式正常结束时返回 TokenUsage。
 func (c *ChatOrchestrator) StreamExecute(ctx context.Context, req ChatRequest, onChunk func(string)) (*models.TokenUsage, error) {
 	messages, deidResult := c.prepareMessages(ctx, req)
 
@@ -230,16 +230,18 @@ func (c *ChatOrchestrator) StreamExecute(ctx context.Context, req ChatRequest, o
 		})
 	}
 
-	// 合规检测（检测通过后才向用户展示）
+	// 合规检测
 	compResult, compErr := c.compliance.Check(ctx, reply)
 	if compErr != nil {
 		return nil, fmt.Errorf("compliance check error: %w", compErr)
 	}
-	if compResult.Level != application.L4Normal.String() {
-		return nil, fmt.Errorf("compliance check failed: level=%s, rule=%s", compResult.Level, compResult.MatchedRule)
+	// 仅 L1（阻断级）替换为安全文本并结束流式输出
+	// L2/L3 保留原文，由外层通过 chat:stream:compliance 事件追加标签
+	if compResult.Blocked {
+		onChunk(compResult.SafeText)
+		return usage, nil
 	}
 
-	// 检测通过，统一推送
 	onChunk(reply)
 	return usage, nil
 }

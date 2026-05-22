@@ -23,7 +23,7 @@ import (
 
 const (
 	githubAPIBase      = "https://api.github.com"
-	githubRepoOwner    = "medmemo"
+	githubRepoOwner    = "hzhan516"
 	githubRepoName     = "medmemo"
 	defaultHTTPTimeout = 30 * time.Second
 )

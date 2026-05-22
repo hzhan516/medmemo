@@ -27,6 +27,7 @@ export function useConversation() {
     addConversation,
     selectConversation,
     updateConversation,
+    setMessages,
     setEmergencyAlert,
     acknowledgeEmergencyWarning,
   } = useChatStore()
@@ -59,7 +60,7 @@ export function useConversation() {
         case 'content':
           appendToLastMessage(chunk.payload)
           break
-        case 'done':
+        case 'done': {
           setStreaming(false)
           // 流式结束后更新当前会话的预览和时间
           if (currentConversationId) {
@@ -81,6 +82,7 @@ export function useConversation() {
             )
           }
           break
+        }
         case 'error':
           setLastMessageError(chunk.payload)
           setStreaming(false)
@@ -284,13 +286,33 @@ export function useConversation() {
       }
       addConversation(newConv)
       selectConversation(id)
+      setMessages([])
       setError(null)
       // 新建会话时清除紧急症状状态
       setEmergencyAlert(null)
     } catch (e) {
       setError('创建新会话失败')
     }
-  }, [wails, addConversation, selectConversation, setEmergencyAlert])
+  }, [wails, addConversation, selectConversation, setMessages, setEmergencyAlert])
+
+  const loadConversationMessages = useCallback(
+    async (convID: string) => {
+      try {
+        const response = await wails.getConversationMessages(convID)
+        const mappedMessages = response.map((msg) => ({
+          id: msg.id,
+          role: msg.role as 'user' | 'assistant' | 'system',
+          content: msg.content,
+          timestamp: Number(msg.timestamp),
+        }))
+        setMessages(mappedMessages)
+      } catch (e) {
+        console.error('加载会话消息失败:', e)
+        setMessages([])
+      }
+    },
+    [wails, setMessages]
+  )
 
   // 紧急症状弹窗操作回调
   const handleEmergencyContinue = useCallback(() => {
@@ -326,6 +348,7 @@ export function useConversation() {
     stopGeneration,
     retryMessage,
     startNewConversation,
+    loadConversationMessages,
     handleEmergencyContinue,
     handleEmergencyNotEmergency,
     handleAcknowledgeWarning,

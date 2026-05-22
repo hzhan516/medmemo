@@ -45,7 +45,7 @@ type WailsApp struct {
 	tokenRefreshSvc  *auth.TokenRefreshService
 	deviceFlowSvc    *auth.OAuthDeviceFlowService
 	streamMu         sync.Mutex
-	streamCancel     context.CancelFunc
+	activeStreams    map[string]context.CancelFunc
 
 	// 本地回调服务器管理（每个 Device Flow 会话对应一个）
 	callbackServers map[string]*auth.LocalCallbackServer
@@ -86,6 +86,7 @@ func NewWailsApp(
 		tokenRefreshSvc:  tokenRefreshSvc,
 		deviceFlowSvc:    deviceFlowSvc,
 		callbackServers:  make(map[string]*auth.LocalCallbackServer),
+		activeStreams:    make(map[string]context.CancelFunc),
 	}
 }
 
@@ -121,6 +122,9 @@ func (a *WailsApp) Startup(ctx context.Context) {
 		})
 		go a.checkUpdateAsync()
 	}
+
+	// 执行数据留存自动清理（后台 goroutine，不阻塞启动）
+	go a.runRetentionCleanup()
 
 	// 启动时扫描 cli_token / oauth_device provider，安排自动刷新
 	if a.tokenRefreshSvc != nil {
@@ -256,16 +260,22 @@ func (a *WailsApp) SendMessage(req SendMessageRequest) (*SendMessageResponse, er
 }
 
 // SendMessageStream 发送流式对话请求，通过 Wails Events 实时推送结构化 StreamChunk。
-func (a *WailsApp) SendMessageStream(req SendMessageRequest) error {
+func (a *WailsApp) SendMessageStream(req SendMessageRequest) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("[panic] SendMessageStream: %v\n", r)
+			err = fmt.Errorf("stream internal error: %v", r)
+		}
+	}()
 	ctx, cancel := context.WithTimeout(a.ctx, 120*time.Second)
 
 	a.streamMu.Lock()
-	a.streamCancel = cancel
+	a.activeStreams[req.ConversationID] = cancel
 	a.streamMu.Unlock()
 
 	defer func() {
 		a.streamMu.Lock()
-		a.streamCancel = nil
+		delete(a.activeStreams, req.ConversationID)
 		a.streamMu.Unlock()
 		cancel()
 	}()
@@ -279,6 +289,7 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) error {
 
 	// 统一流式处理层：将原始 callback 包装为结构化 StreamChunk 序列
 	broker := stream.NewBroker(req.Model, "", func(chunk models.StreamChunk) {
+		chunk.Metadata.ConversationID = req.ConversationID
 		runtime.EventsEmit(a.ctx, "chat:stream_chunk", chunk)
 	})
 	broker.Start()
@@ -309,11 +320,12 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) error {
 	compResult, compErr := a.chatOrchestrator.CheckCompliance(ctx, fullReply.String())
 	if compErr == nil && compResult.Level != "L4_NORMAL" {
 		payload := map[string]any{
-			"level":         compResult.Level,
-			"warning":       compResult.Warning,
-			"notice":        compResult.Notice,
-			"replacedTerms": compResult.ReplacedTerms,
-			"matchedRule":   compResult.MatchedRule,
+			"conversation_id": req.ConversationID,
+			"level":           compResult.Level,
+			"warning":         compResult.Warning,
+			"notice":          compResult.Notice,
+			"replacedTerms":   compResult.ReplacedTerms,
+			"matchedRule":     compResult.MatchedRule,
 		}
 		runtime.EventsEmit(a.ctx, "chat:stream:compliance", payload)
 	}
@@ -344,37 +356,42 @@ func (a *WailsApp) saveMessages(ctx context.Context, convID string, messages []m
 	if len(messages) > 0 {
 		lastUser := messages[len(messages)-1]
 		if lastUser.Role == models.RoleUser {
-			_ = a.msgRepo.Save(ctx, models.ConversationID(convID), &entity.Message{
+			if err := a.msgRepo.Save(ctx, models.ConversationID(convID), &entity.Message{
 				ID:        fmt.Sprintf("msg_%d", time.Now().UnixNano()),
 				Role:      lastUser.Role,
 				Content:   lastUser.Content,
 				Timestamp: time.Now(),
-			})
+			}); err != nil {
+				fmt.Printf("[saveMessages] 保存用户消息失败: %v\n", err)
+			}
 		}
 	}
 	// 保存 AI 回复
 	if aiReply != "" {
-		_ = a.msgRepo.Save(ctx, models.ConversationID(convID), &entity.Message{
+		if err := a.msgRepo.Save(ctx, models.ConversationID(convID), &entity.Message{
 			ID:        fmt.Sprintf("msg_%d", time.Now().UnixNano()),
 			Role:      models.RoleAssistant,
 			Content:   aiReply,
 			Timestamp: time.Now(),
-		})
+		}); err != nil {
+			fmt.Printf("[saveMessages] 保存 AI 回复失败: %v\n", err)
+		}
 	}
 	// 更新会话时间
 	if a.convRepo != nil {
-		_ = a.convRepo.Save(ctx, &entity.Conversation{
-			ID:        models.ConversationID(convID),
-			UpdatedAt: time.Now(),
-		})
+		if err := a.convRepo.UpdateTimestamp(ctx, models.ConversationID(convID), time.Now()); err != nil {
+			fmt.Printf("[saveMessages] 更新会话时间失败: %v\n", err)
+		}
 	}
 }
 
-// StopGeneration 中断当前正在进行的流式生成。
+// StopGeneration 中断所有正在进行的流式生成。
 func (a *WailsApp) StopGeneration() {
 	a.streamMu.Lock()
-	if a.streamCancel != nil {
-		a.streamCancel()
+	for _, cancel := range a.activeStreams {
+		if cancel != nil {
+			cancel()
+		}
 	}
 	a.streamMu.Unlock()
 }
@@ -384,27 +401,147 @@ type ConversationSummary struct {
 	ID        string `json:"id"`
 	Title     string `json:"title"`
 	UpdatedAt string `json:"updated_at"`
+	DeletedAt string `json:"deleted_at"` // 空字符串表示未删除，否则为软删除时间戳（毫秒）
+}
+
+// MessageResponse 单条消息响应。
+type MessageResponse struct {
+	ID        string `json:"id"`
+	Role      string `json:"role"`
+	Content   string `json:"content"`
+	Timestamp string `json:"timestamp"`
+}
+
+// GetConversationMessages 获取指定会话的全部消息。
+func (a *WailsApp) GetConversationMessages(convID string) ([]MessageResponse, error) {
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+
+	if a.msgRepo == nil {
+		return nil, fmt.Errorf("message repository not initialized")
+	}
+
+	msgs, _, err := a.msgRepo.ListByConversation(ctx, models.ConversationID(convID), "", 1000)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list messages for conversation %s: %w", convID, err)
+	}
+
+	if len(msgs) == 0 {
+		fmt.Printf("[GetConversationMessages] 会话 %s 无消息\n", convID)
+	}
+
+	// ListByConversation 返回 created_at DESC（最新的在前），需要反转为正序
+	result := make([]MessageResponse, len(msgs))
+	for i, m := range msgs {
+		result[len(msgs)-1-i] = MessageResponse{
+			ID:        m.ID,
+			Role:      string(m.Role),
+			Content:   m.Content,
+			Timestamp: strconv.FormatInt(m.Timestamp.UnixMilli(), 10),
+		}
+	}
+	return result, nil
 }
 
 // GetConversations 获取会话列表。
-func (a *WailsApp) GetConversations() ([]ConversationSummary, error) {
+func (a *WailsApp) GetConversations() (result []ConversationSummary, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("[panic] GetConversations: %v\n", r)
+			err = fmt.Errorf("internal error: %v", r)
+		}
+	}()
 	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
 	defer cancel()
+
+	if a.convRepo == nil {
+		return nil, fmt.Errorf("conversation repository not initialized")
+	}
 
 	convs, err := a.convRepo.ListRecent(ctx, 100)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list conversations: %w", err)
 	}
 
-	result := make([]ConversationSummary, len(convs))
+	result = make([]ConversationSummary, len(convs))
 	for i, conv := range convs {
-		result[i] = ConversationSummary{
+		summary := ConversationSummary{
 			ID:        string(conv.ID),
 			Title:     conv.Title,
 			UpdatedAt: strconv.FormatInt(conv.UpdatedAt.UnixMilli(), 10),
 		}
+		if conv.DeletedAt != nil {
+			summary.DeletedAt = strconv.FormatInt(conv.DeletedAt.UnixMilli(), 10)
+		}
+		result[i] = summary
 	}
 	return result, nil
+}
+
+// DeleteConversation 软删除指定会话（移入回收站）。
+func (a *WailsApp) DeleteConversation(convID string) error {
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+
+	if a.convRepo == nil {
+		return fmt.Errorf("conversation repository not initialized")
+	}
+	if err := a.convRepo.Delete(ctx, models.ConversationID(convID)); err != nil {
+		return fmt.Errorf("failed to delete conversation %s: %w", convID, err)
+	}
+	return nil
+}
+
+// RestoreConversation 恢复软删除的会话。
+func (a *WailsApp) RestoreConversation(convID string) error {
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+
+	if a.convRepo == nil {
+		return fmt.Errorf("conversation repository not initialized")
+	}
+	if err := a.convRepo.Restore(ctx, models.ConversationID(convID)); err != nil {
+		return fmt.Errorf("failed to restore conversation %s: %w", convID, err)
+	}
+	return nil
+}
+
+// HardDeleteConversation 永久删除指定会话及其消息。
+func (a *WailsApp) HardDeleteConversation(convID string) error {
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+
+	if a.convRepo == nil {
+		return fmt.Errorf("conversation repository not initialized")
+	}
+	if err := a.convRepo.HardDelete(ctx, models.ConversationID(convID)); err != nil {
+		return fmt.Errorf("failed to hard delete conversation %s: %w", convID, err)
+	}
+	return nil
+}
+
+// runRetentionCleanup 执行数据留存自动归档与清理。
+func (a *WailsApp) runRetentionCleanup() {
+	retentionDays := a.config.DataRetentionDays
+	if retentionDays <= 0 {
+		return // 永久保留，不执行清理
+	}
+
+	ctx, cancel := context.WithTimeout(a.ctx, 30*time.Second)
+	defer cancel()
+
+	cutoff := time.Now().AddDate(0, 0, -retentionDays)
+
+	if a.convRepo != nil {
+		// 自动归档：主列表中超过期限的会话 → 移入回收站
+		if err := a.convRepo.ArchiveOlderThan(ctx, cutoff); err != nil {
+			fmt.Printf("[retention] 自动归档失败: %v\n", err)
+		}
+		// 自动清理：回收站中超过期限的会话 → 物理删除
+		if err := a.convRepo.PermanentlyDeleteOlderThan(ctx, cutoff); err != nil {
+			fmt.Printf("[retention] 自动清理失败: %v\n", err)
+		}
+	}
 }
 
 // CreateConversation 创建新会话，返回会话 ID。
@@ -469,11 +606,9 @@ func (a *WailsApp) GenerateTitle(convID string, userMessage string) {
 
 		// 持久化到数据库
 		if a.convRepo != nil {
-			_ = a.convRepo.Save(ctx, &entity.Conversation{
-				ID:        models.ConversationID(convID),
-				Title:     title,
-				UpdatedAt: time.Now(),
-			})
+			if err := a.convRepo.UpdateTitle(ctx, models.ConversationID(convID), title); err != nil {
+				fmt.Printf("[GenerateTitle] 更新标题失败: %v\n", err)
+			}
 		}
 
 		// 推送前端更新
@@ -686,6 +821,7 @@ func (a *WailsApp) SkipUpdateVersion(v string) error {
 
 // OpenDownloadURL 通过系统浏览器打开指定 URL。
 func (a *WailsApp) OpenDownloadURL(url string) {
+	fmt.Println("[DEBUG] OpenDownloadURL called with:", url)
 	runtime.BrowserOpenURL(a.ctx, url)
 }
 

@@ -30,6 +30,8 @@ export function CreateProvider(arg1:models.ProviderConfig):Promise<void>;
 
 export function DeclineDisclaimer():Promise<void>;
 
+export function DeleteConversation(arg1:string):Promise<void>;
+
 export function DeleteProvider(arg1:string):Promise<void>;
 
 export function DetectAuthMethods():Promise<main.AuthDetectResult>;
@@ -47,6 +49,8 @@ export function EnableAutoRefresh(arg1:string):Promise<void>;
 export function EnsureOllamaAndSmolLM2():Promise<main.OllamaDetectResult>;
 
 export function GenerateTitle(arg1:string,arg2:string):Promise<void>;
+
+export function GetConversationMessages(arg1:string):Promise<Array<main.MessageResponse>>;
 
 export function GetConversations():Promise<Array<main.ConversationSummary>>;
 
@@ -66,6 +70,8 @@ export function GetVersion():Promise<string>;
 
 export function GetVersionNotes():Promise<Array<entity.VersionNote>>;
 
+export function HardDeleteConversation(arg1:string):Promise<void>;
+
 export function HasAPIKey(arg1:string):Promise<boolean>;
 
 export function ListProviders():Promise<Array<models.ProviderConfig>>;
@@ -81,6 +87,8 @@ export function PullOllamaModel(arg1:string):Promise<void>;
 export function RefreshToken(arg1:string):Promise<void>;
 
 export function ReportComplianceFeedback(arg1:string,arg2:string):Promise<void>;
+
+export function RestoreConversation(arg1:string):Promise<void>;
 
 export function SaveAPIKey(arg1:string,arg2:string):Promise<void>;
 

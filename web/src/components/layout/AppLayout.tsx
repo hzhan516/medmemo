@@ -1,5 +1,7 @@
+import { useState, useEffect } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { MessageSquare, Settings, Info } from 'lucide-react'
+import { useWails } from '@/hooks/useWails'
 
 const navItems = [
   { to: '/chat', label: '对话', icon: MessageSquare },
@@ -13,6 +15,12 @@ const navItems = [
  */
 export function AppLayout() {
   const location = useLocation()
+  const { getVersion } = useWails()
+  const [version, setVersion] = useState('')
+
+  useEffect(() => {
+    getVersion().then(setVersion).catch(() => setVersion(''))
+  }, [getVersion])
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-background text-foreground flex">
@@ -69,7 +77,7 @@ export function AppLayout() {
             <span>就绪</span>
           </div>
           <div className="flex items-center gap-3">
-            <span>MedMemo v0.1.0-alpha</span>
+            <span>MedMemo {version || '...'}</span>
           </div>
         </footer>
       </div>
