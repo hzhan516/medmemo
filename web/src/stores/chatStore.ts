@@ -34,7 +34,12 @@ export interface Conversation {
 
 interface ChatState {
   messages: ChatMessage[]
+  // 按会话缓存消息数组，实现真正的会话隔离
+  messagesMap: Record<string, ChatMessage[]>
+  // 当前会话是否在流式中（派生自 streamingIds）
   isStreaming: boolean
+  // 哪些会话正在流式中
+  streamingIds: Set<string>
   currentConversationId: string | null
 
   conversations: Conversation[]
@@ -50,17 +55,26 @@ interface ChatState {
 
   setConversationId: (id: string | null) => void
   addMessage: (message: ChatMessage) => void
+  addMessageForConversation: (convId: string, message: ChatMessage) => void
   updateLastMessage: (content: string, append?: boolean) => void
   appendToLastMessage: (content: string) => void
+  appendToLastMessageForConversation: (convId: string, content: string) => void
   setLastMessageError: (error: string) => void
+  setLastMessageErrorForConversation: (convId: string, error: string) => void
   abortLastMessage: () => void
   setStreaming: (streaming: boolean) => void
+  setStreamingForConversation: (convId: string, streaming: boolean) => void
   clearMessages: () => void
   setLastMessageWarnings: (warnings: string[]) => void
+  setLastMessageWarningsForConversation: (convId: string, warnings: string[]) => void
   setLastMessageReplacedTerms: (terms: string[]) => void
+  setLastMessageReplacedTermsForConversation: (convId: string, terms: string[]) => void
   setLastMessageTokenUsage: (promptTokens: number, completionTokens: number, totalTokens: number) => void
+  setLastMessageTokenUsageForConversation: (convId: string, promptTokens: number, completionTokens: number, totalTokens: number) => void
+  setMessages: (messages: ChatMessage[]) => void
 
   setConversations: (conversations: Conversation[]) => void
+  setDeletedConversations: (deletedConversations: Conversation[]) => void
   addConversation: (conversation: Conversation) => void
   updateConversation: (id: string, updates: Partial<Conversation>) => void
   removeConversation: (id: string) => void
@@ -85,9 +99,26 @@ interface ChatState {
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000
 const MAX_CONVERSATIONS = 500
 
+// 辅助函数：更新 messagesMap 中指定会话的最后一条 assistant 消息
+function updateLastAssistantInMap(
+  map: Record<string, ChatMessage[]>,
+  convId: string,
+  updater: (msg: ChatMessage) => ChatMessage
+): Record<string, ChatMessage[]> {
+  const msgs = [...(map[convId] || [])]
+  if (msgs.length === 0) return map
+  const lastIdx = msgs.length - 1
+  const last = msgs[lastIdx]
+  if (last.role !== 'assistant') return map
+  msgs[lastIdx] = updater(last)
+  return { ...map, [convId]: msgs }
+}
+
 export const useChatStore = create<ChatState>((set) => ({
   messages: [],
+  messagesMap: {},
   isStreaming: false,
+  streamingIds: new Set(),
   currentConversationId: null,
 
   conversations: [],
@@ -102,10 +133,29 @@ export const useChatStore = create<ChatState>((set) => ({
   setConversationId: (id) => set({ currentConversationId: id }),
 
   addMessage: (message) =>
-    set((state) => ({ messages: [...state.messages, message] })),
+    set((state) => {
+      const convId = state.currentConversationId
+      const msgs = [...state.messages, message]
+      if (!convId) return { messages: msgs }
+      return {
+        messages: msgs,
+        messagesMap: { ...state.messagesMap, [convId]: msgs },
+      }
+    }),
+
+  addMessageForConversation: (convId, message) =>
+    set((state) => {
+      const convMsgs = [...(state.messagesMap[convId] || []), message]
+      const newMap = { ...state.messagesMap, [convId]: convMsgs }
+      if (state.currentConversationId === convId) {
+        return { messages: convMsgs, messagesMap: newMap }
+      }
+      return { messagesMap: newMap }
+    }),
 
   updateLastMessage: (content, append = false) =>
     set((state) => {
+      const convId = state.currentConversationId
       const msgs = [...state.messages]
       if (msgs.length === 0) return state
       const last = msgs[msgs.length - 1]
@@ -114,11 +164,16 @@ export const useChatStore = create<ChatState>((set) => ({
         ...last,
         content: append ? last.content + content : content,
       }
-      return { messages: msgs }
+      if (!convId) return { messages: msgs }
+      return {
+        messages: msgs,
+        messagesMap: { ...state.messagesMap, [convId]: msgs },
+      }
     }),
 
   appendToLastMessage: (content) =>
     set((state) => {
+      const convId = state.currentConversationId
       const msgs = [...state.messages]
       if (msgs.length === 0) return state
       const lastIdx = msgs.length - 1
@@ -128,11 +183,28 @@ export const useChatStore = create<ChatState>((set) => ({
         ...last,
         content: last.content + content,
       }
-      return { messages: msgs }
+      if (!convId) return { messages: msgs }
+      return {
+        messages: msgs,
+        messagesMap: { ...state.messagesMap, [convId]: msgs },
+      }
+    }),
+
+  appendToLastMessageForConversation: (convId, content) =>
+    set((state) => {
+      const newMap = updateLastAssistantInMap(state.messagesMap, convId, (last) => ({
+        ...last,
+        content: last.content + content,
+      }))
+      if (state.currentConversationId === convId) {
+        return { messages: newMap[convId] || [], messagesMap: newMap }
+      }
+      return { messagesMap: newMap }
     }),
 
   setLastMessageError: (error) =>
     set((state) => {
+      const convId = state.currentConversationId
       const msgs = [...state.messages]
       if (msgs.length === 0) return state
       const lastIdx = msgs.length - 1
@@ -143,11 +215,29 @@ export const useChatStore = create<ChatState>((set) => ({
         isStreaming: false,
         error,
       }
-      return { messages: msgs }
+      if (!convId) return { messages: msgs }
+      return {
+        messages: msgs,
+        messagesMap: { ...state.messagesMap, [convId]: msgs },
+      }
+    }),
+
+  setLastMessageErrorForConversation: (convId, error) =>
+    set((state) => {
+      const newMap = updateLastAssistantInMap(state.messagesMap, convId, (last) => ({
+        ...last,
+        isStreaming: false,
+        error,
+      }))
+      if (state.currentConversationId === convId) {
+        return { messages: newMap[convId] || [], messagesMap: newMap }
+      }
+      return { messagesMap: newMap }
     }),
 
   abortLastMessage: () =>
     set((state) => {
+      const convId = state.currentConversationId
       const msgs = [...state.messages]
       if (msgs.length === 0) return state
       const lastIdx = msgs.length - 1
@@ -158,47 +248,156 @@ export const useChatStore = create<ChatState>((set) => ({
         isStreaming: false,
         interrupted: true,
       }
-      return { messages: msgs }
+      if (!convId) return { messages: msgs }
+      return {
+        messages: msgs,
+        messagesMap: { ...state.messagesMap, [convId]: msgs },
+      }
     }),
 
-  setStreaming: (streaming) => set({ isStreaming: streaming }),
+  setStreaming: (streaming) =>
+    set((state) => {
+      const convId = state.currentConversationId
+      if (!convId) return { isStreaming: streaming }
+      const newIds = new Set(state.streamingIds)
+      if (streaming) {
+        newIds.add(convId)
+      } else {
+        newIds.delete(convId)
+      }
+      return { isStreaming: streaming, streamingIds: newIds }
+    }),
+
+  setStreamingForConversation: (convId, streaming) =>
+    set((state) => {
+      const newIds = new Set(state.streamingIds)
+      if (streaming) {
+        newIds.add(convId)
+      } else {
+        newIds.delete(convId)
+      }
+      const isCurrentStreaming = state.currentConversationId
+        ? newIds.has(state.currentConversationId)
+        : false
+      const newMap = updateLastAssistantInMap(state.messagesMap, convId, (last) => ({
+        ...last,
+        isStreaming: streaming,
+      }))
+      if (state.currentConversationId === convId) {
+        return {
+          isStreaming: isCurrentStreaming,
+          streamingIds: newIds,
+          messages: newMap[convId] || [],
+          messagesMap: newMap,
+        }
+      }
+      return {
+        isStreaming: isCurrentStreaming,
+        streamingIds: newIds,
+        messagesMap: newMap,
+      }
+    }),
+
+  clearMessages: () => set({ messages: [], currentConversationId: null }),
 
   setLastMessageWarnings: (warnings) =>
     set((state) => {
+      const convId = state.currentConversationId
       const msgs = [...state.messages]
       if (msgs.length === 0) return state
       const lastIdx = msgs.length - 1
       const last = msgs[lastIdx]
       if (last.role !== 'assistant') return state
       msgs[lastIdx] = { ...last, warnings }
-      return { messages: msgs }
+      if (!convId) return { messages: msgs }
+      return {
+        messages: msgs,
+        messagesMap: { ...state.messagesMap, [convId]: msgs },
+      }
+    }),
+
+  setLastMessageWarningsForConversation: (convId, warnings) =>
+    set((state) => {
+      const newMap = updateLastAssistantInMap(state.messagesMap, convId, (last) => ({
+        ...last,
+        warnings,
+      }))
+      if (state.currentConversationId === convId) {
+        return { messages: newMap[convId] || [], messagesMap: newMap }
+      }
+      return { messagesMap: newMap }
     }),
 
   setLastMessageReplacedTerms: (terms) =>
     set((state) => {
+      const convId = state.currentConversationId
       const msgs = [...state.messages]
       if (msgs.length === 0) return state
       const lastIdx = msgs.length - 1
       const last = msgs[lastIdx]
       if (last.role !== 'assistant') return state
       msgs[lastIdx] = { ...last, replacedTerms: terms }
-      return { messages: msgs }
+      if (!convId) return { messages: msgs }
+      return {
+        messages: msgs,
+        messagesMap: { ...state.messagesMap, [convId]: msgs },
+      }
+    }),
+
+  setLastMessageReplacedTermsForConversation: (convId, terms) =>
+    set((state) => {
+      const newMap = updateLastAssistantInMap(state.messagesMap, convId, (last) => ({
+        ...last,
+        replacedTerms: terms,
+      }))
+      if (state.currentConversationId === convId) {
+        return { messages: newMap[convId] || [], messagesMap: newMap }
+      }
+      return { messagesMap: newMap }
     }),
 
   setLastMessageTokenUsage: (promptTokens, completionTokens, totalTokens) =>
     set((state) => {
+      const convId = state.currentConversationId
       const msgs = [...state.messages]
       if (msgs.length === 0) return state
       const lastIdx = msgs.length - 1
       const last = msgs[lastIdx]
       if (last.role !== 'assistant') return state
       msgs[lastIdx] = { ...last, promptTokens, completionTokens, totalTokens }
-      return { messages: msgs }
+      if (!convId) return { messages: msgs }
+      return {
+        messages: msgs,
+        messagesMap: { ...state.messagesMap, [convId]: msgs },
+      }
     }),
 
-  clearMessages: () => set({ messages: [], currentConversationId: null }),
+  setLastMessageTokenUsageForConversation: (convId, promptTokens, completionTokens, totalTokens) =>
+    set((state) => {
+      const newMap = updateLastAssistantInMap(state.messagesMap, convId, (last) => ({
+        ...last,
+        promptTokens,
+        completionTokens,
+        totalTokens,
+      }))
+      if (state.currentConversationId === convId) {
+        return { messages: newMap[convId] || [], messagesMap: newMap }
+      }
+      return { messagesMap: newMap }
+    }),
+
+  setMessages: (messages) =>
+    set((state) => {
+      const convId = state.currentConversationId
+      if (!convId) return { messages }
+      return {
+        messages,
+        messagesMap: { ...state.messagesMap, [convId]: messages },
+      }
+    }),
 
   setConversations: (conversations) => set({ conversations }),
+  setDeletedConversations: (deletedConversations) => set({ deletedConversations }),
 
   addConversation: (conversation) =>
     set((state) => {
@@ -245,6 +444,11 @@ export const useChatStore = create<ChatState>((set) => ({
     set((state) => {
       const conv = state.conversations.find((c) => c.id === id)
       if (!conv) return state
+      // 切换会话前先将当前消息保存到 map
+      const currentId = state.currentConversationId
+      const newMap = currentId
+        ? { ...state.messagesMap, [currentId]: [...state.messages] }
+        : state.messagesMap
       return {
         conversations: state.conversations.filter((c) => c.id !== id),
         deletedConversations: [
@@ -252,6 +456,9 @@ export const useChatStore = create<ChatState>((set) => ({
           ...state.deletedConversations,
         ],
         lastDeleted: { ...conv, deletedAt: Date.now() },
+        messages: [],
+        currentConversationId: null,
+        messagesMap: newMap,
       }
     }),
 
@@ -297,7 +504,21 @@ export const useChatStore = create<ChatState>((set) => ({
   setShowTrash: (show) => set({ showTrash: show }),
 
   selectConversation: (id) =>
-    set({ currentConversationId: id, messages: [] }),
+    set((state) => {
+      const currentId = state.currentConversationId
+      // 保存当前会话的消息到 map
+      const newMap = currentId
+        ? { ...state.messagesMap, [currentId]: [...state.messages] }
+        : state.messagesMap
+      // 从 map 加载目标会话的消息
+      const loadedMessages = id ? (newMap[id] || []) : []
+      return {
+        currentConversationId: id,
+        messages: loadedMessages,
+        messagesMap: newMap,
+        isStreaming: id ? state.streamingIds.has(id) : false,
+      }
+    }),
 
   cleanupOldDeleted: () =>
     set((state) => ({

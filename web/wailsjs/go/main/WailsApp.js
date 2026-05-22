@@ -50,6 +50,10 @@ export function DeclineDisclaimer() {
   return window['go']['main']['WailsApp']['DeclineDisclaimer']();
 }
 
+export function DeleteConversation(arg1) {
+  return window['go']['main']['WailsApp']['DeleteConversation'](arg1);
+}
+
 export function DeleteProvider(arg1) {
   return window['go']['main']['WailsApp']['DeleteProvider'](arg1);
 }
@@ -84,6 +88,10 @@ export function EnsureOllamaAndSmolLM2() {
 
 export function GenerateTitle(arg1, arg2) {
   return window['go']['main']['WailsApp']['GenerateTitle'](arg1, arg2);
+}
+
+export function GetConversationMessages(arg1) {
+  return window['go']['main']['WailsApp']['GetConversationMessages'](arg1);
 }
 
 export function GetConversations() {
@@ -122,6 +130,10 @@ export function GetVersionNotes() {
   return window['go']['main']['WailsApp']['GetVersionNotes']();
 }
 
+export function HardDeleteConversation(arg1) {
+  return window['go']['main']['WailsApp']['HardDeleteConversation'](arg1);
+}
+
 export function HasAPIKey(arg1) {
   return window['go']['main']['WailsApp']['HasAPIKey'](arg1);
 }
@@ -152,6 +164,10 @@ export function RefreshToken(arg1) {
 
 export function ReportComplianceFeedback(arg1, arg2) {
   return window['go']['main']['WailsApp']['ReportComplianceFeedback'](arg1, arg2);
+}
+
+export function RestoreConversation(arg1) {
+  return window['go']['main']['WailsApp']['RestoreConversation'](arg1);
 }
 
 export function SaveAPIKey(arg1, arg2) {

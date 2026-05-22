@@ -3,7 +3,7 @@ project_name: MedMemo
 
 before:
   hooks:
-    - cd web && npm ci && npm run build
+    - bash -c 'cd web && npm ci && npm run build'
 
 builds:
   - skip: true

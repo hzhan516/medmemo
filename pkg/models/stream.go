@@ -19,6 +19,7 @@ const (
 type StreamChunkMetadata struct {
 	Model            string `json:"model,omitempty"`
 	ProviderID       string `json:"provider_id,omitempty"`
+	ConversationID   string `json:"conversation_id,omitempty"`
 	LatencyMs        int64  `json:"latency_ms,omitempty"`
 	TokenCount       int    `json:"token_count,omitempty"`
 	PromptTokens     int    `json:"prompt_tokens,omitempty"`

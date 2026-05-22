@@ -126,3 +126,68 @@ func (r *ConversationRepoSQLite) Delete(ctx context.Context, id models.Conversat
 	}
 	return nil
 }
+
+// ArchiveOlderThan 将 cutoff 时间之前更新的所有未删除会话归档。
+func (r *ConversationRepoSQLite) ArchiveOlderThan(ctx context.Context, cutoff time.Time) error {
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE conversations SET archived_at = ?
+		WHERE updated_at < ? AND deleted_at IS NULL AND archived_at IS NULL
+	`, time.Now().UnixMilli(), cutoff.UnixMilli())
+	if err != nil {
+		return fmt.Errorf("failed to archive conversations older than %v: %w", cutoff, err)
+	}
+	return nil
+}
+
+// Restore 恢复被软删除或归档的会话。
+func (r *ConversationRepoSQLite) Restore(ctx context.Context, id models.ConversationID) error {
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE conversations SET deleted_at = NULL, archived_at = NULL WHERE id = ?
+	`, id)
+	if err != nil {
+		return fmt.Errorf("failed to restore conversation %s: %w", id, err)
+	}
+	return nil
+}
+
+// HardDelete 永久删除指定会话。
+func (r *ConversationRepoSQLite) HardDelete(ctx context.Context, id models.ConversationID) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM conversations WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("failed to hard delete conversation %s: %w", id, err)
+	}
+	return nil
+}
+
+// PermanentlyDeleteOlderThan 永久删除早于 cutoff 的已软删除会话。
+func (r *ConversationRepoSQLite) PermanentlyDeleteOlderThan(ctx context.Context, cutoff time.Time) error {
+	_, err := r.db.ExecContext(ctx, `
+		DELETE FROM conversations WHERE deleted_at IS NOT NULL AND deleted_at < ?
+	`, cutoff.UnixMilli())
+	if err != nil {
+		return fmt.Errorf("failed to permanently delete conversations older than %v: %w", cutoff, err)
+	}
+	return nil
+}
+
+// UpdateTimestamp 仅更新会话的 updated_at 时间戳。
+func (r *ConversationRepoSQLite) UpdateTimestamp(ctx context.Context, id models.ConversationID, updatedAt time.Time) error {
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE conversations SET updated_at = ? WHERE id = ?
+	`, updatedAt.UnixMilli(), id)
+	if err != nil {
+		return fmt.Errorf("failed to update timestamp for conversation %s: %w", id, err)
+	}
+	return nil
+}
+
+// UpdateTitle 仅更新会话的标题。
+func (r *ConversationRepoSQLite) UpdateTitle(ctx context.Context, id models.ConversationID, title string) error {
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE conversations SET title = ? WHERE id = ?
+	`, title, id)
+	if err != nil {
+		return fmt.Errorf("failed to update title for conversation %s: %w", id, err)
+	}
+	return nil
+}
