@@ -71,6 +71,28 @@ func TestHTTPClient_DoWithRetry_4xxNoRetry(t *testing.T) {
 	assert.Equal(t, int32(1), count.Load()) // 不重试
 }
 
+func TestHTTPClient_DoWithRetry_429Retry(t *testing.T) {
+	var count atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if count.Add(1) < 3 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client := NewHTTPClient(server.URL)
+	req, err := http.NewRequest(http.MethodGet, server.URL+"/test", nil)
+	require.NoError(t, err)
+
+	resp, err := client.DoWithRetry(context.Background(), req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, int32(3), count.Load()) // 429 应被重试
+}
+
 func TestHTTPClient_DoWithRetry_MaxRetriesExceeded(t *testing.T) {
 	var count atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

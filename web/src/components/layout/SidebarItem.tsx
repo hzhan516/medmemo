@@ -10,6 +10,7 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import { useChatStore } from '@/stores/chatStore'
+import { useWails } from '@/hooks/useWails'
 import { highlightText, validateConversationTitle, formatRelativeTime } from '@/lib/conversationUtils'
 
 interface SidebarItemProps {
@@ -73,21 +74,38 @@ export function SidebarItem({
     setShowMenu(false)
   }
 
-  const handleSoftDelete = (e: React.MouseEvent) => {
+  const wails = useWails()
+
+  const handleSoftDelete = async (e: React.MouseEvent) => {
     e.stopPropagation()
-    softDeleteConversation(id)
+    try {
+      await wails.deleteConversation(id)
+      softDeleteConversation(id)
+    } catch (e) {
+      console.error('删除会话失败:', e)
+    }
     setShowMenu(false)
   }
 
-  const handlePermanentDelete = (e: React.MouseEvent) => {
+  const handlePermanentDelete = async (e: React.MouseEvent) => {
     e.stopPropagation()
-    permanentlyDeleteConversation(id)
+    try {
+      await wails.hardDeleteConversation(id)
+      permanentlyDeleteConversation(id)
+    } catch (e) {
+      console.error('永久删除会话失败:', e)
+    }
     setShowMenu(false)
   }
 
-  const handleRestore = (e: React.MouseEvent) => {
+  const handleRestore = async (e: React.MouseEvent) => {
     e.stopPropagation()
-    restoreConversation(id)
+    try {
+      await wails.restoreConversation(id)
+      restoreConversation(id)
+    } catch (e) {
+      console.error('恢复会话失败:', e)
+    }
     setShowMenu(false)
   }
 

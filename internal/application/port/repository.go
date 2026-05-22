@@ -2,6 +2,7 @@ package port
 
 import (
 	"context"
+	"time"
 
 	"github.com/medmemo/medmemo/internal/domain/entity"
 	"github.com/medmemo/medmemo/pkg/models"
@@ -47,6 +48,14 @@ type ConversationRepository interface {
 	GetByID(ctx context.Context, id models.ConversationID) (*entity.Conversation, error)
 	ListRecent(ctx context.Context, limit int) ([]*entity.Conversation, error)
 	Delete(ctx context.Context, id models.ConversationID) error
+	Restore(ctx context.Context, id models.ConversationID) error
+	HardDelete(ctx context.Context, id models.ConversationID) error
+	ArchiveOlderThan(ctx context.Context, cutoff time.Time) error
+	PermanentlyDeleteOlderThan(ctx context.Context, cutoff time.Time) error
+	// UpdateTimestamp 仅更新会话的 updated_at 时间戳，不覆盖其他字段。
+	UpdateTimestamp(ctx context.Context, id models.ConversationID, updatedAt time.Time) error
+	// UpdateTitle 仅更新会话的标题，不覆盖其他字段。
+	UpdateTitle(ctx context.Context, id models.ConversationID, title string) error
 }
 
 // DisclaimerRepository 定义免责声明同意记录的持久化接口。

@@ -16,6 +16,7 @@ type UpdateSettingsResponse = main.UpdateSettingsResponse
 type SystemInfo = feedback.SystemInfo
 
 type AuthDetectResult = main.AuthDetectResult
+type MessageResponse = main.MessageResponse
 
 import { SaveAPIKey, HasAPIKey, GetVersion, DetectAuthMethods } from '@wails/go/main/WailsApp'
 
@@ -44,6 +45,10 @@ export function useWails() {
 
   const getConversations = useCallback(async (): Promise<ConversationSummary[]> => {
     return await WailsApp.GetConversations()
+  }, [])
+
+  const getConversationMessages = useCallback(async (convID: string): Promise<MessageResponse[]> => {
+    return await WailsApp.GetConversationMessages(convID)
   }, [])
 
   const createConversation = useCallback(async (): Promise<string> => {
@@ -151,11 +156,24 @@ export function useWails() {
     return list.map(fromWailsProviderConfig)
   }, [])
 
+  const deleteConversation = useCallback(async (convID: string): Promise<void> => {
+    return await WailsApp.DeleteConversation(convID)
+  }, [])
+
+  const restoreConversation = useCallback(async (convID: string): Promise<void> => {
+    return await WailsApp.RestoreConversation(convID)
+  }, [])
+
+  const hardDeleteConversation = useCallback(async (convID: string): Promise<void> => {
+    return await WailsApp.HardDeleteConversation(convID)
+  }, [])
+
   return {
     sendMessage,
     sendMessageStream,
     stopGeneration,
     getConversations,
+    getConversationMessages,
     createConversation,
     getModels,
     checkEmergency,
@@ -182,5 +200,8 @@ export function useWails() {
     updateProvider,
     deleteProvider,
     listProviders,
+    deleteConversation,
+    restoreConversation,
+    hardDeleteConversation,
   }
 }

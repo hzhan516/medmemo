@@ -1,9 +1,28 @@
-import { useCallback, useEffect, useState } from 'react'
-import { useChatStore } from '@/stores/chatStore'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useChatStore, type Conversation } from '@/stores/chatStore'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useProviderStore } from '@/stores/providerStore'
 import { useWails } from './useWails'
 import { EventsOn } from '@wails/runtime/runtime'
+
+/**
+ * 粗略估算文本 token 数。
+ * 中文/东亚字符按 1 token 估算，英文按 0.3 token 估算，作为前端展示用。
+ */
+function estimateTokens(text: string): number {
+  let count = 0
+  for (const char of text) {
+    // CJK 统一表意文字范围
+    if (/[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/.test(char)) {
+      count += 1
+    } else if (/\s/.test(char)) {
+      // 空白字符不计
+    } else {
+      count += 0.3
+    }
+  }
+  return Math.max(1, Math.ceil(count))
+}
 
 /**
  * 会话管理 Hook，封装消息发送、流式输出与状态更新。
@@ -13,22 +32,27 @@ export function useConversation() {
   const {
     messages,
     isStreaming,
+    streamingIds,
     currentConversationId,
     emergencyAlert,
     emergencyWarningAcknowledged,
     addMessage,
-    appendToLastMessage,
+    appendToLastMessageForConversation,
     setLastMessageError,
-    setLastMessageWarnings,
-    setLastMessageReplacedTerms,
-    setLastMessageTokenUsage,
-    setStreaming,
+    setLastMessageErrorForConversation,
+    setLastMessageWarningsForConversation,
+    setLastMessageReplacedTermsForConversation,
+    setLastMessageTokenUsageForConversation,
+    setStreamingForConversation,
     setConversationId,
     addConversation,
     selectConversation,
     updateConversation,
     setEmergencyAlert,
     acknowledgeEmergencyWarning,
+    setMessages,
+    setConversations,
+    setDeletedConversations,
   } = useChatStore()
 
   // 当前活跃 Provider 及健康状态
@@ -49,55 +73,106 @@ export function useConversation() {
 
   const [error, setError] = useState<string | null>(null)
 
+  // 当前正在加载历史消息的会话 ID，用于竞态保护
+  const pendingLoadRef = useRef<string | null>(null)
+  // 标记是否已执行过启动加载
+  const hydratedRef = useRef(false)
+
   // 注册 Wails 流式事件监听
   useEffect(() => {
-    const removeStreamChunk = EventsOn('chat:stream_chunk', (chunk: { type: 'start' | 'content' | 'done' | 'error'; payload: string; metadata?: { model?: string; provider_id?: string; latency_ms?: number; token_count?: number; prompt_tokens?: number; completion_tokens?: number } }) => {
+    const removeStreamChunk = EventsOn('chat:stream_chunk', (chunk: {
+      type: 'start' | 'content' | 'done' | 'error'
+      payload: string
+      metadata?: {
+        conversation_id?: string
+        model?: string
+        provider_id?: string
+        latency_ms?: number
+        token_count?: number
+        prompt_tokens?: number
+        completion_tokens?: number
+      }
+    }) => {
+      const convId = chunk.metadata?.conversation_id
+      if (!convId) {
+        console.warn('[stream_chunk] 缺少 conversation_id，忽略')
+        return
+      }
+
       switch (chunk.type) {
         case 'start':
           // start chunk 仅携带 metadata，无需 UI 操作
           break
         case 'content':
-          appendToLastMessage(chunk.payload)
+          appendToLastMessageForConversation(convId, chunk.payload)
           break
         case 'done':
-          setStreaming(false)
-          // 流式结束后更新当前会话的预览和时间
-          if (currentConversationId) {
-            const lastMsg = useChatStore.getState().messages
-            const lastAssistant = [...lastMsg].reverse().find((m) => m.role === 'assistant')
-            if (lastAssistant) {
-              updateConversation(currentConversationId, {
-                preview: lastAssistant.content.slice(0, 60),
-                updatedAt: Date.now(),
-              })
-            }
+          setStreamingForConversation(convId, false)
+          // 更新对应会话的预览和时间
+          const state = useChatStore.getState()
+          const convMsgs = state.messagesMap[convId] || []
+          const lastAssistant = [...convMsgs].reverse().find((m) => m.role === 'assistant')
+          if (lastAssistant) {
+            updateConversation(convId, {
+              preview: lastAssistant.content.slice(0, 60),
+              updatedAt: Date.now(),
+            })
           }
           // 写入 token 用量统计
           if (chunk.metadata?.prompt_tokens !== undefined && chunk.metadata?.completion_tokens !== undefined) {
-            setLastMessageTokenUsage(
-              chunk.metadata.prompt_tokens,
-              chunk.metadata.completion_tokens,
-              (chunk.metadata.prompt_tokens ?? 0) + (chunk.metadata.completion_tokens ?? 0),
-            )
+            const promptTokens = chunk.metadata.prompt_tokens
+            const completionTokens = chunk.metadata.completion_tokens
+            const totalTokens = promptTokens + completionTokens
+            setLastMessageTokenUsageForConversation(convId, promptTokens, completionTokens, totalTokens)
+            // 同时给对应会话的最后一条用户消息标记输入 token 数
+            const allMsgs = state.messagesMap[convId] || []
+            const lastUserMsgIdx = [...allMsgs].reverse().findIndex((m) => m.role === 'user')
+            if (lastUserMsgIdx >= 0) {
+              const actualIdx = allMsgs.length - 1 - lastUserMsgIdx
+              useChatStore.setState((s) => {
+                const convMsgs = [...(s.messagesMap[convId] || [])]
+                convMsgs[actualIdx] = { ...convMsgs[actualIdx], totalTokens: promptTokens }
+                const newMap = { ...s.messagesMap, [convId]: convMsgs }
+                if (s.currentConversationId === convId) {
+                  return { messages: convMsgs, messagesMap: newMap }
+                }
+                return { messagesMap: newMap }
+              })
+            }
           }
           break
         case 'error':
-          setLastMessageError(chunk.payload)
-          setStreaming(false)
+          setStreamingForConversation(convId, false)
+          setLastMessageErrorForConversation(convId, chunk.payload)
           break
       }
     })
-    const removeCompliance = EventsOn('chat:stream:compliance', (payload: { level: string; warning: string; notice: string; replacedTerms?: string[]; matchedRule?: string }) => {
+
+    const removeCompliance = EventsOn('chat:stream:compliance', (payload: {
+      conversation_id?: string
+      level: string
+      warning: string
+      notice: string
+      replacedTerms?: string[]
+      matchedRule?: string
+    }) => {
+      const convId = payload.conversation_id
+      if (!convId) {
+        console.warn('[stream:compliance] 缺少 conversation_id，忽略')
+        return
+      }
       const warnings: string[] = [payload.level]
       if (payload.warning) warnings.push(`WARNING:${payload.warning}`)
       if (payload.notice) warnings.push(`NOTICE:${payload.notice}`)
       if (payload.matchedRule) warnings.push(`RULE:${payload.matchedRule}`)
-      setLastMessageWarnings(warnings)
+      setLastMessageWarningsForConversation(convId, warnings)
       if (payload.replacedTerms && payload.replacedTerms.length > 0) {
-        setLastMessageReplacedTerms(payload.replacedTerms)
+        setLastMessageReplacedTermsForConversation(convId, payload.replacedTerms)
       }
     })
+
     const removeTitle = EventsOn('chat:title:generated', (payload: { conv_id: string; title: string }) => {
+      // 标题生成按 conv_id 处理，始终更新对应会话（不受会话切换影响）
       updateConversation(payload.conv_id, { title: payload.title })
     })
 
@@ -106,11 +181,46 @@ export function useConversation() {
       removeCompliance()
       removeTitle()
     }
-  }, [appendToLastMessage, setLastMessageError, setLastMessageWarnings, setStreaming, currentConversationId, updateConversation])
+  }, [appendToLastMessageForConversation, setLastMessageErrorForConversation, setLastMessageWarningsForConversation, setLastMessageReplacedTermsForConversation, setLastMessageTokenUsageForConversation, setStreamingForConversation, updateConversation])
+
+  // 启动时加载历史会话列表
+  useEffect(() => {
+    if (hydratedRef.current) return
+    hydratedRef.current = true
+
+    const loadConversations = async () => {
+      try {
+        const convs = await wails.getConversations()
+        const active: Conversation[] = []
+        const deleted: Conversation[] = []
+        convs.forEach((c) => {
+          const conv: Conversation = {
+            id: c.id,
+            title: c.title,
+            updatedAt: parseInt(c.updated_at, 10),
+            unread: 0,
+          }
+          if (c.deleted_at) {
+            conv.deletedAt = parseInt(c.deleted_at, 10)
+            deleted.push(conv)
+          } else {
+            active.push(conv)
+          }
+        })
+        setConversations(active)
+        setDeletedConversations(deleted)
+        console.log('[hydrate] 加载历史会话:', active.length, '条，回收站:', deleted.length, '条')
+      } catch (e) {
+        console.error('[hydrate] 加载历史会话失败:', e)
+      }
+    }
+
+    loadConversations()
+  }, [wails, setConversations])
 
   const sendMessage = useCallback(
     async (content: string) => {
-      if (!content.trim() || isStreaming) return
+      if (!content.trim()) return
 
       setError(null)
 
@@ -131,6 +241,12 @@ export function useConversation() {
           setError('创建会话失败')
           return
         }
+      }
+
+      // 检查当前会话是否已在流式中（按会话隔离）
+      if (streamingIds.has(convId)) {
+        console.log('[sendMessage] 会话', convId, '正在流式中，忽略重复发送')
+        return
       }
 
       // 紧急症状检测（独立于 AI 回复流程）
@@ -154,12 +270,15 @@ export function useConversation() {
         // B 级：仍添加用户消息，但阻断后续 LLM 调用直到用户确认
       }
 
-      // 添加用户消息
+      // 添加用户消息（同时估算 token 数用于前端展示）
+      const trimmedContent = content.trim()
+      const estimatedTokens = estimateTokens(trimmedContent)
       const userMsg = {
         id: `msg_${Date.now()}_user`,
         role: 'user' as const,
-        content: content.trim(),
+        content: trimmedContent,
         timestamp: Date.now(),
+        totalTokens: estimatedTokens,
       }
       addMessage(userMsg)
 
@@ -183,7 +302,7 @@ export function useConversation() {
         timestamp: Date.now(),
         isStreaming: true,
       })
-      setStreaming(true)
+      setStreamingForConversation(convId, true)
 
       // 活跃 Provider 不可用时的回退逻辑
       let targetProvider = activeProvider
@@ -221,20 +340,21 @@ export function useConversation() {
         }
       } catch (e) {
         setLastMessageError(String(e))
-        setStreaming(false)
+        setStreamingForConversation(convId, false)
         setError(String(e))
       }
     },
     [
       currentConversationId,
-      isStreaming,
+      streamingIds,
       messages,
       emergencyWarningAcknowledged,
       addMessage,
-      appendToLastMessage,
+      appendToLastMessageForConversation,
       setLastMessageError,
-      setLastMessageTokenUsage,
-      setStreaming,
+      setLastMessageErrorForConversation,
+      setLastMessageTokenUsageForConversation,
+      setStreamingForConversation,
       setConversationId,
       addConversation,
       selectConversation,
@@ -263,14 +383,51 @@ export function useConversation() {
         // 移除后续的 assistant 消息（错误/中断的那条）
         const msgIndex = messages.findIndex((m) => m.id === messageId)
         if (msgIndex >= 0) {
-          useChatStore.setState((state) => ({
-            messages: state.messages.slice(0, msgIndex),
-          }))
+          useChatStore.setState((state) => {
+            const convId = state.currentConversationId
+            const newMsgs = state.messages.slice(0, msgIndex)
+            if (!convId) return { messages: newMsgs }
+            return {
+              messages: newMsgs,
+              messagesMap: { ...state.messagesMap, [convId]: newMsgs },
+            }
+          })
         }
         await sendMessage(lastUserMsg.content)
       }
     },
     [messages, sendMessage]
+  )
+
+  // 加载指定会话的历史消息
+  const loadConversationMessages = useCallback(
+    async (convId: string) => {
+      pendingLoadRef.current = convId
+      try {
+        const rawMsgs = await wails.getConversationMessages(convId)
+        console.log('[loadConversationMessages]', convId, '加载到', rawMsgs.length, '条消息')
+        // 竞态保护：若用户已切换到其他会话，丢弃旧结果
+        if (useChatStore.getState().currentConversationId !== convId) {
+          console.log('[loadConversationMessages] 会话已切换，丢弃结果:', convId)
+          return
+        }
+        const loadedMessages = rawMsgs.map((m) => ({
+          id: m.id,
+          role: m.role as 'user' | 'assistant' | 'system',
+          content: m.content,
+          timestamp: parseInt(m.timestamp, 10),
+        }))
+        setMessages(loadedMessages)
+      } catch (e) {
+        console.error('加载历史消息失败:', e)
+        setError('加载历史消息失败')
+      } finally {
+        if (pendingLoadRef.current === convId) {
+          pendingLoadRef.current = null
+        }
+      }
+    },
+    [wails, setMessages]
   )
 
   const startNewConversation = useCallback(async () => {
@@ -326,6 +483,7 @@ export function useConversation() {
     stopGeneration,
     retryMessage,
     startNewConversation,
+    loadConversationMessages,
     handleEmergencyContinue,
     handleEmergencyNotEmergency,
     handleAcknowledgeWarning,
