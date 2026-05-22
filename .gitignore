@@ -68,3 +68,4 @@ coverage.html
 /medmemo/
 /web/test-report/
 /.github/FUNDING.yml
+/build/package/AppDir/usr/bin/MedMemo

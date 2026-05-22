@@ -31,10 +31,12 @@ import "C"
 import (
 	"context"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/signal"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
@@ -51,8 +53,33 @@ import (
 //go:embed all:web/dist
 var assets embed.FS
 
+//go:embed wails.json
+var wailsConfig embed.FS
+
 // version 由构建时通过 -ldflags -X main.version={{.Version}} 注入。
 var version = "dev"
+
+func init() {
+	if version != "dev" {
+		return
+	}
+	data, err := wailsConfig.ReadFile("wails.json")
+	if err != nil {
+		return
+	}
+	var cfg struct {
+		Info struct {
+			ProductVersion string `json:"productVersion"`
+		} `json:"info"`
+	}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return
+	}
+	v := strings.TrimSpace(cfg.Info.ProductVersion)
+	if v != "" {
+		version = "v" + v
+	}
+}
 
 // buildTime 由构建时通过 -ldflags -X main.buildTime={{.Date}} 注入。
 var buildTime = ""
