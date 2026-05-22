@@ -17,6 +17,7 @@ type Conversation struct {
 	Model     models.ProviderType
 	CreatedAt time.Time
 	UpdatedAt time.Time
+	DeletedAt *time.Time // 软删除时间戳，nil 表示未删除
 }
 
 // Message 是会话中的单条消息，封装 models.Message 并附加领域元数据。

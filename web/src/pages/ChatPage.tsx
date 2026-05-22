@@ -25,6 +25,7 @@ export function ChatPage() {
     stopGeneration,
     retryMessage,
     startNewConversation,
+    loadConversationMessages,
     handleEmergencyContinue,
     handleEmergencyNotEmergency,
     handleAcknowledgeWarning,
@@ -102,10 +103,11 @@ export function ChatPage() {
   }, [lastDeleted])
 
   const handleSelectConversation = useCallback(
-    (id: string) => {
+    async (id: string) => {
       selectConversation(id)
+      await loadConversationMessages(id)
     },
-    [selectConversation]
+    [selectConversation, loadConversationMessages]
   )
 
   const handleNewConversation = useCallback(async () => {

@@ -97,5 +97,22 @@
       "fetch 超时保护完善（clearTimeout 移至 finally 覆盖完整链路）",
       "API Key 输入框添加 maxLength={1024} 防止超长粘贴卡顿"
     ]
+  },
+  {
+    "version": "v1.0.1",
+    "title": "稳定性修复与自动发布",
+    "features": [
+      "build-and-release 自动发布工作流",
+      "GitHubUpdater.FetchLatest 单元测试"
+    ],
+    "fixes": [
+      "AI 429 速率限制 nil 显示 bug 修复，添加指数退避重试",
+      "L3 合规层不再错误阻塞流式输出",
+      "GitHub 仓库外部链接打开方式修复",
+      "相对数据目录解析为绝对路径",
+      "AppImage 打包后资源加载路径修复",
+      "自动更新器双通道发布资源命名对齐",
+      "CI 发布流程修复（GitHub Actions、immutable-release 资源上传）"
+    ]
   }
 ]
