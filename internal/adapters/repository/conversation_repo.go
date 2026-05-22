@@ -112,7 +112,10 @@ func (r *ConversationRepoSQLite) Delete(ctx context.Context, id models.Conversat
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction for soft delete: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		// 事务已提交后 Rollback 会返回 sql.ErrTxDone，属正常情况
+		_ = tx.Rollback()
+	}()
 
 	_, err = tx.ExecContext(ctx, `
 		UPDATE conversations SET deleted_at = ? WHERE id = ?
