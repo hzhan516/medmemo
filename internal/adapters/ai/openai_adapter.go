@@ -42,9 +42,15 @@ func NewOpenAIAdapter(apiKey, baseURL, model string) *OpenAIAdapter {
 
 // chatRequest OpenAI Chat Completion 请求体。
 type chatRequest struct {
-	Model    string    `json:"model"`
-	Messages []message `json:"messages"`
-	Stream   bool      `json:"stream,omitempty"`
+	Model         string         `json:"model"`
+	Messages      []message      `json:"messages"`
+	Stream        bool           `json:"stream,omitempty"`
+	StreamOptions *streamOptions `json:"stream_options,omitempty"`
+}
+
+// streamOptions 控制流式输出的附加选项。
+type streamOptions struct {
+	IncludeUsage bool `json:"include_usage"`
 }
 
 // chatResponse OpenAI Chat Completion 非流式响应。
@@ -100,17 +106,65 @@ func toMessages(msgs []models.Message) []message {
 func mapAPIError(statusCode int, apiErr *apiError) error {
 	switch statusCode {
 	case http.StatusUnauthorized:
-		return fmt.Errorf("API 认证失败，请检查 API Key 是否有效: %w", apiErr)
+		if apiErr != nil {
+			return fmt.Errorf("API 认证失败，请检查 API Key 是否有效: %w", apiErr)
+		}
+		return fmt.Errorf("API 认证失败，请检查 API Key 是否有效")
 	case http.StatusTooManyRequests:
-		return fmt.Errorf("请求过于频繁，请稍后再试: %w", apiErr)
+		if apiErr != nil {
+			return fmt.Errorf("请求过于频繁，请稍后再试: %w", apiErr)
+		}
+		return fmt.Errorf("请求过于频繁，请稍后再试")
 	case http.StatusNotFound:
-		return fmt.Errorf("请求的模型不存在或接口地址错误: %w", apiErr)
+		if apiErr != nil {
+			return fmt.Errorf("请求的模型不存在或接口地址错误: %w", apiErr)
+		}
+		return fmt.Errorf("请求的模型不存在或接口地址错误")
 	default:
 		if apiErr != nil {
 			return fmt.Errorf("API 调用失败: %w", apiErr)
 		}
 		return fmt.Errorf("API 调用失败，HTTP %d", statusCode)
 	}
+}
+
+// doWithRetry 执行 HTTP 请求，遇到 429 速率限制时指数退避重试。
+// 最多重试 3 次，退避间隔：500ms、1s、2s（最大 5s）。
+func (a *OpenAIAdapter) doWithRetry(req *http.Request) (*http.Response, error) {
+	const maxRetries = 3
+	var lastErr error
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 {
+			// 重试前重置请求体
+			if req.GetBody != nil {
+				req.Body, _ = req.GetBody()
+			} else if req.Body != nil {
+				if seeker, ok := req.Body.(io.Seeker); ok {
+					_, _ = seeker.Seek(0, io.SeekStart)
+				}
+			}
+			delay := min(500*time.Millisecond*(1<<(attempt-1)), 5*time.Second)
+			select {
+			case <-time.After(delay):
+			case <-req.Context().Done():
+				return nil, fmt.Errorf("retry cancelled: %w", req.Context().Err())
+			}
+		}
+
+		resp, err := a.client.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to send request: %w", err)
+		}
+
+		if resp.StatusCode == http.StatusTooManyRequests {
+			lastErr = fmt.Errorf("attempt %d: rate limited (HTTP 429)", attempt+1)
+			_ = resp.Body.Close()
+			continue
+		}
+
+		return resp, nil
+	}
+	return nil, fmt.Errorf("请求过于频繁，请稍后再试 (HTTP 429, 已重试 %d 次): %w", maxRetries, lastErr)
 }
 
 // Chat 发送非流式对话请求。
@@ -134,7 +188,7 @@ func (a *OpenAIAdapter) Chat(ctx context.Context, messages []models.Message) (st
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+a.apiKey)
 
-	resp, err := a.client.Do(req)
+	resp, err := a.doWithRetry(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to send chat request: %w", err)
 	}
@@ -167,9 +221,10 @@ func (a *OpenAIAdapter) Chat(ctx context.Context, messages []models.Message) (st
 // 流式结束后返回 TokenUsage（若响应中未包含 usage 则为 nil）。
 func (a *OpenAIAdapter) StreamChat(ctx context.Context, messages []models.Message, callback func(chunk string)) (*models.TokenUsage, error) {
 	reqBody := chatRequest{
-		Model:    a.model,
-		Messages: toMessages(messages),
-		Stream:   true,
+		Model:         a.model,
+		Messages:      toMessages(messages),
+		Stream:        true,
+		StreamOptions: &streamOptions{IncludeUsage: true},
 	}
 
 	jsonBody, err := json.Marshal(reqBody)
@@ -186,7 +241,7 @@ func (a *OpenAIAdapter) StreamChat(ctx context.Context, messages []models.Messag
 	req.Header.Set("Authorization", "Bearer "+a.apiKey)
 	req.Header.Set("Accept", "text/event-stream")
 
-	resp, err := a.client.Do(req)
+	resp, err := a.doWithRetry(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send stream request: %w", err)
 	}

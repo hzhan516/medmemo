@@ -72,18 +72,31 @@ func TestOpenAIAdapter_Chat_Unauthorized(t *testing.T) {
 	assert.True(t, errors.As(err, &apiErr))
 }
 
-// TestOpenAIAdapter_Chat_RateLimit 验证 429 速率限制错误映射。
+// TestOpenAIAdapter_Chat_RateLimit 验证 429 速率限制时重试后成功。
 func TestOpenAIAdapter_Chat_RateLimit(t *testing.T) {
+	var callCount int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		if callCount == 1 {
+			resp := chatResponse{
+				Error: &apiError{
+					Message: "Rate limit exceeded",
+					Type:    "rate_limit_error",
+					Code:    "rate_limit_exceeded",
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusTooManyRequests)
+			_ = json.NewEncoder(w).Encode(resp)
+			return
+		}
 		resp := chatResponse{
-			Error: &apiError{
-				Message: "Rate limit exceeded",
-				Type:    "rate_limit_error",
-				Code:    "rate_limit_exceeded",
+			Choices: []choice{
+				{Message: message{Role: "assistant", Content: "hi"}, FinishReason: "stop"},
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusTooManyRequests)
+		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
@@ -91,9 +104,10 @@ func TestOpenAIAdapter_Chat_RateLimit(t *testing.T) {
 	adapter := NewOpenAIAdapter("test-key", server.URL, "test-model")
 	msgs := []models.Message{{Role: models.RoleUser, Content: "test"}}
 
-	_, err := adapter.Chat(context.Background(), msgs)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "请求过于频繁")
+	reply, err := adapter.Chat(context.Background(), msgs)
+	require.NoError(t, err)
+	assert.Equal(t, "hi", reply)
+	assert.Equal(t, 2, callCount)
 }
 
 // TestOpenAIAdapter_Chat_ModelNotFound 验证 404 模型不存在错误映射。
@@ -277,6 +291,71 @@ func TestOpenAIAdapter_CheckAvailability_NetworkError(t *testing.T) {
 	ok, reason := adapter.CheckAvailability(context.Background())
 	assert.False(t, ok)
 	assert.Contains(t, reason, "connection failed")
+}
+
+// TestOpenAIAdapter_Chat_RateLimitNoErrorBody 验证 429 无错误体时不包含 <nil>。
+func TestOpenAIAdapter_Chat_RateLimitNoErrorBody(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer server.Close()
+
+	adapter := NewOpenAIAdapter("test-key", server.URL, "test-model")
+	adapter.client.Timeout = 5 * time.Second
+	msgs := []models.Message{{Role: models.RoleUser, Content: "test"}}
+
+	_, err := adapter.Chat(context.Background(), msgs)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "请求过于频繁")
+	assert.NotContains(t, err.Error(), "<nil>")
+}
+
+// TestOpenAIAdapter_StreamChat_RateLimitRetry 验证 429 时重试后成功。
+func TestOpenAIAdapter_StreamChat_RateLimitRetry(t *testing.T) {
+	var callCount int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		if callCount < 3 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"ok\"},\"finish_reason\":\"stop\"}]}\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	defer server.Close()
+
+	adapter := NewOpenAIAdapter("test-key", server.URL, "test-model")
+	msgs := []models.Message{{Role: models.RoleUser, Content: "test"}}
+
+	var collected strings.Builder
+	usage, err := adapter.StreamChat(context.Background(), msgs, func(chunk string) {
+		collected.WriteString(chunk)
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 3, callCount)
+	assert.Equal(t, "ok", collected.String())
+	assert.Nil(t, usage)
+}
+
+// TestOpenAIAdapter_Chat_RateLimitRetryExhausted 验证 429 重试耗尽后返回错误。
+func TestOpenAIAdapter_Chat_RateLimitRetryExhausted(t *testing.T) {
+	var callCount int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer server.Close()
+
+	adapter := NewOpenAIAdapter("test-key", server.URL, "test-model")
+	adapter.client.Timeout = 5 * time.Second
+	msgs := []models.Message{{Role: models.RoleUser, Content: "test"}}
+
+	_, err := adapter.Chat(context.Background(), msgs)
+	require.Error(t, err)
+	assert.Equal(t, 4, callCount) // 初始 1 次 + 3 次重试
+	assert.Contains(t, err.Error(), "请求过于频繁")
 }
 
 // TestOpenAIAdapter_Chat_EmptyChoices 验证空 choices 时返回错误。

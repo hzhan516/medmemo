@@ -136,6 +136,7 @@ export namespace main {
 	    id: string;
 	    title: string;
 	    updated_at: string;
+	    deleted_at?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ConversationSummary(source);
@@ -146,6 +147,7 @@ export namespace main {
 	        this.id = source["id"];
 	        this.title = source["title"];
 	        this.updated_at = source["updated_at"];
+	        this.deleted_at = source["deleted_at"];
 	    }
 	}
 	export class DeviceFlowStartResponse {
@@ -254,6 +256,24 @@ export namespace main {
 	        this.latency_ms = source["latency_ms"];
 	        this.checked_at = source["checked_at"];
 	        this.error = source["error"];
+	    }
+	}
+	export class MessageResponse {
+	    id: string;
+	    role: string;
+	    content: string;
+	    timestamp: string;
+
+	    static createFrom(source: any = {}) {
+	        return new MessageResponse(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.role = source["role"];
+	        this.content = source["content"];
+	        this.timestamp = source["timestamp"];
 	    }
 	}
 	export class ModelInfo {
