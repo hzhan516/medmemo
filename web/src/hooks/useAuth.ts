@@ -5,6 +5,10 @@ import type { AuthDetectResult } from '@/types/provider'
 
 export type AuthPanel = 'cli_token' | 'oauth_device' | 'api_key' | 'service_account' | 'local'
 
+interface OllamaPullProgressEvent {
+  progress?: string
+}
+
 interface AuthState {
   detecting: boolean
   detected: boolean
@@ -41,12 +45,12 @@ export function useAuth() {
   const stateRef = useRef(state)
   stateRef.current = state
 
-  // 监听 OAuth 事件
+  // 监听 OAuth 事件 —— 仅在组件挂载时注册一次；setState 引用稳定，不放入依赖数组
   useEffect(() => {
-    const unSuccess = EventsOn('oauth:success', (_data: any) => {
+    const unSuccess = EventsOn('oauth:success', () => {
       setState((prev) => ({ ...prev, oauthDeviceCode: null }))
     })
-    const unError = EventsOn('oauth:error', (_data: any) => {
+    const unError = EventsOn('oauth:error', () => {
       setState((prev) => ({ ...prev, oauthDeviceCode: null }))
     })
     return () => {
@@ -55,36 +59,36 @@ export function useAuth() {
     }
   }, [])
 
-  // 监听 Ollama 事件
+  // 监听 Ollama 事件 —— 仅在组件挂载时注册一次；setState 引用稳定，不放入依赖数组
   useEffect(() => {
-    const unProgress = EventsOn('ollama:pull_progress', (data: any) => {
+    const unProgress = EventsOn('ollama:pull_progress', (data: OllamaPullProgressEvent) => {
       setState((prev) => ({
         ...prev,
         ollamaPulling: true,
         ollamaPullProgress: data.progress || '',
       }))
     })
-    const unDone = EventsOn('ollama:pull_done', (_data: any) => {
+    const unDone = EventsOn('ollama:pull_done', () => {
       setState((prev) => ({
         ...prev,
         ollamaPulling: false,
         ollamaPullProgress: '下载完成',
       }))
     })
-    const unError = EventsOn('ollama:pull_error', (_data: any) => {
+    const unError = EventsOn('ollama:pull_error', () => {
       setState((prev) => ({
         ...prev,
         ollamaPulling: false,
         ollamaPullProgress: '下载失败',
       }))
     })
-    const unServerStarting = EventsOn('ollama:server_starting', (_data: any) => {
+    const unServerStarting = EventsOn('ollama:server_starting', () => {
       setState((prev) => ({ ...prev, ollamaServerStarting: true }))
     })
-    const unServerReady = EventsOn('ollama:server_ready', (_data: any) => {
+    const unServerReady = EventsOn('ollama:server_ready', () => {
       setState((prev) => ({ ...prev, ollamaServerStarting: false }))
     })
-    const unServerError = EventsOn('ollama:server_error', (_data: any) => {
+    const unServerError = EventsOn('ollama:server_error', () => {
       setState((prev) => ({ ...prev, ollamaServerStarting: false }))
     })
 

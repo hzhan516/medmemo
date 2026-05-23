@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, lazy, Suspense } from 'react'
+import { logger } from '@/lib/logger'
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { ChatPage } from '@/pages/ChatPage'
@@ -22,6 +23,7 @@ import { useUpdate } from '@/hooks/useUpdate'
 import { useVersionNotes } from '@/hooks/useVersionNotes'
 import { useOnboardingStore } from '@/stores/onboardingStore'
 import { useProviderStore } from '@/stores/providerStore'
+import { useChatStore } from '@/stores/chatStore'
 
 
 /**
@@ -31,10 +33,13 @@ import { useProviderStore } from '@/stores/providerStore'
 function App() {
   useTheme()
 
-  const { getDisclaimerStatus, acceptDisclaimer, declineDisclaimer, listProviders, createProvider } = useWails()
+  const { getDisclaimerStatus, acceptDisclaimer, declineDisclaimer, listProviders, createProvider, getConversations, getConversationMessages } = useWails()
 
   const setProviders = useProviderStore((s) => s.setProviders)
   const initialized = useProviderStore((s) => s.initialized)
+  const setConversations = useChatStore((s) => s.setConversations)
+  const selectConversation = useChatStore((s) => s.selectConversation)
+  const setMessages = useChatStore((s) => s.setMessages)
   const [disclaimerRequired, setDisclaimerRequired] = useState<boolean | null>(null)
   const [disclaimerText, setDisclaimerText] = useState('')
   const [disclaimerVersion, setDisclaimerVersion] = useState('')
@@ -102,31 +107,72 @@ function App() {
                       auth_params: p.authParams || p.auth_params || {},
                     } as unknown as Parameters<typeof createProvider>[0])
                   } catch (migrateErr) {
-                    console.error('Failed to migrate provider:', p.id, migrateErr)
+                    logger.error('Failed to migrate provider:', p.id, migrateErr)
                   }
                 }
                 // 迁移完成后重新加载
                 const reloaded = await listProviders()
                 if (!cancelled) setProviders(reloaded)
                 localStorage.removeItem('medmemo-providers')
-                console.warn(`已迁移 ${migrated.length} 个 Provider 到后端存储`)
+                logger.warn(`已迁移 ${migrated.length} 个 Provider 到后端存储`)
                 return
               }
             } catch (e) {
-              console.error('Failed to parse old provider storage:', e)
+              logger.error('Failed to parse old provider storage:', e)
             }
           }
         }
 
         setProviders(backendProviders)
       } catch (err) {
-        console.error('Failed to load providers:', err)
+        logger.error('Failed to load providers:', err)
       }
     })()
     return () => {
       cancelled = true
     }
   }, [initialized, listProviders, createProvider, setProviders])
+
+  // 应用启动时加载对话列表（从后端 SQLite）
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const backendConversations = await getConversations()
+        if (cancelled) return
+        const mapped = backendConversations.map((conv) => ({
+          id: conv.id,
+          title: conv.title,
+          updatedAt: Number(conv.updated_at),
+          unread: 0,
+        }))
+        setConversations(mapped)
+        // 自动选中最近更新的对话并加载消息
+        if (mapped.length > 0) {
+          const latest = mapped[0]
+          selectConversation(latest.id)
+          try {
+            const msgResponse = await getConversationMessages(latest.id)
+            if (cancelled) return
+            const mappedMessages = msgResponse.map((msg) => ({
+              id: msg.id,
+              role: msg.role as 'user' | 'assistant' | 'system',
+              content: msg.content,
+              timestamp: Number(msg.timestamp),
+            }))
+            setMessages(mappedMessages)
+          } catch (msgErr) {
+            logger.error('Failed to load conversation messages:', msgErr)
+          }
+        }
+      } catch (err) {
+        logger.error('Failed to load conversations:', err)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [getConversations, getConversationMessages, setConversations, selectConversation, setMessages])
 
   // 应用启动时检测免责声明状态
   useEffect(() => {
@@ -139,7 +185,7 @@ function App() {
         setDisclaimerVersion(status.version)
       })
       .catch((err) => {
-        console.error('Failed to get disclaimer status:', err)
+        logger.error('Failed to get disclaimer status:', err)
         // 若后端查询失败，保守策略：强制展示免责声明
         if (!cancelled) {
           setDisclaimerRequired(true)
@@ -156,7 +202,7 @@ function App() {
         await acceptDisclaimer(version)
         setDisclaimerRequired(false)
       } catch (err) {
-        console.error('Failed to accept disclaimer:', err)
+        logger.error('Failed to accept disclaimer:', err)
       }
     },
     [acceptDisclaimer]
@@ -166,7 +212,7 @@ function App() {
     try {
       await declineDisclaimer()
     } catch (err) {
-      console.error('Failed to decline disclaimer:', err)
+      logger.error('Failed to decline disclaimer:', err)
     }
   }, [declineDisclaimer])
 

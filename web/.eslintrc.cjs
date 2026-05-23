@@ -11,19 +11,21 @@ module.exports = {
   plugins: ['react-refresh'],
   rules: {
     'react-refresh/only-export-components': 'off',
-    'react-hooks/exhaustive-deps': 'off',
-    '@typescript-eslint/no-explicit-any': 'off',
+    'react-hooks/exhaustive-deps': 'warn',
+    '@typescript-eslint/no-explicit-any': 'warn',
     '@typescript-eslint/no-unused-vars': [
       'error',
       { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
     ],
-    '@typescript-eslint/ban-ts-comment': 'off',
+    '@typescript-eslint/ban-ts-comment': 'warn',
   },
   overrides: [
     {
       files: ['**/*.test.ts', '**/*.test.tsx', '**/test/**/*.ts', '**/test/**/*.tsx'],
       rules: {
         '@typescript-eslint/no-unused-vars': 'off',
+        '@typescript-eslint/no-explicit-any': 'off',
+        '@typescript-eslint/ban-ts-comment': 'off',
       },
     },
   ],

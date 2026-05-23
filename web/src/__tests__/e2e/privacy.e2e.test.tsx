@@ -28,11 +28,12 @@ function renderSettingsPage() {
 describe('E2E: 隐私与设置流程', () => {
   it('输入含 PII 消息 → 验证脱敏占位符替换', async () => {
     setMockHandlers({
-      SendMessageStream: async () => {
+      SendMessageStream: async (req: { conversation_id: string }) => {
+        const convId = req.conversation_id
         await new Promise((r) => setTimeout(r, 150))
-        EventsEmit('chat:stream_chunk', { type: 'start', payload: '' })
-        EventsEmit('chat:stream_chunk', { type: 'content', payload: '用户 <NAME_1> 的联系方式是 <PHONE_1>，身份证 <ID_1>。' })
-        EventsEmit('chat:stream_chunk', { type: 'done', payload: '' })
+        EventsEmit('chat:stream_chunk', { type: 'start', payload: '', metadata: { conversation_id: convId } })
+        EventsEmit('chat:stream_chunk', { type: 'content', payload: '用户 <NAME_1> 的联系方式是 <PHONE_1>，身份证 <ID_1>。', metadata: { conversation_id: convId } })
+        EventsEmit('chat:stream_chunk', { type: 'done', payload: '', metadata: { conversation_id: convId } })
       },
     })
 

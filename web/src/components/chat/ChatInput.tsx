@@ -55,7 +55,7 @@ export function ChatInput({
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
     }
-  }, [content, isLoading, onSend, onNewConversation])
+  }, [content, isLoading, onSend, onNewConversation, blockedByEmergency])
 
   const handleStop = useCallback(() => {
     if (!isLoading || !onStop) return

@@ -18,20 +18,25 @@ import type {
 
 // --- 内部状态 ---
 
-const listeners = new Map<string, Set<(data: any) => void>>()
+interface MockProvider {
+  id: string
+  [key: string]: unknown
+}
+
+const listeners = new Map<string, Set<(...data: unknown[]) => void>>()
 
 // 默认的 mock 处理器，可被测试覆盖
-let mockHandlers: Record<string, (...args: any[]) => any> = {}
+let mockHandlers: Record<string, (...args: unknown[]) => unknown> = {}
 
 // 会话内存存储（用于模拟数据库持久化）
 let mockConversations: ConversationSummary[] = []
 let mockMessages: Record<string, Array<{ role: string; content: string }>> = {}
 let mockNextConvId = 1
-let mockProviders: any[] = []
+let mockProviders: MockProvider[] = []
 
 // --- Events 模拟 ---
 
-export function EventsOn(eventName: string, callback: (...data: any) => void): () => void {
+export function EventsOn(eventName: string, callback: (...data: unknown[]) => void): () => void {
   if (!listeners.has(eventName)) {
     listeners.set(eventName, new Set())
   }
@@ -45,15 +50,15 @@ export function EventsOff(eventName: string): void {
   listeners.delete(eventName)
 }
 
-export function EventsEmit(eventName: string, ...data: any): void {
+export function EventsEmit(eventName: string, ...data: unknown[]): void {
   const cbs = listeners.get(eventName)
   if (cbs) {
     cbs.forEach((cb) => cb(...data))
   }
 }
 
-export function EventsOnce(eventName: string, callback: (...data: any) => void): () => void {
-  const wrapped = (...data: any[]) => {
+export function EventsOnce(eventName: string, callback: (...data: unknown[]) => void): () => void {
+  const wrapped = (...data: unknown[]) => {
     callback(...data)
     listeners.get(eventName)?.delete(wrapped)
   }
@@ -86,30 +91,41 @@ const defaultSendMessage = async (_req: SendMessageRequest): Promise<SendMessage
 const defaultSendMessageStream = async (req: SendMessageRequest): Promise<void> => {
   // 延迟确保前端 EventsOn listener 在 React effect 周期后已稳定注册
   await new Promise((r) => setTimeout(r, 150))
+  const convId = req.conversation_id
   const chunks = ['这是', '一个', '模拟的', '流式', '回复。']
   let accumulated = ''
-  EventsEmit('chat:stream_chunk', { type: 'start', payload: '', metadata: { model: 'kimi-lite' } })
+  EventsEmit('chat:stream_chunk', { type: 'start', payload: '', metadata: { conversation_id: convId, model: 'kimi-lite' } })
   for (const chunk of chunks) {
     accumulated += chunk
     await new Promise((r) => setTimeout(r, 10))
-    EventsEmit('chat:stream_chunk', { type: 'content', payload: chunk })
+    EventsEmit('chat:stream_chunk', { type: 'content', payload: chunk, metadata: { conversation_id: convId } })
   }
-  if (!mockMessages[req.conversation_id]) {
-    mockMessages[req.conversation_id] = []
+  if (!mockMessages[convId]) {
+    mockMessages[convId] = []
   }
-  mockMessages[req.conversation_id].push(
+  mockMessages[convId].push(
     { role: 'user', content: req.messages[req.messages.length - 1]?.content ?? '' },
     { role: 'assistant', content: accumulated }
   )
-  EventsEmit('chat:stream_chunk', { type: 'done', payload: '', metadata: { latency_ms: 50 } })
+  EventsEmit('chat:stream_chunk', { type: 'done', payload: '', metadata: { conversation_id: convId, latency_ms: 50 } })
 }
 
 const defaultStopGeneration = async (): Promise<void> => {
+  // mock 中无法确定具体会话，由测试覆盖提供 conversation_id
   EventsEmit('chat:stream_chunk', { type: 'error', payload: '生成已中断' })
 }
 
 const defaultGetConversations = async (): Promise<ConversationSummary[]> => {
   return [...mockConversations]
+}
+
+const defaultGetConversationMessages = async (convID: string): Promise<Array<{ id: string; role: string; content: string; timestamp: string }>> => {
+  return (mockMessages[convID] ?? []).map((msg, idx) => ({
+    id: `msg_${convID}_${idx}`,
+    role: msg.role,
+    content: msg.content,
+    timestamp: String(Date.now()),
+  }))
 }
 
 const defaultCreateConversation = async (): Promise<string> => {
@@ -200,7 +216,7 @@ const defaultHasAPIKey = async (_provider: string): Promise<boolean> => {
   return false
 }
 
-const defaultTestAPIKey = async (_provider: string, _apiKey: string, _apiHost: string): Promise<any> => {
+const defaultTestAPIKey = async (_provider: string, _apiKey: string, _apiHost: string): Promise<unknown> => {
   return { valid: true, message: '验证通过', models: ['gpt-4o'] }
 }
 
@@ -208,7 +224,7 @@ const defaultGetVersion = async (): Promise<string> => {
   return '0.5.0-test'
 }
 
-const defaultCollectSystemInfo = async (): Promise<any> => {
+const defaultCollectSystemInfo = async (): Promise<unknown> => {
   return {
     app_version: '0.5.0-test',
     go_version: 'go1.26.0',
@@ -220,7 +236,7 @@ const defaultCollectSystemInfo = async (): Promise<any> => {
 
 const defaultOpenGitHubIssue = async (_userDescription: string, _errorLog: string): Promise<void> => {}
 
-const defaultDetectAuthMethods = async (): Promise<any> => {
+const defaultDetectAuthMethods = async (): Promise<unknown> => {
   return {
     results: [
       { method: 'cli_token', available: false, connected: false, tier: 1, detail: '未检测到 CLI 工具' },
@@ -234,7 +250,7 @@ const defaultDetectAuthMethods = async (): Promise<any> => {
   }
 }
 
-const defaultDetectCLIToken = async (_providerType: string): Promise<any> => {
+const defaultDetectCLIToken = async (_providerType: string): Promise<unknown> => {
   return {
     provider_type: _providerType,
     detected: false,
@@ -243,7 +259,7 @@ const defaultDetectCLIToken = async (_providerType: string): Promise<any> => {
   }
 }
 
-const defaultBuildCLIProvider = async (_providerType: string, _modelID: string): Promise<any> => {
+const defaultBuildCLIProvider = async (_providerType: string, _modelID: string): Promise<unknown> => {
   return {
     id: `${_providerType}_cli_${Date.now()}`,
     templateId: _providerType,
@@ -264,7 +280,7 @@ const defaultBuildCLIProvider = async (_providerType: string, _modelID: string):
   }
 }
 
-const defaultStartOAuthDeviceFlow = async (_providerType: string): Promise<any> => {
+const defaultStartOAuthDeviceFlow = async (_providerType: string): Promise<unknown> => {
   return {
     user_code: 'ABCD-EFGH',
     verification_uri: 'https://platform.moonshot.cn/device',
@@ -276,7 +292,7 @@ const defaultStartOAuthDeviceFlow = async (_providerType: string): Promise<any> 
 
 const defaultCancelOAuthDeviceFlow = async (_deviceCode: string): Promise<void> => {}
 
-const defaultGetOAuthDeviceFlowStatus = async (_deviceCode: string): Promise<any> => {
+const defaultGetOAuthDeviceFlowStatus = async (_deviceCode: string): Promise<unknown> => {
   return {
     device_code: _deviceCode,
     provider_type: 'kimi',
@@ -284,7 +300,7 @@ const defaultGetOAuthDeviceFlowStatus = async (_deviceCode: string): Promise<any
   }
 }
 
-const defaultGetOAuthDeviceFlowProviders = async (): Promise<any[]> => {
+const defaultGetOAuthDeviceFlowProviders = async (): Promise<unknown[]> => {
   return [
     { provider_type: 'kimi', name: 'Kimi (Moonshot)', available: true, configured: true, detail: '已配置 OAuth client_id' },
     { provider_type: 'gemini', name: 'Gemini (Google)', available: true, configured: true, detail: '已配置 OAuth client_id' },
@@ -293,7 +309,7 @@ const defaultGetOAuthDeviceFlowProviders = async (): Promise<any[]> => {
   ]
 }
 
-const defaultParseServiceAccountJSON = async (_jsonStr: string): Promise<any> => {
+const defaultParseServiceAccountJSON = async (_jsonStr: string): Promise<unknown> => {
   return {
     project_id: 'mock-project-123',
     client_email: 'mock@mock-project-123.iam.gserviceaccount.com',
@@ -301,7 +317,7 @@ const defaultParseServiceAccountJSON = async (_jsonStr: string): Promise<any> =>
   }
 }
 
-const defaultDetectOllama = async (): Promise<any> => {
+const defaultDetectOllama = async (): Promise<unknown> => {
   return {
     installed: false,
     running: false,
@@ -312,7 +328,7 @@ const defaultDetectOllama = async (): Promise<any> => {
 
 const defaultStartOllamaServer = async (): Promise<void> => {}
 const defaultPullOllamaModel = async (_modelName: string): Promise<void> => {}
-const defaultEnsureOllamaAndSmolLM2 = async (): Promise<any> => {
+const defaultEnsureOllamaAndSmolLM2 = async (): Promise<unknown> => {
   return {
     installed: false,
     running: false,
@@ -320,7 +336,7 @@ const defaultEnsureOllamaAndSmolLM2 = async (): Promise<any> => {
     install_guide: 'curl -fsSL https://ollama.com/install.sh | sh',
   }
 }
-const defaultCreateOllamaProvider = async (): Promise<any> => {
+const defaultCreateOllamaProvider = async (): Promise<unknown> => {
   return {
     id: `ollama_local_${Date.now()}`,
     templateId: 'ollama',
@@ -341,14 +357,14 @@ const defaultCreateOllamaProvider = async (): Promise<any> => {
   }
 }
 
-const defaultCreateProvider = async (config: any): Promise<void> => {
-  mockProviders.push(config)
+const defaultCreateProvider = async (config: Record<string, unknown>): Promise<void> => {
+  mockProviders.push(config as MockProvider)
 }
 
-const defaultUpdateProvider = async (config: any): Promise<void> => {
+const defaultUpdateProvider = async (config: Record<string, unknown>): Promise<void> => {
   const idx = mockProviders.findIndex((p) => p.id === config.id)
   if (idx >= 0) {
-    mockProviders[idx] = config
+    mockProviders[idx] = config as MockProvider
   }
 }
 
@@ -356,15 +372,15 @@ const defaultDeleteProvider = async (id: string): Promise<void> => {
   mockProviders = mockProviders.filter((p) => p.id !== id)
 }
 
-const defaultListProviders = async (): Promise<any[]> => {
+const defaultListProviders = async (): Promise<MockProvider[]> => {
   return [...mockProviders]
 }
 
-const defaultGetProviderHealthStatus = async (_providerID: string): Promise<any> => {
+const defaultGetProviderHealthStatus = async (_providerID: string): Promise<unknown> => {
   return { provider_id: _providerID, status: 'green', latency_ms: 120, checked_at: new Date().toISOString() }
 }
 
-const defaultCheckProviderHealth = async (_providerID: string): Promise<any> => {
+const defaultCheckProviderHealth = async (_providerID: string): Promise<unknown> => {
   return { provider_id: _providerID, status: 'green', latency_ms: 120, checked_at: new Date().toISOString() }
 }
 
@@ -374,7 +390,7 @@ const defaultDisableAutoRefresh = async (_providerID: string): Promise<void> => 
 
 const defaultEnableAutoRefresh = async (_providerID: string): Promise<void> => {}
 
-const defaultGetVersionNotes = async (): Promise<any[]> => {
+const defaultGetVersionNotes = async (): Promise<unknown[]> => {
   return []
 }
 
@@ -385,6 +401,7 @@ export const MockWailsApp = {
   SendMessageStream: (req: SendMessageRequest) => resolveHandler('SendMessageStream', defaultSendMessageStream)(req),
   StopGeneration: () => resolveHandler('StopGeneration', defaultStopGeneration)(),
   GetConversations: () => resolveHandler('GetConversations', defaultGetConversations)(),
+  GetConversationMessages: (convID: string) => resolveHandler('GetConversationMessages', defaultGetConversationMessages)(convID),
   CreateConversation: () => resolveHandler('CreateConversation', defaultCreateConversation)(),
   GetModels: () => resolveHandler('GetModels', defaultGetModels)(),
   CheckEmergency: (text: string) => resolveHandler('CheckEmergency', defaultCheckEmergency)(text),
@@ -420,8 +437,8 @@ export const MockWailsApp = {
   CollectSystemInfo: () => resolveHandler('CollectSystemInfo', defaultCollectSystemInfo)(),
   OpenGitHubIssue: (arg1: string, arg2: string) => resolveHandler('OpenGitHubIssue', defaultOpenGitHubIssue)(arg1, arg2),
   CreateOllamaProvider: () => resolveHandler('CreateOllamaProvider', defaultCreateOllamaProvider)(),
-  CreateProvider: (config: any) => resolveHandler('CreateProvider', defaultCreateProvider)(config),
-  UpdateProvider: (config: any) => resolveHandler('UpdateProvider', defaultUpdateProvider)(config),
+  CreateProvider: (config: Record<string, unknown>) => resolveHandler('CreateProvider', defaultCreateProvider)(config),
+  UpdateProvider: (config: Record<string, unknown>) => resolveHandler('UpdateProvider', defaultUpdateProvider)(config),
   DeleteProvider: (id: string) => resolveHandler('DeleteProvider', defaultDeleteProvider)(id),
   ListProviders: () => resolveHandler('ListProviders', defaultListProviders)(),
   GetProviderHealthStatus: (id: string) => resolveHandler('GetProviderHealthStatus', defaultGetProviderHealthStatus)(id),
@@ -437,7 +454,7 @@ export const MockWailsApp = {
 /**
  * 设置自定义 mock 处理器，覆盖默认行为。
  */
-export function setMockHandlers(handlers: Record<string, (...args: any[]) => any>): void {
+export function setMockHandlers(handlers: Record<string, (...args: unknown[]) => unknown>): void {
   mockHandlers = { ...handlers }
 }
 
@@ -472,16 +489,16 @@ export function getMockMessages(convId: string): Array<{ role: string; content: 
  */
 export async function mockStreamResponse(
   chunks: string[],
-  options: { delayMs?: number; emitEnd?: boolean } = {}
+  options: { delayMs?: number; emitEnd?: boolean; conversationId?: string } = {}
 ): Promise<void> {
-  const { delayMs = 10, emitEnd = true } = options
-  EventsEmit('chat:stream_chunk', { type: 'start', payload: '' })
+  const { delayMs = 10, emitEnd = true, conversationId = '' } = options
+  EventsEmit('chat:stream_chunk', { type: 'start', payload: '', metadata: { conversation_id: conversationId } })
   for (const chunk of chunks) {
     await new Promise((r) => setTimeout(r, delayMs))
-    EventsEmit('chat:stream_chunk', { type: 'content', payload: chunk })
+    EventsEmit('chat:stream_chunk', { type: 'content', payload: chunk, metadata: { conversation_id: conversationId } })
   }
   if (emitEnd) {
-    EventsEmit('chat:stream_chunk', { type: 'done', payload: '' })
+    EventsEmit('chat:stream_chunk', { type: 'done', payload: '', metadata: { conversation_id: conversationId } })
   }
 }
 
@@ -523,13 +540,13 @@ export function mockDesensitizedResponse(): SendMessageResponse {
  * 在测试 setup 中调用一次即可。
  */
 export function registerGlobalWailsMock(): void {
-  // @ts-ignore
+  // @ts-expect-error window.go 为测试模拟全局对象
   if (typeof window !== 'undefined') {
-    // @ts-ignore
+    // @ts-expect-error window.go 为测试模拟全局对象
     window.go = window.go ?? {}
-    // @ts-ignore
+    // @ts-expect-error window.go.main 为测试模拟全局对象
     window.go.main = window.go.main ?? {}
-    // @ts-ignore
+    // @ts-expect-error window.go.main.WailsApp 为测试模拟全局对象
     window.go.main.WailsApp = MockWailsApp
   }
 }
