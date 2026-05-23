@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { logger } from '@/lib/logger'
 import {
   MessageSquare,
   MoreHorizontal,
@@ -82,7 +83,7 @@ export function SidebarItem({
       await wails.deleteConversation(id)
       softDeleteConversation(id)
     } catch (e) {
-      console.error('删除会话失败:', e)
+      logger.error('删除会话失败:', e)
     }
     setShowMenu(false)
   }
@@ -93,7 +94,7 @@ export function SidebarItem({
       await wails.hardDeleteConversation(id)
       permanentlyDeleteConversation(id)
     } catch (e) {
-      console.error('永久删除会话失败:', e)
+      logger.error('永久删除会话失败:', e)
     }
     setShowMenu(false)
   }
@@ -104,7 +105,7 @@ export function SidebarItem({
       await wails.restoreConversation(id)
       restoreConversation(id)
     } catch (e) {
-      console.error('恢复会话失败:', e)
+      logger.error('恢复会话失败:', e)
     }
     setShowMenu(false)
   }
@@ -124,6 +125,8 @@ export function SidebarItem({
 
   return (
     <div
+      role="button"
+      tabIndex={0}
       className={`
         group flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-pointer
         transition-colors text-sm
@@ -133,6 +136,12 @@ export function SidebarItem({
         }
       `}
       onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onClick?.()
+        }
+      }}
     >
       <MessageSquare size={16} className="shrink-0 mt-0.5" />
 

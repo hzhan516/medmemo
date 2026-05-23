@@ -12,9 +12,10 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 // OpenAICompatibleClient 通用 OpenAI-compatible HTTP 客户端。
@@ -146,11 +147,12 @@ func (c *OpenAICompatibleClient) readSSE(ctx context.Context, resp *http.Respons
 			ch <- StreamChunk{Type: ChunkDone, Payload: ""}
 			return
 		}
-		if !bytes.HasPrefix([]byte(line), []byte("data: ")) {
+		const sseDataPrefix = "data: "
+		if len(line) <= len(sseDataPrefix) || !strings.HasPrefix(line, sseDataPrefix) {
 			continue
 		}
 
-		data := line[len("data: "):]
+		data := line[len(sseDataPrefix):]
 		var chunk sseChunk
 		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
 			// 忽略无法解析的行
@@ -275,8 +277,7 @@ func isNetworkError(err error) bool {
 	if err == nil {
 		return false
 	}
-	var urlErr *url.Error
-	if errors.As(err, &urlErr) {
+	if urlErr, ok := errors.AsType[*url.Error](err); ok {
 		if urlErr.Timeout() {
 			return true
 		}

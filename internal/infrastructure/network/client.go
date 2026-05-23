@@ -98,7 +98,7 @@ func (c *HTTPClient) DoWithRetry(ctx context.Context, req *http.Request) (*http.
 		// 5xx 服务端错误 和 429 速率限制 可重试；其他 4xx 客户端错误不可重试
 		if resp.StatusCode >= 500 || resp.StatusCode == http.StatusTooManyRequests {
 			lastErr = fmt.Errorf("attempt %d received server error: HTTP %d", attempt+1, resp.StatusCode)
-			_ = resp.Body.Close()
+			_ = resp.Body.Close() // 5xx/429 重试前关闭响应体，关闭错误不影响重试逻辑
 			continue
 		}
 

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 // Conversation 表示一次用户与 AI 的对话会话。
@@ -31,7 +31,7 @@ type Message struct {
 
 // NewConversation 创建新会话，标题默认为空，由第一条消息自动生成。
 func NewConversation(model models.ProviderType) *Conversation {
-	now := time.Now()
+	now := time.Now().UTC()
 	return &Conversation{
 		ID:        models.ConversationID(fmt.Sprintf("conv_%d", now.UnixNano())),
 		Messages:  make([]Message, 0),
@@ -47,13 +47,13 @@ func (c *Conversation) AddMessage(role models.Role, content string) {
 		ID:        fmt.Sprintf("msg_%d", time.Now().UnixNano()),
 		Role:      role,
 		Content:   content,
-		Timestamp: time.Now(),
+		Timestamp: time.Now().UTC(),
 	})
-	c.UpdatedAt = time.Now()
+	c.UpdatedAt = time.Now().UTC()
 }
 
 // Rename 重命名会话标题。
 func (c *Conversation) Rename(title string) {
 	c.Title = title
-	c.UpdatedAt = time.Now()
+	c.UpdatedAt = time.Now().UTC()
 }

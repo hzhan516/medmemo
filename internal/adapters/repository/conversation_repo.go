@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/medmemo/medmemo/internal/domain/entity"
-	"github.com/medmemo/medmemo/internal/infrastructure/database"
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/internal/infrastructure/database"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 // ConversationRepoSQLite 基于 SQLite 的会话仓库实现。

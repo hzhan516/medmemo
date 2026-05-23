@@ -26,34 +26,34 @@ linters-settings:
         files:
           - "**/internal/domain/**/*.go"
         deny:
-          - pkg: "github.com/medmemo/medmemo/internal/**/*"
+          - pkg: "github.com/hzhan516/medmemo/internal/**/*"
             desc: "domain layer must not depend on any internal sub-packages"
-          - pkg: "github.com/medmemo/medmemo/pkg/desensitizer"
+          - pkg: "github.com/hzhan516/medmemo/pkg/desensitizer"
             desc: "domain layer must not depend on pkg/desensitizer"
         allow:
           - "$gostd"
-          - "github.com/medmemo/medmemo/pkg/models"
+          - "github.com/hzhan516/medmemo/pkg/models"
 
       # DEP-002: application 层不能直接调用 adapter 实现
       app_no_adapter:
         files:
           - "**/internal/application/**/*.go"
         deny:
-          - pkg: "github.com/medmemo/medmemo/internal/adapters/**/*"
+          - pkg: "github.com/hzhan516/medmemo/internal/adapters/**/*"
             desc: "application layer must not depend on adapter implementations"
-          - pkg: "github.com/medmemo/medmemo/internal/infrastructure/**/*"
+          - pkg: "github.com/hzhan516/medmemo/internal/infrastructure/**/*"
             desc: "application layer must not depend on infrastructure"
         allow:
           - "$gostd"
-          - "github.com/medmemo/medmemo/internal/domain/**/*"
-          - "github.com/medmemo/medmemo/pkg/models"
+          - "github.com/hzhan516/medmemo/internal/domain/**/*"
+          - "github.com/hzhan516/medmemo/pkg/models"
 
       # DEP-003: adapter 层不能反向依赖 cmd
       adapter_no_cmd:
         files:
           - "**/internal/adapters/**/*.go"
         deny:
-          - pkg: "github.com/medmemo/medmemo/cmd/**/*"
+          - pkg: "github.com/hzhan516/medmemo/cmd/**/*"
             desc: "adapter layer must not depend on cmd package"
 
       # DEP-005: infrastructure 层不知道业务存在
@@ -61,11 +61,11 @@ linters-settings:
         files:
           - "**/internal/infrastructure/**/*.go"
         deny:
-          - pkg: "github.com/medmemo/medmemo/internal/domain/**/*"
+          - pkg: "github.com/hzhan516/medmemo/internal/domain/**/*"
             desc: "infrastructure layer must not depend on domain"
-          - pkg: "github.com/medmemo/medmemo/internal/application/**/*"
+          - pkg: "github.com/hzhan516/medmemo/internal/application/**/*"
             desc: "infrastructure layer must not depend on application"
-          - pkg: "github.com/medmemo/medmemo/internal/adapters/**/*"
+          - pkg: "github.com/hzhan516/medmemo/internal/adapters/**/*"
             desc: "infrastructure layer must not depend on adapters"
 
   revive:

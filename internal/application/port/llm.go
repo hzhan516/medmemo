@@ -5,7 +5,7 @@ package port
 import (
 	"context"
 
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 // LLMClient 定义大语言模型客户端接口。

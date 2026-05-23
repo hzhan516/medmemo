@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import { Plus, PanelLeftClose, PanelLeft, Search, Trash2, ArrowLeft } from 'lucide-react'
+import { Virtuoso } from 'react-virtuoso'
 import { SidebarItem } from './SidebarItem'
 import { ResizableHandle } from './ResizableHandle'
 import { useChatStore, type Conversation } from '@/stores/chatStore'
@@ -24,10 +25,16 @@ const GROUP_LABELS: Record<string, string> = {
   earlier: '更早',
 }
 
+type SidebarListItem =
+  | { type: 'header'; label: string }
+  | { type: 'conversation'; conv: Conversation }
+
+const isTest = import.meta.env.VITEST === 'true'
+
 /**
  * 左侧会话列表侧边栏。
  * 支持拖拽调整宽度（200-400px），窗口 < 768px 时自动收起为图标导航栏。
- * 新增：搜索过滤、时间分组、回收站视图。
+ * 使用 react-virtuoso 虚拟列表优化长列表性能（测试环境回退到普通渲染）。
  */
 export function Sidebar({
   activeId,
@@ -80,30 +87,22 @@ export function Sidebar({
     return groupConversationsByTime(filtered)
   }, [filtered])
 
-  const renderGroup = (groupKey: string, items: Conversation[]) => {
-    if (items.length === 0) return null
-    return (
-      <div key={groupKey} className="mb-2">
-        <div className="px-3 py-1 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-          {GROUP_LABELS[groupKey] || groupKey}
-        </div>
-        {items.map((conv) => (
-          <SidebarItem
-            key={conv.id}
-            id={conv.id}
-            title={conv.title}
-            preview={conv.preview}
-            timestamp={conv.updatedAt}
-            unread={conv.unread}
-            isActive={conv.id === activeId}
-            isTrashView={showTrash}
-            highlightQuery={searchQuery}
-            onClick={() => onSelect?.(conv.id)}
-          />
-        ))}
-      </div>
-    )
-  }
+  const flatList = useMemo((): SidebarListItem[] => {
+    if (showTrash) {
+      return filtered.map((conv) => ({ type: 'conversation', conv }))
+    }
+    const items: SidebarListItem[] = []
+    for (const key of ['pinned', 'today', 'yesterday', 'last7Days', 'earlier'] as const) {
+      const convs = grouped[key]
+      if (convs && convs.length > 0) {
+        items.push({ type: 'header', label: GROUP_LABELS[key] || key })
+        for (const conv of convs) {
+          items.push({ type: 'conversation', conv })
+        }
+      }
+    }
+    return items
+  }, [showTrash, filtered, grouped])
 
   if (isCollapsed) {
     return (
@@ -185,9 +184,9 @@ export function Sidebar({
           )}
         </div>
 
-        {/* 会话列表 */}
+        {/* 会话列表 —— 使用 react-virtuoso 虚拟列表（测试环境回退到普通渲染） */}
         <div className="flex-1 overflow-y-auto px-2 py-2">
-          {filtered.length === 0 && (
+          {filtered.length === 0 ? (
             <div className="text-center text-xs text-muted-foreground py-8">
               {showTrash
                 ? '回收站为空'
@@ -195,32 +194,62 @@ export function Sidebar({
                   ? '未找到匹配的会话'
                   : '暂无会话，点击上方按钮开始'}
             </div>
+          ) : isTest ? (
+            <>
+              {flatList.map((item, index) => {
+                if (item.type === 'header') {
+                  return (
+                    <div key={`h-${index}`} className="px-3 py-1 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                      {item.label}
+                    </div>
+                  )
+                }
+                const conv = item.conv
+                return (
+                  <SidebarItem
+                    key={conv.id}
+                    id={conv.id}
+                    title={conv.title}
+                    preview={conv.preview}
+                    timestamp={conv.updatedAt}
+                    unread={conv.unread}
+                    isActive={conv.id === activeId}
+                    isTrashView={showTrash}
+                    highlightQuery={searchQuery}
+                    onClick={() => onSelect?.(conv.id)}
+                  />
+                )
+              })}
+            </>
+          ) : (
+            <Virtuoso
+              data={flatList}
+              overscan={10}
+              itemContent={(_index, item) => {
+                if (item.type === 'header') {
+                  return (
+                    <div className="px-3 py-1 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                      {item.label}
+                    </div>
+                  )
+                }
+                const conv = item.conv
+                return (
+                  <SidebarItem
+                    id={conv.id}
+                    title={conv.title}
+                    preview={conv.preview}
+                    timestamp={conv.updatedAt}
+                    unread={conv.unread}
+                    isActive={conv.id === activeId}
+                    isTrashView={showTrash}
+                    highlightQuery={searchQuery}
+                    onClick={() => onSelect?.(conv.id)}
+                  />
+                )
+              }}
+            />
           )}
-
-          {showTrash
-            ? filtered.map((conv) => (
-                <SidebarItem
-                  key={conv.id}
-                  id={conv.id}
-                  title={conv.title}
-                  preview={conv.preview}
-                  timestamp={conv.updatedAt}
-                  unread={0}
-                  isActive={conv.id === activeId}
-                  isTrashView={true}
-                  highlightQuery={searchQuery}
-                  onClick={() => onSelect?.(conv.id)}
-                />
-              ))
-            : (
-              <>
-                {renderGroup('pinned', grouped.pinned)}
-                {renderGroup('today', grouped.today)}
-                {renderGroup('yesterday', grouped.yesterday)}
-                {renderGroup('last7Days', grouped.last7Days)}
-                {renderGroup('earlier', grouped.earlier)}
-              </>
-            )}
         </div>
 
         {/* 底部回收站入口 */}

@@ -134,3 +134,91 @@ func TestVerifyModelSHA256_Valid(t *testing.T) {
 	err := verifyModelSHA256(modelFile)
 	assert.NoError(t, err)
 }
+
+// TestDefaultModelPath 验证默认模型路径拼接。
+func TestDefaultModelPath(t *testing.T) {
+	path := DefaultModelPath("/opt/medmemo")
+	assert.Equal(t, filepath.Join("/opt/medmemo", "models", "distilbert-ner"), path)
+}
+
+// TestNewEngine_ModelDirExistsButModelMissing 验证模型目录存在但 model.onnx 缺失时降级。
+func TestNewEngine_ModelDirExistsButModelMissing(t *testing.T) {
+	tmpDir := t.TempDir()
+	// 创建虚拟动态库文件
+	libDir := filepath.Join(tmpDir, "lib", "linux")
+	require.NoError(t, os.MkdirAll(libDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(libDir, "libonnxruntime.so"), []byte("dummy"), 0644))
+
+	// 创建模型目录（空）
+	modelDir := filepath.Join(tmpDir, "models", "distilbert-ner")
+	require.NoError(t, os.MkdirAll(modelDir, 0755))
+
+	engine, err := NewEngine(EngineConfig{ResourceDir: tmpDir, ModelPath: modelDir})
+	require.NoError(t, err)
+	assert.NotNil(t, engine)
+	assert.False(t, engine.IsAvailable(), "model.onnx 缺失时应降级")
+	assert.NoError(t, engine.Close())
+}
+
+// TestNewEngine_SHA256Mismatch 验证 SHA-256 校验失败时降级。
+func TestNewEngine_SHA256Mismatch(t *testing.T) {
+	tmpDir := t.TempDir()
+	// 创建虚拟动态库文件
+	libDir := filepath.Join(tmpDir, "lib", "linux")
+	require.NoError(t, os.MkdirAll(libDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(libDir, "libonnxruntime.so"), []byte("dummy"), 0644))
+
+	// 创建模型目录 + model.onnx + 错误的 .sha256
+	modelDir := filepath.Join(tmpDir, "models", "distilbert-ner")
+	require.NoError(t, os.MkdirAll(modelDir, 0755))
+	modelFile := filepath.Join(modelDir, "model.onnx")
+	require.NoError(t, os.WriteFile(modelFile, []byte("dummy model"), 0644))
+	require.NoError(t, os.WriteFile(modelFile+".sha256", []byte("0000000000000000000000000000000000000000000000000000000000000000"), 0644))
+
+	engine, err := NewEngine(EngineConfig{ResourceDir: tmpDir, ModelPath: modelDir})
+	require.NoError(t, err)
+	assert.NotNil(t, engine)
+	assert.False(t, engine.IsAvailable(), "SHA-256 不匹配时应降级")
+	assert.NoError(t, engine.Close())
+}
+
+// TestVerifyModelSHA256_ModelFileMissing 验证 .sha256 存在但 model.onnx 不存在时返回错误。
+func TestVerifyModelSHA256_ModelFileMissing(t *testing.T) {
+	tmpDir := t.TempDir()
+	modelFile := filepath.Join(tmpDir, "model.onnx")
+	shaFile := modelFile + ".sha256"
+	// 创建 .sha256 文件但不创建 model.onnx
+	require.NoError(t, os.WriteFile(shaFile, []byte("dummyhash"), 0644))
+
+	err := verifyModelSHA256(modelFile)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "read model file failed")
+}
+
+// TestVerifyModelSHA256_HashFileReadError 验证 .sha256 文件存在但不可读时返回错误。
+func TestVerifyModelSHA256_HashFileReadError(t *testing.T) {
+	tmpDir := t.TempDir()
+	modelFile := filepath.Join(tmpDir, "model.onnx")
+	shaFile := modelFile + ".sha256"
+	require.NoError(t, os.WriteFile(modelFile, []byte("dummy"), 0644))
+	// 创建不可读的 .sha256 目录（导致 ReadFile 失败）
+	require.NoError(t, os.Mkdir(shaFile, 0755))
+
+	err := verifyModelSHA256(modelFile)
+	require.Error(t, err)
+}
+
+// TestNewNERWorker 验证 Worker 构造函数。
+func TestNewNERWorker(t *testing.T) {
+	w := NewNERWorker(1, nil)
+	assert.NotNil(t, w)
+	assert.Equal(t, 1, w.id)
+}
+
+// TestEngine_Close_NilSession 验证无 session 时 Close 安全退出。
+func TestEngine_Close_NilSession(t *testing.T) {
+	// 使用无模型的引擎，session 为 nil
+	engine, err := NewEngine(EngineConfig{ResourceDir: "resources", ModelPath: "resources/models/nonexistent"})
+	require.NoError(t, err)
+	assert.NoError(t, engine.Close())
+}

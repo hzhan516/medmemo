@@ -73,13 +73,15 @@ describe('E2E: 合规流程', () => {
 
   it('输入高风险内容 → 验证 L1 阻断级拦截 → 替换为标准提示语', async () => {
     setMockHandlers({
-      SendMessageStream: async () => {
+      SendMessageStream: async (req: { conversation_id: string }) => {
+        const convId = req.conversation_id
         // 模拟后端返回 L1 阻断级内容后，通过 compliance event 推送
-        EventsEmit('chat:stream_chunk', { type: 'start', payload: '' })
-        EventsEmit('chat:stream_chunk', { type: 'content', payload: '我无法提供医疗诊断或治疗建议。' })
-        EventsEmit('chat:stream_chunk', { type: 'done', payload: '' })
+        EventsEmit('chat:stream_chunk', { type: 'start', payload: '', metadata: { conversation_id: convId } })
+        EventsEmit('chat:stream_chunk', { type: 'content', payload: '我无法提供医疗诊断或治疗建议。', metadata: { conversation_id: convId } })
+        EventsEmit('chat:stream_chunk', { type: 'done', payload: '', metadata: { conversation_id: convId } })
         // 流式结束后推送合规事件
         EventsEmit('chat:stream:compliance', {
+          conversation_id: convId,
           level: 'L1_BLOCK',
           warning: '',
           notice: '',
@@ -107,11 +109,13 @@ describe('E2E: 合规流程', () => {
 
   it('输入 L2 警告级内容 → 验证橙色高亮警告框 + 免责声明追加', async () => {
     setMockHandlers({
-      SendMessageStream: async () => {
-        EventsEmit('chat:stream_chunk', { type: 'start', payload: '' })
-        EventsEmit('chat:stream_chunk', { type: 'content', payload: '这可能是某种健康问题的表现，建议咨询医生确认。' })
-        EventsEmit('chat:stream_chunk', { type: 'done', payload: '' })
+      SendMessageStream: async (req: { conversation_id: string }) => {
+        const convId = req.conversation_id
+        EventsEmit('chat:stream_chunk', { type: 'start', payload: '', metadata: { conversation_id: convId } })
+        EventsEmit('chat:stream_chunk', { type: 'content', payload: '这可能是某种健康问题的表现，建议咨询医生确认。', metadata: { conversation_id: convId } })
+        EventsEmit('chat:stream_chunk', { type: 'done', payload: '', metadata: { conversation_id: convId } })
         EventsEmit('chat:stream:compliance', {
+          conversation_id: convId,
           level: 'L2_WARNING',
           warning: '此内容涉及健康风险，仅供参考',
           notice: '',

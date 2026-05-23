@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/pkg/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -33,7 +33,7 @@ func TestLocalAdapter_Chat_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	adapter := NewLocalAdapter(server.URL, "llama3.1")
+	adapter := NewLocalAdapter(server.URL, "llama3.1", 30*time.Second)
 	msgs := []models.Message{{Role: models.RoleUser, Content: "Hi"}}
 
 	reply, err := adapter.Chat(context.Background(), msgs)
@@ -51,7 +51,7 @@ func TestLocalAdapter_Chat_Error(t *testing.T) {
 	}))
 	defer server.Close()
 
-	adapter := NewLocalAdapter(server.URL, "unknown-model")
+	adapter := NewLocalAdapter(server.URL, "unknown-model", 30*time.Second)
 	msgs := []models.Message{{Role: models.RoleUser, Content: "Hi"}}
 
 	_, err := adapter.Chat(context.Background(), msgs)
@@ -88,7 +88,7 @@ func TestLocalAdapter_StreamChat_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	adapter := NewLocalAdapter(server.URL, "llama3.1")
+	adapter := NewLocalAdapter(server.URL, "llama3.1", 30*time.Second)
 	msgs := []models.Message{{Role: models.RoleUser, Content: "Hi"}}
 
 	var builder strings.Builder
@@ -110,7 +110,7 @@ func TestLocalAdapter_CheckAvailability_Available(t *testing.T) {
 	}))
 	defer server.Close()
 
-	adapter := NewLocalAdapter(server.URL, "llama3.1")
+	adapter := NewLocalAdapter(server.URL, "llama3.1", 30*time.Second)
 	ok, msg := adapter.CheckAvailability(context.Background())
 	assert.True(t, ok)
 	assert.Equal(t, "available", msg)
@@ -122,7 +122,7 @@ func TestLocalAdapter_CheckAvailability_Unavailable(t *testing.T) {
 	}))
 	defer server.Close()
 
-	adapter := NewLocalAdapter(server.URL, "llama3.1")
+	adapter := NewLocalAdapter(server.URL, "llama3.1", 30*time.Second)
 	ok, msg := adapter.CheckAvailability(context.Background())
 	assert.False(t, ok)
 	assert.Contains(t, msg, "500")
@@ -130,7 +130,7 @@ func TestLocalAdapter_CheckAvailability_Unavailable(t *testing.T) {
 
 func TestLocalAdapter_CheckAvailability_NotReachable(t *testing.T) {
 	// 使用一个不可达的地址
-	adapter := NewLocalAdapter("http://localhost:59999", "llama3.1")
+	adapter := NewLocalAdapter("http://localhost:59999", "llama3.1", 30*time.Second)
 	ok, msg := adapter.CheckAvailability(context.Background())
 	assert.False(t, ok)
 	assert.Contains(t, msg, "not reachable")

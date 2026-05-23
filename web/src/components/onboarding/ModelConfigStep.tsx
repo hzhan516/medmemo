@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo } from 'react'
+import { logger } from '@/lib/logger'
 import { ProviderTemplateList } from '@/components/provider/ProviderTemplateList'
 import { ModelServiceDialog } from '@/components/provider/ModelServiceDialog'
 import { useProviderStore } from '@/stores/providerStore'
@@ -20,7 +21,7 @@ interface ModelConfigStepProps {
 export function ModelConfigStep({ onComplete, onBack, onSkip }: ModelConfigStepProps) {
   const { saveAPIKey, createProvider } = useWails()
   const showToast = useCallback((message: string) => {
-    console.error('[Toast]', message)
+    logger.error('[Toast]', message)
   }, [])
   const addProvider = useProviderStore((s) => s.addProvider)
   const providers = useProviderStore((s) => s.providers)
@@ -90,7 +91,7 @@ export function ModelConfigStep({ onComplete, onBack, onSkip }: ModelConfigStepP
         // 保存 API Key 到系统密钥环
         if (data.apiKey && templateId !== 'custom') {
           saveAPIKey(templateId, data.apiKey).catch((err: unknown) => {
-            console.error('Failed to save API key:', err)
+            logger.error('Failed to save API key:', err)
           })
         }
 

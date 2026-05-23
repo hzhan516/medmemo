@@ -22,7 +22,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 // Stage 定义脱敏流水线中的单个处理阶段接口。
@@ -104,7 +104,18 @@ func (e *RuleEngine) Process(text string) (models.DeidentifyResult, error) {
 		return result, nil
 	}
 
-	// 确定哪些规则需要执行 regexp
+	ruleActive := e.activateRules(text)
+	matches := e.collectMatches(text, ruleActive)
+	matches = deduplicateMatches(matches)
+	if len(matches) == 0 {
+		return result, nil
+	}
+
+	return e.replaceMatches(result, matches, text), nil
+}
+
+// activateRules 通过 AC 预筛选和数字扫描确定需要激活的规则。
+func (e *RuleEngine) activateRules(text string) map[string]bool {
 	ruleActive := make(map[string]bool)
 	for _, r := range e.rules {
 		// 无关键词的规则默认激活（后续通过数字扫描二次判断）
@@ -140,7 +151,11 @@ func (e *RuleEngine) Process(text string) (models.DeidentifyResult, error) {
 		}
 	}
 
-	// 收集所有 regexp 匹配（在原始文本上执行，避免占位符干扰）
+	return ruleActive
+}
+
+// collectMatches 在原始文本上执行所有激活规则的 regexp 匹配。
+func (e *RuleEngine) collectMatches(text string, ruleActive map[string]bool) []matchInfo {
 	var matches []matchInfo
 	for _, r := range e.rules {
 		if !ruleActive[r.config.Name] {
@@ -157,12 +172,15 @@ func (e *RuleEngine) Process(text string) (models.DeidentifyResult, error) {
 			}
 		}
 	}
+	return matches
+}
 
+// deduplicateMatches 按 start 升序排序并去除重叠匹配，保留先出现的。
+func deduplicateMatches(matches []matchInfo) []matchInfo {
 	if len(matches) == 0 {
-		return result, nil
+		return matches
 	}
 
-	// 去重：按 start 升序排序，重叠时保留先出现的（与顺序遍历行为一致）
 	sort.Slice(matches, func(i, j int) bool {
 		if matches[i].start == matches[j].start {
 			return matches[i].end < matches[j].end
@@ -183,9 +201,11 @@ func (e *RuleEngine) Process(text string) (models.DeidentifyResult, error) {
 			deduped = append(deduped, m)
 		}
 	}
-	matches = deduped
+	return deduped
+}
 
-	// 按 start 降序排序，从后向前替换（避免偏移量混乱）
+// replaceMatches 按 start 降序从后向前替换匹配文本，避免偏移量混乱。
+func (e *RuleEngine) replaceMatches(result models.DeidentifyResult, matches []matchInfo, text string) models.DeidentifyResult {
 	sort.Slice(matches, func(i, j int) bool {
 		return matches[i].start > matches[j].start
 	})
@@ -214,7 +234,7 @@ func (e *RuleEngine) Process(text string) (models.DeidentifyResult, error) {
 	}
 
 	result.SafeText = safeText
-	return result, nil
+	return result
 }
 
 // maxDigitSequence 返回文本中最长连续数字序列的长度。

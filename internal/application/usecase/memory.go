@@ -5,9 +5,9 @@ import (
 	"fmt"
 
 	"github.com/google/wire"
-	"github.com/medmemo/medmemo/internal/application/port"
-	"github.com/medmemo/medmemo/internal/domain/entity"
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/internal/application/port"
+	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 // MemoryRetriever 编排记忆检索与归档用例。

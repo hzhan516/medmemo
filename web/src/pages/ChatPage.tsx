@@ -105,7 +105,11 @@ export function ChatPage() {
   const handleSelectConversation = useCallback(
     async (id: string) => {
       selectConversation(id)
-      await loadConversationMessages(id)
+      // 若目标会话正在流式生成中，保留本地缓存（用户消息 + AI 占位 + thinking indicator）
+      const isTargetStreaming = useChatStore.getState().streamingIds.has(id)
+      if (!isTargetStreaming) {
+        await loadConversationMessages(id)
+      }
     },
     [selectConversation, loadConversationMessages]
   )

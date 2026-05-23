@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/medmemo/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/internal/domain/entity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

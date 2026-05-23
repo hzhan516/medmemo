@@ -3,8 +3,8 @@ package repository
 import (
 	"context"
 
-	"github.com/medmemo/medmemo/internal/domain/entity"
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 // FamilyRepository 定义家族成员与关系的持久化接口。

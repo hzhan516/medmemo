@@ -6,7 +6,7 @@ import (
 	"context"
 	"io"
 
-	"github.com/medmemo/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/internal/domain/entity"
 )
 
 // Updater 定义更新信息获取与资产下载的端口。

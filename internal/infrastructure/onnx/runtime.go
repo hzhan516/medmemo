@@ -179,7 +179,7 @@ func NewEngine(cfg EngineConfig) (*Engine, error) {
 	}
 	pipeline, err := hugot.NewPipeline[*pipelines.TokenClassificationPipeline](session, config)
 	if err != nil {
-		_ = session.Destroy()
+		_ = session.Destroy() // Pipeline 创建失败后销毁 session，销毁错误非关键（已降级为不可用）
 		e.session = nil
 		return e, nil // 降级：Pipeline 创建失败，不报错
 	}

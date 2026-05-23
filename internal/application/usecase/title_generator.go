@@ -9,8 +9,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/medmemo/medmemo/internal/application/port"
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/internal/application/port"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 // TitleGenerator 编排会话标题的自动生成。

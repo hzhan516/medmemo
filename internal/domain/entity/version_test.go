@@ -23,6 +23,7 @@ func TestHasUpdate(t *testing.T) {
 		{"invalid current", "abc", "v0.2.0", false, true},
 		{"invalid remote", "v0.1.0", "abc", false, true},
 		{"invalid format", "v1.a.0", "v1.b.0", false, true},
+		{"too many segments", "v1.0.0.0", "v1.0.0.1", false, true},
 		{"two segment current", "v1.0", "v1.0.1", true, false},
 		{"two segment remote", "v1.0.0", "v1.1", true, false},
 		{"one segment current", "v1", "v1.0.1", true, false},
@@ -112,6 +113,7 @@ func TestIsStableVersion(t *testing.T) {
 		{"with build metadata", "v1.0.0+build123", false},
 		{"dev version", "dev", false},
 		{"empty string", "", false},
+		{"mixed alphanumeric", "1.2.3a", false},
 	}
 
 	for _, tt := range tests {

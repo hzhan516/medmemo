@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 // CLIDetectResult CLI 检测结果，供前端展示。

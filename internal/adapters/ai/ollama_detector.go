@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 // defaultOllamaEndpoint Ollama 默认 HTTP 端点。

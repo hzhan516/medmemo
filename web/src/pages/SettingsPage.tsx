@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react'
+import { logger } from '@/lib/logger'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useOnboardingStore } from '@/stores/onboardingStore'
 import { useProviderStore } from '@/stores/providerStore'
@@ -60,7 +61,7 @@ export function SettingsPage() {
   const { saveAPIKey, createProvider, updateProvider: updateProviderApi, deleteProvider: deleteProviderApi, setUpdateSettings } = useWails()
   const showToast = useCallback((message: string) => {
     // 简单 toast：使用 alert 降级，后续可接入全局 toast 系统
-    console.error('[Toast]', message)
+    logger.error('[Toast]', message)
   }, [])
 
   /**
@@ -76,7 +77,7 @@ export function SettingsPage() {
           skip_version: '',
         })
       } catch (err) {
-        console.error('Failed to sync update channel to backend:', err)
+        logger.error('Failed to sync update channel to backend:', err)
       }
     },
     [setUpdateChannelStore, setUpdateSettings, autoCheckUpdate]
@@ -176,7 +177,7 @@ export function SettingsPage() {
           }
           if (data.apiKey && templateId !== 'custom') {
             saveAPIKey(templateId, data.apiKey).catch((err) => {
-              console.error('Failed to save API key:', err)
+              logger.error('Failed to save API key:', err)
             })
           }
           showToast('Provider 已添加')

@@ -4,7 +4,7 @@ package stream
 import (
 	"time"
 
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 // Broker 将原始流式 callback 包装为统一 StreamChunk 序列。

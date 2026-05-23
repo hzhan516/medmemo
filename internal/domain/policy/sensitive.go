@@ -3,7 +3,7 @@ package policy
 import (
 	"context"
 
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 // SensitiveDataPolicy 定义敏感数据分级与处理策略。

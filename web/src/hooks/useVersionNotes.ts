@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { logger } from '@/lib/logger'
 import { useWails } from './useWails'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { entity } from '@wails/go/models'
@@ -45,7 +46,7 @@ export function useVersionNotes() {
           setShouldShow(true)
         }
       } catch (err) {
-        console.error('Failed to load version notes:', err)
+        logger.error('Failed to load version notes:', err)
       } finally {
         if (!cancelled) setLoading(false)
       }

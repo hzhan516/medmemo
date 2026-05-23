@@ -91,17 +91,19 @@ describe('E2E: 对话流程', () => {
   it('发送消息 → 停止生成 → 验证保留已生成内容 + [用户中断] 标记', async () => {
     // 模拟一个缓慢的流式响应
     setMockHandlers({
-      SendMessageStream: async () => {
-        EventsEmit('chat:stream_chunk', { type: 'start', payload: '' })
-        EventsEmit('chat:stream_chunk', { type: 'content', payload: '这是' })
+      SendMessageStream: async (req: { conversation_id: string }) => {
+        const convId = req.conversation_id
+        EventsEmit('chat:stream_chunk', { type: 'start', payload: '', metadata: { conversation_id: convId } })
+        EventsEmit('chat:stream_chunk', { type: 'content', payload: '这是', metadata: { conversation_id: convId } })
         await new Promise((r) => setTimeout(r, 50))
-        EventsEmit('chat:stream_chunk', { type: 'content', payload: '被中断' })
+        EventsEmit('chat:stream_chunk', { type: 'content', payload: '被中断', metadata: { conversation_id: convId } })
         await new Promise((r) => setTimeout(r, 50))
-        EventsEmit('chat:stream_chunk', { type: 'content', payload: '的内容' })
+        EventsEmit('chat:stream_chunk', { type: 'content', payload: '的内容', metadata: { conversation_id: convId } })
         // 不发送 done 事件，模拟中断
       },
       StopGeneration: async () => {
-        EventsEmit('chat:stream_chunk', { type: 'error', payload: '生成已中断' })
+        const convId = useChatStore.getState().currentConversationId ?? ''
+        EventsEmit('chat:stream_chunk', { type: 'error', payload: '生成已中断', metadata: { conversation_id: convId } })
       },
     })
 
@@ -133,8 +135,9 @@ describe('E2E: 对话流程', () => {
 
   it('发送消息 → 网络异常 → 验证错误提示 + 重试按钮', async () => {
     setMockHandlers({
-      SendMessageStream: async () => {
-        EventsEmit('chat:stream_chunk', { type: 'error', payload: '网络连接超时，请检查网络后重试' })
+      SendMessageStream: async (req: { conversation_id: string }) => {
+        const convId = req.conversation_id
+        EventsEmit('chat:stream_chunk', { type: 'error', payload: '网络连接超时，请检查网络后重试', metadata: { conversation_id: convId } })
       },
     })
 

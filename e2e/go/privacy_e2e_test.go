@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/medmemo/medmemo/internal/adapters/repository"
-	"github.com/medmemo/medmemo/internal/application"
-	"github.com/medmemo/medmemo/internal/application/usecase"
-	"github.com/medmemo/medmemo/internal/domain/entity"
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/internal/adapters/repository"
+	"github.com/hzhan516/medmemo/internal/application"
+	"github.com/hzhan516/medmemo/internal/application/usecase"
+	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/pkg/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -51,7 +51,7 @@ func TestE2E_Privacy_DeidentifyPipeline(t *testing.T) {
 			},
 		},
 	}
-	chatOrch := usecase.NewChatOrchestrator(mockLLM, &mockMemoryRepository{}, &mockSensitiveDetector{}, checker, deid, nil)
+	chatOrch := usecase.NewChatOrchestrator(&mockLLMClientFactory{client: mockLLM}, newMockProviderStore(), &mockMemoryRepository{}, &mockSensitiveDetector{}, checker, deid, &mockMemoryQuerier{})
 
 	ctx := context.Background()
 	conv := entity.NewConversation(models.ProviderKimi)
@@ -65,6 +65,7 @@ func TestE2E_Privacy_DeidentifyPipeline(t *testing.T) {
 		ConversationID: conv.ID,
 		Messages:       []models.Message{{Role: models.RoleUser, Content: "我叫张三，电话 13800138000"}},
 		Model:          models.ProviderKimi,
+		ProviderID:     "test-kimi",
 	})
 	require.NoError(t, err)
 
@@ -87,7 +88,7 @@ func TestE2E_Privacy_DatabaseEncryption(t *testing.T) {
 	convRepo := repository.NewConversationRepoSQLite(conn)
 	msgRepo := repository.NewMessageRepoSQLite(conn)
 	checker := &mockComplianceChecker{interceptor: comp}
-	chatOrch := usecase.NewChatOrchestrator(&mockLLMClient{chatReply: "回复"}, &mockMemoryRepository{}, &mockSensitiveDetector{}, checker, nil, nil)
+	chatOrch := usecase.NewChatOrchestrator(&mockLLMClientFactory{client: &mockLLMClient{chatReply: "回复"}}, newMockProviderStore(), &mockMemoryRepository{}, &mockSensitiveDetector{}, checker, nil, &mockMemoryQuerier{})
 
 	ctx := context.Background()
 	conv := entity.NewConversation(models.ProviderKimi)
@@ -100,6 +101,7 @@ func TestE2E_Privacy_DatabaseEncryption(t *testing.T) {
 		ConversationID: conv.ID,
 		Messages:       []models.Message{{Role: models.RoleUser, Content: "敏感健康信息"}},
 		Model:          models.ProviderKimi,
+		ProviderID:     "test-kimi",
 	})
 	require.NoError(t, err)
 
@@ -150,7 +152,7 @@ func TestE2E_Privacy_DesensitizeFallback(t *testing.T) {
 
 	mockLLM := &mockLLMClient{chatReply: "收到"}
 	deid := &mockDeidentifier{err: assert.AnError}
-	chatOrch := usecase.NewChatOrchestrator(mockLLM, &mockMemoryRepository{}, &mockSensitiveDetector{}, checker, deid, nil)
+	chatOrch := usecase.NewChatOrchestrator(&mockLLMClientFactory{client: mockLLM}, newMockProviderStore(), &mockMemoryRepository{}, &mockSensitiveDetector{}, checker, deid, &mockMemoryQuerier{})
 
 	ctx := context.Background()
 	conv := entity.NewConversation(models.ProviderKimi)
@@ -163,6 +165,7 @@ func TestE2E_Privacy_DesensitizeFallback(t *testing.T) {
 		ConversationID: conv.ID,
 		Messages:       []models.Message{{Role: models.RoleUser, Content: "原始内容"}},
 		Model:          models.ProviderKimi,
+		ProviderID:     "test-kimi",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "收到", resp.Reply)

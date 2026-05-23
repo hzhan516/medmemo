@@ -88,7 +88,6 @@ export function CodeBlock({ className, children }: CodeBlockProps) {
           <code
             ref={codeRef}
             className={className || 'language-text'}
-            style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' }}
           >
             {children}
           </code>

@@ -37,7 +37,7 @@ export function ModelSwitcher() {
   // 首次加载时刷新健康状态
   useEffect(() => {
     refreshHealth()
-  }, [])
+  }, [refreshHealth])
 
   // 构建所有已启用的模型列表
   const enabledModels = useMemo((): ModelItem[] => {

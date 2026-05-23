@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/google/wire"
-	"github.com/medmemo/medmemo/internal/application/port"
-	"github.com/medmemo/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/internal/application/port"
+	"github.com/hzhan516/medmemo/internal/domain/entity"
 )
 
 // CheckInterval 默认更新检测间隔（24 小时）。

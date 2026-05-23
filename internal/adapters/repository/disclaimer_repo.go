@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/medmemo/medmemo/internal/domain/entity"
-	"github.com/medmemo/medmemo/internal/infrastructure/database"
+	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/internal/infrastructure/database"
 )
 
 // DisclaimerRepoSQLite 基于 SQLite 的免责声明同意记录仓库实现。

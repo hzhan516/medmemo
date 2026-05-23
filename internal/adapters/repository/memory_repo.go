@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/google/wire"
-	"github.com/medmemo/medmemo/internal/domain/entity"
-	"github.com/medmemo/medmemo/internal/infrastructure/database"
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/internal/infrastructure/database"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 // MemoryRepoSQLite 基于 SQLite 的记忆仓库实现（DuckDB 降级方案）。
@@ -62,7 +62,7 @@ func (r *MemoryRepoSQLite) GetByID(ctx context.Context, id models.MemoryID) (*en
 }
 
 // Search 关键词搜索记忆（简单 LIKE 匹配）。
-// 向量语义检索待 DuckDB vss 扩展引入后实现 [Issue#015]。
+// TODO(作者): 向量语义检索待 DuckDB vss 扩展引入后实现 [Issue#015]。
 func (r *MemoryRepoSQLite) Search(ctx context.Context, query string, limit int) ([]*entity.HealthMemory, error) {
 	pattern := "%" + query + "%"
 	rows, err := r.db.QueryContext(ctx, `
@@ -124,7 +124,10 @@ func EnsureMemorySchema(db *sql.DB) error {
 		CREATE INDEX IF NOT EXISTS idx_memories_tier ON memories(tier);
 		CREATE INDEX IF NOT EXISTS idx_memories_accessed ON memories(accessed_at);
 	`)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to ensure memory schema: %w", err)
+	}
+	return nil
 }
 
 // scanMemories 扫描查询结果为记忆列表。

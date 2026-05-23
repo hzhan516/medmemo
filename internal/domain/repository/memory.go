@@ -6,8 +6,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/medmemo/medmemo/internal/domain/entity"
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 // MemoryRepository 定义健康记忆的持久化接口。

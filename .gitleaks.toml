@@ -1,0 +1,9 @@
+# Gitleaks allowlist for MedMemo
+# These paths contain intentionally fake / mock secrets used in tests.
+
+[allowlist]
+paths = [
+  '''web/src/test/mocks/wails.ts''',
+  '''web/src/components/auth/APIKeyPanel.test.tsx''',
+  '''internal/application/feedback/reporter_test.go''',
+]

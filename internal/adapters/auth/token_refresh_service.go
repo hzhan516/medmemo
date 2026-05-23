@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"github.com/google/wire"
-	"github.com/medmemo/medmemo/internal/application/port"
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/internal/application/port"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 // RefreshResult 表示一次刷新操作的结果。
@@ -93,7 +93,10 @@ func (s *TokenRefreshService) RefreshProvider(p *models.ProviderConfig) (*Refres
 
 	// 获取 provider 级别的刷新锁，防止并发刷新
 	muVal, _ := s.refreshMu.LoadOrStore(p.ID, &sync.Mutex{})
-	mu := muVal.(*sync.Mutex)
+	mu, ok := muVal.(*sync.Mutex)
+	if !ok {
+		return nil, fmt.Errorf("refreshMu stored non-*sync.Mutex value for provider %s", p.ID)
+	}
 	mu.Lock()
 	defer mu.Unlock()
 

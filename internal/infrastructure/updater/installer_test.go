@@ -75,3 +75,80 @@ func TestCopyFile(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "test content", string(content))
 }
+
+func TestGetCurrentBinary(t *testing.T) {
+	path := getCurrentBinary()
+	// 当前进程为 go test，应返回非空路径
+	assert.NotEmpty(t, path)
+}
+
+func TestNewLinuxInstaller(t *testing.T) {
+	inst := newLinuxInstaller()
+	assert.NotNil(t, inst)
+	assert.NotEmpty(t, inst.currentPath)
+	assert.Equal(t, inst.currentPath, inst.CurrentBinaryPath())
+}
+
+func TestLinuxInstallerInstall_EmptyCurrentPath(t *testing.T) {
+	installer := &linuxInstaller{currentPath: ""}
+	_, err := installer.Install("/tmp/fake.AppImage")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to determine current binary path")
+}
+
+func TestLinuxInstallerInstall_CopyFileFails(t *testing.T) {
+	tmpDir := t.TempDir()
+	currentBinary := filepath.Join(tmpDir, "MedMemo")
+	require.NoError(t, os.WriteFile(currentBinary, []byte("old"), 0755))
+
+	installer := &linuxInstaller{currentPath: currentBinary}
+	// 传入不存在的 source 路径，使 copyFile 失败
+	_, err := installer.Install("/nonexistent/AppImage")
+	assert.Error(t, err)
+}
+
+func TestLinuxInstallerInstall_RenameFails(t *testing.T) {
+	tmpDir := t.TempDir()
+	currentBinary := filepath.Join(tmpDir, "MedMemo")
+	require.NoError(t, os.WriteFile(currentBinary, []byte("old"), 0755))
+	// 创建一个目录，使 os.Rename 无法覆盖
+	require.NoError(t, os.Mkdir(filepath.Join(tmpDir, "new.AppImage"), 0755))
+
+	installer := &linuxInstaller{currentPath: currentBinary}
+	_, err := installer.Install(filepath.Join(tmpDir, "new.AppImage"))
+	assert.Error(t, err)
+}
+
+func TestLinuxInstallerRollback_BackupNotFound(t *testing.T) {
+	tmpDir := t.TempDir()
+	installer := &linuxInstaller{
+		currentPath: filepath.Join(tmpDir, "MedMemo"),
+		backupPath:  filepath.Join(tmpDir, "nonexistent.backup"),
+	}
+	err := installer.Rollback()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "backup file not found")
+}
+
+func TestLinuxInstallerRollback_RenameFails(t *testing.T) {
+	tmpDir := t.TempDir()
+	// backup 存在，currentPath 是目录导致 rename 失败
+	backupPath := filepath.Join(tmpDir, "backup")
+	currentPath := filepath.Join(tmpDir, "current_dir")
+	require.NoError(t, os.WriteFile(backupPath, []byte("good"), 0644))
+	require.NoError(t, os.Mkdir(currentPath, 0755))
+
+	installer := &linuxInstaller{
+		currentPath: currentPath,
+		backupPath:  backupPath,
+	}
+	err := installer.Rollback()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to restore backup")
+}
+
+func TestCopyFile_ReadFails(t *testing.T) {
+	err := copyFile("/nonexistent/file", "/tmp/dest")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to read source file")
+}

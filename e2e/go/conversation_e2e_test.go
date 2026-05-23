@@ -10,14 +10,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/medmemo/medmemo/internal/adapters/repository"
-	"github.com/medmemo/medmemo/internal/application"
-	"github.com/medmemo/medmemo/internal/application/port"
-	"github.com/medmemo/medmemo/internal/application/usecase"
-	"github.com/medmemo/medmemo/internal/domain/entity"
-	"github.com/medmemo/medmemo/internal/infrastructure/database"
-	"github.com/medmemo/medmemo/internal/infrastructure/secret"
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/internal/adapters/repository"
+	"github.com/hzhan516/medmemo/internal/application"
+	"github.com/hzhan516/medmemo/internal/application/port"
+	"github.com/hzhan516/medmemo/internal/application/usecase"
+	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/internal/infrastructure/database"
+	"github.com/hzhan516/medmemo/internal/infrastructure/secret"
+	"github.com/hzhan516/medmemo/pkg/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -35,12 +35,12 @@ func (m *mockLLMClient) Chat(ctx context.Context, messages []models.Message) (st
 	return m.chatReply, nil
 }
 
-func (m *mockLLMClient) StreamChat(ctx context.Context, messages []models.Message, callback func(chunk string)) error {
+func (m *mockLLMClient) StreamChat(ctx context.Context, messages []models.Message, callback func(chunk string)) (*models.TokenUsage, error) {
 	m.lastMessages = messages
 	for _, chunk := range m.streamChunks {
 		callback(chunk)
 	}
-	return m.streamErr
+	return nil, m.streamErr
 }
 
 func (m *mockLLMClient) CheckAvailability(ctx context.Context) (bool, string) {
@@ -130,6 +130,74 @@ func (m *mockComplianceChecker) Check(ctx context.Context, text string) (*usecas
 
 var _ usecase.ComplianceChecker = (*mockComplianceChecker)(nil)
 
+// mockLLMClientFactory 实现 port.LLMClientFactory，始终返回预设的 mockLLMClient。
+type mockLLMClientFactory struct {
+	client port.LLMClient
+}
+
+func (m *mockLLMClientFactory) CreateClient(providerConfig *models.ProviderConfig) (port.LLMClient, error) {
+	return m.client, nil
+}
+
+var _ port.LLMClientFactory = (*mockLLMClientFactory)(nil)
+
+// mockProviderStore 实现 port.ProviderStore 的内存版本。
+type mockProviderStore struct {
+	providers map[string]*models.ProviderConfig
+}
+
+func newMockProviderStore() *mockProviderStore {
+	return &mockProviderStore{providers: make(map[string]*models.ProviderConfig)}
+}
+
+func (m *mockProviderStore) Create(ctx context.Context, provider *models.ProviderConfig) error {
+	m.providers[provider.ID] = provider
+	return nil
+}
+
+func (m *mockProviderStore) Update(ctx context.Context, provider *models.ProviderConfig) error {
+	m.providers[provider.ID] = provider
+	return nil
+}
+
+func (m *mockProviderStore) Delete(ctx context.Context, id string) error {
+	delete(m.providers, id)
+	return nil
+}
+
+func (m *mockProviderStore) Get(ctx context.Context, id string) (*models.ProviderConfig, error) {
+	if p, ok := m.providers[id]; ok {
+		return p, nil
+	}
+	// 测试场景下返回默认配置，避免每个测试都需要手动创建 provider
+	return &models.ProviderConfig{
+		ID:      id,
+		Name:    "test-provider",
+		APIHost: "http://localhost",
+		ModelID: "test-model",
+		Enabled: true,
+	}, nil
+}
+
+func (m *mockProviderStore) List(ctx context.Context) ([]*models.ProviderConfig, error) {
+	result := make([]*models.ProviderConfig, 0, len(m.providers))
+	for _, p := range m.providers {
+		result = append(result, p)
+	}
+	return result, nil
+}
+
+var _ port.ProviderStore = (*mockProviderStore)(nil)
+
+// mockMemoryQuerier 实现 usecase.MemoryQuerier 的内存版本。
+type mockMemoryQuerier struct{}
+
+func (m *mockMemoryQuerier) RetrieveForContext(ctx context.Context, query string, limit int) ([]*entity.HealthMemory, error) {
+	return nil, nil
+}
+
+var _ usecase.MemoryQuerier = (*mockMemoryQuerier)(nil)
+
 // mustEmptyRulesPath 创建包含空规则库的临时 JSON 文件并返回路径。
 func mustEmptyRulesPath(t *testing.T) string {
 	t.Helper()
@@ -170,7 +238,7 @@ func TestE2E_Conversation_FullFlow(t *testing.T) {
 		streamChunks: []string{"流", "式", "回", "复"},
 	}
 	checker := &mockComplianceChecker{interceptor: comp}
-	chatOrch := usecase.NewChatOrchestrator(mockLLM, &mockMemoryRepository{}, &mockSensitiveDetector{}, checker, nil, nil)
+	chatOrch := usecase.NewChatOrchestrator(&mockLLMClientFactory{client: mockLLM}, newMockProviderStore(), &mockMemoryRepository{}, &mockSensitiveDetector{}, checker, nil, &mockMemoryQuerier{})
 
 	ctx := context.Background()
 
@@ -188,6 +256,7 @@ func TestE2E_Conversation_FullFlow(t *testing.T) {
 		ConversationID: conv.ID,
 		Messages:       []models.Message{{Role: models.RoleUser, Content: "你好"}},
 		Model:          models.ProviderKimi,
+		ProviderID:     "test-kimi",
 	}
 	resp, err := chatOrch.Execute(ctx, req)
 	require.NoError(t, err)
@@ -210,10 +279,11 @@ func TestE2E_Conversation_FullFlow(t *testing.T) {
 	require.NoError(t, msgRepo.Save(ctx, conv.ID, userMsg2))
 
 	var streamResult string
-	err = chatOrch.StreamExecute(ctx, usecase.ChatRequest{
+	_, _, err = chatOrch.StreamExecute(ctx, usecase.ChatRequest{
 		ConversationID: conv.ID,
 		Messages:       []models.Message{{Role: models.RoleUser, Content: "流式测试"}},
 		Model:          models.ProviderKimi,
+		ProviderID:     "test-kimi",
 	}, func(chunk string) {
 		streamResult += chunk
 	})
@@ -241,7 +311,7 @@ func TestE2E_Conversation_MultipleSessions(t *testing.T) {
 	convRepo := repository.NewConversationRepoSQLite(conn)
 	msgRepo := repository.NewMessageRepoSQLite(conn)
 	checker := &mockComplianceChecker{interceptor: comp}
-	chatOrch := usecase.NewChatOrchestrator(&mockLLMClient{chatReply: "回复"}, &mockMemoryRepository{}, &mockSensitiveDetector{}, checker, nil, nil)
+	chatOrch := usecase.NewChatOrchestrator(&mockLLMClientFactory{client: &mockLLMClient{chatReply: "回复"}}, newMockProviderStore(), &mockMemoryRepository{}, &mockSensitiveDetector{}, checker, nil, &mockMemoryQuerier{})
 
 	ctx := context.Background()
 
@@ -259,6 +329,7 @@ func TestE2E_Conversation_MultipleSessions(t *testing.T) {
 		ConversationID: conv1.ID,
 		Messages:       []models.Message{{Role: models.RoleUser, Content: "会话1的消息"}},
 		Model:          models.ProviderKimi,
+		ProviderID:     "test-kimi",
 	})
 	require.NoError(t, err)
 

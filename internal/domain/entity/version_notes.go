@@ -24,7 +24,12 @@ var versionNotesJSON []byte
 var AllVersionNotes []VersionNote
 
 func init() {
-	if err := json.Unmarshal(versionNotesJSON, &AllVersionNotes); err != nil {
+	if err := loadVersionNotes(versionNotesJSON); err != nil {
 		panic(fmt.Errorf("failed to unmarshal version notes: %w", err))
 	}
+}
+
+// loadVersionNotes 解析版本提示 JSON 数据。
+func loadVersionNotes(data []byte) error {
+	return json.Unmarshal(data, &AllVersionNotes)
 }

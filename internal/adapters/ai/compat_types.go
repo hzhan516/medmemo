@@ -5,7 +5,7 @@ package ai
 import (
 	"fmt"
 
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 // ChatRequest 表示对话请求 DTO。

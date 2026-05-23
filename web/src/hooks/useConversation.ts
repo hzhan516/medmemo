@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { logger } from '@/lib/logger'
 import { useChatStore } from '@/stores/chatStore'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useProviderStore } from '@/stores/providerStore'
@@ -16,14 +17,14 @@ export function useConversation() {
     currentConversationId,
     emergencyAlert,
     emergencyWarningAcknowledged,
-    addMessage,
-    appendToLastMessage,
-    setLastMessageError,
-    setLastMessageWarnings,
-    setLastMessageReplacedTerms,
-    setLastMessageTokenUsage,
-    setStreaming,
-    setConversationId,
+    addMessageForConversation,
+    appendToLastMessageForConversation,
+    setLastMessageErrorForConversation,
+    setLastMessageWarningsForConversation,
+    setLastMessageReplacedTermsForConversation,
+    setLastMessageTokenUsageForConversation,
+    replaceLastMessageForConversation,
+    setStreamingForConversation,
     addConversation,
     selectConversation,
     updateConversation,
@@ -51,31 +52,33 @@ export function useConversation() {
   const [error, setError] = useState<string | null>(null)
 
   // 注册 Wails 流式事件监听
+  // 所有事件按 conversation_id 路由到对应会话，消除 currentConversationId 闭包依赖
   useEffect(() => {
-    const removeStreamChunk = EventsOn('chat:stream_chunk', (chunk: { type: 'start' | 'content' | 'done' | 'error'; payload: string; metadata?: { model?: string; provider_id?: string; latency_ms?: number; token_count?: number; prompt_tokens?: number; completion_tokens?: number } }) => {
+    const removeStreamChunk = EventsOn('chat:stream_chunk', (chunk: { type: 'start' | 'content' | 'done' | 'error'; payload: string; metadata?: { conversation_id?: string; model?: string; provider_id?: string; latency_ms?: number; token_count?: number; prompt_tokens?: number; completion_tokens?: number } }) => {
+      const convId = chunk.metadata?.conversation_id
+      if (!convId) return
       switch (chunk.type) {
         case 'start':
           // start chunk 仅携带 metadata，无需 UI 操作
           break
         case 'content':
-          appendToLastMessage(chunk.payload)
+          appendToLastMessageForConversation(convId, chunk.payload)
           break
         case 'done': {
-          setStreaming(false)
-          // 流式结束后更新当前会话的预览和时间
-          if (currentConversationId) {
-            const lastMsg = useChatStore.getState().messages
-            const lastAssistant = [...lastMsg].reverse().find((m) => m.role === 'assistant')
-            if (lastAssistant) {
-              updateConversation(currentConversationId, {
-                preview: lastAssistant.content.slice(0, 60),
-                updatedAt: Date.now(),
-              })
-            }
+          setStreamingForConversation(convId, false)
+          // 流式结束后更新对应会话的预览和时间
+          const convMsgs = useChatStore.getState().messagesMap[convId] || []
+          const lastAssistant = [...convMsgs].reverse().find((m) => m.role === 'assistant')
+          if (lastAssistant) {
+            updateConversation(convId, {
+              preview: lastAssistant.content.slice(0, 60),
+              updatedAt: Date.now(),
+            })
           }
           // 写入 token 用量统计
           if (chunk.metadata?.prompt_tokens !== undefined && chunk.metadata?.completion_tokens !== undefined) {
-            setLastMessageTokenUsage(
+            setLastMessageTokenUsageForConversation(
+              convId,
               chunk.metadata.prompt_tokens,
               chunk.metadata.completion_tokens,
               (chunk.metadata.prompt_tokens ?? 0) + (chunk.metadata.completion_tokens ?? 0),
@@ -84,40 +87,49 @@ export function useConversation() {
           break
         }
         case 'error':
-          setLastMessageError(chunk.payload)
-          setStreaming(false)
+          setLastMessageErrorForConversation(convId, chunk.payload)
+          setStreamingForConversation(convId, false)
           break
       }
     })
-    const removeCompliance = EventsOn('chat:stream:compliance', (payload: { level: string; warning: string; notice: string; replacedTerms?: string[]; matchedRule?: string }) => {
+    const removeCompliance = EventsOn('chat:stream:compliance', (payload: { conversation_id?: string; level: string; warning: string; notice: string; replacedTerms?: string[]; matchedRule?: string }) => {
+      const convId = payload.conversation_id
+      if (!convId) return
       const warnings: string[] = [payload.level]
       if (payload.warning) warnings.push(`WARNING:${payload.warning}`)
       if (payload.notice) warnings.push(`NOTICE:${payload.notice}`)
       if (payload.matchedRule) warnings.push(`RULE:${payload.matchedRule}`)
-      setLastMessageWarnings(warnings)
+      setLastMessageWarningsForConversation(convId, warnings)
       if (payload.replacedTerms && payload.replacedTerms.length > 0) {
-        setLastMessageReplacedTerms(payload.replacedTerms)
+        setLastMessageReplacedTermsForConversation(convId, payload.replacedTerms)
       }
     })
     const removeTitle = EventsOn('chat:title:generated', (payload: { conv_id: string; title: string }) => {
       updateConversation(payload.conv_id, { title: payload.title })
+    })
+    const removeReplace = EventsOn('chat:stream:replace', (payload: { conversation_id: string; content: string }) => {
+      replaceLastMessageForConversation(payload.conversation_id, payload.content)
     })
 
     return () => {
       removeStreamChunk()
       removeCompliance()
       removeTitle()
+      removeReplace()
     }
-  }, [appendToLastMessage, setLastMessageError, setLastMessageWarnings, setStreaming, currentConversationId, updateConversation])
+  }, [appendToLastMessageForConversation, setLastMessageErrorForConversation, setLastMessageWarningsForConversation, setLastMessageReplacedTermsForConversation, setLastMessageTokenUsageForConversation, replaceLastMessageForConversation, setStreamingForConversation, updateConversation])
 
   const sendMessage = useCallback(
     async (content: string) => {
-      if (!content.trim() || isStreaming) return
+      // 按会话维度检测流式状态，避免会话 A 流式中阻断会话 B 的发送
+      const convStreamingIds = useChatStore.getState().streamingIds
+      const currentConvId = useChatStore.getState().currentConversationId
+      if (!content.trim() || (currentConvId && convStreamingIds.has(currentConvId))) return
 
       setError(null)
 
       // 确保当前会话存在
-      let convId = currentConversationId
+      let convId = currentConvId
       if (!convId) {
         try {
           convId = await wails.createConversation()
@@ -156,14 +168,25 @@ export function useConversation() {
         // B 级：仍添加用户消息，但阻断后续 LLM 调用直到用户确认
       }
 
-      // 添加用户消息
+      // 在添加新消息前，先快照当前会话的历史消息（排除 AI 占位符），
+      // 避免将空的 assistant 消息和重复的 user 消息发送到后端
+      const snapshotMessages = useChatStore.getState().messagesMap[convId] || useChatStore.getState().messages
+      const history = snapshotMessages
+        .filter((m) => !(m.role === 'assistant' && m.isStreaming))
+        .map((m) => ({
+          role: m.role,
+          content: m.content,
+        }))
+
+      // 添加用户消息（使用 ForConversation 变体确保跨会话隔离）
       const userMsg = {
         id: `msg_${Date.now()}_user`,
         role: 'user' as const,
         content: content.trim(),
         timestamp: Date.now(),
+        conversationId: convId,
       }
-      addMessage(userMsg)
+      addMessageForConversation(convId, userMsg)
 
       // 更新会话 preview
       updateConversation(convId, {
@@ -176,16 +199,17 @@ export function useConversation() {
         return
       }
 
-      // 添加空的 AI 消息占位
+      // 添加空的 AI 消息占位（使用 ForConversation 变体确保跨会话隔离）
       const aiMsgId = `msg_${Date.now()}_ai`
-      addMessage({
+      addMessageForConversation(convId, {
         id: aiMsgId,
         role: 'assistant',
         content: '',
         timestamp: Date.now(),
         isStreaming: true,
+        conversationId: convId,
       })
-      setStreaming(true)
+      setStreamingForConversation(convId, true)
 
       // 活跃 Provider 不可用时的回退逻辑
       let targetProvider = activeProvider
@@ -201,12 +225,7 @@ export function useConversation() {
       }
 
       try {
-        // 构造对话请求并启动流式生成
-        const history = messages.map((m) => ({
-          role: m.role,
-          content: m.content,
-        }))
-
+        // 使用已快照的历史消息 + 当前用户消息构造请求，不重复读取 store
         await wails.sendMessageStream({
           conversation_id: convId,
           messages: [...history, { role: 'user', content: content.trim() }],
@@ -215,29 +234,22 @@ export function useConversation() {
         } as Parameters<typeof wails.sendMessageStream>[0])
 
         // 首条用户消息后异步生成标题（不阻塞流式输出）
-        const isFirstMessage = messages.filter((m) => m.role === 'user').length === 0
-        if (isFirstMessage) {
+        if (history.filter((m) => m.role === 'user').length === 0) {
           wails.generateTitle(convId, content.trim()).catch(() => {
             // 标题生成失败静默处理，不影响对话流程
           })
         }
       } catch (e) {
-        setLastMessageError(String(e))
-        setStreaming(false)
+        setLastMessageErrorForConversation(convId, String(e))
+        setStreamingForConversation(convId, false)
         setError(String(e))
       }
     },
     [
-      currentConversationId,
-      isStreaming,
-      messages,
       emergencyWarningAcknowledged,
-      addMessage,
-      appendToLastMessage,
-      setLastMessageError,
-      setLastMessageTokenUsage,
-      setStreaming,
-      setConversationId,
+      addMessageForConversation,
+      setLastMessageErrorForConversation,
+      setStreamingForConversation,
       addConversation,
       selectConversation,
       updateConversation,
@@ -245,6 +257,10 @@ export function useConversation() {
       wails,
       activeModelId,
       setActiveModelId,
+      activeProvider,
+      activeStatus,
+      fallbackProvider,
+      setActiveProviderId,
     ]
   )
 
@@ -252,27 +268,34 @@ export function useConversation() {
     try {
       await wails.stopGeneration()
     } catch (e) {
-      console.error('停止生成失败:', e)
+      logger.error('停止生成失败:', e)
     }
   }, [wails])
 
   const retryMessage = useCallback(
     async (messageId: string) => {
-      // 找到最后一条用户消息并重发
-      const userMessages = messages.filter((m) => m.role === 'user')
+      // 从 store 实时读取消息，避免闭包中 messages 陈旧
+      const currentState = useChatStore.getState()
+      const currentMsgs = currentState.messages
+      const userMessages = currentMsgs.filter((m) => m.role === 'user')
       const lastUserMsg = userMessages[userMessages.length - 1]
       if (lastUserMsg) {
         // 移除后续的 assistant 消息（错误/中断的那条）
-        const msgIndex = messages.findIndex((m) => m.id === messageId)
+        const msgIndex = currentMsgs.findIndex((m) => m.id === messageId)
         if (msgIndex >= 0) {
+          const truncated = currentMsgs.slice(0, msgIndex)
+          const convId = currentState.currentConversationId
           useChatStore.setState((state) => ({
-            messages: state.messages.slice(0, msgIndex),
+            messages: truncated,
+            messagesMap: convId
+              ? { ...state.messagesMap, [convId]: truncated }
+              : state.messagesMap,
           }))
         }
         await sendMessage(lastUserMsg.content)
       }
     },
-    [messages, sendMessage]
+    [sendMessage]
   )
 
   const startNewConversation = useCallback(async () => {
@@ -307,7 +330,7 @@ export function useConversation() {
         }))
         setMessages(mappedMessages)
       } catch (e) {
-        console.error('加载会话消息失败:', e)
+        logger.error('加载会话消息失败:', e)
         setMessages([])
       }
     },
@@ -321,14 +344,15 @@ export function useConversation() {
 
   const handleEmergencyNotEmergency = useCallback(() => {
     // 误判反馈：记录到控制台，关闭弹窗/横幅
-    console.warn('[Emergency Feedback] User reported false positive:', emergencyAlert)
+    logger.warn('[Emergency Feedback] User reported false positive:', emergencyAlert)
     setEmergencyAlert(null)
   }, [emergencyAlert, setEmergencyAlert])
 
   const handleAcknowledgeWarning = useCallback(() => {
     acknowledgeEmergencyWarning()
-    // 确认后自动触发重发最后一条用户消息
-    const userMessages = messages.filter((m) => m.role === 'user')
+    // 确认后自动触发重发最后一条用户消息（从 store 实时读取）
+    const currentMsgs = useChatStore.getState().messages
+    const userMessages = currentMsgs.filter((m) => m.role === 'user')
     const lastUserMsg = userMessages[userMessages.length - 1]
     if (lastUserMsg) {
       // 清除 B 级 alert 后重发
@@ -337,7 +361,7 @@ export function useConversation() {
     } else {
       setEmergencyAlert(null)
     }
-  }, [acknowledgeEmergencyWarning, messages, setEmergencyAlert, sendMessage])
+  }, [acknowledgeEmergencyWarning, setEmergencyAlert, sendMessage])
 
   return {
     messages,
@@ -364,7 +388,7 @@ export function useConversation() {
           ),
         }))
       } catch (e) {
-        console.error('提交合规反馈失败:', e)
+        logger.error('提交合规反馈失败:', e)
       }
     },
   }

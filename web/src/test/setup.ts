@@ -61,12 +61,35 @@ Object.defineProperty(window, 'matchMedia', {
   })),
 })
 
-// 模拟 ResizeObserver（Sidebar 等组件使用）
-global.ResizeObserver = vi.fn().mockImplementation(() => ({
-  observe: vi.fn(),
-  unobserve: vi.fn(),
-  disconnect: vi.fn(),
-}))
+// 模拟 ResizeObserver（Sidebar / react-virtuoso 使用）
+// 需在 observe 时立即触发回调，否则虚拟列表无法计算可见区域
+global.ResizeObserver = class {
+  callback: ResizeObserverCallback
+
+  constructor(callback: ResizeObserverCallback) {
+    this.callback = callback
+  }
+
+  observe(target: Element) {
+    const rect = target.getBoundingClientRect()
+    const size: ResizeObserverSize = { inlineSize: rect.width, blockSize: rect.height }
+    this.callback(
+      [
+        {
+          target,
+          contentRect: rect,
+          borderBoxSize: [size],
+          contentBoxSize: [size],
+          devicePixelContentBoxSize: [size],
+        } as ResizeObserverEntry,
+      ],
+      this
+    )
+  }
+
+  unobserve = vi.fn()
+  disconnect = vi.fn()
+} as unknown as typeof ResizeObserver
 
 // 模拟 IntersectionObserver
 global.IntersectionObserver = vi.fn().mockImplementation(() => ({
@@ -84,3 +107,53 @@ Object.defineProperty(window, 'innerWidth', {
 
 // 模拟 scrollIntoView（jsdom 不支持）
 Element.prototype.scrollIntoView = vi.fn()
+
+// 模拟 getBoundingClientRect（jsdom 默认返回 0，影响 react-virtuoso 等虚拟列表库）
+Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+  configurable: true,
+  value: function (this: HTMLElement) {
+    const height = parseFloat(this.style.height) || 768
+    const width = parseFloat(this.style.width) || 1024
+    return {
+      width,
+      height,
+      top: 0,
+      left: 0,
+      bottom: height,
+      right: width,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    }
+  },
+})
+
+// 模拟 offsetHeight / clientHeight / offsetWidth / clientWidth
+// react-virtuoso 依赖这些值计算可见区域
+function getComputedDim(element: HTMLElement, dim: 'height' | 'width'): number {
+  const styleVal = parseFloat(element.style[dim])
+  if (!isNaN(styleVal) && styleVal > 0) return styleVal
+  const parent = element.parentElement
+  if (parent) {
+    const parentVal = getComputedDim(parent, dim)
+    if (!isNaN(parentVal) && parentVal > 0) return parentVal
+  }
+  return dim === 'height' ? 768 : 1024
+}
+
+Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+  configurable: true,
+  get() { return getComputedDim(this, 'height') },
+})
+Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
+  configurable: true,
+  get() { return getComputedDim(this, 'height') },
+})
+Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
+  configurable: true,
+  get() { return getComputedDim(this, 'width') },
+})
+Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+  configurable: true,
+  get() { return getComputedDim(this, 'width') },
+})

@@ -7,8 +7,8 @@ import (
 	"fmt"
 
 	"github.com/google/wire"
-	"github.com/medmemo/medmemo/pkg/desensitizer"
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/pkg/desensitizer"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 // RuleDetector 基于规则的敏感信息检测器。

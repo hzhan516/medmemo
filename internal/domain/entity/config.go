@@ -1,6 +1,6 @@
 package entity
 
-import "github.com/medmemo/medmemo/pkg/models"
+import "github.com/hzhan516/medmemo/pkg/models"
 
 // AppConfig 表示应用的核心配置领域对象。
 // 不绑定任何框架特定的配置结构，保持纯领域表达。

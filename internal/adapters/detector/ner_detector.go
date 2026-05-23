@@ -6,8 +6,8 @@ import (
 	"context"
 
 	"github.com/google/wire"
-	"github.com/medmemo/medmemo/internal/infrastructure/onnx"
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/internal/infrastructure/onnx"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 // defaultConfidenceThreshold 为 NER 实体置信度过滤阈值。

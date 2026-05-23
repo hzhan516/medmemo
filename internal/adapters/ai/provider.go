@@ -3,11 +3,12 @@ package ai
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/wire"
-	"github.com/medmemo/medmemo/internal/application/port"
-	"github.com/medmemo/medmemo/internal/domain/entity"
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/internal/application/port"
+	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 // defaultEndpoints 各云端提供商默认 API 端点。
@@ -40,6 +41,9 @@ var localDefaultModels = map[models.ProviderType]string{
 	models.ProviderLocal:  "llama3.1-8b",
 }
 
+// defaultRequestTimeout ProviderFactory 默认请求超时（非流式场景）。
+const defaultRequestTimeout = 30 * time.Second
+
 // ProviderFactory 根据配置创建对应的 LLMClient 适配器。
 //
 // 路由规则：
@@ -57,7 +61,7 @@ func ProviderFactory(cfg *entity.AppConfig) port.LLMClient {
 		if model == "" {
 			model = localDefaultModels[models.ProviderOllama]
 		}
-		return NewLocalAdapter(endpoint, model)
+		return NewLocalAdapter(endpoint, model, defaultRequestTimeout)
 	}
 
 	// 通用本地端点路由
@@ -70,7 +74,7 @@ func ProviderFactory(cfg *entity.AppConfig) port.LLMClient {
 		if model == "" {
 			model = localDefaultModels[models.ProviderLocal]
 		}
-		return NewOpenAIAdapter("", endpoint, model)
+		return NewOpenAIAdapter("", endpoint, model, defaultRequestTimeout)
 	}
 
 	// 云端模型路由
@@ -88,7 +92,7 @@ func ProviderFactory(cfg *entity.AppConfig) port.LLMClient {
 		model = "kimi-lite"
 	}
 
-	return NewOpenAIAdapter("", baseURL, model)
+	return NewOpenAIAdapter("", baseURL, model, defaultRequestTimeout)
 }
 
 // llmClientFactory 实现 port.LLMClientFactory，根据 ProviderConfig 动态创建 adapter。
@@ -121,58 +125,65 @@ func (f *llmClientFactory) CreateClient(cfg *models.ProviderConfig) (port.LLMCli
 	}
 
 	providerType := inferProviderTypeFromHost(cfg.APIHost)
-
-	// Ollama 本地模型路由
-	if providerType == models.ProviderOllama {
-		endpoint := cfg.APIHost
-		if endpoint == "" {
-			endpoint = localEndpoints[models.ProviderOllama]
-		}
-		model := cfg.ModelID
-		if model == "" && len(cfg.Models) > 0 {
-			model = cfg.Models[0].ID
-		}
-		if model == "" {
-			model = localDefaultModels[models.ProviderOllama]
-		}
-		return NewLocalAdapter(endpoint, model), nil
+	switch providerType {
+	case models.ProviderOllama:
+		return createOllamaClient(cfg), nil
+	case models.ProviderLocal:
+		return createLocalClient(cfg), nil
+	default:
+		return createCloudClient(cfg, providerType), nil
 	}
+}
 
-	// 通用本地端点路由
-	if providerType == models.ProviderLocal {
-		endpoint := cfg.APIHost
-		if endpoint == "" {
-			endpoint = localEndpoints[models.ProviderLocal]
-		}
-		model := cfg.ModelID
-		if model == "" && len(cfg.Models) > 0 {
-			model = cfg.Models[0].ID
-		}
-		if model == "" {
-			model = localDefaultModels[models.ProviderLocal]
-		}
-		return NewOpenAIAdapter("", endpoint, model), nil
+// resolveTimeout 根据 ProviderConfig.TimeoutMs 解析超时，未配置则默认 120 秒。
+func resolveTimeout(timeoutMs int) time.Duration {
+	if timeoutMs > 0 {
+		return time.Duration(timeoutMs) * time.Millisecond
 	}
+	return 120 * time.Second
+}
 
-	// 云端模型路由
-	baseURL := cfg.APIHost
+// createOllamaClient 创建 Ollama 本地模型适配器。
+func createOllamaClient(cfg *models.ProviderConfig) port.LLMClient {
+	endpoint := resolveEndpoint(cfg.APIHost, localEndpoints[models.ProviderOllama])
+	model := resolveModel(cfg.ModelID, cfg.Models, localDefaultModels[models.ProviderOllama])
+	return NewLocalAdapter(endpoint, model, resolveTimeout(cfg.TimeoutMs))
+}
+
+// createLocalClient 创建通用本地端点适配器。
+func createLocalClient(cfg *models.ProviderConfig) port.LLMClient {
+	endpoint := resolveEndpoint(cfg.APIHost, localEndpoints[models.ProviderLocal])
+	model := resolveModel(cfg.ModelID, cfg.Models, localDefaultModels[models.ProviderLocal])
+	return NewOpenAIAdapter("", endpoint, model, resolveTimeout(cfg.TimeoutMs))
+}
+
+// createCloudClient 创建云端模型适配器。
+func createCloudClient(cfg *models.ProviderConfig, providerType models.ProviderType) port.LLMClient {
+	baseURL := resolveEndpoint(cfg.APIHost, defaultEndpoints[providerType])
 	if baseURL == "" {
-		if u, ok := defaultEndpoints[providerType]; ok {
-			baseURL = u
-		} else {
-			baseURL = defaultEndpoints[models.ProviderKimi]
-		}
+		baseURL = defaultEndpoints[models.ProviderKimi]
 	}
+	model := resolveModel(cfg.ModelID, cfg.Models, "kimi-lite")
+	return NewOpenAIAdapter(cfg.APIKey, baseURL, model, resolveTimeout(cfg.TimeoutMs))
+}
 
-	model := cfg.ModelID
-	if model == "" && len(cfg.Models) > 0 {
-		model = cfg.Models[0].ID
+// resolveEndpoint 返回有效的 API 端点，优先使用用户配置，否则使用默认值。
+func resolveEndpoint(cfgValue, defaultValue string) string {
+	if cfgValue != "" {
+		return cfgValue
 	}
-	if model == "" {
-		model = "kimi-lite"
-	}
+	return defaultValue
+}
 
-	return NewOpenAIAdapter(cfg.APIKey, baseURL, model), nil
+// resolveModel 返回有效的模型 ID，优先使用用户配置，其次取 Models 列表首个，最后使用默认值。
+func resolveModel(modelID string, models []models.ProviderModel, defaultModel string) string {
+	if modelID != "" {
+		return modelID
+	}
+	if len(models) > 0 {
+		return models[0].ID
+	}
+	return defaultModel
 }
 
 // ProviderSet 供 Wire 使用的 ProviderSet。
