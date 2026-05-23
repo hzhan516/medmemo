@@ -6,6 +6,21 @@
 
 ---
 
+## API 参考索引
+
+按模块组织的 Wails 绑定详细文档见 [`docs/api/`](../../api/)：
+
+| 模块 | 说明 | 文档 |
+|------|------|------|
+| Chat | 会话管理与消息流式输出 | [`api/chat.md`](../../api/chat.md) |
+| Provider | AI 模型提供商配置与健康检测 | [`api/provider.md`](../../api/provider.md) |
+| Auth | 四层鉴权体系 | [`api/auth.md`](../../api/auth.md) |
+| System | 设置、更新、免责声明与诊断 | [`api/system.md`](../../api/system.md) |
+| Ollama | 本地模型检测与管理 | [`api/ollama.md`](../../api/ollama.md) |
+| Events | 后端发出的 Wails Events | [`api/events.md`](../../api/events.md) |
+
+---
+
 ## 内部接口契约
 
 ### LLMClient

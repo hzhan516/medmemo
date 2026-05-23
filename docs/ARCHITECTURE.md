@@ -125,11 +125,11 @@ pkg               │   -    │      -      │    -     │       -        │
 
 | ADR | Topic | Decision | Status |
 |:-----|:------|:---------|:-------|
-| ADR-001 | Desktop Framework Selection | Wails v2 (Go + React) | Accepted |
-| ADR-002 | Architecture Pattern | Clean Architecture Four-Layer Model | Accepted |
-| ADR-003 | Dependency Injection | Google Wire (compile-time) | Accepted |
-| ADR-004 | Local AI Inference | Hugot + ONNX Runtime | Accepted |
-| ADR-005 | Embedded Database | DuckDB (analytics) + SQLite (transactional) + Kùzǔ (graph) | Accepted |
+| [ADR-001](adr/001-clean-architecture.md) | Clean Architecture Four-Layer Model | Robert C. Martin's Clean Architecture | Accepted |
+| [ADR-002](adr/002-duckdb-selection.md) | Embedded Analytics Database | DuckDB v1.7+ for analytics + vector search | Accepted |
+| [ADR-003](adr/003-multi-model-architecture.md) | Multi-Model LLM Architecture | Provider-Factory with 6+ backends | Accepted |
+| [ADR-004](adr/004-onnx-integration.md) | Local AI Inference | Hugot + ONNX Runtime (int8 DistilBERT NER) | Accepted |
+| ADR-005 | Dependency Injection | Google Wire (compile-time) | Accepted |
 | ADR-006 | Vector Retrieval | DuckDB `vss` extension + HNSW index | Accepted |
 | ADR-007 | De-Identification Architecture | L1 Rules + L2 NER ONNX + L3 Keyword Dictionary | Accepted |
 | ADR-008 | Streaming Compliance Detection | Punctuation sentence buffering + push after detection | Accepted |

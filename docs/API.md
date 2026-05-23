@@ -6,6 +6,21 @@
 
 ---
 
+## API Reference Index
+
+Detailed Wails binding documentation is organized by module in [`docs/api/`](./api/):
+
+| Module | Description | Document |
+|--------|-------------|----------|
+| Chat | Conversation management & message streaming | [`api/chat.md`](./api/chat.md) |
+| Provider | AI model provider configuration & health | [`api/provider.md`](./api/provider.md) |
+| Auth | Four-tier authentication system | [`api/auth.md`](./api/auth.md) |
+| System | Settings, updates, disclaimers & diagnostics | [`api/system.md`](./api/system.md) |
+| Ollama | Local model detection & management | [`api/ollama.md`](./api/ollama.md) |
+| Events | Wails Events emitted by the backend | [`api/events.md`](./api/events.md) |
+
+---
+
 ## Internal Interface Contracts
 
 ### LLMClient
