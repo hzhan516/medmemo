@@ -30,7 +30,7 @@ func (c *DuckDBConnector) Close() error {
 
 // Migrate 执行数据库迁移脚本。
 func (c *DuckDBConnector) Migrate(ctx context.Context) error {
-	// TODO(作者): 执行 schema 迁移 [Issue#021]
+	// TODO(作者): 执行 schema 迁移 [Issue#023]
 	return fmt.Errorf("DuckDBConnector.Migrate not implemented")
 }
 
@@ -58,7 +58,7 @@ func NewSQLiteConnector(dataDir string) (*SQLiteConnector, error) {
 
 	// 启用外键约束
 	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
-		_ = db.Close()
+		_ = db.Close() // 外键启用失败后的清理关闭，关闭错误非关键（上方已返回主错误）
 		return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
 	}
 

@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/medmemo/medmemo/internal/domain/entity"
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 // FamilyRepoKuzu 基于 kùzǔ 图数据库的家族关系仓库实现。
@@ -45,6 +45,6 @@ func (r *FamilyRepoKuzu) FindRelations(ctx context.Context, id models.MemberID) 
 
 // FindByDisease 实现 port.FamilyRepository。
 func (r *FamilyRepoKuzu) FindByDisease(ctx context.Context, diseaseName string) ([]*entity.FamilyMember, error) {
-	// TODO(作者): Cypher 查询实现 [Issue#017]
+	// TODO(作者): Cypher 查询实现 [Issue#019]
 	return nil, fmt.Errorf("FamilyRepoKuzu.FindByDisease not implemented")
 }
