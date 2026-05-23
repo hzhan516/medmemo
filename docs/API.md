@@ -1,29 +1,46 @@
-# API 文档
+# API Documentation
 
-> 本文档描述 MedMemo 内部接口契约与 Wails 前后端绑定规范。
+> 🌐 [中文版本](./i18n/zh-Hans-CN/API.md)
+
+> This document describes MedMemo's internal interface contracts and Wails frontend-backend binding specifications.
 
 ---
 
-## 内部接口契约
+## API Reference Index
+
+Detailed Wails binding documentation is organized by module in [`docs/api/`](./api/):
+
+| Module | Description | Document |
+|--------|-------------|----------|
+| Chat | Conversation management & message streaming | [`api/chat.md`](./api/chat.md) |
+| Provider | AI model provider configuration & health | [`api/provider.md`](./api/provider.md) |
+| Auth | Four-tier authentication system | [`api/auth.md`](./api/auth.md) |
+| System | Settings, updates, disclaimers & diagnostics | [`api/system.md`](./api/system.md) |
+| Ollama | Local model detection & management | [`api/ollama.md`](./api/ollama.md) |
+| Events | Wails Events emitted by the backend | [`api/events.md`](./api/events.md) |
+
+---
+
+## Internal Interface Contracts
 
 ### LLMClient
 
 ```go
 type LLMClient interface {
-    // Chat 发送非流式对话请求，返回完整回复。
+    // Chat sends a non-streaming conversation request and returns the full reply.
     Chat(ctx context.Context, messages []models.Message) (string, error)
 
-    // StreamChat 发送流式对话请求，通过 callback 逐块推送内容。
+    // StreamChat sends a streaming conversation request, pushing content chunk-by-chunk via callback.
     StreamChat(ctx context.Context, messages []models.Message, callback func(chunk string)) error
 
-    // CheckAvailability 检查当前模型是否可用。
+    // CheckAvailability checks whether the current model is available.
     CheckAvailability(ctx context.Context) (bool, string)
 }
 ```
 
-**实现者**：
-- `ai.OpenAIAdapter` — OpenAI-compatible API（Kimi / GPT / Qwen / SiliconFlow）
-- `ai.LocalAdapter` — Ollama / llama.cpp 本地端点
+**Implementations**:
+- `ai.OpenAIAdapter` — OpenAI-compatible API (Kimi / GPT / Qwen / SiliconFlow)
+- `ai.LocalAdapter` — Ollama / llama.cpp local endpoints
 
 ---
 
@@ -37,7 +54,7 @@ type RecordStore interface {
 }
 ```
 
-通用键值存储端口，可由 SQLite / DuckDB / 本地文件系统实现。
+Generic key-value storage port, implementable by SQLite / DuckDB / local filesystem.
 
 ---
 
@@ -49,9 +66,9 @@ type SensitiveDetector interface {
 }
 ```
 
-**实现者**：
-- `onnx.Engine` — Hugot + DistilBERT-ONNX NER 模型（L2 级）
-- `desensitizer.RuleEngine` — 正则规则引擎（L1 级）
+**Implementations**:
+- `onnx.Engine` — Hugot + DistilBERT-ONNX NER model (L2 level)
+- `desensitizer.RuleEngine` — Regular expression rule engine (L1 level)
 
 ---
 
@@ -68,7 +85,7 @@ type MemoryRepository interface {
 }
 ```
 
-**实现者**：`repository.MemoryRepoDuckDB`
+**Implementation**: `repository.MemoryRepoDuckDB`
 
 ---
 
@@ -85,60 +102,60 @@ type FamilyRepository interface {
 }
 ```
 
-**实现者**：`repository.FamilyRepoKuzu`
+**Implementation**: `repository.FamilyRepoKuzu`
 
 ---
 
-## Wails 前后端绑定
+## Wails Frontend-Backend Bindings
 
-Wails v2 通过 Go 结构体方法自动生成前端 TypeScript 绑定。
+Wails v2 automatically generates frontend TypeScript bindings from Go struct methods.
 
-### 绑定示例
+### Binding Example
 
-**Go 端（`internal/infrastructure/wails/app.go` — 待实现）**：
+**Go side (`wails_app.go`)**:
 
 ```go
 type WailsApp struct {
     chatUC *usecase.ChatOrchestrator
 }
 
-// StartConversation 创建新会话，前端通过 window.go.main.App.StartConversation 调用。
+// StartConversation creates a new conversation; frontend calls via window.go.main.WailsApp.StartConversation.
 func (a *WailsApp) StartConversation(model string) (dto.ConversationDTO, error) {
     conv := entity.NewConversation(models.ProviderType(model))
     return dto.ToConversationDTO(conv), nil
 }
 
-// SendMessage 发送消息并触发流式响应。
+// SendMessage sends a message and triggers a streaming response.
 func (a *WailsApp) SendMessage(convID string, content string) error {
-    // 通过 Wails Events 推送流式 chunk 到前端
+    // Push streaming chunks to frontend via Wails Events
     return nil
 }
 ```
 
-**前端事件监听**：
+**Frontend event listeners**:
 
 ```typescript
 import { EventsOn } from '@wails/runtime'
 
 EventsOn('chat:stream', (chunk: string) => {
-  // 追加到当前对话消息列表
+  // Append to current conversation message list
 })
 
 EventsOn('compliance:warning', (level: string, reason: string) => {
-  // 显示合规警告横幅
+  // Display compliance warning banner
 })
 ```
 
 ---
 
-## 错误码定义
+## Error Code Definitions
 
-| 错误码 | 含义 | HTTP 等效 | 处理建议 |
-|--------|------|----------|---------|
-| `ErrNotFound` | 记录不存在 | 404 | 提示用户创建新记录 |
-| `ErrInvalidConfig` | 配置非法 | 400 | 引导用户检查设置 |
-| `ErrDuplicateEntry` | 重复记录 | 409 | 提示用户合并或替换 |
-| `ErrComplianceBlocked` | 内容被合规阻断 | 403 | 显示标准提示语，终止输出 |
-| `ErrSensitiveDataLeak` | 敏感数据泄露风险 | 403 | 触发二次脱敏 |
+| Error Code | Meaning | HTTP Equivalent | Handling Suggestion |
+|:-----------|:--------|:----------------|:--------------------|
+| `ErrNotFound` | Record does not exist | 404 | Prompt user to create a new record |
+| `ErrInvalidConfig` | Invalid configuration | 400 | Guide user to check settings |
+| `ErrDuplicateEntry` | Duplicate record | 409 | Prompt user to merge or replace |
+| `ErrComplianceBlocked` | Content blocked by compliance | 403 | Display standard prompt, terminate output |
+| `ErrSensitiveDataLeak` | Sensitive data leak risk | 403 | Trigger secondary de-identification |
 
-所有错误通过 `fmt.Errorf("...: %w", err)` 包装传递，前端通过 `errors.Is` 链判断根因。
+All errors are wrapped and propagated via `fmt.Errorf("...: %w", err)`. The frontend uses `errors.Is` to determine the root cause.

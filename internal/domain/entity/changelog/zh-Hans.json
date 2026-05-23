@@ -1,0 +1,136 @@
+[
+  {
+    "version": "v0.1",
+    "title": "基础框架（Sprint 1-2）",
+    "features": [
+      "项目脚手架搭建（Go modules、Wails v2）",
+      "Clean Architecture 四层目录与包导入规则",
+      "Wire 编译期依赖注入框架集成",
+      "CI/CD 流水线（GitHub Actions 跨平台矩阵构建）",
+      "Wails 前端框架（React 18 + TypeScript + Tailwind CSS）",
+      "基础导航与路由（ChatPage / SettingsPage）",
+      "暗色/亮色/系统三档主题切换"
+    ],
+    "fixes": []
+  },
+  {
+    "version": "v0.2",
+    "title": "对话引擎与基础框架层修复（Sprint 3）",
+    "features": [
+      "Markdown 渲染引擎（react-markdown + remark-gfm + PrismJS）",
+      "OpenAI API 客户端（Chat / StreamChat / CheckAvailability）",
+      "流式响应（后端 Wails Events 推送 + 前端逐字渲染）",
+      "会话管理（搜索、回收站、撤销、分组、归档）",
+      "SQLite 消息持久化（连接池 + 自动迁移）",
+      "自动会话标题生成（AI 生成 + Fallback 本地降级）"
+    ],
+    "fixes": []
+  },
+  {
+    "version": "v0.3",
+    "title": "合规体系层（Sprint 4）",
+    "features": [
+      "首次启动免责声明流程（滚动检测 + SQLite 持久化）",
+      "会话顶部合规提示条（三种展示模式 + 暗色/亮色自适应）",
+      "高风险内容四层拦截层（L1 阻断 ~ L4 正常）",
+      "紧急症状识别与强制就医提醒（A 级 50 条 + B 级 32 条）",
+      "用词规范实时校验与内联替换"
+    ],
+    "fixes": []
+  },
+  {
+    "version": "v0.4",
+    "title": "本地 AI 层与完整对话流水线（Sprint 5）",
+    "features": [
+      "多模型自由切换模块验收（OpenAIAdapter + LocalAdapter）",
+      "完整对话流水线（输入脱敏 → 记忆检索 → LLM → 输出还原 → 合规检测）"
+    ],
+    "fixes": [
+      "llama.cpp 本地端点路由修复（ProviderLocal 路由到 OpenAIAdapter）"
+    ]
+  },
+  {
+    "version": "v0.5",
+    "title": "内测准备层（Sprint 8-10）",
+    "features": [
+      "跨平台打包与自动发布（GoReleaser + GitHub Actions）",
+      "自动更新机制（GitHub Releases API + 前端更新弹窗）",
+      "首次启动安装向导（3 步引导：欢迎 → 隐私 → 模型配置）",
+      "完整 E2E 测试套件（11 条用例 + CI 集成）",
+      "用户文档完善（12 份文档：安装指南/隐私政策/FAQ）",
+      "开源合规审查（499 个依赖许可证扫描）"
+    ],
+    "fixes": [
+      "ArrowUp 编辑上一条消息",
+      "linter 告警清理与 golangci-lint 升级",
+      "代码审查 4 项问题修复"
+    ]
+  },
+  {
+    "version": "v1.0",
+    "title": "多模型自由配置系统",
+    "features": [
+      "通用 OpenAICompatibleClient（零厂商硬编码）",
+      "Provider 配置存储层（SQLite + AES-256-GCM 加密）",
+      "健康检测引擎（异步 goroutine + 四级状态）",
+      "流式响应统一处理层（SSE 解析 + StreamChunk 统一包装）",
+      "21 个预置 Provider 模板（一键添加）",
+      "自定义 Provider 表单（apiHost/Key/Model + 验证）",
+      "测试连接与模型列表拉取",
+      "运行时模型切换 UI（顶部选择器 + 状态指示）",
+      "Provider 配置导入导出（JSON 格式）",
+      "四层认证体系：CLI Token → OAuth Device Flow → API Key → 本地模型",
+      "认证方式智能选择 UI（自动检测并推荐最佳方式）",
+      "API Key 获取引导（5 厂商分步指引）",
+      "稳定版定义与版本提示弹窗（三段式版本号判定 + 更新后自动展示）"
+    ],
+    "fixes": [
+      "isNetworkError 无脑返回 true 的 Critical 修复",
+      "删除环境变量硬编码 API Key",
+      "本地适配器添加 120s 默认超时",
+      "OAuth token 字段加 json:\"-\" 防泄漏",
+      "密钥派生增强（加入 os.Getuid() + 随机 salt）",
+      "合规拦截 goroutine 泄漏修复",
+      "流式输出先合规检测后推送",
+      "SQL 注入风险修复（migrateFromPlaintext 路径转义）",
+      "http:// 明文传输安全警告（API Host 输入框下方橙色提示）",
+      "fetch 超时保护完善（clearTimeout 移至 finally 覆盖完整链路）",
+      "API Key 输入框添加 maxLength={1024} 防止超长粘贴卡顿"
+    ]
+  },
+  {
+    "version": "v1.0.1",
+    "title": "稳定性修复与自动发布",
+    "features": [
+      "build-and-release 自动发布工作流",
+      "GitHubUpdater.FetchLatest 单元测试"
+    ],
+    "fixes": [
+      "AI 429 速率限制 nil 显示 bug 修复，添加指数退避重试",
+      "L3 合规层不再错误阻塞流式输出",
+      "GitHub 仓库外部链接打开方式修复",
+      "相对数据目录解析为绝对路径",
+      "AppImage 打包后资源加载路径修复",
+      "自动更新器双通道发布资源命名对齐",
+      "CI 发布流程修复（GitHub Actions、immutable-release 资源上传）"
+    ]
+  },
+  {
+    "version": "v1.0.2",
+    "title": "前端消息同步修复与文档完善",
+    "features": [
+      "react-virtuoso 虚拟列表优化长会话渲染性能",
+      "流式事件按 conversation_id 路由，消除会话切换时的消息丢失",
+      "Wails 前后端绑定完整 API 契约文档（6 个模块）",
+      "架构决策记录 ADR-002/003/004 中文翻译",
+      "gitleaks Secret 扫描规则（排除测试文件假密钥误报）"
+    ],
+    "fixes": [
+      "修复主聊天区域消息显示为空（messages/messagesMap 双存储同步缺陷）",
+      "修复 addMessage 在 currentConversationId 为 null 时丢失消息到 messagesMap",
+      "修复 TypingIndicator 在 messages 为空数组时的条件判断异常",
+      "修正代码 TODO 编号与 issues.md 不一致（#017→#019、#021→#023）",
+      "清理 wails_app.go 遗留的 fmt.Println 调试代码"
+    ]
+  }
+]

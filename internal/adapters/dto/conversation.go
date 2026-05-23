@@ -5,8 +5,8 @@ package dto
 import (
 	"fmt"
 
-	"github.com/medmemo/medmemo/internal/domain/entity"
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 // ConversationDTO 是对外暴露的会话数据对象。

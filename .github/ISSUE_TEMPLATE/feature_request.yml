@@ -1,0 +1,55 @@
+name: 💡 功能建议
+description: 提交新功能建议或改进想法
+title: "[Feature] "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        欢迎提出功能建议！请描述你的使用场景和期望的解决方案。
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 问题描述 / 使用场景
+      description: 你遇到了什么痛点？在什么场景下需要这个功能？
+      placeholder: 作为家庭健康管理者，我希望能够快速导出家族成员的健康档案...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: 期望的解决方案
+      description: 你希望 MedMemo 如何解决这个问题？
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 替代方案
+      description: 你是否考虑过其他实现方式或替代工具？
+
+  - type: dropdown
+    id: module
+    attributes:
+      label: 相关模块
+      options:
+        - M01 Chatbox 对话引擎
+        - M02 多模型自由切换
+        - M03 分层长期记忆池
+        - M04 家族关系网图谱
+        - M05 可视化记忆管理台
+        - M06 端云协同
+        - M07 合规与隐私保护
+        - 其他
+
+  - type: checkboxes
+    id: willing
+    attributes:
+      label: 参与贡献
+      description: 你是否愿意参与该功能的开发或测试？
+      options:
+        - label: 我愿意提交 PR 实现这个功能
+        - label: 我愿意参与测试和反馈

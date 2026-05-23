@@ -9,7 +9,6 @@
 *.dylib
 *.test
 *.out
-wire_gen.go
 
 # === Wails ===
 /build/bin/
@@ -53,9 +52,22 @@ coverage.html
 /resources/models/*.bin
 /resources/models/*.param
 
+# === ONNX Runtime dynamic libraries (use scripts/build/download-onnx.*) ===
+/resources/lib/*/
+!/resources/lib/*/.gitkeep
+
+# === ONNX NER models (use scripts/build/download-model.*) ===
+/resources/models/*/
+!/resources/models/*/.gitkeep
+
 # === Temporary ===
 /tmp/
 *.tmp
 *.bak
 /AGENTS.md
 /medmemo/
+/web/test-report/
+/.github/FUNDING.yml
+/build/package/AppDir/usr/bin/MedMemo
+/build/package/AppDir/
+/.hermes/

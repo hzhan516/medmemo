@@ -1,0 +1,178 @@
+[
+  {
+    "id": "openai",
+    "name": "OpenAI",
+    "apiHost": "https://api.openai.com",
+    "defaultModel": "gpt-4o",
+    "models": ["gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo"],
+    "description": "OpenAI 官方 API，GPT 系列模型",
+    "docsUrl": "https://platform.openai.com/docs",
+    "type": "cloud",
+    "authMethods": ["api_key"]
+  },
+  {
+    "id": "microsoft",
+    "name": "Microsoft Copilot",
+    "apiHost": "https://models.inference.ai.azure.com",
+    "defaultModel": "gpt-4o",
+    "models": ["gpt-4o", "gpt-4o-mini", "gpt-35-turbo"],
+    "description": "Microsoft Azure 托管的 OpenAI 服务，支持 OAuth Device Flow",
+    "docsUrl": "https://learn.microsoft.com/azure/ai-services/openai",
+    "type": "cloud",
+    "authMethods": ["oauth_device"]
+  },
+  {
+    "id": "github",
+    "name": "GitHub Copilot",
+    "apiHost": "https://models.inference.ai.azure.com",
+    "defaultModel": "gpt-4o",
+    "models": ["gpt-4o", "Meta-Llama-3.1-70B-Instruct", "Mistral-large"],
+    "description": "GitHub Models 推理平台，支持 OAuth Device Flow",
+    "docsUrl": "https://docs.github.com/en/copilot",
+    "type": "cloud",
+    "authMethods": ["oauth_device"]
+  },
+  {
+    "id": "gemini",
+    "name": "Gemini (Google)",
+    "apiHost": "https://generativelanguage.googleapis.com/v1beta/openai",
+    "defaultModel": "gemini-1.5-flash",
+    "models": ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.5-pro-latest"],
+    "description": "Google 多模态大模型，支持 OAuth Device Flow",
+    "docsUrl": "https://ai.google.dev/docs",
+    "type": "cloud",
+    "authMethods": ["oauth_device", "api_key"]
+  },
+  {
+    "id": "claude",
+    "name": "Claude (Anthropic)",
+    "apiHost": "https://api.anthropic.com",
+    "defaultModel": "claude-3-5-sonnet",
+    "models": ["claude-3-5-sonnet", "claude-3-opus", "claude-3-haiku"],
+    "description": "Anthropic 出品，长上下文与安全性突出",
+    "docsUrl": "https://docs.anthropic.com",
+    "type": "cloud",
+    "authMethods": ["api_key"]
+  },
+  {
+    "id": "grok",
+    "name": "Grok (xAI)",
+    "apiHost": "https://api.x.ai",
+    "defaultModel": "grok-1",
+    "models": ["grok-1", "grok-1.5"],
+    "description": "xAI 出品，实时信息获取能力强",
+    "docsUrl": "https://docs.x.ai",
+    "type": "cloud",
+    "authMethods": ["api_key"]
+  },
+  {
+    "id": "doubao",
+    "name": "豆包 (字节跳动)",
+    "apiHost": "https://ark.cn-beijing.volces.com/api/v3",
+    "defaultModel": "doubao-pro",
+    "models": ["doubao-pro", "doubao-lite"],
+    "description": "字节跳动出品，中文场景优化",
+    "docsUrl": "https://www.volcengine.com/docs/82379",
+    "type": "cloud",
+    "authMethods": ["api_key"]
+  },
+  {
+    "id": "kimi",
+    "name": "Kimi (Moonshot)",
+    "apiHost": "https://api.moonshot.cn",
+    "defaultModel": "moonshot-v1-8k",
+    "models": ["moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k"],
+    "description": "Moonshot 出品，中文场景表现出色，支持 OAuth Device Flow",
+    "docsUrl": "https://platform.moonshot.cn/docs",
+    "type": "cloud",
+    "authMethods": ["oauth_device", "api_key"]
+  },
+  {
+    "id": "qwen",
+    "name": "通义千问 (阿里云)",
+    "apiHost": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "defaultModel": "qwen-turbo",
+    "models": ["qwen-turbo", "qwen-plus", "qwen-max"],
+    "description": "阿里云出品，国内 API 稳定",
+    "docsUrl": "https://help.aliyun.com/dashscope",
+    "type": "cloud",
+    "authMethods": ["api_key"]
+  },
+  {
+    "id": "zhipu",
+    "name": "智谱 AI (GLM)",
+    "apiHost": "https://open.bigmodel.cn/api/paas/v4",
+    "defaultModel": "glm-4",
+    "models": ["glm-4", "glm-4-flash", "glm-4-plus"],
+    "description": "智谱华章，GLM 系列模型",
+    "docsUrl": "https://open.bigmodel.cn/dev/howuse/glm-4",
+    "type": "cloud",
+    "authMethods": ["api_key"]
+  },
+  {
+    "id": "deepseek",
+    "name": "DeepSeek",
+    "apiHost": "https://api.deepseek.com",
+    "defaultModel": "deepseek-chat",
+    "models": ["deepseek-chat", "deepseek-reasoner"],
+    "description": "深度求索，高性价比中文大模型",
+    "docsUrl": "https://platform.deepseek.com/docs",
+    "type": "cloud",
+    "authMethods": ["api_key"]
+  },
+  {
+    "id": "minimax",
+    "name": "MiniMax",
+    "apiHost": "https://api.minimax.chat/v1",
+    "defaultModel": "abab6.5s-chat",
+    "models": ["abab6.5s-chat", "abab6-chat"],
+    "description": "MiniMax 多模态大模型",
+    "docsUrl": "https://www.minimaxi.com/docs",
+    "type": "cloud",
+    "authMethods": ["api_key"]
+  },
+  {
+    "id": "xiaomi",
+    "name": "Xiaomi Mimo",
+    "apiHost": "https://api.mi.ai",
+    "defaultModel": "mimo-pro",
+    "models": ["mimo-pro", "mimo-lite"],
+    "description": "小米 AI 大模型",
+    "docsUrl": "https://mi.ai",
+    "type": "cloud",
+    "authMethods": ["api_key"]
+  },
+  {
+    "id": "hunyuan",
+    "name": "腾讯混元",
+    "apiHost": "https://hunyuan.tencentcloudapi.com",
+    "defaultModel": "hunyuan-pro",
+    "models": ["hunyuan-pro", "hunyuan-standard"],
+    "description": "腾讯出品，中文大模型",
+    "docsUrl": "https://cloud.tencent.com/document/product/1729",
+    "type": "cloud",
+    "authMethods": ["api_key"]
+  },
+  {
+    "id": "vertex",
+    "name": "Vertex AI (Google Cloud)",
+    "apiHost": "https://{region}-aiplatform.googleapis.com",
+    "defaultModel": "gemini-1.5-pro",
+    "models": [],
+    "description": "Google Cloud Vertex AI，使用 Service Account 认证",
+    "docsUrl": "https://cloud.google.com/vertex-ai/docs",
+    "type": "cloud",
+    "authMethods": ["service_account"]
+  },
+  {
+    "id": "ollama",
+    "name": "Ollama (本地)",
+    "apiHost": "http://localhost:11434",
+    "defaultModel": "llama3",
+    "models": [],
+    "description": "本地运行，无需联网，需先安装 Ollama",
+    "docsUrl": "https://ollama.com/docs",
+    "type": "local",
+    "authMethods": ["api_key"]
+  }
+]

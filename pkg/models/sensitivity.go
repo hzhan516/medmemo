@@ -11,11 +11,13 @@ const (
 
 // SensitiveEntity 表示识别到的敏感实体。
 type SensitiveEntity struct {
-	Text     string
-	Type     string // 如 "姓名", "身份证号", "疾病名"
-	Level    SensitivityLevel
-	StartPos int
-	EndPos   int
+	Text        string
+	Type        string // 如 "姓名", "身份证号", "疾病名"
+	Level       SensitivityLevel
+	StartPos    int
+	EndPos      int
+	Score       float32 // 置信度 [0,1]，L2 NER 模型输出用
+	Placeholder string  // 该实体被替换后的占位符，如 "{{phone_a3f7b2d1}}"
 }
 
 // DeidentifyResult 脱敏处理结果。
