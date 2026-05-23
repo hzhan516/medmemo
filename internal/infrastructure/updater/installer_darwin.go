@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/medmemo/medmemo/internal/application/port"
+	"github.com/hzhan516/medmemo/internal/application/port"
 )
 
 // NewInstaller 根据当前运行平台创建对应的 Installer 实例。
@@ -81,7 +81,7 @@ func (d *darwinInstaller) CurrentBinaryPath() string {
 func copyFileDarwin(src, dst string) error {
 	input, err := os.ReadFile(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read source file %s: %w", src, err)
 	}
 	return os.WriteFile(dst, input, 0644)
 }

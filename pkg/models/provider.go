@@ -91,6 +91,14 @@ type ProviderConfig struct {
 
 // Validate 根据 AuthMethod 校验必填字段。
 func (p *ProviderConfig) Validate() error {
+	if err := p.validateBaseFields(); err != nil {
+		return fmt.Errorf("failed to validate base fields: %w", err)
+	}
+	return p.validateAuthParams()
+}
+
+// validateBaseFields 校验 Provider 通用基础字段。
+func (p *ProviderConfig) validateBaseFields() error {
 	if p.ID == "" {
 		return fmt.Errorf("provider id is required")
 	}
@@ -111,7 +119,11 @@ func (p *ProviderConfig) Validate() error {
 	if p.Temperature < 0 || p.Temperature > 2 {
 		return fmt.Errorf("provider temperature must be in range [0, 2]")
 	}
+	return nil
+}
 
+// validateAuthParams 根据 AuthMethod 校验认证参数。
+func (p *ProviderConfig) validateAuthParams() error {
 	method := p.AuthMethod
 	if method == "" {
 		method = AuthMethodAPIToken
@@ -119,32 +131,49 @@ func (p *ProviderConfig) Validate() error {
 
 	switch method {
 	case AuthMethodAPIToken:
-		if p.APIKey == "" {
-			return fmt.Errorf("provider api_key is required for auth method api_key")
-		}
+		return validateAPIToken(p.APIKey)
 	case AuthMethodCLIToken:
-		// apiKey 可为空，运行时从 CLI 缓存读取
-		if p.AuthParams.CLICredentialPath == "" {
-			return fmt.Errorf("provider cli_credential_path is required for auth method cli_token")
-		}
+		return validateCLIToken(p.AuthParams.CLICredentialPath)
 	case AuthMethodOAuthDevice:
-		if p.AuthParams.OAuthClientID == "" {
-			return fmt.Errorf("provider oauth_client_id is required for auth method oauth_device")
-		}
-		if p.AuthParams.OAuthTokenURL == "" {
-			return fmt.Errorf("provider oauth_token_url is required for auth method oauth_device")
-		}
+		return validateOAuthDevice(p.AuthParams.OAuthClientID, p.AuthParams.OAuthTokenURL)
 	case AuthMethodServiceAccount:
-		if p.AuthParams.GCPProjectID == "" {
-			return fmt.Errorf("provider gcp_project_id is required for auth method service_account")
-		}
-		if p.AuthParams.SAJSON == "" {
-			return fmt.Errorf("provider sa_json is required for auth method service_account")
-		}
+		return validateServiceAccount(p.AuthParams.GCPProjectID, p.AuthParams.SAJSON)
 	default:
 		return fmt.Errorf("unknown auth method: %s", method)
 	}
+}
 
+func validateAPIToken(apiKey string) error {
+	if apiKey == "" {
+		return fmt.Errorf("provider api_key is required for auth method api_key")
+	}
+	return nil
+}
+
+func validateCLIToken(path string) error {
+	if path == "" {
+		return fmt.Errorf("provider cli_credential_path is required for auth method cli_token")
+	}
+	return nil
+}
+
+func validateOAuthDevice(clientID, tokenURL string) error {
+	if clientID == "" {
+		return fmt.Errorf("provider oauth_client_id is required for auth method oauth_device")
+	}
+	if tokenURL == "" {
+		return fmt.Errorf("provider oauth_token_url is required for auth method oauth_device")
+	}
+	return nil
+}
+
+func validateServiceAccount(projectID, saJSON string) error {
+	if projectID == "" {
+		return fmt.Errorf("provider gcp_project_id is required for auth method service_account")
+	}
+	if saJSON == "" {
+		return fmt.Errorf("provider sa_json is required for auth method service_account")
+	}
 	return nil
 }
 

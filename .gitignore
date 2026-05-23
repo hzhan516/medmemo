@@ -70,3 +70,4 @@ coverage.html
 /.github/FUNDING.yml
 /build/package/AppDir/usr/bin/MedMemo
 /build/package/AppDir/
+/.hermes/

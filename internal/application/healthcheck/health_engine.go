@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/medmemo/medmemo/internal/application/port"
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/internal/application/port"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 const (
@@ -122,7 +122,7 @@ func (e *HealthEngine) checkAll(ctx context.Context) {
 
 // checkOne 对单个 Provider 执行连通性检测（2 秒超时）。
 func (e *HealthEngine) checkOne(ctx context.Context, p *models.ProviderConfig) port.HealthResult {
-	start := time.Now()
+	start := time.Now().UTC()
 
 	checkCtx, cancel := context.WithTimeout(ctx, e.checkTimeout)
 	defer cancel()
@@ -211,7 +211,14 @@ func (e *HealthEngine) updateResult(result port.HealthResult) {
 		return
 	}
 
-	old := oldValue.(port.HealthResult)
+	old, ok := oldValue.(port.HealthResult)
+	if !ok {
+		// 类型断言失败，视为首次检测，触发回调
+		if e.onChange != nil {
+			e.onChange(result)
+		}
+		return
+	}
 	if old.Status != result.Status && e.onChange != nil {
 		e.onChange(result)
 	}
@@ -238,7 +245,11 @@ func (e *HealthEngine) GetStatus(providerID string) (port.HealthResult, bool) {
 	if !ok {
 		return port.HealthResult{}, false
 	}
-	return val.(port.HealthResult), true
+	result, ok := val.(port.HealthResult)
+	if !ok {
+		return port.HealthResult{}, false
+	}
+	return result, true
 }
 
 // SetOnChange 设置状态变更回调。

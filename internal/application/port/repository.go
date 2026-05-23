@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/medmemo/medmemo/internal/domain/entity"
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 // ProviderStore 定义 Provider 配置的持久化接口。

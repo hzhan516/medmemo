@@ -27,6 +27,10 @@ test:
 test-integration:
 	go test -race -tags=integration ./...
 
+# 运行 E2E 测试
+test-e2e:
+	go test -tags=e2e ./e2e/go/...
+
 # 查看测试覆盖率
 coverage: test
 	go tool cover -html=coverage.out -o coverage.html

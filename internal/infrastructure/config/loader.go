@@ -10,8 +10,8 @@ import (
 	"strconv"
 
 	"github.com/google/wire"
-	"github.com/medmemo/medmemo/internal/domain/entity"
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/pkg/models"
 	"gopkg.in/yaml.v3"
 )
 
@@ -88,12 +88,8 @@ func (l *Loader) Load() (*entity.AppConfig, error) {
 }
 
 func (l *Loader) loadDefaults() *rawConfig {
-	enableCloud := defaultEnableCloud
-	enableAnalytics := defaultEnableAnalytics
-	updateCheckEnabled := true
 	updateChannel := string(entity.ChannelBeta)
 	desensitizationLevel := defaultDesensitizationLevel
-	dataRetentionDays := defaultDataRetentionDays
 	dataDir := expandTilde(defaultDataDir)
 	if dataDir == "" {
 		// 兜底：若无法解析主目录，使用当前工作目录下的 .medmemo/data
@@ -103,16 +99,16 @@ func (l *Loader) loadDefaults() *rawConfig {
 		DataDir:              dataDir,
 		DefaultModel:         defaultModel,
 		Language:             defaultLanguage,
-		EnableCloud:          &enableCloud,
-		EnableAnalytics:      &enableAnalytics,
+		EnableCloud:          new(defaultEnableCloud),
+		EnableAnalytics:      new(defaultEnableAnalytics),
 		ProviderType:         string(defaultProviderType),
 		APIEndpoint:          "",
 		APIKeyFile:           "",
 		ModelDir:             defaultModelDir,
-		UpdateCheckEnabled:   &updateCheckEnabled,
+		UpdateCheckEnabled:   new(true),
 		UpdateChannel:        updateChannel,
 		DesensitizationLevel: desensitizationLevel,
-		DataRetentionDays:    &dataRetentionDays,
+		DataRetentionDays:    new(defaultDataRetentionDays),
 	}
 }
 
@@ -168,8 +164,7 @@ func (l *Loader) applyEnvOverrides(raw *rawConfig) {
 		raw.ModelDir = v
 	}
 	if v := os.Getenv("MEDMEMO_UPDATE_CHECK"); v != "" {
-		enabled := v == "true" || v == "1"
-		raw.UpdateCheckEnabled = &enabled
+		raw.UpdateCheckEnabled = new(v == "true" || v == "1")
 	}
 	if v := os.Getenv("MEDMEMO_UPDATE_CHANNEL"); v != "" {
 		raw.UpdateChannel = v

@@ -117,6 +117,23 @@ jobs:
       - name: Run integration tests
         run: go test -race -tags=integration ./...
 
+  e2e-test:
+    name: E2E Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Install SQLCipher
+        run: sudo apt-get update && sudo apt-get install -y libsqlcipher-dev
+
+      - name: Run E2E tests
+        run: go test -tags=e2e ./e2e/go/...
+
   build:
     name: Build
     runs-on: ubuntu-latest

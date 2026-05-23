@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/medmemo/medmemo/internal/adapters/auth"
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/internal/adapters/auth"
+	"github.com/hzhan516/medmemo/pkg/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

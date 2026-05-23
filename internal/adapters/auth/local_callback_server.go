@@ -86,7 +86,11 @@ func (s *LocalCallbackServer) Start() (int, error) {
 		_ = s.server.Serve(listener)
 	}()
 
-	return listener.Addr().(*net.TCPAddr).Port, nil
+	addr, ok := listener.Addr().(*net.TCPAddr)
+	if !ok {
+		return 0, fmt.Errorf("listener address is not *net.TCPAddr, got %T", listener.Addr())
+	}
+	return addr.Port, nil
 }
 
 // Stop 关闭 HTTP 服务器和监听器。
@@ -138,7 +142,11 @@ func (s *LocalCallbackServer) GetRedirectURI() string {
 	if s.listener == nil {
 		return ""
 	}
-	port := s.listener.Addr().(*net.TCPAddr).Port
+	addr, ok := s.listener.Addr().(*net.TCPAddr)
+	if !ok {
+		return ""
+	}
+	port := addr.Port
 	return fmt.Sprintf("http://127.0.0.1:%d/callback", port)
 }
 

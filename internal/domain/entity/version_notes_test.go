@@ -29,6 +29,33 @@ func TestAllVersionNotesParseable(t *testing.T) {
 	}
 }
 
+func TestLoadVersionNotes(t *testing.T) {
+	t.Run("valid json", func(t *testing.T) {
+		var original = AllVersionNotes
+		AllVersionNotes = nil
+		defer func() { AllVersionNotes = original }()
+
+		data := []byte(`[{"version":"v1.0","title":"Test","features":["f1"],"fixes":[]}]`)
+		if err := loadVersionNotes(data); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(AllVersionNotes) != 1 {
+			t.Errorf("expected 1 note, got %d", len(AllVersionNotes))
+		}
+	})
+
+	t.Run("invalid json", func(t *testing.T) {
+		var original = AllVersionNotes
+		AllVersionNotes = nil
+		defer func() { AllVersionNotes = original }()
+
+		data := []byte(`invalid json`)
+		if err := loadVersionNotes(data); err == nil {
+			t.Error("expected error for invalid json")
+		}
+	})
+}
+
 func TestAllVersionNotesAscending(t *testing.T) {
 	for i := 1; i < len(AllVersionNotes); i++ {
 		prev, err := parseSemver(AllVersionNotes[i-1].Version)

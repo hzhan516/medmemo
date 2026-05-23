@@ -7,7 +7,7 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/medmemo/medmemo/internal/application/port"
+	"github.com/hzhan516/medmemo/internal/application/port"
 )
 
 // noopInstaller 为不支持平台的空实现，避免编译错误。

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/pkg/models"
 	"github.com/stretchr/testify/assert"
 )
 

@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/google/wire"
-	"github.com/medmemo/medmemo/internal/application/port"
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/internal/application/port"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 // DeviceAuthResponse 表示设备授权端点返回的数据。

@@ -17,8 +17,8 @@ import (
 	"time"
 
 	"github.com/google/wire"
-	"github.com/medmemo/medmemo/internal/application/port"
-	"github.com/medmemo/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/internal/application/port"
+	"github.com/hzhan516/medmemo/internal/domain/entity"
 )
 
 const (
@@ -35,14 +35,21 @@ type GitHubUpdater struct {
 
 // NewGitHubUpdater 构造函数。
 // 测试时可传入自定义 http.Client（如带 mock Transport）以模拟 API 响应。
-func NewGitHubUpdater(client ...*http.Client) *GitHubUpdater {
-	if len(client) > 0 && client[0] != nil {
-		return &GitHubUpdater{client: client[0]}
+func NewGitHubUpdater(client *http.Client) *GitHubUpdater {
+	if client != nil {
+		return &GitHubUpdater{client: client}
 	}
 	return &GitHubUpdater{
 		client: &http.Client{
 			Timeout: defaultHTTPTimeout,
 		},
+	}
+}
+
+// NewDefaultHTTPClient 返回带默认超时的 HTTP 客户端，供 Wire 注入使用。
+func NewDefaultHTTPClient() *http.Client {
+	return &http.Client{
+		Timeout: defaultHTTPTimeout,
 	}
 }
 
@@ -178,58 +185,62 @@ func (g *GitHubUpdater) VerifyChecksum(path, expectedSHA256 string) error {
 // matchPlatformAsset 根据当前平台匹配对应的 Release 资产文件。
 // 同时查找配套的 checksums.txt 提取 SHA256 值。
 func (g *GitHubUpdater) matchPlatformAsset(assets []githubAsset) (*githubAsset, string) {
-	goos := runtime.GOOS
-	goarch := runtime.GOARCH
-
-	var targetAsset *githubAsset
-	for i := range assets {
-		a := &assets[i]
-		name := strings.ToLower(a.Name)
-		switch goos {
-		case "linux":
-			if strings.Contains(name, "appimage") && matchArch(name, goarch) {
-				targetAsset = a
-			}
-		case "darwin":
-			if strings.HasSuffix(name, ".dmg") {
-				targetAsset = a
-			}
-		case "windows":
-			// 第一轮：优先匹配 setup/installer 安装程序
-			if strings.HasSuffix(name, ".exe") &&
-				(strings.Contains(name, "setup") || strings.Contains(name, "installer")) {
-				targetAsset = a
-			}
-		}
-		if targetAsset != nil {
-			break
-		}
-	}
-
-	// Windows 第二轮：若未匹配到 setup/installer，回退到任意 exe
-	if targetAsset == nil && goos == "windows" {
-		for i := range assets {
-			a := &assets[i]
-			name := strings.ToLower(a.Name)
-			if strings.HasSuffix(name, ".exe") {
-				targetAsset = a
-				break
-			}
-		}
-	}
-
-	// 查找 checksums.txt 提取对应校验值
+	targetAsset := findTargetAsset(assets, runtime.GOOS, runtime.GOARCH)
 	checksum := ""
 	if targetAsset != nil {
-		for i := range assets {
-			if strings.Contains(strings.ToLower(assets[i].Name), "checksums") {
-				checksum = g.extractChecksum(assets[i].BrowserDownloadURL, targetAsset.Name)
-				break
-			}
+		checksum = g.findChecksum(assets, targetAsset.Name)
+	}
+	return targetAsset, checksum
+}
+
+// findTargetAsset 按平台匹配最佳 Release 资产。
+func findTargetAsset(assets []githubAsset, goos, goarch string) *githubAsset {
+	for i := range assets {
+		a := &assets[i]
+		if matchesPlatform(a.Name, goos, goarch) {
+			return a
 		}
 	}
+	// Windows 回退：未匹配到 setup/installer 时取任意 exe
+	if goos == "windows" {
+		return findWindowsFallback(assets)
+	}
+	return nil
+}
 
-	return targetAsset, checksum
+// matchesPlatform 检查资产文件名是否匹配当前平台与架构。
+func matchesPlatform(name, goos, goarch string) bool {
+	name = strings.ToLower(name)
+	switch goos {
+	case "linux":
+		return strings.Contains(name, "appimage") && matchArch(name, goarch)
+	case "darwin":
+		return strings.HasSuffix(name, ".dmg")
+	case "windows":
+		return strings.HasSuffix(name, ".exe") &&
+			(strings.Contains(name, "setup") || strings.Contains(name, "installer"))
+	}
+	return false
+}
+
+// findWindowsFallback 在未匹配到 setup 安装程序时回退到任意 exe。
+func findWindowsFallback(assets []githubAsset) *githubAsset {
+	for i := range assets {
+		if strings.HasSuffix(strings.ToLower(assets[i].Name), ".exe") {
+			return &assets[i]
+		}
+	}
+	return nil
+}
+
+// findChecksum 从 assets 中查找 checksums.txt 并提取目标文件的 SHA256。
+func (g *GitHubUpdater) findChecksum(assets []githubAsset, targetName string) string {
+	for i := range assets {
+		if strings.Contains(strings.ToLower(assets[i].Name), "checksums") {
+			return g.extractChecksum(assets[i].BrowserDownloadURL, targetName)
+		}
+	}
+	return ""
 }
 
 // matchArch 检查文件名是否包含目标架构标识。
@@ -307,5 +318,6 @@ type githubAsset struct {
 // ProviderSet 供 Wire 使用的 Provider 集合。
 var ProviderSet = wire.NewSet(
 	NewGitHubUpdater,
+	NewDefaultHTTPClient,
 	wire.Bind(new(port.Updater), new(*GitHubUpdater)),
 )

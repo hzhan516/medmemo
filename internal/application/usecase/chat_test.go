@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/medmemo/medmemo/internal/application"
-	"github.com/medmemo/medmemo/internal/application/port"
-	"github.com/medmemo/medmemo/internal/domain/entity"
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/internal/application"
+	"github.com/hzhan516/medmemo/internal/application/port"
+	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/pkg/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -305,12 +305,13 @@ func TestChatOrchestrator_StreamExecute_Success(t *testing.T) {
 	}
 
 	var collected []string
-	_, err := orch.StreamExecute(context.Background(), req, func(chunk string) {
+	_, finalContent, err := orch.StreamExecute(context.Background(), req, func(chunk string) {
 		collected = append(collected, chunk)
 	})
 	require.NoError(t, err)
-	// 先缓冲完整内容，检测通过后统一推送
-	assert.Equal(t, []string{"你好！"}, collected)
+	// 逐 chunk 透传，最终内容经检测后返回
+	assert.Equal(t, []string{"你", "好", "！"}, collected)
+	assert.Equal(t, "你好！", finalContent)
 }
 
 // TestChatOrchestrator_StreamExecute_Error 验证流式错误被正确包装。
@@ -325,7 +326,7 @@ func TestChatOrchestrator_StreamExecute_Error(t *testing.T) {
 		ProviderID: "test-provider",
 	}
 
-	_, err := orch.StreamExecute(context.Background(), req, func(chunk string) {})
+	_, _, err := orch.StreamExecute(context.Background(), req, func(chunk string) {})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "stream execution failed")
 }
@@ -350,11 +351,12 @@ func TestChatOrchestrator_StreamExecute_WithDeidentify(t *testing.T) {
 	}
 
 	var full string
-	_, err := orch.StreamExecute(context.Background(), req, func(chunk string) {
+	_, finalContent, err := orch.StreamExecute(context.Background(), req, func(chunk string) {
 		full += chunk
 	})
 	require.NoError(t, err)
 	// LLM 应收到脱敏后的文本
+	assert.Equal(t, "收到", finalContent)
 	require.Len(t, mock.lastMessages, 1)
 	assert.Equal(t, "邮箱 {{EMAIL_abc12345}}", mock.lastMessages[0].Content)
 }

@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/medmemo/medmemo/internal/adapters/repository"
-	"github.com/medmemo/medmemo/internal/application"
-	"github.com/medmemo/medmemo/internal/application/usecase"
-	"github.com/medmemo/medmemo/internal/domain/entity"
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/internal/adapters/repository"
+	"github.com/hzhan516/medmemo/internal/application"
+	"github.com/hzhan516/medmemo/internal/application/usecase"
+	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/pkg/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -73,7 +73,7 @@ func TestE2E_Compliance_L1Block(t *testing.T) {
 
 	convRepo := repository.NewConversationRepoSQLite(conn)
 	checker := &mockComplianceChecker{interceptor: comp}
-	chatOrch := usecase.NewChatOrchestrator(&mockLLMClient{chatReply: "你患有糖尿病，需要治疗。"}, &mockMemoryRepository{}, &mockSensitiveDetector{}, checker, nil, nil)
+	chatOrch := usecase.NewChatOrchestrator(&mockLLMClientFactory{client: &mockLLMClient{chatReply: "你患有糖尿病，需要治疗。"}}, newMockProviderStore(), &mockMemoryRepository{}, &mockSensitiveDetector{}, checker, nil, &mockMemoryQuerier{})
 
 	ctx := context.Background()
 	conv := entity.NewConversation(models.ProviderKimi)
@@ -83,6 +83,7 @@ func TestE2E_Compliance_L1Block(t *testing.T) {
 		ConversationID: conv.ID,
 		Messages:       []models.Message{{Role: models.RoleUser, Content: "测试"}},
 		Model:          models.ProviderKimi,
+		ProviderID:     "test-kimi",
 	})
 	require.NoError(t, err)
 
@@ -145,7 +146,7 @@ func TestE2E_Compliance_PipelineEndToEnd(t *testing.T) {
 
 	// 使用含 L1 触发词的回复
 	mockLLM := &mockLLMClient{chatReply: "你患有高血压病，建议服用药物。"}
-	chatOrch := usecase.NewChatOrchestrator(mockLLM, &mockMemoryRepository{}, &mockSensitiveDetector{}, checker, nil, nil)
+	chatOrch := usecase.NewChatOrchestrator(&mockLLMClientFactory{client: mockLLM}, newMockProviderStore(), &mockMemoryRepository{}, &mockSensitiveDetector{}, checker, nil, &mockMemoryQuerier{})
 
 	ctx := context.Background()
 	conv := entity.NewConversation(models.ProviderKimi)
@@ -159,6 +160,7 @@ func TestE2E_Compliance_PipelineEndToEnd(t *testing.T) {
 		ConversationID: conv.ID,
 		Messages:       []models.Message{{Role: models.RoleUser, Content: "我头晕"}},
 		Model:          models.ProviderKimi,
+		ProviderID:     "test-kimi",
 	})
 	require.NoError(t, err)
 

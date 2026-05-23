@@ -7,20 +7,24 @@
 package main
 
 import (
-	"github.com/medmemo/medmemo/internal/adapters/ai"
-	"github.com/medmemo/medmemo/internal/adapters/auth"
-	"github.com/medmemo/medmemo/internal/adapters/detector"
-	"github.com/medmemo/medmemo/internal/adapters/repository"
-	"github.com/medmemo/medmemo/internal/adapters/updater"
-	"github.com/medmemo/medmemo/internal/application/healthcheck"
-	"github.com/medmemo/medmemo/internal/application/pipeline"
-	updater3 "github.com/medmemo/medmemo/internal/application/updater"
-	"github.com/medmemo/medmemo/internal/application/usecase"
-	"github.com/medmemo/medmemo/internal/infrastructure/config"
-	"github.com/medmemo/medmemo/internal/infrastructure/database"
-	"github.com/medmemo/medmemo/internal/infrastructure/onnx"
-	"github.com/medmemo/medmemo/internal/infrastructure/secret"
-	updater2 "github.com/medmemo/medmemo/internal/infrastructure/updater"
+	"github.com/hzhan516/medmemo/internal/adapters/ai"
+	"github.com/hzhan516/medmemo/internal/adapters/auth"
+	"github.com/hzhan516/medmemo/internal/adapters/detector"
+	"github.com/hzhan516/medmemo/internal/adapters/repository"
+	"github.com/hzhan516/medmemo/internal/adapters/updater"
+	"github.com/hzhan516/medmemo/internal/application/healthcheck"
+	"github.com/hzhan516/medmemo/internal/application/pipeline"
+	updater3 "github.com/hzhan516/medmemo/internal/application/updater"
+	"github.com/hzhan516/medmemo/internal/application/usecase"
+	"github.com/hzhan516/medmemo/internal/infrastructure/config"
+	"github.com/hzhan516/medmemo/internal/infrastructure/database"
+	"github.com/hzhan516/medmemo/internal/infrastructure/onnx"
+	"github.com/hzhan516/medmemo/internal/infrastructure/secret"
+	updater2 "github.com/hzhan516/medmemo/internal/infrastructure/updater"
+)
+
+import (
+	_ "unsafe"
 )
 
 // Injectors from wire.go:
@@ -71,7 +75,8 @@ func InitializeApp() (*App, func(), error) {
 	healthEngine := healthcheck.NewHealthEngine(providerRepoSQLite)
 	llmClient := ai.ProviderFactory(appConfig)
 	titleGenerator := usecase.NewTitleGenerator(llmClient)
-	gitHubUpdater := updater.NewGitHubUpdater()
+	client := updater.NewDefaultHTTPClient()
+	gitHubUpdater := updater.NewGitHubUpdater(client)
 	installer := updater2.NewInstaller()
 	service := updater3.NewService(gitHubUpdater, installer)
 	tokenRefreshService := auth.NewTokenRefreshServiceBare(providerRepoSQLite)
