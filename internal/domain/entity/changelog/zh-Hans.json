@@ -114,5 +114,23 @@
       "自动更新器双通道发布资源命名对齐",
       "CI 发布流程修复（GitHub Actions、immutable-release 资源上传）"
     ]
+  },
+  {
+    "version": "v1.0.2",
+    "title": "前端消息同步修复与文档完善",
+    "features": [
+      "react-virtuoso 虚拟列表优化长会话渲染性能",
+      "流式事件按 conversation_id 路由，消除会话切换时的消息丢失",
+      "Wails 前后端绑定完整 API 契约文档（6 个模块）",
+      "架构决策记录 ADR-002/003/004 中文翻译",
+      "gitleaks Secret 扫描规则（排除测试文件假密钥误报）"
+    ],
+    "fixes": [
+      "修复主聊天区域消息显示为空（messages/messagesMap 双存储同步缺陷）",
+      "修复 addMessage 在 currentConversationId 为 null 时丢失消息到 messagesMap",
+      "修复 TypingIndicator 在 messages 为空数组时的条件判断异常",
+      "修正代码 TODO 编号与 issues.md 不一致（#017→#019、#021→#023）",
+      "清理 wails_app.go 遗留的 fmt.Println 调试代码"
+    ]
   }
 ]
