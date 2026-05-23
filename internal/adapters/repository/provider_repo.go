@@ -11,10 +11,10 @@ import (
 	"io"
 	"time"
 
-	"github.com/medmemo/medmemo/internal/domain/entity"
-	"github.com/medmemo/medmemo/internal/infrastructure/database"
-	"github.com/medmemo/medmemo/internal/infrastructure/secret"
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/internal/infrastructure/database"
+	"github.com/hzhan516/medmemo/internal/infrastructure/secret"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 const providerMasterKeyName = "provider:api_key:master"
@@ -43,7 +43,7 @@ func NewProviderRepoSQLite(connector database.DBConnector, store secret.Store) (
 // Create 创建新的 Provider 配置。
 func (r *ProviderRepoSQLite) Create(ctx context.Context, provider *models.ProviderConfig) error {
 	if err := validateProvider(provider); err != nil {
-		return err
+		return fmt.Errorf("provider validation failed: %w", err)
 	}
 
 	encryptedKey, err := encrypt(provider.APIKey, r.masterKey)
@@ -77,7 +77,7 @@ func (r *ProviderRepoSQLite) Create(ctx context.Context, provider *models.Provid
 // Update 更新已有 Provider 配置。
 func (r *ProviderRepoSQLite) Update(ctx context.Context, provider *models.ProviderConfig) error {
 	if err := validateProvider(provider); err != nil {
-		return err
+		return fmt.Errorf("provider validation failed: %w", err)
 	}
 
 	encryptedKey, err := encrypt(provider.APIKey, r.masterKey)

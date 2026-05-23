@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 // MemoryTier 表示记忆层级（L1/L2/L3）。

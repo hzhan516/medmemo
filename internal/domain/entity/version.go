@@ -74,7 +74,7 @@ func parseSemver(v string) (semver, error) {
 		v = v[:idx]
 	}
 	parts := strings.Split(v, ".")
-	if len(parts) < 1 || len(parts) > 3 {
+	if len(parts) > 3 {
 		return semver{}, fmt.Errorf("invalid semver format: expected 1~3 segments, got %q", v)
 	}
 	var s semver

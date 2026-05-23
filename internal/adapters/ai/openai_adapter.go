@@ -10,9 +10,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 // OpenAIAdapter 适配 OpenAI 兼容 API。
@@ -24,13 +25,18 @@ type OpenAIAdapter struct {
 }
 
 // NewOpenAIAdapter 构造函数，返回具体类型供 Wire 绑定。
-func NewOpenAIAdapter(apiKey, baseURL, model string) *OpenAIAdapter {
+// timeout 为 HTTP 客户端整体超时（含连接、发送、读取响应体）；
+// 若传入 <=0 则默认 120 秒，以覆盖流式长连接场景。
+func NewOpenAIAdapter(apiKey, baseURL, model string, timeout time.Duration) *OpenAIAdapter {
+	if timeout <= 0 {
+		timeout = 120 * time.Second
+	}
 	return &OpenAIAdapter{
 		apiKey:  apiKey,
 		baseURL: baseURL,
 		model:   model,
 		client: &http.Client{
-			Timeout: 15 * time.Second,
+			Timeout: timeout,
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{
 					MinVersion: tls.VersionTLS12,
@@ -137,10 +143,10 @@ func (a *OpenAIAdapter) doWithRetry(req *http.Request) (*http.Response, error) {
 		if attempt > 0 {
 			// 重试前重置请求体
 			if req.GetBody != nil {
-				req.Body, _ = req.GetBody()
+				req.Body, _ = req.GetBody() // GetBody 返回的 error 通常为 nil（请求体已在前面正确构造）
 			} else if req.Body != nil {
 				if seeker, ok := req.Body.(io.Seeker); ok {
-					_, _ = seeker.Seek(0, io.SeekStart)
+					_, _ = seeker.Seek(0, io.SeekStart) // 对内存 buffer 执行 Seek 不会失败
 				}
 			}
 			delay := min(500*time.Millisecond*(1<<(attempt-1)), 5*time.Second)
@@ -158,7 +164,7 @@ func (a *OpenAIAdapter) doWithRetry(req *http.Request) (*http.Response, error) {
 
 		if resp.StatusCode == http.StatusTooManyRequests {
 			lastErr = fmt.Errorf("attempt %d: rate limited (HTTP 429)", attempt+1)
-			_ = resp.Body.Close()
+			_ = resp.Body.Close() // 429 重试前关闭响应体，关闭错误不影响重试逻辑
 			continue
 		}
 
@@ -201,7 +207,7 @@ func (a *OpenAIAdapter) Chat(ctx context.Context, messages []models.Message) (st
 
 	if resp.StatusCode != http.StatusOK {
 		var errResp chatResponse
-		_ = json.Unmarshal(body, &errResp)
+		_ = json.Unmarshal(body, &errResp) // 非 200 响应尝试解析错误体，解析失败不影响主错误映射
 		return "", mapAPIError(resp.StatusCode, errResp.Error)
 	}
 
@@ -250,42 +256,32 @@ func (a *OpenAIAdapter) StreamChat(ctx context.Context, messages []models.Messag
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		var errResp streamChunk
-		_ = json.Unmarshal(body, &errResp)
+		_ = json.Unmarshal(body, &errResp) // 非 200 响应尝试解析错误体，解析失败不影响主错误映射
 		return nil, mapAPIError(resp.StatusCode, errResp.Error)
 	}
 
+	return a.readStream(resp.Body, callback)
+}
+
+// readStream 读取 SSE 响应体，逐条解析 chunk 并调用回调。
+func (a *OpenAIAdapter) readStream(body io.Reader, callback func(chunk string)) (*models.TokenUsage, error) {
 	var tokenUsage *models.TokenUsage
-	scanner := bufio.NewScanner(resp.Body)
+	scanner := bufio.NewScanner(body)
 	for scanner.Scan() {
 		line := scanner.Text()
-		if line == "" {
-			continue
+		chunk, done, err := parseStreamLine(line)
+		if err != nil {
+			return nil, err
 		}
-		if line == "data: [DONE]" {
+		if done {
 			break
 		}
-		if !bytes.HasPrefix([]byte(line), []byte("data: ")) {
+		if chunk == nil {
 			continue
 		}
 
-		data := line[len("data: "):]
-		var chunk streamChunk
-		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
-			// 忽略无法解析的行
-			continue
-		}
-
-		if chunk.Error != nil {
-			return nil, fmt.Errorf("stream error: %w", chunk.Error)
-		}
-
-		// 提取 usage（通常出现在 choices 为空的最后一条 chunk 中）
 		if chunk.Usage != nil {
-			tokenUsage = &models.TokenUsage{
-				PromptTokens:     chunk.Usage.PromptTokens,
-				CompletionTokens: chunk.Usage.CompletionTokens,
-				TotalTokens:      chunk.Usage.TotalTokens,
-			}
+			tokenUsage = extractTokenUsage(chunk.Usage)
 		}
 
 		if len(chunk.Choices) > 0 {
@@ -304,6 +300,36 @@ func (a *OpenAIAdapter) StreamChat(ctx context.Context, messages []models.Messag
 	}
 
 	return tokenUsage, nil
+}
+
+// parseStreamLine 解析单行 SSE 数据，返回解析后的 chunk、是否结束、错误。
+func parseStreamLine(line string) (*streamChunk, bool, error) {
+	const sseDataPrefix = "data: "
+	if len(line) <= len(sseDataPrefix) || !strings.HasPrefix(line, sseDataPrefix) {
+		return nil, false, nil
+	}
+	if line == "data: [DONE]" {
+		return nil, true, nil
+	}
+
+	data := line[len(sseDataPrefix):]
+	var chunk streamChunk
+	if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+		return nil, false, nil
+	}
+	if chunk.Error != nil {
+		return nil, false, fmt.Errorf("stream error: %w", chunk.Error)
+	}
+	return &chunk, false, nil
+}
+
+// extractTokenUsage 从 usageInfo 结构提取 TokenUsage 模型。
+func extractTokenUsage(u *usageInfo) *models.TokenUsage {
+	return &models.TokenUsage{
+		PromptTokens:     u.PromptTokens,
+		CompletionTokens: u.CompletionTokens,
+		TotalTokens:      u.TotalTokens,
+	}
 }
 
 // CheckAvailability 轻量级连通性检测。

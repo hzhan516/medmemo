@@ -7,11 +7,11 @@ import (
 	"strings"
 
 	"github.com/google/wire"
-	"github.com/medmemo/medmemo/internal/application"
-	"github.com/medmemo/medmemo/internal/application/port"
-	"github.com/medmemo/medmemo/internal/domain/entity"
-	"github.com/medmemo/medmemo/pkg/desensitizer"
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/internal/application"
+	"github.com/hzhan516/medmemo/internal/application/port"
+	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/pkg/desensitizer"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 // Deidentifier 脱敏流水线接口。
@@ -200,25 +200,29 @@ func (c *ChatOrchestrator) Execute(ctx context.Context, req ChatRequest) (*ChatR
 }
 
 // StreamExecute 执行流式对话用例。
-// 先完整收集流式内容，经还原与合规检测通过后再统一推送。
-// 仅 L1（阻断级）替换为安全文本并结束流式输出；L2/L3 保留原文，由外层通过
-// chat:stream:compliance 事件追加标签。流式正常结束时返回 TokenUsage。
-func (c *ChatOrchestrator) StreamExecute(ctx context.Context, req ChatRequest, onChunk func(string)) (*models.TokenUsage, error) {
+// 采用逐 chunk 透传策略：LLM 每生成一个 token 立即通过 onChunk 推送到前端，
+// 保持打字机效果；流结束后在后台执行输出还原与合规检测。
+// 若还原或合规替换导致内容变化，返回的 finalContent 与流式过程中推送的内容不同，
+// 由外层通过 chat:stream:replace 事件通知前端替换。
+// 仅 L1（阻断级）返回 SafeText；L2/L3 保留原文，由外层通过
+// chat:stream:compliance 事件追加标签。流式正常结束时返回 TokenUsage 与最终内容。
+func (c *ChatOrchestrator) StreamExecute(ctx context.Context, req ChatRequest, onChunk func(string)) (*models.TokenUsage, string, error) {
 	messages, deidResult := c.prepareMessages(ctx, req)
 
 	// 根据 ProviderID 动态创建 LLMClient
 	llmClient, err := c.resolveLLMClient(ctx, req.ProviderID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve llm client: %w", err)
+		return nil, "", fmt.Errorf("failed to resolve llm client: %w", err)
 	}
 
-	// 完整收集流式内容（检测通过后再推送，避免用户看到不合规内容）
+	// 逐 chunk 透传，保持打字机流式效果
 	var fullReply strings.Builder
 	usage, err := llmClient.StreamChat(ctx, messages, func(chunk string) {
 		fullReply.WriteString(chunk)
+		onChunk(chunk)
 	})
 	if err != nil {
-		return nil, fmt.Errorf("stream execution failed: %w", err)
+		return nil, "", fmt.Errorf("stream execution failed: %w", err)
 	}
 
 	// 输出还原
@@ -233,17 +237,15 @@ func (c *ChatOrchestrator) StreamExecute(ctx context.Context, req ChatRequest, o
 	// 合规检测
 	compResult, compErr := c.compliance.Check(ctx, reply)
 	if compErr != nil {
-		return nil, fmt.Errorf("compliance check error: %w", compErr)
+		return nil, "", fmt.Errorf("compliance check error: %w", compErr)
 	}
 	// 仅 L1（阻断级）替换为安全文本并结束流式输出
 	// L2/L3 保留原文，由外层通过 chat:stream:compliance 事件追加标签
 	if compResult.Blocked {
-		onChunk(compResult.SafeText)
-		return usage, nil
+		return usage, compResult.SafeText, nil
 	}
 
-	onChunk(reply)
-	return usage, nil
+	return usage, reply, nil
 }
 
 // resolveLLMClient 根据 ProviderID 从 store 查找配置并动态创建 LLMClient。

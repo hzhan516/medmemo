@@ -9,9 +9,9 @@ import (
 	"sort"
 
 	"github.com/google/wire"
-	"github.com/medmemo/medmemo/internal/application/port"
-	"github.com/medmemo/medmemo/pkg/desensitizer"
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/internal/application/port"
+	"github.com/hzhan516/medmemo/pkg/desensitizer"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 // DeidentifyPipeline 三级脱敏流水线编排器。

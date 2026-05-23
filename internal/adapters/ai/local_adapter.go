@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 // LocalAdapter 适配本地 Ollama / llama.cpp 端点。
@@ -21,11 +21,15 @@ type LocalAdapter struct {
 }
 
 // NewLocalAdapter 构造函数。
-func NewLocalAdapter(endpoint, model string) *LocalAdapter {
+// timeout 为 HTTP 客户端整体超时；若传入 <=0 则默认 120 秒。
+func NewLocalAdapter(endpoint, model string, timeout time.Duration) *LocalAdapter {
+	if timeout <= 0 {
+		timeout = 120 * time.Second
+	}
 	return &LocalAdapter{
 		endpoint: endpoint,
 		model:    model,
-		client:   &http.Client{Timeout: 120 * time.Second},
+		client:   &http.Client{Timeout: timeout},
 	}
 }
 

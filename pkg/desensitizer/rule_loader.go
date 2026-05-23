@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 //go:embed rules/*.json

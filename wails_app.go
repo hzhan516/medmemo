@@ -14,17 +14,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/medmemo/medmemo/internal/adapters/ai"
-	"github.com/medmemo/medmemo/internal/adapters/auth"
-	"github.com/medmemo/medmemo/internal/application"
-	"github.com/medmemo/medmemo/internal/application/feedback"
-	"github.com/medmemo/medmemo/internal/application/port"
-	"github.com/medmemo/medmemo/internal/application/stream"
-	"github.com/medmemo/medmemo/internal/application/updater"
-	"github.com/medmemo/medmemo/internal/application/usecase"
-	"github.com/medmemo/medmemo/internal/domain/entity"
-	"github.com/medmemo/medmemo/internal/infrastructure/secret"
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/internal/adapters/ai"
+	"github.com/hzhan516/medmemo/internal/adapters/auth"
+	"github.com/hzhan516/medmemo/internal/application"
+	"github.com/hzhan516/medmemo/internal/application/feedback"
+	"github.com/hzhan516/medmemo/internal/application/port"
+	"github.com/hzhan516/medmemo/internal/application/stream"
+	"github.com/hzhan516/medmemo/internal/application/updater"
+	"github.com/hzhan516/medmemo/internal/application/usecase"
+	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/internal/infrastructure/secret"
+	"github.com/hzhan516/medmemo/pkg/models"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -294,10 +294,18 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) (err error) {
 	})
 	broker.Start()
 
+	// 立即保存用户消息，确保切换会话时可见（不阻塞流式生成）
+	if len(req.Messages) > 0 {
+		lastUser := req.Messages[len(req.Messages)-1]
+		if lastUser.Role == models.RoleUser {
+			a.saveUserMessage(ctx, req.ConversationID, lastUser)
+		}
+	}
+
 	// 收集 AI 完整回复用于持久化
 	var fullReply stringsBuilder
 
-	usage, err := a.chatOrchestrator.StreamExecute(ctx, chatReq, func(chunk string) {
+	usage, finalContent, err := a.chatOrchestrator.StreamExecute(ctx, chatReq, func(chunk string) {
 		fullReply.WriteString(chunk)
 		broker.Content(chunk)
 	})
@@ -313,11 +321,19 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) (err error) {
 		return fmt.Errorf("stream failed: %w", err)
 	}
 
+	// 若最终内容与流式过程中展示的不同（脱敏还原或合规替换），通知前端替换
+	if finalContent != fullReply.String() {
+		runtime.EventsEmit(a.ctx, "chat:stream:replace", map[string]any{
+			"conversation_id": req.ConversationID,
+			"content":         finalContent,
+		})
+	}
+
 	// 保存用户消息和 AI 回复
-	a.saveMessages(ctx, req.ConversationID, req.Messages, fullReply.String())
+	a.saveMessages(ctx, req.ConversationID, req.Messages, finalContent)
 
 	// 流式结束后对完整内容做一次合规检测（MVP 简化策略）
-	compResult, compErr := a.chatOrchestrator.CheckCompliance(ctx, fullReply.String())
+	compResult, compErr := a.chatOrchestrator.CheckCompliance(ctx, finalContent)
 	if compErr == nil && compResult.Level != "L4_NORMAL" {
 		payload := map[string]any{
 			"conversation_id": req.ConversationID,
@@ -345,6 +361,27 @@ func (s *stringsBuilder) WriteString(str string) {
 
 func (s *stringsBuilder) String() string {
 	return string(s.b)
+}
+
+// saveUserMessage 单独保存一条用户消息并更新会话时间戳，
+// 用于流式生成启动前立即持久化，确保切换会话时可见。
+func (a *WailsApp) saveUserMessage(ctx context.Context, convID string, message models.Message) {
+	if a.msgRepo == nil || convID == "" || message.Role != models.RoleUser {
+		return
+	}
+	if err := a.msgRepo.Save(ctx, models.ConversationID(convID), &entity.Message{
+		ID:        fmt.Sprintf("msg_%d", time.Now().UnixNano()),
+		Role:      message.Role,
+		Content:   message.Content,
+		Timestamp: time.Now(),
+	}); err != nil {
+		fmt.Printf("[saveUserMessage] 保存用户消息失败: %v\n", err)
+	}
+	if a.convRepo != nil {
+		if err := a.convRepo.UpdateTimestamp(ctx, models.ConversationID(convID), time.Now()); err != nil {
+			fmt.Printf("[saveUserMessage] 更新会话时间失败: %v\n", err)
+		}
+	}
 }
 
 // saveMessages 将对话消息持久化到数据库。
@@ -821,7 +858,6 @@ func (a *WailsApp) SkipUpdateVersion(v string) error {
 
 // OpenDownloadURL 通过系统浏览器打开指定 URL。
 func (a *WailsApp) OpenDownloadURL(url string) {
-	fmt.Println("[DEBUG] OpenDownloadURL called with:", url)
 	runtime.BrowserOpenURL(a.ctx, url)
 }
 
@@ -910,7 +946,7 @@ func (a *WailsApp) TestAPIKey(providerType string, apiKey string, apiHost string
 	}
 
 	// 其他厂商使用 OpenAI 兼容格式 /v1/models
-	adapter := ai.NewOpenAIAdapter(apiKey, apiHost, "")
+	adapter := ai.NewOpenAIAdapter(apiKey, apiHost, "", 30*time.Second)
 	ok, msg := adapter.CheckAvailability(ctx)
 	if ok {
 		return &TestAPIKeyResult{
@@ -1625,213 +1661,27 @@ func (a *WailsApp) DetectAuthMethods() (*AuthDetectResult, error) {
 	defer cancel()
 
 	var wg sync.WaitGroup
-	results := make([]AuthMethodDetectStatus, 0, 4)
+	results := make([]AuthMethodDetectStatus, 0, 5)
 	var mu sync.Mutex
 
-	// Tier 1: CLI Token（kimi / gemini）
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		status := AuthMethodDetectStatus{
-			Method: "cli_token",
-			Tier:   1,
-		}
+	detectors := []func() AuthMethodDetectStatus{
+		a.detectCLIToken,
+		func() AuthMethodDetectStatus { return a.detectOAuthDevice(ctx) },
+		a.detectAPIKey,
+		func() AuthMethodDetectStatus { return a.detectServiceAccount(ctx) },
+		a.detectLocalModel,
+	}
 
-		svc := auth.NewCLITokenService()
-		// 优先检测 Kimi CLI
-		kimiResult, err := svc.Detect("kimi")
-		if err == nil && kimiResult.Detected && kimiResult.LoggedIn {
-			status.Available = true
-			status.Connected = true
-			status.ProviderType = "kimi"
-			status.Detail = fmt.Sprintf("已检测到 %s CLI，已登录", kimiResult.ProviderType)
+	for _, d := range detectors {
+		wg.Add(1)
+		go func(fn func() AuthMethodDetectStatus) {
+			defer wg.Done()
+			status := fn()
 			mu.Lock()
 			results = append(results, status)
 			mu.Unlock()
-			return
-		}
-		if err == nil && kimiResult.Detected {
-			status.Available = true
-			status.ProviderType = "kimi"
-			status.Detail = fmt.Sprintf("已检测到 %s CLI，未登录", kimiResult.ProviderType)
-			status.Error = "请执行 kimi login 登录"
-			mu.Lock()
-			results = append(results, status)
-			mu.Unlock()
-			return
-		}
-
-		// 降级检测 Gemini CLI
-		geminiResult, err := svc.Detect("gemini")
-		if err == nil && geminiResult.Detected && geminiResult.LoggedIn {
-			status.Available = true
-			status.Connected = true
-			status.ProviderType = "gemini"
-			status.Detail = fmt.Sprintf("已检测到 %s CLI，已登录", geminiResult.ProviderType)
-			mu.Lock()
-			results = append(results, status)
-			mu.Unlock()
-			return
-		}
-		if err == nil && geminiResult.Detected {
-			status.Available = true
-			status.ProviderType = "gemini"
-			status.Detail = fmt.Sprintf("已检测到 %s CLI，未登录", geminiResult.ProviderType)
-			status.Error = "请执行 gcloud auth login 登录"
-			mu.Lock()
-			results = append(results, status)
-			mu.Unlock()
-			return
-		}
-
-		status.Detail = "未检测到 Kimi 或 Gemini CLI 工具"
-		status.Error = "未安装 CLI 工具"
-		mu.Lock()
-		results = append(results, status)
-		mu.Unlock()
-	}()
-
-	// Tier 2: OAuth Device Flow
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		status := AuthMethodDetectStatus{
-			Method: "oauth_device",
-			Tier:   2,
-		}
-
-		if a.deviceFlowSvc == nil {
-			status.Detail = "OAuth Device Flow 服务未初始化"
-			status.Error = "服务不可用"
-			mu.Lock()
-			results = append(results, status)
-			mu.Unlock()
-			return
-		}
-
-		// OAuth Device Flow 服务已初始化即视为可用
-		// 实际是否已授权需通过 ListProviders 检查是否有 oauth_device 类型的 provider
-		status.Available = true
-		status.Detail = "支持 OAuth Device Flow 授权"
-
-		// 检查是否已有 oauth_device 类型的 provider
-		providers, err := a.providerStore.List(ctx)
-		if err == nil {
-			for _, p := range providers {
-				if p.AuthMethod == models.AuthMethodOAuthDevice {
-					status.Connected = true
-					status.ProviderType = p.ModelID
-					status.Detail = fmt.Sprintf("已配置 OAuth Device Flow（%s）", p.Name)
-					break
-				}
-			}
-		}
-
-		mu.Lock()
-		results = append(results, status)
-		mu.Unlock()
-	}()
-
-	// Tier 3: API Key
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		status := AuthMethodDetectStatus{
-			Method: "api_key",
-			Tier:   3,
-		}
-
-		// API Key 方式始终可用（用户可手动输入）
-		status.Available = true
-		status.Detail = "可手动输入 API Key"
-
-		// 检查是否已有 API Key 配置
-		providers := []string{"kimi", "openai", "deepseek", "claude", "qwen"}
-		for _, provider := range providers {
-			key := fmt.Sprintf("apikey:%s", provider)
-			_, err := a.secretStore.Get(key)
-			if err == nil {
-				status.Connected = true
-				status.ProviderType = provider
-				status.Detail = fmt.Sprintf("已配置 %s 的 API Key", provider)
-				break
-			}
-		}
-
-		mu.Lock()
-		results = append(results, status)
-		mu.Unlock()
-	}()
-
-	// Tier 3.5: Service Account (Vertex AI)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		status := AuthMethodDetectStatus{
-			Method: "service_account",
-			Tier:   3,
-		}
-
-		// Service Account 方式始终可用（用户可手动粘贴 JSON）
-		status.Available = true
-		status.Detail = "可手动配置 Vertex AI Service Account"
-
-		// 检查是否已有 service_account 类型的 provider
-		providers, err := a.providerStore.List(ctx)
-		if err == nil {
-			for _, p := range providers {
-				if p.AuthMethod == models.AuthMethodServiceAccount {
-					status.Connected = true
-					status.ProviderType = "vertex"
-					status.Detail = fmt.Sprintf("已配置 Vertex AI Service Account（%s）", p.Name)
-					break
-				}
-			}
-		}
-
-		mu.Lock()
-		results = append(results, status)
-		mu.Unlock()
-	}()
-
-	// Tier 4: Local Model (Ollama)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		status := AuthMethodDetectStatus{
-			Method: "local",
-			Tier:   4,
-		}
-
-		detector := ai.NewOllamaDetector()
-		d := detector.Detect()
-
-		if !d.Installed {
-			status.Detail = "未检测到 Ollama"
-			status.Error = "Ollama 未安装"
-			mu.Lock()
-			results = append(results, status)
-			mu.Unlock()
-			return
-		}
-
-		status.Available = true
-		switch {
-		case d.Running && d.HasSmolLM2:
-			status.Connected = true
-			status.Detail = "Ollama 运行中，SmolLM2 已就绪"
-		case d.Running:
-			status.Detail = "Ollama 运行中，SmolLM2 未下载"
-			status.Error = "模型未下载"
-		default:
-			status.Detail = "Ollama 已安装，服务未运行"
-			status.Error = "服务未运行"
-		}
-
-		mu.Lock()
-		results = append(results, status)
-		mu.Unlock()
-	}()
+		}(d)
+	}
 
 	// 等待所有检测完成或超时
 	done := make(chan struct{})
@@ -1842,50 +1692,10 @@ func (a *WailsApp) DetectAuthMethods() (*AuthDetectResult, error) {
 
 	select {
 	case <-done:
-		// 全部完成
 	case <-ctx.Done():
-		// 超时，使用已有结果
 	}
 
-	// 按 Tier 排序
-	for i := range results {
-		if results[i].Method == "" {
-			results[i].Method = methodFromTier(results[i].Tier)
-		}
-	}
-
-	// 计算推荐：按 Tier 顺序找第一个 available && connected 的
-	recommended := ""
-	allUnavailable := true
-	for tier := 1; tier <= 4; tier++ {
-		for _, r := range results {
-			if r.Tier == tier {
-				if r.Available {
-					allUnavailable = false
-				}
-				if r.Available && r.Connected && recommended == "" {
-					recommended = r.Method
-				}
-			}
-		}
-	}
-
-	// 如果没有已连接的，推荐第一个 available 的
-	if recommended == "" && !allUnavailable {
-		for tier := 1; tier <= 4; tier++ {
-			for _, r := range results {
-				if r.Tier == tier && r.Available && recommended == "" {
-					recommended = r.Method
-				}
-			}
-		}
-	}
-
-	// 全部不可用时兜底推荐 local
-	if recommended == "" {
-		recommended = "local"
-	}
-
+	recommended, allUnavailable := computeRecommendation(results)
 	return &AuthDetectResult{
 		Results:        results,
 		Recommended:    recommended,
@@ -1893,17 +1703,165 @@ func (a *WailsApp) DetectAuthMethods() (*AuthDetectResult, error) {
 	}, nil
 }
 
-func methodFromTier(tier int) string {
-	switch tier {
-	case 1:
-		return "cli_token"
-	case 2:
-		return "oauth_device"
-	case 3:
-		return "api_key"
-	case 4:
-		return "local"
-	default:
-		return ""
+// detectCLIToken 检测 Kimi / Gemini CLI Token 认证方式。
+func (a *WailsApp) detectCLIToken() AuthMethodDetectStatus {
+	status := AuthMethodDetectStatus{Method: "cli_token", Tier: 1}
+	svc := auth.NewCLITokenService()
+
+	// 优先检测 Kimi CLI
+	kimiResult, err := svc.Detect("kimi")
+	if err == nil && kimiResult.Detected {
+		status.Available = true
+		status.ProviderType = "kimi"
+		if kimiResult.LoggedIn {
+			status.Connected = true
+			status.Detail = fmt.Sprintf("已检测到 %s CLI，已登录", kimiResult.ProviderType)
+		} else {
+			status.Detail = fmt.Sprintf("已检测到 %s CLI，未登录", kimiResult.ProviderType)
+			status.Error = "请执行 kimi login 登录"
+		}
+		return status
 	}
+
+	// 降级检测 Gemini CLI
+	geminiResult, err := svc.Detect("gemini")
+	if err == nil && geminiResult.Detected {
+		status.Available = true
+		status.ProviderType = "gemini"
+		if geminiResult.LoggedIn {
+			status.Connected = true
+			status.Detail = fmt.Sprintf("已检测到 %s CLI，已登录", geminiResult.ProviderType)
+		} else {
+			status.Detail = fmt.Sprintf("已检测到 %s CLI，未登录", geminiResult.ProviderType)
+			status.Error = "请执行 gcloud auth login 登录"
+		}
+		return status
+	}
+
+	status.Detail = "未检测到 Kimi 或 Gemini CLI 工具"
+	status.Error = "未安装 CLI 工具"
+	return status
+}
+
+// detectOAuthDevice 检测 OAuth Device Flow 认证方式。
+func (a *WailsApp) detectOAuthDevice(ctx context.Context) AuthMethodDetectStatus {
+	status := AuthMethodDetectStatus{Method: "oauth_device", Tier: 2}
+
+	if a.deviceFlowSvc == nil {
+		status.Detail = "OAuth Device Flow 服务未初始化"
+		status.Error = "服务不可用"
+		return status
+	}
+
+	status.Available = true
+	status.Detail = "支持 OAuth Device Flow 授权"
+
+	providers, err := a.providerStore.List(ctx)
+	if err == nil {
+		for _, p := range providers {
+			if p.AuthMethod == models.AuthMethodOAuthDevice {
+				status.Connected = true
+				status.ProviderType = p.ModelID
+				status.Detail = fmt.Sprintf("已配置 OAuth Device Flow（%s）", p.Name)
+				break
+			}
+		}
+	}
+	return status
+}
+
+// detectAPIKey 检测 API Key 认证方式。
+func (a *WailsApp) detectAPIKey() AuthMethodDetectStatus {
+	status := AuthMethodDetectStatus{Method: "api_key", Tier: 3, Available: true, Detail: "可手动输入 API Key"}
+
+	providers := []string{"kimi", "openai", "deepseek", "claude", "qwen"}
+	for _, provider := range providers {
+		key := fmt.Sprintf("apikey:%s", provider)
+		_, err := a.secretStore.Get(key)
+		if err == nil {
+			status.Connected = true
+			status.ProviderType = provider
+			status.Detail = fmt.Sprintf("已配置 %s 的 API Key", provider)
+			break
+		}
+	}
+	return status
+}
+
+// detectServiceAccount 检测 Vertex AI Service Account 认证方式。
+func (a *WailsApp) detectServiceAccount(ctx context.Context) AuthMethodDetectStatus {
+	status := AuthMethodDetectStatus{Method: "service_account", Tier: 3, Available: true, Detail: "可手动配置 Vertex AI Service Account"}
+
+	providers, err := a.providerStore.List(ctx)
+	if err == nil {
+		for _, p := range providers {
+			if p.AuthMethod == models.AuthMethodServiceAccount {
+				status.Connected = true
+				status.ProviderType = "vertex"
+				status.Detail = fmt.Sprintf("已配置 Vertex AI Service Account（%s）", p.Name)
+				break
+			}
+		}
+	}
+	return status
+}
+
+// detectLocalModel 检测 Ollama 本地模型认证方式。
+func (a *WailsApp) detectLocalModel() AuthMethodDetectStatus {
+	status := AuthMethodDetectStatus{Method: "local", Tier: 4}
+
+	detector := ai.NewOllamaDetector()
+	d := detector.Detect()
+
+	if !d.Installed {
+		status.Detail = "未检测到 Ollama"
+		status.Error = "Ollama 未安装"
+		return status
+	}
+
+	status.Available = true
+	switch {
+	case d.Running && d.HasSmolLM2:
+		status.Connected = true
+		status.Detail = "Ollama 运行中，SmolLM2 已就绪"
+	case d.Running:
+		status.Detail = "Ollama 运行中，SmolLM2 未下载"
+		status.Error = "模型未下载"
+	default:
+		status.Detail = "Ollama 已安装，服务未运行"
+		status.Error = "服务未运行"
+	}
+	return status
+}
+
+// computeRecommendation 从检测结果中计算推荐认证方式。
+func computeRecommendation(results []AuthMethodDetectStatus) (string, bool) {
+	allUnavailable := true
+	for _, r := range results {
+		if r.Available {
+			allUnavailable = false
+			break
+		}
+	}
+
+	// 按 Tier 顺序找第一个 available && connected 的
+	for tier := 1; tier <= 4; tier++ {
+		for _, r := range results {
+			if r.Tier == tier && r.Available && r.Connected {
+				return r.Method, allUnavailable
+			}
+		}
+	}
+
+	// 没有已连接的，推荐第一个 available 的
+	for tier := 1; tier <= 4; tier++ {
+		for _, r := range results {
+			if r.Tier == tier && r.Available {
+				return r.Method, allUnavailable
+			}
+		}
+	}
+
+	// 全部不可用时兜底推荐 local
+	return "local", allUnavailable
 }

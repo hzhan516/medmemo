@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/google/wire"
-	"github.com/medmemo/medmemo/internal/infrastructure/secret"
+	"github.com/hzhan516/medmemo/internal/infrastructure/secret"
 	sqlite3 "github.com/mutecomm/go-sqlcipher"
 )
 
@@ -80,7 +80,7 @@ func NewSQLCipherConnector(dataDir string, store secret.Store) (*SQLCipherConnec
 
 	// 验证密钥有效性
 	if _, err := db.Exec("SELECT count(*) FROM sqlite_master"); err != nil {
-		_ = db.Close()
+		_ = db.Close() // 密钥验证失败后的清理关闭，关闭错误非关键（上方已返回主错误）
 		return nil, fmt.Errorf("database key verification failed: %w", err)
 	}
 
@@ -90,13 +90,13 @@ func NewSQLCipherConnector(dataDir string, store secret.Store) (*SQLCipherConnec
 
 	// 启用外键约束
 	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
-		_ = db.Close()
+		_ = db.Close() // 外键启用失败后的清理关闭，关闭错误非关键（上方已返回主错误）
 		return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
 	}
 
 	// DELETE journal 模式，避免 WAL 空主文件导致的密钥验证问题
 	if _, err := db.Exec("PRAGMA journal_mode = DELETE"); err != nil {
-		_ = db.Close()
+		_ = db.Close() // journal_mode 设置失败后的清理关闭，关闭错误非关键（上方已返回主错误）
 		return nil, fmt.Errorf("failed to set journal mode: %w", err)
 	}
 
@@ -190,7 +190,7 @@ func migrateFromPlaintext(dbPath string, key []byte) error {
 	// 验证是有效的 SQLite 数据库
 	var count int
 	if err := plainDB.QueryRow("SELECT count(*) FROM sqlite_master").Scan(&count); err != nil {
-		_ = plainDB.Close()
+		_ = plainDB.Close() // 明文数据库验证失败后的清理关闭，关闭错误非关键（上方已返回主错误）
 		return fmt.Errorf("plaintext database verification failed: %w", err)
 	}
 
@@ -202,48 +202,48 @@ func migrateFromPlaintext(dbPath string, key []byte) error {
 	escapedPath := strings.ReplaceAll(newPath, "'", "''")
 	attachSQL := fmt.Sprintf("ATTACH DATABASE '%s' AS encrypted KEY \"x'%x'\"", escapedPath, key)
 	if _, err := plainDB.Exec(attachSQL); err != nil {
-		_ = plainDB.Close()
-		_ = os.Remove(newPath)
+		_ = plainDB.Close()    // attach 失败后的清理关闭，关闭错误非关键（上方已返回主错误）
+		_ = os.Remove(newPath) // 清理临时加密文件，Remove 错误不影响主错误返回
 		return fmt.Errorf("failed to attach encrypted database: %w", err)
 	}
 
 	// 执行 SQLCipher 原生导出
 	if _, err := plainDB.Exec("SELECT sqlcipher_export('encrypted')"); err != nil {
-		_ = plainDB.Close()
-		_ = os.Remove(newPath)
+		_ = plainDB.Close()    // 导出失败后的清理关闭，关闭错误非关键（上方已返回主错误）
+		_ = os.Remove(newPath) // 清理临时加密文件，Remove 错误不影响主错误返回
 		return fmt.Errorf("sqlcipher_export failed: %w", err)
 	}
 
 	// DETACH
 	if _, err := plainDB.Exec("DETACH DATABASE encrypted"); err != nil {
-		_ = plainDB.Close()
-		_ = os.Remove(newPath)
+		_ = plainDB.Close()    // detach 失败后的清理关闭，关闭错误非关键（上方已返回主错误）
+		_ = os.Remove(newPath) // 清理临时加密文件，Remove 错误不影响主错误返回
 		return fmt.Errorf("failed to detach encrypted database: %w", err)
 	}
 
 	// 关闭明文连接
 	if err := plainDB.Close(); err != nil {
-		_ = os.Remove(newPath)
+		_ = os.Remove(newPath) // 明文关闭失败时清理临时加密文件，Remove 错误不影响主错误返回
 		return fmt.Errorf("failed to close plaintext database: %w", err)
 	}
 
 	// 验证加密文件是否生成
 	encrypted, err := sqlite3.IsEncrypted(newPath)
 	if err != nil || !encrypted {
-		_ = os.Remove(newPath)
+		_ = os.Remove(newPath) // 加密验证失败时清理临时文件，Remove 错误不影响主错误返回
 		return fmt.Errorf("encrypted database verification failed")
 	}
 
 	// 原子替换：明文 → backup，加密 → 主路径
 	backupPath := dbPath + ".backup"
 	if err := os.Rename(dbPath, backupPath); err != nil {
-		_ = os.Remove(newPath)
+		_ = os.Remove(newPath) // 备份失败时清理临时加密文件，Remove 错误不影响主错误返回
 		return fmt.Errorf("failed to backup plaintext database: %w", err)
 	}
 	if err := os.Rename(newPath, dbPath); err != nil {
 		// 尝试恢复
-		_ = os.Rename(backupPath, dbPath)
-		_ = os.Remove(newPath)
+		_ = os.Rename(backupPath, dbPath) // 恢复回退，Rename 失败无额外补救措施（已返回主错误）
+		_ = os.Remove(newPath)            // 清理残留临时文件，Remove 错误不影响主错误返回
 		return fmt.Errorf("failed to replace with encrypted database: %w", err)
 	}
 
