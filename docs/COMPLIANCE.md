@@ -1,111 +1,113 @@
-# 合规与隐私保护文档
+# Compliance and Privacy Protection
 
-> 本文档是 MedMemo 合规体系的开发者参考，涵盖红线清单、脱敏流水线、拦截规则与紧急症状识别。
+> 🌐 [中文版本](./i18n/zh-Hans-CN/COMPLIANCE.md)
 
----
-
-## 合规红线清单（不可触碰）
-
-| 红线类别 | 禁止行为 | 违规后果 |
-|---------|---------|---------|
-| **诊断红线** | 输出确诊性结论（如"你患有XX病"） | 合规致命，阻断发布 |
-| **处方红线** | 推荐具体药品及剂量、开具检查单 | 合规致命，阻断发布 |
-| **治疗红线** | 输出治疗方案、手术建议 | 合规致命，阻断发布 |
-| **AI 身份红线** | 使用"AI医生""智能诊断""数字医生"等称谓 | 合规致命 |
-| **数据商业红线** | 用户健康数据商业化（广告/保险推送） | 信任致命 |
-| **紧急场景红线** | 紧急症状不触发强制就医提醒 | 安全致命 |
-
-### 推荐用词 vs 禁用词汇
-
-| 场景 | 安全用词 | 禁用词汇 |
-|------|---------|---------|
-| 症状关联 | "可能与...有关""常见于...情况""建议关注" | "诊断为""确诊""筛查结果""患有" |
-| 就医建议 | "建议咨询""推荐就诊""可考虑前往" | "必须立即""一定要"（非紧急场景） |
-| 检查建议 | "医生可能会建议...""常规评估可能包括..." | "您需要做...检查""必须做...化验" |
-| 治疗用药 | "治疗方案由医生面诊后制定""请遵医嘱用药" | "治疗""建议您服用...""用...药可以治好" |
-| 风险评估 | "风险因素包括...""家族史可能增加关注必要性" | "您的风险为...%""肯定会/不会..." |
+> This document serves as the developer reference for MedMemo's compliance system, covering red-line policies, the de-identification pipeline, interception rules, and emergency symptom detection.
 
 ---
 
-## 三级脱敏流水线
+## Compliance Red Lines (Non-Negotiable)
+
+| Red Line Category | Prohibited Behavior | Consequence of Violation |
+|:------------------|:--------------------|:-------------------------|
+| **Diagnostic Red Line** | Outputting definitive diagnostic conclusions (e.g., "You have XX disease") | Compliance fatal, blocks release |
+| **Prescription Red Line** | Recommending specific drugs/dosages or ordering tests | Compliance fatal, blocks release |
+| **Treatment Red Line** | Outputting treatment plans or surgical recommendations | Compliance fatal, blocks release |
+| **AI Identity Red Line** | Using terms like "AI doctor," "smart diagnosis," or "digital doctor" | Compliance fatal |
+| **Data Commercialization Red Line** | Commercializing user health data (ads/insurance targeting) | Trust fatal |
+| **Emergency Scenario Red Line** | Failing to trigger mandatory medical reminders for emergency symptoms | Safety fatal |
+
+### Recommended Terminology vs. Prohibited Terms
+
+| Scenario | Safe Wording | Prohibited Wording |
+|:---------|:-------------|:-------------------|
+| Symptom association | "May be related to...", "Commonly seen in...", "Suggested attention" | "Diagnosed as", "Confirmed", "Screening results", "Suffering from" |
+| Medical advice | "Recommended consultation", "Suggest visiting", "May consider" | "Must immediately", "Definitely need to" (non-emergency) |
+| Test recommendations | "Doctor may suggest...", "Routine evaluation may include..." | "You need to do... test", "Must do... lab work" |
+| Treatment/medication | "Treatment plan to be determined by doctor after visit", "Please follow doctor's advice" | "Treatment", "Recommended to take...", "Can be cured with..." |
+| Risk assessment | "Risk factors include...", "Family history may increase attention necessity" | "Your risk is...%", "Definitely will/won't..." |
+
+---
+
+## Three-Tier De-Identification Pipeline
 
 ```
-用户输入
-  → L1 规则脱敏引擎 (<1ms, <1MB)
-    → L2 NER 脱敏模型 (20-50ms, ~50MB int8量化)
-      → L3 关键词字典匹配 (<5ms, ~5MB)
-        → 安全文本输出
+User Input
+  → L1 Rule-Based De-Identification Engine (<1ms, <1MB)
+    → L2 NER De-Identification Model (20-50ms, ~50MB int8 quantized)
+      → L3 Keyword Dictionary Matching (<5ms, ~5MB)
+        → Safe Text Output
 ```
 
-### L1：规则脱敏引擎
+### L1: Rule-Based De-Identification Engine
 
-- Aho-Corasick 多模式匹配，O(n) 时间复杂度
-- 覆盖：身份证号、手机号、银行卡号、邮箱、URL
+- Aho-Corasick multi-pattern matching, O(n) time complexity
+- Coverage: ID card numbers, phone numbers, bank card numbers, email, URL
 
-### L2：NER 脱敏模型
+### L2: NER De-Identification Model
 
-- Hugot + ONNX Runtime 的 BiLSTM-CRF 模型
-- 覆盖：人名、机构名、疾病名、药品名
-- **ONNX Session 非线程安全**，必须通过 2-Worker 串行化调用
+- Hugot + ONNX Runtime BiLSTM-CRF model
+- Coverage: Person names, organization names, disease names, drug names
+- **ONNX Session is not thread-safe**; must be called serially through the 2-Worker pattern
 
-### L3：关键词字典匹配
+### L3: Keyword Dictionary Matching
 
-- Trie 树前缀匹配
-- 兜底策略：专业术语、药品别名、机构简称
+- Trie tree prefix matching
+- Fallback strategy: professional terminology, drug aliases, organization abbreviations
 
-### 分级标记体系
+### Sensitivity Level Classification
 
 ```go
-P1Public     // 公开信息，无需处理
-P2Internal   // 内部信息，软替换（可恢复）
-P3Confidential // 机密信息，硬替换（不可逆）
+P1Public     // Public information, no processing needed
+P2Internal   // Internal information, soft replacement (reversible)
+P3Confidential // Confidential information, hard replacement (irreversible)
 ```
 
 ---
 
-## 四级合规消息拦截
+## Four-Level Compliance Message Interception
 
-拦截层部署在 AI 响应生成与用户展示之间，采用"规则匹配 + 本地轻量模型分类"双层检测。
+The interception layer sits between AI response generation and user display, using a dual-layer detection of "rule matching + local lightweight model classification."
 
-| 风险等级 | 触发条件 | 系统响应 |
-|---------|---------|---------|
-| **L1-阻断级** | 明确疾病诊断结论、具体药物剂量处方、手术建议 | 阻断展示，替换为标准提示语 |
-| **L2-警告级** | 暗示性诊断、非处方药物推荐、检查项目建议 | 允许展示但追加橙色高亮警告框 + 免责声明 |
-| **L3-提示级** | 健康科普内容涉及严重疾病 | 消息底部追加标准免责声明（蓝色提示条） |
-| **L4-正常级** | 一般健康科普、生活方式建议 | 正常展示 |
+| Risk Level | Trigger Condition | System Response |
+|:-----------|:------------------|:----------------|
+| **L1-Block** | Definitive disease diagnosis, specific drug dosage prescriptions, surgical recommendations | Block display, replace with standard prompt |
+| **L2-Warning** | Implied diagnosis, OTC drug recommendations, test suggestions | Allow display but append orange highlighted warning + disclaimer |
+| **L3-Notice** | Health education content involving severe diseases | Append standard disclaimer at message bottom (blue notice bar) |
+| **L4-Normal** | General health education, lifestyle advice | Normal display |
 
-### 流式输出的拦截策略
+### Streaming Output Interception Strategy
 
-1. **标点符号分句缓冲**：按中文/英文标点符号分句，每形成一句完整文本后立即执行检测
-2. **检测通过后再推送**：只有通过 L1~L4 检测的句子，才通过 Wails Events 推送到前端
-3. **L1 阻断词的即时中断**：缓冲过程中命中 L1 级阻断词，**立即中断 Stream**，丢弃后续内容，替换为标准提示语
-4. **性能预算**：分句缓冲 + 单句检测延迟 < 20ms
-
----
-
-## 紧急症状识别
-
-独立于 AI 回复流程，在用户输入阶段即本地实时检测。
-
-| 等级 | 触发条件 | 响应行为 |
-|------|---------|---------|
-| **A级-立即就医** | 胸痛伴呼吸困难、意识丧失、大出血、严重过敏等（~200条） | 全屏红色遮罩弹窗（不可忽略），提供"拨打120"/"查找附近急诊"/"继续咨询" |
-| **B级-尽快就医** | 持续高热>3天、剧烈腹痛、血尿、视力突然下降等（~50条） | 输入区域上方红色警告横幅，需点击"我已了解"后方可继续 |
-
-**性能要求**：检测延迟 < 5ms，不依赖 AI 响应或网络。
+1. **Punctuation-based sentence buffering**: Split by Chinese/English punctuation marks; perform detection immediately after each complete sentence is formed.
+2. **Push only after detection passes**: Only sentences that pass L1~L4 detection are pushed to the frontend via Wails Events.
+3. **L1 blockword instant interruption**: If an L1-level blockword is hit during buffering, **immediately interrupt the Stream**, discard subsequent content, and replace with a standard prompt.
+4. **Performance budget**: Sentence buffering + single-sentence detection latency < 20ms.
 
 ---
 
-## 知情同意与免责声明
+## Emergency Symptom Detection
 
-### 首次启动
+Independent of the AI reply flow; performs local real-time detection at the user input stage.
 
-不可跳过的三步流程：
-1. **核心信息展示** — 产品性质、服务边界、数据使用、风险提示
-2. **理解确认** — 两道测试题，答对后方可进入下一阶段
-3. **主动同意** — 勾选同意框并点击确认，记录加密保存本地
+| Level | Trigger Conditions | Response Behavior |
+|:------|:-------------------|:------------------|
+| **Level A — Seek Immediate Care** | Chest pain with difficulty breathing, loss of consciousness, severe bleeding, severe allergy, etc. (~200 rules) | Full-screen red overlay modal (cannot be dismissed); offers "Call 120", "Find Nearby ER", "Continue Consulting" |
+| **Level B — Seek Care Soon** | Persistent high fever >3 days, severe abdominal pain, blood in urine, sudden vision loss, etc. (~50 rules) | Red warning banner above input area; user must click "I Understand" before continuing |
 
-### 每次会话
+**Performance requirement**: Detection latency < 5ms, independent of AI response or network.
 
-对话界面顶部常驻合规提示条（高度 <= 40px）：
-> "本工具仅提供健康信息参考，不诊断、不治疗，紧急情况请拨打120。"
+---
+
+## Informed Consent and Disclaimer
+
+### First Launch
+
+Non-skippable three-step process:
+1. **Core Information Display** — Product nature, service boundaries, data usage, risk notices
+2. **Comprehension Check** — Two test questions; must answer correctly to proceed
+3. **Active Consent** — Check consent box and click confirm; record encrypted and saved locally
+
+### Every Session
+
+A persistent compliance notice bar at the top of the conversation interface (height <= 40px):
+> "This tool provides health information for reference only. It does not diagnose or treat. For emergencies, please call 120."

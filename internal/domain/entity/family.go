@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 // RelationType 表示家族成员间的亲属关系类型。

@@ -1,0 +1,11 @@
+{
+  "name": "email",
+  "entity_type": "邮箱",
+  "patterns": [
+    "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"
+  ],
+  "keywords": ["@"],
+  "min_digits": 0,
+  "level": "P2",
+  "placeholder": "EMAIL"
+}

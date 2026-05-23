@@ -5,7 +5,7 @@ package service
 import (
 	"context"
 
-	"github.com/medmemo/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/internal/domain/entity"
 )
 
 // MemoryConsolidator 负责记忆冲突检测与合并决策。

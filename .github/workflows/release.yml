@@ -1,0 +1,85 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    name: Release ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: windows-latest
+            platform: windows
+          - os: macos-latest
+            platform: darwin
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Install frontend dependencies
+        run: cd web && npm ci
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsqlcipher-dev libwebkit2gtk-4.1-dev gcc
+
+      - name: Install macOS dependencies
+        if: matrix.platform == 'darwin'
+        run: |
+          brew install sqlcipher create-dmg
+
+      - name: Build and Package
+        run: ./scripts/build/wails-build.sh ${{ matrix.platform }} ${{ github.ref_name }}
+        shell: bash
+
+      - name: Check binary size
+        if: matrix.platform == 'linux'
+        run: |
+          SIZE=$(stat -c%s build/bin/MedMemo)
+          MAX=157286400  # 150MB in bytes
+          if [ $SIZE -gt $MAX ]; then
+            echo "Binary size $SIZE exceeds limit $MAX"
+            exit 1
+          fi
+          echo "Binary size OK: $SIZE bytes"
+        shell: bash
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v5
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --clean --skip=validate
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PLATFORM: ${{ matrix.platform }}

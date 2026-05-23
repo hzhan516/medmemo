@@ -4,23 +4,31 @@ package detector
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/google/wire"
-	"github.com/medmemo/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/pkg/desensitizer"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
-// RuleDetector 基于规则的敏感信息检测器（占位实现）。
-// TODO(作者): 接入 pkg/desensitizer 规则引擎与 ONNX NER 模型 [Issue#030]
-type RuleDetector struct{}
+// RuleDetector 基于规则的敏感信息检测器。
+// 当前接入 pkg/desensitizer L1 规则引擎，L2 NER 模型待后续引入 [Issue#030]。
+type RuleDetector struct {
+	engine *desensitizer.RuleEngine
+}
 
 // NewRuleDetector 创建规则检测器。
 func NewRuleDetector() *RuleDetector {
-	return &RuleDetector{}
+	return &RuleDetector{engine: desensitizer.NewRuleEngine()}
 }
 
-// Detect 检测文本中的敏感实体，当前返回空结果。
+// Detect 检测文本中的敏感实体，返回分级标记结果。
 func (d *RuleDetector) Detect(ctx context.Context, text string) ([]models.SensitiveEntity, error) {
-	return []models.SensitiveEntity{}, nil
+	result, err := d.engine.Process(text)
+	if err != nil {
+		return nil, fmt.Errorf("rule detection failed: %w", err)
+	}
+	return result.Entities, nil
 }
 
 // ProviderSet 供 Wire 使用的 ProviderSet。

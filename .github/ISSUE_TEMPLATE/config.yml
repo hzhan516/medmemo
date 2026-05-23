@@ -1,0 +1,13 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📖 用户指南
+    url: https://github.com/hzhan516/medmemo/blob/main/docs/user-guide/README.md
+    about: 查看用户操作手册、安装指南和常见问题
+
+  - name: 💬 社区讨论
+    url: https://github.com/hzhan516/medmemo/discussions
+    about: 如有使用疑问或想分享使用心得，请前往 Discussions
+
+  - name: 🔒 安全漏洞披露
+    url: mailto:doyle_zhang@outlook.com
+    about: 发现安全漏洞请发送邮件至 doyle_zhang@outlook.com，不要在公开 Issue 中披露
