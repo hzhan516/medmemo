@@ -350,6 +350,48 @@ func migrateSQLiteSchema(ctx context.Context, db *sql.DB) error {
 			ALTER TABLE providers ADD COLUMN auth_params TEXT DEFAULT '{}';
 			`,
 		},
+		{
+			version: 7,
+			sql: `
+			CREATE TABLE IF NOT EXISTS raw_dialogues (
+				message_id TEXT PRIMARY KEY,
+				session_id TEXT NOT NULL,
+				role TEXT NOT NULL CHECK(role IN ('user','assistant','system')),
+				content TEXT NOT NULL,
+				model_name TEXT,
+				timestamp INTEGER NOT NULL,
+				extraction_status TEXT DEFAULT 'unprocessed' CHECK(extraction_status IN ('unprocessed','processing','processed','failed')),
+				created_at INTEGER NOT NULL
+			);
+			CREATE INDEX IF NOT EXISTS idx_raw_session_time ON raw_dialogues(session_id, timestamp);
+			CREATE INDEX IF NOT EXISTS idx_raw_extraction_status ON raw_dialogues(extraction_status);
+
+			CREATE TABLE IF NOT EXISTS extracted_facts (
+				fact_id TEXT PRIMARY KEY,
+				subject TEXT NOT NULL,
+				predicate TEXT NOT NULL,
+				object TEXT NOT NULL,
+				confidence REAL NOT NULL CHECK(confidence >= 0 AND confidence <= 1),
+				source_msg_ids TEXT NOT NULL,
+				status TEXT DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected')),
+				scored_at INTEGER,
+				reviewed_at INTEGER,
+				created_at INTEGER NOT NULL
+			);
+			CREATE INDEX IF NOT EXISTS idx_fact_confidence ON extracted_facts(confidence);
+			CREATE INDEX IF NOT EXISTS idx_fact_status ON extracted_facts(status);
+
+			CREATE TABLE IF NOT EXISTS semantic_embeddings (
+				embedding_id TEXT PRIMARY KEY,
+				fact_id TEXT NOT NULL UNIQUE,
+				vector BLOB NOT NULL,
+				model_version TEXT NOT NULL DEFAULT 'all-MiniLM-L6-v2',
+				created_at INTEGER NOT NULL,
+				FOREIGN KEY (fact_id) REFERENCES extracted_facts(fact_id) ON DELETE CASCADE
+			);
+			CREATE INDEX IF NOT EXISTS idx_embedding_fact ON semantic_embeddings(fact_id);
+			`,
+		},
 	}
 
 	for _, m := range migrations {

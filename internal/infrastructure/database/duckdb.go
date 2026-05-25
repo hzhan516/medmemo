@@ -62,6 +62,12 @@ func NewSQLiteConnector(dataDir string) (*SQLiteConnector, error) {
 		return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
 	}
 
+	// WAL 模式提升并发读写性能
+	if _, err := db.Exec("PRAGMA journal_mode = WAL"); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("failed to set WAL journal mode: %w", err)
+	}
+
 	return &SQLiteConnector{db: db, path: dbPath}, nil
 }
 
