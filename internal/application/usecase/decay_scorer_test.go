@@ -61,16 +61,8 @@ func TestDecayScorer_CustomLambda(t *testing.T) {
 	assert.InDelta(t, 0.5, score, 0.01)
 }
 
-// ScoredItem 用于批量排序测试的辅助结构
-type scoredItem struct {
-	id         string
-	similarity float64
-	createdAt  time.Time
-}
-
 func TestDecayScorer_Rank(t *testing.T) {
 	s := NewDecayScorer()
-	now := time.Now().UTC()
 
 	items := []struct {
 		id         string
