@@ -154,7 +154,9 @@ func TestEmbeddingRepo_SearchSimilar(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, results, 2)
 	assert.Equal(t, "fact_sim_0", results[0].FactID) // v1 最相似
+	assert.InDelta(t, 1.0, results[0].Similarity, 0.001)
 	assert.Equal(t, "fact_sim_1", results[1].FactID) // v2 次相似
+	assert.Greater(t, results[0].Similarity, results[1].Similarity)
 
 	// topK=10，应返回全部 4 个，顺序为 v1 > v2 > v3 > v4
 	results, err = repo.SearchSimilar(ctx, query, 10)
@@ -164,6 +166,10 @@ func TestEmbeddingRepo_SearchSimilar(t *testing.T) {
 	assert.Equal(t, "fact_sim_1", results[1].FactID)
 	assert.Equal(t, "fact_sim_2", results[2].FactID)
 	assert.Equal(t, "fact_sim_3", results[3].FactID)
+	// 验证相似度单调递减
+	for i := 1; i < len(results); i++ {
+		assert.GreaterOrEqual(t, results[i-1].Similarity, results[i].Similarity)
+	}
 }
 
 func TestEmbeddingRepo_SearchSimilar_EmptyResult(t *testing.T) {

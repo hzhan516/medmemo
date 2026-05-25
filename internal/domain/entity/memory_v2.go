@@ -147,6 +147,12 @@ func (f *ExtractedFact) SetScoredAt() {
 
 const EmbeddingDimension = 384
 
+// ScoredEmbedding 封装语义嵌入及其相似度分数（由向量搜索返回）。
+type ScoredEmbedding struct {
+	*SemanticEmbedding
+	Similarity float64 // 余弦相似度，范围 [0,1]
+}
+
 // SemanticEmbedding 表示 Layer 3 的语义向量嵌入实体。
 type SemanticEmbedding struct {
 	EmbeddingID  string

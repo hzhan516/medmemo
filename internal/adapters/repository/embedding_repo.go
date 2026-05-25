@@ -71,8 +71,8 @@ func (r *EmbeddingRepoSQLite) DeleteByFactID(ctx context.Context, factID string)
 	return nil
 }
 
-// SearchSimilar 执行向量相似度搜索，返回与查询向量最相似的 topK 个嵌入。
-func (r *EmbeddingRepoSQLite) SearchSimilar(ctx context.Context, queryVector []float32, topK int) ([]*entity.SemanticEmbedding, error) {
+// SearchSimilar 执行向量相似度搜索，返回与查询向量最相似的 topK 个嵌入（含相似度分数）。
+func (r *EmbeddingRepoSQLite) SearchSimilar(ctx context.Context, queryVector []float32, topK int) ([]*entity.ScoredEmbedding, error) {
 	if topK <= 0 {
 		return nil, nil
 	}
@@ -83,9 +83,10 @@ func (r *EmbeddingRepoSQLite) SearchSimilar(ctx context.Context, queryVector []f
 	}
 
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT embedding_id, fact_id, vector, model_version, created_at
+		SELECT embedding_id, fact_id, vector, model_version, created_at,
+		       vec_cosine(?, vector) as similarity
 		FROM semantic_embeddings
-		ORDER BY vec_cosine(?, vector) DESC
+		ORDER BY similarity DESC
 		LIMIT ?
 	`, queryBlob, topK)
 	if err != nil {
@@ -93,13 +94,14 @@ func (r *EmbeddingRepoSQLite) SearchSimilar(ctx context.Context, queryVector []f
 	}
 	defer rows.Close()
 
-	var results []*entity.SemanticEmbedding
+	var results []*entity.ScoredEmbedding
 	for rows.Next() {
 		var e entity.SemanticEmbedding
 		var vectorBytes []byte
 		var created int64
+		var similarity float64
 
-		if err := rows.Scan(&e.EmbeddingID, &e.FactID, &vectorBytes, &e.ModelVersion, &created); err != nil {
+		if err := rows.Scan(&e.EmbeddingID, &e.FactID, &vectorBytes, &e.ModelVersion, &created, &similarity); err != nil {
 			return nil, fmt.Errorf("failed to scan embedding row: %w", err)
 		}
 
@@ -109,7 +111,10 @@ func (r *EmbeddingRepoSQLite) SearchSimilar(ctx context.Context, queryVector []f
 		}
 		e.Vector = vec
 		e.CreatedAt = time.UnixMilli(created).UTC()
-		results = append(results, &e)
+		results = append(results, &entity.ScoredEmbedding{
+			SemanticEmbedding: &e,
+			Similarity:        similarity,
+		})
 	}
 
 	if err := rows.Err(); err != nil {
