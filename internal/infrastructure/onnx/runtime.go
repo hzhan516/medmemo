@@ -103,7 +103,7 @@ type EntitySpan struct {
 	Score float32 // 置信度，范围 [0, 1]
 }
 
-// Engine ONNX 推理引擎，管理 Worker Pool 和任务分发。
+// Engine ONNX 推理引擎，管理 NER 和 Embedding 两个 Worker Pool。
 type Engine struct {
 	workers   []*NERWorker
 	taskCh    chan nerTask
@@ -113,6 +113,13 @@ type Engine struct {
 	modelPath string
 	libPath   string
 	available bool
+
+	// 嵌入推理相关
+	embeddingPipeline  *pipelines.FeatureExtractionPipeline
+	embeddingWorkers   []*EmbeddingWorker
+	embeddingTaskCh    chan embeddingTask
+	embeddingWg        sync.WaitGroup
+	embeddingAvailable bool
 }
 
 type nerTask struct {
@@ -126,18 +133,31 @@ type nerResult struct {
 	err   error
 }
 
+type embeddingTask struct {
+	ctx      context.Context
+	texts    []string
+	resultCh chan embeddingResult
+}
+
+type embeddingResult struct {
+	embeddings [][]float32
+	err        error
+}
+
 // EngineConfig 是 Engine 的构造参数，避免 Wire 无法区分多个 string 参数。
 type EngineConfig struct {
-	ResourceDir string
-	ModelPath   string
+	ResourceDir      string
+	ModelPath        string // NER 模型路径
+	EmbeddingModelPath string // 嵌入模型路径（可选）
 }
 
 // NewEngine 创建推理引擎。
 // 若动态库缺失或模型路径无效，返回 available=false 的引擎，不阻塞应用启动。
 func NewEngine(cfg EngineConfig) (*Engine, error) {
 	e := &Engine{
-		taskCh:    make(chan nerTask, 16),
-		modelPath: cfg.ModelPath,
+		taskCh:          make(chan nerTask, 16),
+		embeddingTaskCh: make(chan embeddingTask, 16),
+		modelPath:       cfg.ModelPath,
 	}
 
 	libPath, err := PlatformLibPath(cfg.ResourceDir)
@@ -185,17 +205,22 @@ func NewEngine(cfg EngineConfig) (*Engine, error) {
 	}
 	e.pipeline = pipeline
 
-	// 创建 2 个 Worker
+	// 创建 2 个 NER Worker
 	const workerCount = 2
 	e.workers = make([]*NERWorker, workerCount)
 	for i := 0; i < workerCount; i++ {
 		e.workers[i] = NewNERWorker(i, pipeline)
 	}
 
-	// 启动 Worker goroutine
+	// 启动 NER Worker goroutine
 	for i := 0; i < workerCount; i++ {
 		e.wg.Add(1)
 		go e.workerLoop(e.workers[i])
+	}
+
+	// 尝试初始化嵌入 Pipeline（可选，失败不阻塞）
+	if cfg.EmbeddingModelPath != "" {
+		e.initEmbeddingPipeline(cfg.EmbeddingModelPath)
 	}
 
 	e.available = true
@@ -234,12 +259,91 @@ func (e *Engine) IsAvailable() bool {
 	return e.available
 }
 
+// HasEmbeddingPipeline 返回嵌入 Pipeline 是否已初始化。
+func (e *Engine) HasEmbeddingPipeline() bool {
+	return e.embeddingAvailable
+}
+
+// Embed 向 Embedding Worker Pool 提交嵌入推理任务。
+func (e *Engine) Embed(ctx context.Context, texts []string) ([][]float32, error) {
+	if !e.embeddingAvailable {
+		return nil, fmt.Errorf("embedding pipeline not available")
+	}
+	resultCh := make(chan embeddingResult, 1)
+	select {
+	case e.embeddingTaskCh <- embeddingTask{ctx: ctx, texts: texts, resultCh: resultCh}:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	select {
+	case res := <-resultCh:
+		return res.embeddings, res.err
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// initEmbeddingPipeline 初始化嵌入 Pipeline（内部方法，失败不返回错误）。
+func (e *Engine) initEmbeddingPipeline(modelPath string) {
+	if _, err := os.Stat(modelPath); os.IsNotExist(err) {
+		return // 模型未下载
+	}
+
+	modelFile := filepath.Join(modelPath, "model.onnx")
+	if err := verifyModelSHA256(modelFile); err != nil {
+		return // 校验失败
+	}
+
+	config := hugot.FeatureExtractionConfig{
+		ModelPath:    modelPath,
+		OnnxFilename: "model.onnx",
+		Name:         "embedding-default",
+		Options: []hugot.FeatureExtractionOption{
+			pipelines.WithNormalization(),
+		},
+	}
+	pipeline, err := hugot.NewPipeline[*pipelines.FeatureExtractionPipeline](e.session, config)
+	if err != nil {
+		return // Pipeline 创建失败
+	}
+	e.embeddingPipeline = pipeline
+
+	// 创建 2 个 Embedding Worker
+	const embWorkerCount = 2
+	e.embeddingWorkers = make([]*EmbeddingWorker, embWorkerCount)
+	for i := 0; i < embWorkerCount; i++ {
+		e.embeddingWorkers[i] = NewEmbeddingWorker(i, pipeline)
+	}
+
+	// 启动 Embedding Worker goroutine
+	for i := 0; i < embWorkerCount; i++ {
+		e.embeddingWg.Add(1)
+		go e.embeddingWorkerLoop(e.embeddingWorkers[i])
+	}
+
+	e.embeddingAvailable = true
+}
+
+func (e *Engine) embeddingWorkerLoop(worker *EmbeddingWorker) {
+	defer e.embeddingWg.Done()
+	for task := range e.embeddingTaskCh {
+		embeddings, err := worker.Embed(task.ctx, task.texts)
+		task.resultCh <- embeddingResult{embeddings: embeddings, err: err}
+	}
+}
+
 // Close 优雅关闭引擎：停止 Worker、关闭 Session 释放 ONNX 资源。
 func (e *Engine) Close() error {
 	if e.taskCh != nil {
 		close(e.taskCh)
 	}
 	e.wg.Wait()
+
+	if e.embeddingTaskCh != nil {
+		close(e.embeddingTaskCh)
+	}
+	e.embeddingWg.Wait()
+
 	if e.session != nil {
 		return e.session.Destroy()
 	}
