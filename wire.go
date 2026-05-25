@@ -15,6 +15,7 @@ import (
 	"github.com/hzhan516/medmemo/internal/application/port"
 	"github.com/hzhan516/medmemo/internal/application/updater"
 	"github.com/hzhan516/medmemo/internal/application/usecase"
+	domainRepo "github.com/hzhan516/medmemo/internal/domain/repository"
 	"github.com/hzhan516/medmemo/internal/infrastructure/config"
 	"github.com/hzhan516/medmemo/internal/infrastructure/database"
 	"github.com/hzhan516/medmemo/internal/infrastructure/onnx"
@@ -30,7 +31,10 @@ func InitializeApp() (*App, func(), error) {
 		NewWailsApp,
 		usecase.ApplicationSet,
 		usecase.NewMemoryRetriever,
+		usecase.NewDecayScorer,
 		wire.Bind(new(port.MemoryRepository), new(*repository.MemoryRepoSQLite)),
+		wire.Bind(new(domainRepo.EmbeddingRepository), new(*repository.EmbeddingRepoSQLite)),
+		wire.Bind(new(domainRepo.FactRepository), new(*repository.FactRepoSQLite)),
 		wire.Bind(new(port.SensitiveDetector), new(*detector.RuleDetector)),
 		wire.Bind(new(usecase.ComplianceChecker), new(*usecase.RuleComplianceChecker)),
 		wire.Bind(new(port.ConversationRepository), new(*repository.ConversationRepoSQLite)),
@@ -40,9 +44,12 @@ func InitializeApp() (*App, func(), error) {
 		wire.Bind(new(port.HealthChecker), new(*healthcheck.HealthEngine)),
 		healthcheck.NewHealthEngine,
 		ai.ProviderSet,
+		ai.EmbeddingServiceSet,
 		auth.TokenRefreshProviderSet,
 		auth.OAuthDeviceFlowProviderSet,
 		repository.RepositorySet,
+		repository.FactRepoSet,
+		repository.EmbeddingRepoSet,
 		detector.ProviderSet,
 		detector.ONNXNERSet,
 		pipeline.PipelineSet,
@@ -54,12 +61,14 @@ func InitializeApp() (*App, func(), error) {
 		adapterUpdater.ProviderSet,
 		updater.ProviderSet,
 		NewEngineConfig,
+		wire.Bind(new(port.EmbeddingService), new(*ai.EmbeddingServiceAdapter)),
+		wire.Bind(new(ai.EmbeddingEngine), new(*onnx.Engine)),
 		wire.Bind(new(port.NERDetector), new(*detector.ONNXNERDetector)),
 		wire.Bind(new(secret.Store), new(*secret.KeyringStore)),
 		wire.Bind(new(database.DBConnector), new(*database.SQLCipherConnector)),
 		wire.Bind(new(usecase.Deidentifier), new(*pipeline.DeidentifyPipeline)),
 		wire.Bind(new(usecase.MemoryQuerier), new(*usecase.MemoryRetriever)),
-		wire.Value(""),
+		wire.Value("all-MiniLM-L6-v2"),
 	)
 	return nil, nil, nil
 }

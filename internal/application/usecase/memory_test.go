@@ -150,6 +150,7 @@ func TestMemoryRetriever_DecayRanking(t *testing.T) {
 		&stubFactRepository{facts: facts},
 		NewDecayScorer(),
 	)
+	retriever.minConfidence = 0.1 // 降低阈值以便测试衰减排序
 
 	memories, err := retriever.RetrieveForContext(context.Background(), "query", 10)
 	require.NoError(t, err)

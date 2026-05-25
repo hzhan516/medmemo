@@ -67,7 +67,11 @@ func InitializeApp() (*App, func(), error) {
 	l2NERStage := pipeline.NewL2NERStage(onnxnerDetector)
 	l3KeywordStage := pipeline.NewL3KeywordStage()
 	deidentifyPipeline := pipeline.NewDefaultDeidentifyPipeline(l1RuleStage, l2NERStage, l3KeywordStage)
-	memoryRetriever := usecase.NewMemoryRetriever(memoryRepoSQLite)
+	embeddingServiceAdapter := ai.NewEmbeddingServiceAdapter(engine, string2)
+	embeddingRepoSQLite := repository.NewEmbeddingRepoSQLite(sqlCipherConnector)
+	factRepoSQLite := repository.NewFactRepoSQLite(sqlCipherConnector)
+	decayScorer := usecase.NewDecayScorer()
+	memoryRetriever := usecase.NewMemoryRetriever(embeddingServiceAdapter, embeddingRepoSQLite, factRepoSQLite, decayScorer)
 	chatOrchestrator := usecase.NewChatOrchestrator(llmClientFactory, providerRepoSQLite, memoryRepoSQLite, ruleDetector, ruleComplianceChecker, deidentifyPipeline, memoryRetriever)
 	conversationRepoSQLite := repository.NewConversationRepoSQLite(sqlCipherConnector)
 	messageRepoSQLite := repository.NewMessageRepoSQLite(sqlCipherConnector)
@@ -92,5 +96,5 @@ func InitializeApp() (*App, func(), error) {
 }
 
 var (
-	_wireStringValue = ""
+	_wireStringValue = "all-MiniLM-L6-v2"
 )
