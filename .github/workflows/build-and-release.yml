@@ -113,19 +113,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download Linux artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: medmemo-linux-${{ needs.version.outputs.version }}
           path: artifacts/linux/
 
       - name: Download Windows artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: medmemo-windows-${{ needs.version.outputs.version }}
           path: artifacts/windows/
 
       - name: Download macOS artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: medmemo-darwin-${{ needs.version.outputs.version }}
           path: artifacts/darwin/
