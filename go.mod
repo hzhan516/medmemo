@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	github.com/99designs/keyring v1.2.2
 	github.com/google/wire v0.7.0
-	github.com/knights-analytics/hugot v0.7.3
+	github.com/knights-analytics/hugot v0.7.4
 	github.com/mutecomm/go-sqlcipher v0.0.0-20190227152316-55dbde17881f
 	github.com/stretchr/testify v1.11.1
 	github.com/wailsapp/wails/v2 v2.12.0
