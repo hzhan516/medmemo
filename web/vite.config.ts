@@ -25,15 +25,20 @@ export default defineConfig({
     sourcemap: true,
     rollupOptions: {
       output: {
-        manualChunks: {
-          // 框架核心
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          // Markdown 渲染引擎（仅消息气泡使用）
-          markdown: ['react-markdown', 'remark-gfm', 'prismjs'],
-          // 表单校验（仅设置页面使用）
-          forms: ['react-hook-form', 'zod', '@hookform/resolvers'],
-          // UI 工具库
-          ui: ['lucide-react', 'tailwind-merge', 'zustand'],
+        manualChunks: (id: string) => {
+          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom') || id.includes('node_modules/react-router-dom')) {
+            return 'vendor';
+          }
+          if (id.includes('node_modules/react-markdown') || id.includes('node_modules/remark-gfm') || id.includes('node_modules/prismjs')) {
+            return 'markdown';
+          }
+          if (id.includes('node_modules/react-hook-form') || id.includes('node_modules/zod') || id.includes('node_modules/@hookform/resolvers')) {
+            return 'forms';
+          }
+          if (id.includes('node_modules/lucide-react') || id.includes('node_modules/tailwind-merge') || id.includes('node_modules/zustand')) {
+            return 'ui';
+          }
+          return undefined;
         },
       },
     },
