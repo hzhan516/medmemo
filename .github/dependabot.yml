@@ -25,6 +25,8 @@ updates:
     ignore:
       - dependency-name: "tailwindcss"
         update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint-plugin-react-refresh"
+        update-types: ["version-update:semver-minor"]
     reviewers:
       - "hzhan516"
     commit-message:
