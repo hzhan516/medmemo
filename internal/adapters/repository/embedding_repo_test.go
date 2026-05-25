@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -102,4 +103,78 @@ func TestEmbeddingRepo_ForeignKeyCascade(t *testing.T) {
 
 	_, err = repo.GetByFactID(ctx, "fact_e3")
 	assert.ErrorIs(t, err, entity.ErrEmbeddingNotFound)
+}
+
+func TestEmbeddingRepo_SearchSimilar(t *testing.T) {
+	repo, factRepo, cleanup := setupEmbeddingTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// 准备 4 个事实，每个关联不同方向的向量
+	facts := []*entity.ExtractedFact{
+		entity.NewExtractedFact("用户", "患有", "A", 0.8, []string{"m1"}),
+		entity.NewExtractedFact("用户", "患有", "B", 0.8, []string{"m2"}),
+		entity.NewExtractedFact("用户", "患有", "C", 0.8, []string{"m3"}),
+		entity.NewExtractedFact("用户", "患有", "D", 0.8, []string{"m4"}),
+	}
+	for i, f := range facts {
+		f.FactID = fmt.Sprintf("fact_sim_%d", i)
+		require.NoError(t, factRepo.Save(ctx, f))
+	}
+
+	// v1: [1, 0, 0, ...] — 与 query 完全一致
+	v1 := make([]float32, entity.EmbeddingDimension)
+	v1[0] = 1.0
+
+	// v2: [0.9, 0.1, 0, ...] — 高度相似
+	v2 := make([]float32, entity.EmbeddingDimension)
+	v2[0] = 0.9
+	v2[1] = 0.1
+
+	// v3: [0, 1, 0, ...] — 正交
+	v3 := make([]float32, entity.EmbeddingDimension)
+	v3[1] = 1.0
+
+	// v4: [-1, 0, 0, ...] — 相反
+	v4 := make([]float32, entity.EmbeddingDimension)
+	v4[0] = -1.0
+
+	vectors := [][]float32{v1, v2, v3, v4}
+	for i, v := range vectors {
+		e := entity.NewSemanticEmbedding(facts[i].FactID, v, "all-MiniLM-L6-v2")
+		require.NoError(t, repo.Save(ctx, e))
+	}
+
+	// query: [1, 0, 0, ...]
+	query := make([]float32, entity.EmbeddingDimension)
+	query[0] = 1.0
+
+	// topK=2，应返回 v1、v2（按相似度降序）
+	results, err := repo.SearchSimilar(ctx, query, 2)
+	require.NoError(t, err)
+	require.Len(t, results, 2)
+	assert.Equal(t, "fact_sim_0", results[0].FactID) // v1 最相似
+	assert.Equal(t, "fact_sim_1", results[1].FactID) // v2 次相似
+
+	// topK=10，应返回全部 4 个，顺序为 v1 > v2 > v3 > v4
+	results, err = repo.SearchSimilar(ctx, query, 10)
+	require.NoError(t, err)
+	require.Len(t, results, 4)
+	assert.Equal(t, "fact_sim_0", results[0].FactID)
+	assert.Equal(t, "fact_sim_1", results[1].FactID)
+	assert.Equal(t, "fact_sim_2", results[2].FactID)
+	assert.Equal(t, "fact_sim_3", results[3].FactID)
+}
+
+func TestEmbeddingRepo_SearchSimilar_EmptyResult(t *testing.T) {
+	repo, _, cleanup := setupEmbeddingTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	query := make([]float32, entity.EmbeddingDimension)
+	query[0] = 1.0
+
+	results, err := repo.SearchSimilar(ctx, query, 5)
+	require.NoError(t, err)
+	assert.Empty(t, results)
 }

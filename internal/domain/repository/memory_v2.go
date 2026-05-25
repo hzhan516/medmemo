@@ -52,4 +52,7 @@ type EmbeddingRepository interface {
 	GetByFactID(ctx context.Context, factID string) (*entity.SemanticEmbedding, error)
 	// DeleteByFactID 按事实 ID 删除嵌入。
 	DeleteByFactID(ctx context.Context, factID string) error
+	// SearchSimilar 执行向量相似度搜索，返回与查询向量最相似的 topK 个嵌入。
+	// 结果按余弦相似度降序排列（越靠前越相似）。
+	SearchSimilar(ctx context.Context, queryVector []float32, topK int) ([]*entity.SemanticEmbedding, error)
 }

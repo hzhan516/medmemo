@@ -10,6 +10,7 @@ import (
 	"github.com/google/wire"
 	"github.com/hzhan516/medmemo/internal/domain/entity"
 	"github.com/hzhan516/medmemo/internal/infrastructure/database"
+	"github.com/viant/sqlite-vec/vector"
 )
 
 // EmbeddingRepoSQLite 基于 SQLite 的嵌入向量仓库实现。
@@ -68,6 +69,54 @@ func (r *EmbeddingRepoSQLite) DeleteByFactID(ctx context.Context, factID string)
 		return fmt.Errorf("failed to delete embedding: %w", err)
 	}
 	return nil
+}
+
+// SearchSimilar 执行向量相似度搜索，返回与查询向量最相似的 topK 个嵌入。
+func (r *EmbeddingRepoSQLite) SearchSimilar(ctx context.Context, queryVector []float32, topK int) ([]*entity.SemanticEmbedding, error) {
+	if topK <= 0 {
+		return nil, nil
+	}
+
+	queryBlob, err := vector.EncodeEmbedding(queryVector)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode query vector: %w", err)
+	}
+
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT embedding_id, fact_id, vector, model_version, created_at
+		FROM semantic_embeddings
+		ORDER BY vec_cosine(?, vector) DESC
+		LIMIT ?
+	`, queryBlob, topK)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search similar embeddings: %w", err)
+	}
+	defer rows.Close()
+
+	var results []*entity.SemanticEmbedding
+	for rows.Next() {
+		var e entity.SemanticEmbedding
+		var vectorBytes []byte
+		var created int64
+
+		if err := rows.Scan(&e.EmbeddingID, &e.FactID, &vectorBytes, &e.ModelVersion, &created); err != nil {
+			return nil, fmt.Errorf("failed to scan embedding row: %w", err)
+		}
+
+		vec, err := entity.VectorFromBytes(vectorBytes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode embedding vector: %w", err)
+		}
+		e.Vector = vec
+		e.CreatedAt = time.UnixMilli(created).UTC()
+		results = append(results, &e)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate embedding rows: %w", err)
+	}
+
+	return results, nil
 }
 
 // EmbeddingRepoSet 供 Wire 使用的 ProviderSet。

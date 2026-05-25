@@ -58,6 +58,8 @@ require (
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
 	github.com/viant/afs v1.30.0 // indirect
+	github.com/viant/sqlite-vec v0.3.0 // indirect
+	github.com/viant/vec v0.1.1-0.20240628004145-aad750556278 // indirect
 	github.com/wailsapp/go-webview2 v1.0.23 // indirect
 	github.com/wailsapp/mimetype v1.4.1 // indirect
 	github.com/x448/float16 v0.8.4 // indirect

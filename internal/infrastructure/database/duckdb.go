@@ -9,8 +9,14 @@ import (
 	"path/filepath"
 
 	"github.com/google/wire"
+	"github.com/viant/sqlite-vec/engine"
 	_ "modernc.org/sqlite"
 )
+
+func init() {
+	// 必须在 sql.Open 之前注册，确保所有 SQLite 连接都能使用 vec_cosine / vec_l2
+	_ = engine.RegisterVectorFunctions(nil)
+}
 
 // DuckDBConnector DuckDB 嵌入式数据库连接管理器。
 type DuckDBConnector struct {
