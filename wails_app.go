@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,6 +24,7 @@ import (
 	"github.com/hzhan516/medmemo/internal/application/updater"
 	"github.com/hzhan516/medmemo/internal/application/usecase"
 	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/internal/domain/repository"
 	"github.com/hzhan516/medmemo/internal/infrastructure/secret"
 	"github.com/hzhan516/medmemo/pkg/models"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -53,6 +55,9 @@ type WailsApp struct {
 
 	// Ollama 操作互斥锁，防止并发启动/下载冲突
 	ollamaMu sync.Mutex
+
+	// 记忆管理仓库（TASK-060）
+	factRepo repository.FactRepository
 }
 
 // NewWailsApp 构造函数，供 Wire 调用。
@@ -70,6 +75,7 @@ func NewWailsApp(
 	secretStore secret.Store,
 	tokenRefreshSvc *auth.TokenRefreshService,
 	deviceFlowSvc *auth.OAuthDeviceFlowService,
+	factRepo repository.FactRepository,
 ) *WailsApp {
 	return &WailsApp{
 		chatOrchestrator: chat,
@@ -85,6 +91,7 @@ func NewWailsApp(
 		secretStore:      secretStore,
 		tokenRefreshSvc:  tokenRefreshSvc,
 		deviceFlowSvc:    deviceFlowSvc,
+		factRepo:         factRepo,
 		callbackServers:  make(map[string]*auth.LocalCallbackServer),
 		activeStreams:    make(map[string]context.CancelFunc),
 	}
@@ -1865,3 +1872,175 @@ func computeRecommendation(results []AuthMethodDetectStatus) (string, bool) {
 	// 全部不可用时兜底推荐 local
 	return "local", allUnavailable
 }
+
+// =============================================================================
+// 记忆管理 API（TASK-060）
+// =============================================================================
+
+// MemoryItem 记忆列表项 DTO，供前端管理界面展示。
+type MemoryItem struct {
+	FactID      string  `json:"fact_id"`
+	Subject     string  `json:"subject"`
+	Predicate   string  `json:"predicate"`
+	Object      string  `json:"object"`
+	Confidence  float64 `json:"confidence"`
+	Status      string  `json:"status"`
+	CreatedAt   int64   `json:"created_at"`
+}
+
+func factToMemoryItem(f *entity.ExtractedFact) MemoryItem {
+	return MemoryItem{
+		FactID:     f.FactID,
+		Subject:    f.Subject,
+		Predicate:  f.Predicate,
+		Object:     f.Object,
+		Confidence: f.Confidence,
+		Status:     string(f.Status),
+		CreatedAt:  f.CreatedAt.UnixMilli(),
+	}
+}
+
+// GetMemories 分页获取已审批的记忆列表。
+func (a *WailsApp) GetMemories(limit int, offset int) ([]MemoryItem, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+
+	if a.factRepo == nil {
+		return nil, fmt.Errorf("fact repository not initialized")
+	}
+
+	facts, err := a.factRepo.ListByStatus(ctx, entity.FactStatusApproved, offset, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list memories: %w", err)
+	}
+
+	items := make([]MemoryItem, 0, len(facts))
+	for _, f := range facts {
+		items = append(items, factToMemoryItem(f))
+	}
+	return items, nil
+}
+
+// GetMemoryByID 按 ID 获取单条记忆详情。
+func (a *WailsApp) GetMemoryByID(factID string) (MemoryItem, error) {
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+
+	if a.factRepo == nil {
+		return MemoryItem{}, fmt.Errorf("fact repository not initialized")
+	}
+
+	f, err := a.factRepo.GetByID(ctx, factID)
+	if err != nil {
+		return MemoryItem{}, fmt.Errorf("failed to get memory: %w", err)
+	}
+	return factToMemoryItem(f), nil
+}
+
+// DeleteMemory 删除指定记忆（级联删除关联嵌入）。
+func (a *WailsApp) DeleteMemory(factID string) error {
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+
+	if a.factRepo == nil {
+		return fmt.Errorf("fact repository not initialized")
+	}
+
+	if err := a.factRepo.Delete(ctx, factID); err != nil {
+		return fmt.Errorf("failed to delete memory: %w", err)
+	}
+	return nil
+}
+
+// SearchMemories 关键词搜索已审批的记忆。
+func (a *WailsApp) SearchMemories(query string) ([]MemoryItem, error) {
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+
+	if a.factRepo == nil {
+		return nil, fmt.Errorf("fact repository not initialized")
+	}
+
+	facts, err := a.factRepo.ListByStatus(ctx, entity.FactStatusApproved, 0, 1000)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search memories: %w", err)
+	}
+
+	query = strings.ToLower(strings.TrimSpace(query))
+	var items []MemoryItem
+	for _, f := range facts {
+		if query == "" ||
+			strings.Contains(strings.ToLower(f.Subject), query) ||
+			strings.Contains(strings.ToLower(f.Predicate), query) ||
+			strings.Contains(strings.ToLower(f.Object), query) {
+			items = append(items, factToMemoryItem(f))
+		}
+	}
+	return items, nil
+}
+
+// GetPendingReviews 获取待审核事实列表。
+func (a *WailsApp) GetPendingReviews(limit int, offset int) ([]MemoryItem, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+
+	if a.factRepo == nil {
+		return nil, fmt.Errorf("fact repository not initialized")
+	}
+
+	facts, err := a.factRepo.ListPending(ctx, offset, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list pending reviews: %w", err)
+	}
+
+	items := make([]MemoryItem, 0, len(facts))
+	for _, f := range facts {
+		items = append(items, factToMemoryItem(f))
+	}
+	return items, nil
+}
+
+// ApproveFact 审核通过指定事实。
+func (a *WailsApp) ApproveFact(factID string) error {
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+
+	if a.factRepo == nil {
+		return fmt.Errorf("fact repository not initialized")
+	}
+
+	if err := a.factRepo.UpdateStatus(ctx, factID, entity.FactStatusApproved); err != nil {
+		return fmt.Errorf("failed to approve fact: %w", err)
+	}
+	return nil
+}
+
+// RejectFact 审核拒绝指定事实。
+func (a *WailsApp) RejectFact(factID string) error {
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+
+	if a.factRepo == nil {
+		return fmt.Errorf("fact repository not initialized")
+	}
+
+	if err := a.factRepo.UpdateStatus(ctx, factID, entity.FactStatusRejected); err != nil {
+		return fmt.Errorf("failed to reject fact: %w", err)
+	}
+	return nil
+}
+

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -88,9 +87,11 @@ func setupMemoryWailsApp() *WailsApp {
 	}
 	pending := []*entity.ExtractedFact{facts["fact_3"]}
 
-	return &WailsApp{
+	app := &WailsApp{
 		factRepo: &wailsStubFactRepo{facts: facts, pendingList: pending},
 	}
+	app.ctx = context.Background()
+	return app
 }
 
 func TestWailsApp_GetMemories(t *testing.T) {
