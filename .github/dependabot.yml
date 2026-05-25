@@ -22,6 +22,9 @@ updates:
       day: "monday"
       time: "09:00"
     open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: "tailwindcss"
+        update-types: ["version-update:semver-major"]
     reviewers:
       - "hzhan516"
     commit-message:
