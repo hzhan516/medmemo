@@ -110,6 +110,10 @@ export function GetEmbeddingStatus() {
   return window['go']['main']['WailsApp']['GetEmbeddingStatus']();
 }
 
+export function GetEmbeddingModelDirPath() {
+  return window['go']['main']['WailsApp']['GetEmbeddingModelDirPath']();
+}
+
 export function OpenEmbeddingModelDir() {
   return window['go']['main']['WailsApp']['OpenEmbeddingModelDir']();
 }

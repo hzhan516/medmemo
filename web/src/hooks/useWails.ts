@@ -224,6 +224,10 @@ export function useWails() {
     return await WailsApp.GetEmbeddingStatus()
   }, [])
 
+  const getEmbeddingModelDirPath = useCallback(async (): Promise<string> => {
+    return await WailsApp.GetEmbeddingModelDirPath()
+  }, [])
+
   const openEmbeddingModelDir = useCallback(async (): Promise<void> => {
     return await WailsApp.OpenEmbeddingModelDir()
   }, [])
@@ -277,6 +281,7 @@ export function useWails() {
     setMemoryInjectionEnabled,
     setSessionMemoryInjection,
     getEmbeddingStatus,
+    getEmbeddingModelDirPath,
     openEmbeddingModelDir,
   }
 }

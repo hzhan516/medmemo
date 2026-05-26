@@ -126,7 +126,11 @@ const defaultGetDeletedConversations = async (): Promise<ConversationSummary[]> 
 const defaultSetDataRetentionDays = async (_days: number): Promise<void> => {}
 
 const defaultGetEmbeddingStatus = async (): Promise<Record<string, unknown>> => {
-  return { available: false, model_path: '', model_name: '' }
+  return { available: false, model_path: '', model_name: '', download_url: '' }
+}
+
+const defaultGetEmbeddingModelDirPath = async (): Promise<string> => {
+  return '/tmp/medmemo/models/all-MiniLM-L6-v2'
 }
 
 const defaultOpenEmbeddingModelDir = async (): Promise<void> => {}
@@ -462,6 +466,7 @@ export const MockWailsApp = {
   EnableAutoRefresh: (id: string) => resolveHandler('EnableAutoRefresh', defaultEnableAutoRefresh)(id),
   GetVersionNotes: () => resolveHandler('GetVersionNotes', defaultGetVersionNotes)(),
   GetEmbeddingStatus: () => resolveHandler('GetEmbeddingStatus', defaultGetEmbeddingStatus)(),
+  GetEmbeddingModelDirPath: () => resolveHandler('GetEmbeddingModelDirPath', defaultGetEmbeddingModelDirPath)(),
   OpenEmbeddingModelDir: () => resolveHandler('OpenEmbeddingModelDir', defaultOpenEmbeddingModelDir)(),
 }
 

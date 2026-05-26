@@ -226,6 +226,7 @@ export namespace main {
 	    available: boolean;
 	    model_path: string;
 	    model_name: string;
+	    download_url: string;
 
 	    static createFrom(source: any = {}) {
 	        return new EmbeddingStatusResponse(source);
@@ -236,6 +237,7 @@ export namespace main {
 	        this.available = source["available"];
 	        this.model_path = source["model_path"];
 	        this.model_name = source["model_name"];
+	        this.download_url = source["download_url"];
 	    }
 	}
 	export class EmergencyResult {

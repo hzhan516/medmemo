@@ -12,11 +12,12 @@ type AppConfig struct {
 	EnableAnalytics      bool                 // 是否允许匿名使用数据统计
 	ProviderType         models.ProviderType  // LLM 提供商类型
 	APIEndpoint          string               // 自定义 API 端点（可选，留空则使用提供商默认地址）
-	ModelDir             string               // NER 模型目录路径（默认 resources/models/distilbert-ner）
-	UpdateCheckEnabled   bool                 // 是否启用自动更新检测
-	UpdateChannel        UpdateChannel        // 更新通道（stable / beta）
-	DesensitizationLevel DesensitizationLevel // 脱敏级别（standard / strict / off）
-	DataRetentionDays    int                  // 本地数据留存天数，0 表示永久保留
+	ModelDir                  string               // NER 模型目录路径（默认 resources/models/distilbert-ner）
+	UpdateCheckEnabled        bool                 // 是否启用自动更新检测
+	UpdateChannel             UpdateChannel        // 更新通道（stable / beta）
+	DesensitizationLevel      DesensitizationLevel // 脱敏级别（standard / strict / off）
+	DataRetentionDays         int                  // 本地数据留存天数，0 表示永久保留
+	EmbeddingModelDownloadURL string               // Embedding 模型下载页面 URL（可选）
 }
 
 // Validate 校验配置合法性，返回领域错误。

@@ -11,7 +11,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
+	goruntime "runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -2070,9 +2072,10 @@ type MemoryStats struct {
 
 // EmbeddingStatusResponse Embedding 模型状态响应。
 type EmbeddingStatusResponse struct {
-	Available bool   `json:"available"`  // 模型是否已下载可用
-	ModelPath string `json:"model_path"` // 模型存放路径
-	ModelName string `json:"model_name"` // 模型名称
+	Available   bool   `json:"available"`    // 模型是否已下载可用
+	ModelPath   string `json:"model_path"`   // 模型存放路径
+	ModelName   string `json:"model_name"`   // 模型名称
+	DownloadURL string `json:"download_url"` // 模型下载页面 URL
 }
 
 func factToMemoryItem(f *entity.ExtractedFact) MemoryItem {
@@ -2314,25 +2317,66 @@ func (a *WailsApp) GetEmbeddingStatus() (*EmbeddingStatusResponse, error) {
 	_, err := os.Stat(modelFile)
 	available := err == nil
 
+	downloadURL := a.config.EmbeddingModelDownloadURL
+	if downloadURL == "" {
+		// 默认指向 HuggingFace 模型页面，用户可在 config.yaml 中自定义
+		downloadURL = "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/tree/main/onnx"
+	}
+
 	return &EmbeddingStatusResponse{
-		Available: available,
-		ModelPath: modelPath,
-		ModelName: "all-MiniLM-L6-v2",
+		Available:   available,
+		ModelPath:   modelPath,
+		ModelName:   "all-MiniLM-L6-v2",
+		DownloadURL: downloadURL,
 	}, nil
 }
 
-// OpenEmbeddingModelDir 打开 Embedding 模型所在目录。
-func (a *WailsApp) OpenEmbeddingModelDir() error {
+// GetEmbeddingModelDirPath 返回 Embedding 模型目录的绝对路径。
+func (a *WailsApp) GetEmbeddingModelDirPath() (string, error) {
 	modelPath := filepath.Join(filepath.Dir(a.config.ModelDir), "all-MiniLM-L6-v2")
 	absPath, err := filepath.Abs(modelPath)
 	if err != nil {
-		return fmt.Errorf("failed to resolve model dir path: %w", err)
+		return "", fmt.Errorf("failed to resolve model dir path: %w", err)
 	}
-	// 确保目录存在（如果不存在则创建，方便用户直接放入文件）
+	// 确保目录存在
 	if err := os.MkdirAll(absPath, 0755); err != nil {
-		return fmt.Errorf("failed to create model dir: %w", err)
+		return "", fmt.Errorf("failed to create model dir: %w", err)
 	}
-	runtime.BrowserOpenURL(a.ctx, "file://"+absPath)
+	return absPath, nil
+}
+
+// OpenEmbeddingModelDir 打开 Embedding 模型所在目录。
+// 使用平台特定命令打开文件管理器，比 BrowserOpenURL 更可靠。
+func (a *WailsApp) OpenEmbeddingModelDir() error {
+	absPath, err := a.GetEmbeddingModelDirPath()
+	if err != nil {
+		return err
+	}
+
+	var cmd string
+	var args []string
+	switch goruntime.GOOS {
+	case "windows":
+		cmd = "explorer.exe"
+		args = []string{absPath}
+	case "darwin":
+		cmd = "open"
+		args = []string{absPath}
+	default: // linux and others
+		cmd = "xdg-open"
+		args = []string{absPath}
+	}
+
+	c := exec.Command(cmd, args...)
+	if err := c.Start(); err != nil {
+		// 命令启动失败时，弹窗提示用户手动前往
+		_, _ = runtime.MessageDialog(a.ctx, runtime.MessageDialogOptions{
+			Type:    runtime.InfoDialog,
+			Title:   "打开模型目录",
+			Message: fmt.Sprintf("无法自动打开文件管理器，请手动前往以下目录：\n\n%s", absPath),
+		})
+		return fmt.Errorf("failed to open model dir with %s: %w", cmd, err)
+	}
 	return nil
 }
 

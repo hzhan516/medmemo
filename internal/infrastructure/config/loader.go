@@ -50,8 +50,9 @@ type rawConfig struct {
 	ModelDir             string `json:"model_dir" yaml:"model_dir"`
 	UpdateCheckEnabled   *bool  `json:"update_check_enabled" yaml:"update_check_enabled"`
 	UpdateChannel        string `json:"update_channel" yaml:"update_channel"`
-	DesensitizationLevel string `json:"desensitization_level" yaml:"desensitization_level"`
-	DataRetentionDays    *int   `json:"data_retention_days" yaml:"data_retention_days"`
+	DesensitizationLevel      string `json:"desensitization_level" yaml:"desensitization_level"`
+	DataRetentionDays         *int   `json:"data_retention_days" yaml:"data_retention_days"`
+	EmbeddingModelDownloadURL string `json:"embedding_model_download_url" yaml:"embedding_model_download_url"`
 }
 
 // Load 加载并校验配置，返回领域层 AppConfig。
@@ -104,11 +105,12 @@ func (l *Loader) loadDefaults() *rawConfig {
 		ProviderType:         string(defaultProviderType),
 		APIEndpoint:          "",
 		APIKeyFile:           "",
-		ModelDir:             defaultModelDir,
-		UpdateCheckEnabled:   new(true),
-		UpdateChannel:        updateChannel,
-		DesensitizationLevel: desensitizationLevel,
-		DataRetentionDays:    new(defaultDataRetentionDays),
+		ModelDir:                  defaultModelDir,
+		UpdateCheckEnabled:        new(true),
+		UpdateChannel:             updateChannel,
+		DesensitizationLevel:      desensitizationLevel,
+		DataRetentionDays:         new(defaultDataRetentionDays),
+		EmbeddingModelDownloadURL: "",
 	}
 }
 
@@ -177,6 +179,9 @@ func (l *Loader) applyEnvOverrides(raw *rawConfig) {
 			raw.DataRetentionDays = &d
 		}
 	}
+	if v := os.Getenv("MEDMEMO_EMBEDDING_MODEL_DOWNLOAD_URL"); v != "" {
+		raw.EmbeddingModelDownloadURL = v
+	}
 }
 
 func (l *Loader) toDomain(raw *rawConfig) *entity.AppConfig {
@@ -185,9 +190,10 @@ func (l *Loader) toDomain(raw *rawConfig) *entity.AppConfig {
 		DefaultModel:         raw.DefaultModel,
 		Language:             raw.Language,
 		APIEndpoint:          raw.APIEndpoint,
-		ModelDir:             expandTilde(raw.ModelDir),
-		UpdateChannel:        entity.UpdateChannel(raw.UpdateChannel),
-		DesensitizationLevel: entity.DesensitizationLevel(raw.DesensitizationLevel),
+		ModelDir:                  expandTilde(raw.ModelDir),
+		UpdateChannel:             entity.UpdateChannel(raw.UpdateChannel),
+		DesensitizationLevel:      entity.DesensitizationLevel(raw.DesensitizationLevel),
+		EmbeddingModelDownloadURL: raw.EmbeddingModelDownloadURL,
 	}
 	if raw.EnableCloud != nil {
 		cfg.EnableCloud = *raw.EnableCloud

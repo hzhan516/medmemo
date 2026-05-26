@@ -18,7 +18,7 @@ import {
   Monitor, Moon, Sun, Check, Bell, BellDot, BellOff,
   RefreshCw, Shield, FlaskConical, ShieldCheck, ShieldOff,
   Eye, Trash2, RotateCcw, Plus, FileJson,
-  Brain, FolderOpen, Sparkles, AlertCircle,
+  Brain, FolderOpen, Sparkles, AlertCircle, ExternalLink,
 } from 'lucide-react'
 
 /**
@@ -61,19 +61,24 @@ export function SettingsPage() {
   const updateProvider = useProviderStore((s) => s.updateProvider)
   const removeProvider = useProviderStore((s) => s.removeProvider)
   const hasProvider = useProviderStore((s) => s.hasProvider)
-  const { saveAPIKey, createProvider, updateProvider: updateProviderApi, deleteProvider: deleteProviderApi, setUpdateSettings, getEmbeddingStatus, openEmbeddingModelDir } = useWails()
+  const { saveAPIKey, createProvider, updateProvider: updateProviderApi, deleteProvider: deleteProviderApi, setUpdateSettings, getEmbeddingStatus, getEmbeddingModelDirPath, openEmbeddingModelDir } = useWails()
 
-  const [embeddingStatus, setEmbeddingStatus] = useState<{ available: boolean; model_path: string; model_name: string } | null>(null)
+  const [embeddingStatus, setEmbeddingStatus] = useState<{ available: boolean; model_path: string; model_name: string; download_url: string } | null>(null)
+  const [modelDirPath, setModelDirPath] = useState<string>('')
+  const [toastMsg, setToastMsg] = useState<string | null>(null)
 
   useEffect(() => {
     getEmbeddingStatus()
       .then((status) => setEmbeddingStatus(status))
       .catch((err) => logger.error('Failed to get embedding status:', err))
-  }, [getEmbeddingStatus])
+    getEmbeddingModelDirPath()
+      .then((path) => setModelDirPath(path))
+      .catch((err) => logger.error('Failed to get model dir path:', err))
+  }, [getEmbeddingStatus, getEmbeddingModelDirPath])
 
   const showToast = useCallback((message: string) => {
-    // 简单 toast：使用 alert 降级，后续可接入全局 toast 系统
-    logger.error('[Toast]', message)
+    setToastMsg(message)
+    setTimeout(() => setToastMsg(null), 3000)
   }, [])
 
   /**
@@ -548,13 +553,40 @@ export function SettingsPage() {
 
                   <div className="mt-3 flex items-center gap-2">
                     <button
-                      onClick={() => openEmbeddingModelDir().catch((err) => logger.error('Failed to open model dir:', err))}
+                      onClick={() => {
+                        openEmbeddingModelDir()
+                          .then(() => showToast('已打开模型目录'))
+                          .catch((err) => {
+                            logger.error('Failed to open model dir:', err)
+                            showToast('无法自动打开目录，请手动前往')
+                          })
+                      }}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-border hover:bg-accent transition-colors"
                     >
                       <FolderOpen size={14} />
                       打开模型目录
                     </button>
+                    {embeddingStatus?.download_url && (
+                      <button
+                        onClick={() => {
+                          if (embeddingStatus.download_url) {
+                            window.open(embeddingStatus.download_url, '_blank')
+                          }
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-border hover:bg-accent transition-colors"
+                      >
+                        <ExternalLink size={14} />
+                        下载模型
+                      </button>
+                    )}
                   </div>
+
+                  {modelDirPath && (
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      模型目录：
+                      <span className="font-mono bg-muted px-1 rounded">{modelDirPath}</span>
+                    </div>
+                  )}
 
                   <div className="mt-3 p-3 rounded-md bg-muted/50 space-y-2">
                     <div className="flex items-center gap-2">
@@ -563,7 +595,7 @@ export function SettingsPage() {
                     </div>
                     <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
                       <li>
-                        下载{' '}
+                        点击上方"下载模型"按钮获取{' '}
                         <span className="font-mono text-xs bg-muted px-1 rounded">all-MiniLM-L6-v2</span>{' '}
                         ONNX 模型（约 50MB）
                       </li>
@@ -736,6 +768,13 @@ export function SettingsPage() {
           </div>
         </section>
       </div>
+
+      {/* Toast 提示 */}
+      {toastMsg && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium shadow-lg z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
+          {toastMsg}
+        </div>
+      )}
 
       {/* 模型服务配置弹窗（CherryStudio 风格） */}
       <ModelServiceDialog
