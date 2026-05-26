@@ -2336,8 +2336,8 @@ func (a *WailsApp) GetEmbeddingStatus() (*EmbeddingStatusResponse, error) {
 
 	downloadURL := a.config.EmbeddingModelDownloadURL
 	if downloadURL == "" {
-		// 默认指向 HuggingFace 模型页面，用户可在 config.yaml 中自定义
-		downloadURL = "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/tree/main/onnx"
+		// 默认指向 GitHub Release 下载页面，用户可在 config.yaml 中自定义
+		downloadURL = "https://github.com/hzhan516/medmemo/releases/tag/embedding-model-v1"
 	}
 
 	// 向前端返回绝对路径，便于展示
