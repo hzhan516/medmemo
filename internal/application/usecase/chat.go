@@ -333,6 +333,35 @@ func (c *ChatOrchestrator) resolveLLMClient(ctx context.Context, providerID stri
 	return client, nil
 }
 
+// llmClientAdapter 将 port.LLMClient 适配为 FactLLMClient。
+// 用于复用已配置的 Provider 进行事实提取，避免单独维护 LLM 配置。
+type llmClientAdapter struct {
+	client port.LLMClient
+}
+
+func (a *llmClientAdapter) Chat(ctx context.Context, messages []string) (string, error) {
+	msgs := make([]models.Message, len(messages))
+	for i, m := range messages {
+		msgs[i] = models.Message{Role: models.RoleUser, Content: m}
+	}
+	return a.client.Chat(ctx, msgs)
+}
+
+// ExtractFactsFromReply 从 AI 回复中提取结构化事实三元组。
+// 使用当前会话的 Provider 创建 LLM client，异步调用时不阻塞主流程。
+func (c *ChatOrchestrator) ExtractFactsFromReply(ctx context.Context, reply, providerID string) ([]*entity.ExtractedFact, error) {
+	if reply == "" || providerID == "" {
+		return nil, nil
+	}
+	client, err := c.resolveLLMClient(ctx, providerID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve llm client for fact extraction: %w", err)
+	}
+	adapter := &llmClientAdapter{client: client}
+	extractor := NewFactExtractor(adapter)
+	return extractor.ParseFacts(reply)
+}
+
 // CheckCompliance 对文本执行合规检测。
 func (c *ChatOrchestrator) CheckCompliance(ctx context.Context, text string) (*ComplianceResult, error) {
 	return c.compliance.Check(ctx, text)

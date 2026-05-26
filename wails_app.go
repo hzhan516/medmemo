@@ -62,6 +62,13 @@ type WailsApp struct {
 
 	// 审计日志仓库（v1.1 DoD A3）
 	auditLogRepo repository.AuditLogRepository
+
+	// 原始对话仓库（记忆归档）
+	dialogueRepo repository.RawDialogueRepository
+
+	// 语义嵌入服务与仓库（向量索引）
+	embeddingSvc  port.EmbeddingService
+	embeddingRepo repository.EmbeddingRepository
 }
 
 // NewWailsApp 构造函数，供 Wire 调用。
@@ -81,6 +88,9 @@ func NewWailsApp(
 	deviceFlowSvc *auth.OAuthDeviceFlowService,
 	factRepo repository.FactRepository,
 	auditLogRepo repository.AuditLogRepository,
+	dialogueRepo repository.RawDialogueRepository,
+	embeddingSvc port.EmbeddingService,
+	embeddingRepo repository.EmbeddingRepository,
 ) *WailsApp {
 	return &WailsApp{
 		chatOrchestrator: chat,
@@ -98,6 +108,9 @@ func NewWailsApp(
 		deviceFlowSvc:    deviceFlowSvc,
 		factRepo:         factRepo,
 		auditLogRepo:     auditLogRepo,
+		dialogueRepo:     dialogueRepo,
+		embeddingSvc:     embeddingSvc,
+		embeddingRepo:    embeddingRepo,
 		callbackServers:  make(map[string]*auth.LocalCallbackServer),
 		activeStreams:    make(map[string]context.CancelFunc),
 	}
@@ -269,6 +282,9 @@ func (a *WailsApp) SendMessage(req SendMessageRequest) (*SendMessageResponse, er
 	if resp.ConfidenceResult != nil {
 		confJSON = confidenceResultToMap(resp.ConfidenceResult)
 	}
+	// 保存用户消息和 AI 回复（非流式路径同样需要归档）
+	a.saveMessages(ctx, req.ConversationID, req.Messages, resp.Reply, nil, resp.ConfidenceResult, req.ProviderID)
+
 	return &SendMessageResponse{
 		Reply:            resp.Reply,
 		ConfidenceResult: confJSON,
@@ -331,7 +347,7 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) (err error) {
 		if errors.Is(err, context.Canceled) {
 			broker.Error("生成已中断")
 			// 保存已生成的部分内容（无置信度，token 为 0）
-			a.saveMessages(ctx, req.ConversationID, req.Messages, fullReply.String(), nil, nil)
+			a.saveMessages(ctx, req.ConversationID, req.Messages, fullReply.String(), nil, nil, req.ProviderID)
 			return nil
 		}
 		broker.Error(err.Error())
@@ -347,7 +363,7 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) (err error) {
 	}
 
 	// 保存用户消息和 AI 回复（携带 token 与置信度）
-	a.saveMessages(ctx, req.ConversationID, req.Messages, finalContent, usage, confidenceResult)
+	a.saveMessages(ctx, req.ConversationID, req.Messages, finalContent, usage, confidenceResult, req.ProviderID)
 
 	// 流式结束后对完整内容做一次合规检测（MVP 简化策略）
 	compResult, compErr := a.chatOrchestrator.CheckCompliance(ctx, finalContent)
@@ -405,13 +421,18 @@ func (a *WailsApp) saveUserMessage(ctx context.Context, convID string, message m
 	if a.msgRepo == nil || convID == "" || message.Role != models.RoleUser {
 		return
 	}
+	msgID := fmt.Sprintf("msg_%d", time.Now().UnixNano())
 	if err := a.msgRepo.Save(ctx, models.ConversationID(convID), &entity.Message{
-		ID:        fmt.Sprintf("msg_%d", time.Now().UnixNano()),
+		ID:        msgID,
 		Role:      message.Role,
 		Content:   message.Content,
 		Timestamp: time.Now(),
 	}); err != nil {
 		fmt.Printf("[saveUserMessage] 保存用户消息失败: %v\n", err)
+	}
+	// 同步归档到 raw_dialogues，为事实提取提供源数据
+	if a.dialogueRepo != nil {
+		_ = a.dialogueRepo.Insert(ctx, entity.NewRawDialogue(convID, entity.RoleUser, message.Content, ""))
 	}
 	if a.convRepo != nil {
 		if err := a.convRepo.UpdateTimestamp(ctx, models.ConversationID(convID), time.Now()); err != nil {
@@ -421,7 +442,8 @@ func (a *WailsApp) saveUserMessage(ctx context.Context, convID string, message m
 }
 
 // saveMessages 将对话消息持久化到数据库，可选携带 token 用量与置信度。
-func (a *WailsApp) saveMessages(ctx context.Context, convID string, messages []models.Message, aiReply string, usage *models.TokenUsage, confidence *entity.ConfidenceResult) {
+// providerID 用于异步事实提取时创建对应的 LLM client。
+func (a *WailsApp) saveMessages(ctx context.Context, convID string, messages []models.Message, aiReply string, usage *models.TokenUsage, confidence *entity.ConfidenceResult, providerID string) {
 	if a.msgRepo == nil || convID == "" {
 		return
 	}
@@ -436,6 +458,10 @@ func (a *WailsApp) saveMessages(ctx context.Context, convID string, messages []m
 				Timestamp: time.Now(),
 			}); err != nil {
 				fmt.Printf("[saveMessages] 保存用户消息失败: %v\n", err)
+			}
+			// 同步归档到 raw_dialogues
+			if a.dialogueRepo != nil {
+				_ = a.dialogueRepo.Insert(ctx, entity.NewRawDialogue(convID, entity.RoleUser, lastUser.Content, ""))
 			}
 		}
 	}
@@ -463,6 +489,14 @@ func (a *WailsApp) saveMessages(ctx context.Context, convID string, messages []m
 		if err := a.msgRepo.Save(ctx, models.ConversationID(convID), msg); err != nil {
 			fmt.Printf("[saveMessages] 保存 AI 回复失败: %v\n", err)
 		}
+		// 同步归档 AI 回复到 raw_dialogues
+		if a.dialogueRepo != nil {
+			_ = a.dialogueRepo.Insert(ctx, entity.NewRawDialogue(convID, entity.RoleAssistant, aiReply, ""))
+		}
+		// 异步执行事实提取（不阻塞主流程）
+		if a.chatOrchestrator != nil && providerID != "" {
+			go a.extractFactsAsync(aiReply, providerID)
+		}
 	}
 	// 更新会话时间
 	if a.convRepo != nil {
@@ -470,6 +504,23 @@ func (a *WailsApp) saveMessages(ctx context.Context, convID string, messages []m
 			fmt.Printf("[saveMessages] 更新会话时间失败: %v\n", err)
 		}
 	}
+}
+
+// extractFactsAsync 异步从 AI 回复中提取事实并保存到 factRepo。
+func (a *WailsApp) extractFactsAsync(reply, providerID string) {
+	ctx, cancel := context.WithTimeout(a.ctx, 30*time.Second)
+	defer cancel()
+	facts, err := a.chatOrchestrator.ExtractFactsFromReply(ctx, reply, providerID)
+	if err != nil {
+		fmt.Printf("[extractFactsAsync] 事实提取失败: %v\n", err)
+		return
+	}
+	for _, f := range facts {
+		if err := a.factRepo.Save(ctx, f); err != nil {
+			fmt.Printf("[extractFactsAsync] 保存事实失败 %s: %v\n", f.FactID, err)
+		}
+	}
+	fmt.Printf("[extractFactsAsync] 提取并保存 %d 条事实\n", len(facts))
 }
 
 // StopGeneration 中断所有正在进行的流式生成。
@@ -2141,6 +2192,23 @@ func (a *WailsApp) ApproveFact(factID string) error {
 
 	if err := a.factRepo.UpdateStatus(ctx, factID, entity.FactStatusApproved); err != nil {
 		return fmt.Errorf("failed to approve fact: %w", err)
+	}
+
+	// 审批通过后生成语义嵌入（向量索引），供记忆召回使用
+	if a.embeddingSvc != nil && a.embeddingRepo != nil {
+		fact, err := a.factRepo.GetByID(ctx, factID)
+		if err == nil && fact != nil {
+			content := fmt.Sprintf("%s %s %s", fact.Subject, fact.Predicate, fact.Object)
+			vector, embErr := a.embeddingSvc.EmbedSingle(ctx, content)
+			if embErr == nil {
+				embedding := entity.NewSemanticEmbedding(factID, vector, "all-MiniLM-L6-v2")
+				if saveErr := a.embeddingRepo.Save(ctx, embedding); saveErr != nil {
+					fmt.Printf("[ApproveFact] 保存嵌入向量失败 %s: %v\n", factID, saveErr)
+				}
+			} else {
+				fmt.Printf("[ApproveFact] 生成嵌入向量失败 %s: %v\n", factID, embErr)
+			}
+		}
 	}
 
 	// 记录审计日志（失败不影响主流程）

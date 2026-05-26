@@ -85,7 +85,8 @@ func InitializeApp() (*App, func(), error) {
 	tokenRefreshService := auth.NewTokenRefreshServiceBare(providerRepoSQLite)
 	oAuthDeviceFlowService := auth.NewOAuthDeviceFlowServiceBare(providerRepoSQLite)
 	auditLogRepoSQLite := repository.NewAuditLogRepoSQLite(sqlCipherConnector)
-	wailsApp := NewWailsApp(chatOrchestrator, memoryRetriever, appConfig, conversationRepoSQLite, messageRepoSQLite, disclaimerRepoSQLite, providerRepoSQLite, healthEngine, titleGenerator, service, keyringStore, tokenRefreshService, oAuthDeviceFlowService, factRepoSQLite, auditLogRepoSQLite)
+	dialogueRepoSQLite := repository.NewDialogueRepoSQLite(sqlCipherConnector)
+	wailsApp := NewWailsApp(chatOrchestrator, memoryRetriever, appConfig, conversationRepoSQLite, messageRepoSQLite, disclaimerRepoSQLite, providerRepoSQLite, healthEngine, titleGenerator, service, keyringStore, tokenRefreshService, oAuthDeviceFlowService, factRepoSQLite, auditLogRepoSQLite, dialogueRepoSQLite, embeddingServiceAdapter, embeddingRepoSQLite)
 	app, cleanup, err := NewApp(wailsApp, sqlCipherConnector, deidentifyPipeline, healthEngine)
 	if err != nil {
 		return nil, nil, err
