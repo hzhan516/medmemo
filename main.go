@@ -116,7 +116,7 @@ func NewEngineConfig(cfg *entity.AppConfig) onnx.EngineConfig {
 	return onnx.EngineConfig{
 		ResourceDir:        "resources",
 		ModelPath:          cfg.ModelDir,
-		EmbeddingModelPath: filepath.Join(filepath.Dir(cfg.ModelDir), "all-MiniLM-L6-v2"),
+		EmbeddingModelPath: filepath.Join(cfg.DataDir, "models", "all-MiniLM-L6-v2"),
 	}
 }
 

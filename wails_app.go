@@ -156,6 +156,12 @@ func (a *WailsApp) Startup(ctx context.Context) {
 	// 执行数据留存自动清理（后台 goroutine，不阻塞启动）
 	go a.runRetentionCleanup()
 
+	// 首次启动时自动将打包的模型复制到用户数据目录
+	if err := a.initEmbeddingModels(); err != nil {
+		// 非致命错误，记录日志后继续（用户仍可手动下载）
+		fmt.Fprintf(os.Stderr, "failed to init embedding models: %v\n", err)
+	}
+
 	// 启动时扫描 cli_token / oauth_device provider，安排自动刷新
 	if a.tokenRefreshSvc != nil {
 		go a.scheduleAutoRefreshesAsync()
@@ -2310,20 +2316,68 @@ func (a *WailsApp) RejectFact(factID string) error {
 }
 
 // embeddingModelDir 返回 Embedding 模型目录的绝对路径。
-// 优先使用 DataDir 下的用户可写目录（~/.medmemo/data/models/all-MiniLM-L6-v2），
-// 确保在 AppImage（只读 FS）、macOS .app bundle 及 Windows 安装目录中均可正常工作。
-// 同时兼容旧版相对路径（resources/models/all-MiniLM-L6-v2），若旧路径存在模型则优先使用。
+// 始终使用用户数据目录 ~/.medmemo/data/models/all-MiniLM-L6-v2，
+// 确保在 AppImage（只读 FS）、macOS .app bundle 及 Windows 安装目录中均可正常读写。
 func (a *WailsApp) embeddingModelDir() string {
-	// 新路径：用户可写的数据目录
-	userPath := filepath.Join(a.config.DataDir, "models", "all-MiniLM-L6-v2")
+	return filepath.Join(a.config.DataDir, "models", "all-MiniLM-L6-v2")
+}
 
-	// 兼容旧版相对路径，若已存在模型则继续使用
-	legacyPath := filepath.Join(filepath.Dir(a.config.ModelDir), "all-MiniLM-L6-v2")
-	if _, err := os.Stat(filepath.Join(legacyPath, "model.onnx")); err == nil {
-		return legacyPath
+// bundledModelDir 返回应用包内打包的模型目录路径。
+// 优先相对于可执行文件查找（适用于 AppImage、安装包），
+// 其次相对于工作目录查找（适用于 go run 开发模式）。
+func (a *WailsApp) bundledModelDir() string {
+	// 1. 相对于可执行文件（生产环境：AppImage / macOS .app / Windows 安装目录）
+	if exe, err := os.Executable(); err == nil {
+		dir := filepath.Join(filepath.Dir(exe), "resources", "models", "all-MiniLM-L6-v2")
+		if _, err := os.Stat(filepath.Join(dir, "model.onnx")); err == nil {
+			return dir
+		}
 	}
 
-	return userPath
+	// 2. 相对于工作目录（开发模式 go run）
+	dir := filepath.Join("resources", "models", "all-MiniLM-L6-v2")
+	if _, err := os.Stat(filepath.Join(dir, "model.onnx")); err == nil {
+		return dir
+	}
+
+	return ""
+}
+
+// initEmbeddingModels 首次启动时将打包的模型文件复制到用户数据目录。
+// 若用户目录已存在模型，或找不到打包模型，则跳过。
+func (a *WailsApp) initEmbeddingModels() error {
+	userDir := a.embeddingModelDir()
+
+	// 用户目录已有模型，跳过
+	if _, err := os.Stat(filepath.Join(userDir, "model.onnx")); err == nil {
+		return nil
+	}
+
+	bundledDir := a.bundledModelDir()
+	if bundledDir == "" {
+		return nil // 未找到打包模型，由用户自行下载
+	}
+
+	if err := os.MkdirAll(userDir, 0755); err != nil {
+		return fmt.Errorf("failed to create user model dir: %w", err)
+	}
+
+	for _, name := range []string{"model.onnx", "tokenizer.json"} {
+		src := filepath.Join(bundledDir, name)
+		dst := filepath.Join(userDir, name)
+		if _, err := os.Stat(src); err != nil {
+			continue // 单个文件缺失不影响其他文件复制
+		}
+		data, err := os.ReadFile(src)
+		if err != nil {
+			return fmt.Errorf("failed to read bundled model %s: %w", name, err)
+		}
+		if err := os.WriteFile(dst, data, 0644); err != nil {
+			return fmt.Errorf("failed to write model %s to user dir: %w", name, err)
+		}
+	}
+
+	return nil
 }
 
 // GetEmbeddingStatus 获取本地 Embedding 模型状态。
