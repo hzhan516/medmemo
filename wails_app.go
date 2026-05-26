@@ -156,12 +156,6 @@ func (a *WailsApp) Startup(ctx context.Context) {
 	// 执行数据留存自动清理（后台 goroutine，不阻塞启动）
 	go a.runRetentionCleanup()
 
-	// 首次启动时自动将打包的模型复制到用户数据目录
-	if err := a.initEmbeddingModels(); err != nil {
-		// 非致命错误，记录日志后继续（用户仍可手动下载）
-		fmt.Fprintf(os.Stderr, "failed to init embedding models: %v\n", err)
-	}
-
 	// 启动时扫描 cli_token / oauth_device provider，安排自动刷新
 	if a.tokenRefreshSvc != nil {
 		go a.scheduleAutoRefreshesAsync()
