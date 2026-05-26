@@ -8,6 +8,7 @@ require (
 	github.com/knights-analytics/hugot v0.7.3
 	github.com/mutecomm/go-sqlcipher v0.0.0-20190227152316-55dbde17881f
 	github.com/stretchr/testify v1.11.1
+	github.com/viant/sqlite-vec v0.3.0
 	github.com/wailsapp/wails/v2 v2.12.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.50.1
@@ -58,8 +59,6 @@ require (
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
 	github.com/viant/afs v1.30.0 // indirect
-	github.com/viant/sqlite-vec v0.3.0 // indirect
-	github.com/viant/vec v0.1.1-0.20240628004145-aad750556278 // indirect
 	github.com/wailsapp/go-webview2 v1.0.23 // indirect
 	github.com/wailsapp/mimetype v1.4.1 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
