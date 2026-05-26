@@ -495,7 +495,14 @@ func (a *WailsApp) saveMessages(ctx context.Context, convID string, messages []m
 		}
 		// 异步执行事实提取（不阻塞主流程）
 		if a.chatOrchestrator != nil && providerID != "" {
-			go a.extractFactsAsync(aiReply, providerID)
+			var userContent string
+			if len(messages) > 0 {
+				lastUser := messages[len(messages)-1]
+				if lastUser.Role == models.RoleUser {
+					userContent = lastUser.Content
+				}
+			}
+			go a.extractFactsAsync(userContent, aiReply, providerID)
 		}
 	}
 	// 更新会话时间
@@ -506,11 +513,11 @@ func (a *WailsApp) saveMessages(ctx context.Context, convID string, messages []m
 	}
 }
 
-// extractFactsAsync 异步从 AI 回复中提取事实并保存到 factRepo。
-func (a *WailsApp) extractFactsAsync(reply, providerID string) {
+// extractFactsAsync 异步从完整对话（用户消息 + AI 回复）中提取事实并保存到 factRepo。
+func (a *WailsApp) extractFactsAsync(userContent, aiReply, providerID string) {
 	ctx, cancel := context.WithTimeout(a.ctx, 30*time.Second)
 	defer cancel()
-	facts, err := a.chatOrchestrator.ExtractFactsFromReply(ctx, reply, providerID)
+	facts, err := a.chatOrchestrator.ExtractFactsFromReply(ctx, userContent, aiReply, providerID)
 	if err != nil {
 		fmt.Printf("[extractFactsAsync] 事实提取失败: %v\n", err)
 		return

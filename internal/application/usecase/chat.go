@@ -347,10 +347,21 @@ func (a *llmClientAdapter) Chat(ctx context.Context, messages []string) (string,
 	return a.client.Chat(ctx, msgs)
 }
 
-// ExtractFactsFromReply 从 AI 回复中提取结构化事实三元组。
+// ExtractFactsFromReply 从完整对话轮次（用户消息 + AI 回复）中提取结构化事实三元组。
 // 使用当前会话的 Provider 创建 LLM client，异步调用时不阻塞主流程。
-func (c *ChatOrchestrator) ExtractFactsFromReply(ctx context.Context, reply, providerID string) ([]*entity.ExtractedFact, error) {
-	if reply == "" || providerID == "" {
+func (c *ChatOrchestrator) ExtractFactsFromReply(ctx context.Context, userContent, aiReply, providerID string) ([]*entity.ExtractedFact, error) {
+	if providerID == "" {
+		return nil, nil
+	}
+	// 拼接完整对话内容作为提取源；用户消息和 AI 回复都可能包含事实
+	combined := userContent
+	if aiReply != "" {
+		if combined != "" {
+			combined += "\n"
+		}
+		combined += aiReply
+	}
+	if combined == "" {
 		return nil, nil
 	}
 	client, err := c.resolveLLMClient(ctx, providerID)
@@ -359,7 +370,7 @@ func (c *ChatOrchestrator) ExtractFactsFromReply(ctx context.Context, reply, pro
 	}
 	adapter := &llmClientAdapter{client: client}
 	extractor := NewFactExtractor(adapter)
-	return extractor.ParseFacts(reply)
+	return extractor.ParseFacts(combined)
 }
 
 // CheckCompliance 对文本执行合规检测。
