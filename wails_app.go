@@ -2309,9 +2309,26 @@ func (a *WailsApp) RejectFact(factID string) error {
 	return nil
 }
 
+// embeddingModelDir 返回 Embedding 模型目录的绝对路径。
+// 优先使用 DataDir 下的用户可写目录（~/.medmemo/data/models/all-MiniLM-L6-v2），
+// 确保在 AppImage（只读 FS）、macOS .app bundle 及 Windows 安装目录中均可正常工作。
+// 同时兼容旧版相对路径（resources/models/all-MiniLM-L6-v2），若旧路径存在模型则优先使用。
+func (a *WailsApp) embeddingModelDir() string {
+	// 新路径：用户可写的数据目录
+	userPath := filepath.Join(a.config.DataDir, "models", "all-MiniLM-L6-v2")
+
+	// 兼容旧版相对路径，若已存在模型则继续使用
+	legacyPath := filepath.Join(filepath.Dir(a.config.ModelDir), "all-MiniLM-L6-v2")
+	if _, err := os.Stat(filepath.Join(legacyPath, "model.onnx")); err == nil {
+		return legacyPath
+	}
+
+	return userPath
+}
+
 // GetEmbeddingStatus 获取本地 Embedding 模型状态。
 func (a *WailsApp) GetEmbeddingStatus() (*EmbeddingStatusResponse, error) {
-	modelPath := filepath.Join(filepath.Dir(a.config.ModelDir), "all-MiniLM-L6-v2")
+	modelPath := a.embeddingModelDir()
 	modelFile := filepath.Join(modelPath, "model.onnx")
 
 	_, err := os.Stat(modelFile)
@@ -2321,6 +2338,12 @@ func (a *WailsApp) GetEmbeddingStatus() (*EmbeddingStatusResponse, error) {
 	if downloadURL == "" {
 		// 默认指向 HuggingFace 模型页面，用户可在 config.yaml 中自定义
 		downloadURL = "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/tree/main/onnx"
+	}
+
+	// 向前端返回绝对路径，便于展示
+	absPath, _ := filepath.Abs(modelPath)
+	if absPath != "" {
+		modelPath = absPath
 	}
 
 	return &EmbeddingStatusResponse{
@@ -2333,12 +2356,12 @@ func (a *WailsApp) GetEmbeddingStatus() (*EmbeddingStatusResponse, error) {
 
 // GetEmbeddingModelDirPath 返回 Embedding 模型目录的绝对路径。
 func (a *WailsApp) GetEmbeddingModelDirPath() (string, error) {
-	modelPath := filepath.Join(filepath.Dir(a.config.ModelDir), "all-MiniLM-L6-v2")
+	modelPath := a.embeddingModelDir()
 	absPath, err := filepath.Abs(modelPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve model dir path: %w", err)
 	}
-	// 确保目录存在
+	// 确保目录存在（使用用户可写路径，不会在只读 FS 上失败）
 	if err := os.MkdirAll(absPath, 0755); err != nil {
 		return "", fmt.Errorf("failed to create model dir: %w", err)
 	}

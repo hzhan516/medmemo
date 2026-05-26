@@ -61,7 +61,7 @@ export function SettingsPage() {
   const updateProvider = useProviderStore((s) => s.updateProvider)
   const removeProvider = useProviderStore((s) => s.removeProvider)
   const hasProvider = useProviderStore((s) => s.hasProvider)
-  const { saveAPIKey, createProvider, updateProvider: updateProviderApi, deleteProvider: deleteProviderApi, setUpdateSettings, getEmbeddingStatus, getEmbeddingModelDirPath, openEmbeddingModelDir } = useWails()
+  const { saveAPIKey, createProvider, updateProvider: updateProviderApi, deleteProvider: deleteProviderApi, setUpdateSettings, getEmbeddingStatus, getEmbeddingModelDirPath, openEmbeddingModelDir, openDownloadURL } = useWails()
 
   const [embeddingStatus, setEmbeddingStatus] = useState<{ available: boolean; model_path: string; model_name: string; download_url: string } | null>(null)
   const [modelDirPath, setModelDirPath] = useState<string>('')
@@ -570,7 +570,7 @@ export function SettingsPage() {
                       <button
                         onClick={() => {
                           if (embeddingStatus.download_url) {
-                            window.open(embeddingStatus.download_url, '_blank')
+                            openDownloadURL(embeddingStatus.download_url)
                           }
                         }}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-border hover:bg-accent transition-colors"
