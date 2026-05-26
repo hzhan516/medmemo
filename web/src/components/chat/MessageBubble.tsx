@@ -19,6 +19,8 @@ interface MessageBubbleProps {
  */
 export function MessageBubble({ message, onRetry, onReportCompliance }: MessageBubbleProps) {
   const showConfidenceBar = useSettingsStore((s) => s.showConfidenceBar)
+  const confidenceBarMode = useSettingsStore((s) => s.confidenceBarMode)
+  const setConfidenceBarMode = useSettingsStore((s) => s.setConfidenceBarMode)
   const { id, role, content, isStreaming, interrupted, error, warnings, replacedTerms, complianceFeedback } = message
 
   // 解析合规级别
@@ -202,7 +204,8 @@ export function MessageBubble({ message, onRetry, onReportCompliance }: MessageB
               <div className="mt-2">
                 <ConfidenceBar
                   result={message.confidence}
-                  mode="compact"
+                  mode={confidenceBarMode}
+                  onModeChange={setConfidenceBarMode}
                 />
               </div>
             )}

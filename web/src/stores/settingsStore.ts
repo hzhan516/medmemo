@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import type { ConfidenceBarMode } from '@/components/confidence/types'
 
 type Theme = 'light' | 'dark' | 'system'
 type ComplianceBarMode = 'always' | 'first' | 'off'
@@ -12,6 +13,7 @@ interface SettingsState {
   selectedModel: string
   complianceBarMode: ComplianceBarMode
   showConfidenceBar: boolean
+  confidenceBarMode: ConfidenceBarMode
   autoCheckUpdate: boolean
   updateChannel: UpdateChannel
   desensitizationLevel: DesensitizationLevel
@@ -26,6 +28,7 @@ interface SettingsState {
   setSelectedModel: (model: string) => void
   setComplianceBarMode: (mode: ComplianceBarMode) => void
   setShowConfidenceBar: (show: boolean) => void
+  setConfidenceBarMode: (mode: ConfidenceBarMode) => void
   setAutoCheckUpdate: (enabled: boolean) => void
   setUpdateChannel: (channel: UpdateChannel) => void
   setDesensitizationLevel: (level: DesensitizationLevel) => void
@@ -44,6 +47,7 @@ export const useSettingsStore = create<SettingsState>()(
       selectedModel: 'kimi-lite',
       complianceBarMode: 'always',
       showConfidenceBar: true,
+      confidenceBarMode: 'compact',
       autoCheckUpdate: true,
       updateChannel: 'beta',
       desensitizationLevel: 'standard',
@@ -58,6 +62,7 @@ export const useSettingsStore = create<SettingsState>()(
       setSelectedModel: (model) => set({ selectedModel: model }),
       setComplianceBarMode: (mode) => set({ complianceBarMode: mode }),
       setShowConfidenceBar: (show) => set({ showConfidenceBar: show }),
+      setConfidenceBarMode: (mode) => set({ confidenceBarMode: mode }),
       setAutoCheckUpdate: (enabled) => set({ autoCheckUpdate: enabled }),
       setUpdateChannel: (channel) => set({ updateChannel: channel }),
       setDesensitizationLevel: (level) => set({ desensitizationLevel: level }),
@@ -78,6 +83,7 @@ export const useSettingsStore = create<SettingsState>()(
         selectedModel: state.selectedModel,
         complianceBarMode: state.complianceBarMode,
         showConfidenceBar: state.showConfidenceBar,
+        confidenceBarMode: state.confidenceBarMode,
         autoCheckUpdate: state.autoCheckUpdate,
         updateChannel: state.updateChannel,
         desensitizationLevel: state.desensitizationLevel,

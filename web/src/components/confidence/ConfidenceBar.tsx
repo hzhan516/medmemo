@@ -83,7 +83,7 @@ export function ConfidenceBar({
       {/* 展开面板 */}
       <div
         className={`overflow-hidden transition-all duration-200 ease-in-out ${
-          panelOpen ? 'max-h-[600px] opacity-100 mt-1' : 'max-h-0 opacity-0'
+          panelOpen ? 'max-h-[400px] opacity-100 mt-1' : 'max-h-0 opacity-0'
         }`}
       >
         <ConfidencePanel
