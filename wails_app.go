@@ -371,11 +371,13 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) (err error) {
 			"prompt_tokens":     0,
 			"completion_tokens": 0,
 			"total_tokens":      0,
+			"truncated":         false,
 		}
 		if usage != nil {
 			confidencePayload["prompt_tokens"] = usage.PromptTokens
 			confidencePayload["completion_tokens"] = usage.CompletionTokens
 			confidencePayload["total_tokens"] = usage.TotalTokens
+			confidencePayload["truncated"] = usage.FinishReason == "length"
 		}
 		runtime.EventsEmit(a.ctx, "chat:stream:confidence", confidencePayload)
 	}
@@ -1006,7 +1008,7 @@ func (a *WailsApp) TestAPIKey(providerType string, apiKey string, apiHost string
 	}
 
 	// 其他厂商使用 OpenAI 兼容格式 /v1/models
-	adapter := ai.NewOpenAIAdapter(apiKey, apiHost, "", 30*time.Second)
+	adapter := ai.NewOpenAIAdapter(apiKey, apiHost, "", 0, 30*time.Second)
 	ok, msg := adapter.CheckAvailability(ctx)
 	if ok {
 		return &TestAPIKeyResult{

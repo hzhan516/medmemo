@@ -18,23 +18,28 @@ import (
 
 // OpenAIAdapter 适配 OpenAI 兼容 API。
 type OpenAIAdapter struct {
-	apiKey  string
-	baseURL string
-	model   string
-	client  *http.Client
+	apiKey    string
+	baseURL   string
+	model     string
+	maxTokens int
+	client    *http.Client
 }
 
 // NewOpenAIAdapter 构造函数，返回具体类型供 Wire 绑定。
 // timeout 为 HTTP 客户端整体超时（含连接、发送、读取响应体）；
 // 若传入 <=0 则默认 120 秒，以覆盖流式长连接场景。
-func NewOpenAIAdapter(apiKey, baseURL, model string, timeout time.Duration) *OpenAIAdapter {
+func NewOpenAIAdapter(apiKey, baseURL, model string, maxTokens int, timeout time.Duration) *OpenAIAdapter {
 	if timeout <= 0 {
 		timeout = 120 * time.Second
 	}
+	if maxTokens <= 0 {
+		maxTokens = 4096
+	}
 	return &OpenAIAdapter{
-		apiKey:  apiKey,
-		baseURL: baseURL,
-		model:   model,
+		apiKey:    apiKey,
+		baseURL:   baseURL,
+		model:     model,
+		maxTokens: maxTokens,
 		client: &http.Client{
 			Timeout: timeout,
 			Transport: &http.Transport{
@@ -51,6 +56,7 @@ type chatRequest struct {
 	Model         string         `json:"model"`
 	Messages      []message      `json:"messages"`
 	Stream        bool           `json:"stream,omitempty"`
+	MaxTokens     int            `json:"max_tokens,omitempty"`
 	StreamOptions *streamOptions `json:"stream_options,omitempty"`
 }
 
@@ -184,9 +190,10 @@ func (a *OpenAIAdapter) doWithRetry(req *http.Request) (*http.Response, error) {
 // Chat 发送非流式对话请求。
 func (a *OpenAIAdapter) Chat(ctx context.Context, messages []models.Message) (string, error) {
 	reqBody := chatRequest{
-		Model:    a.model,
-		Messages: toMessages(messages),
-		Stream:   false,
+		Model:     a.model,
+		Messages:  toMessages(messages),
+		Stream:    false,
+		MaxTokens: a.maxTokens,
 	}
 
 	jsonBody, err := json.Marshal(reqBody)
@@ -238,6 +245,7 @@ func (a *OpenAIAdapter) StreamChat(ctx context.Context, messages []models.Messag
 		Model:         a.model,
 		Messages:      toMessages(messages),
 		Stream:        true,
+		MaxTokens:     a.maxTokens,
 		StreamOptions: &streamOptions{IncludeUsage: true},
 	}
 
@@ -274,6 +282,7 @@ func (a *OpenAIAdapter) StreamChat(ctx context.Context, messages []models.Messag
 // readStream 读取 SSE 响应体，逐条解析 chunk 并调用回调。
 func (a *OpenAIAdapter) readStream(body io.Reader, callback func(chunk string)) (*models.TokenUsage, error) {
 	var tokenUsage *models.TokenUsage
+	var finishReason string
 	scanner := bufio.NewScanner(body)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -297,6 +306,9 @@ func (a *OpenAIAdapter) readStream(body io.Reader, callback func(chunk string)) 
 			if content != "" {
 				callback(content)
 			}
+			if chunk.Choices[0].FinishReason != "" {
+				finishReason = chunk.Choices[0].FinishReason
+			}
 			if chunk.Choices[0].FinishReason == "stop" {
 				break
 			}
@@ -305,6 +317,12 @@ func (a *OpenAIAdapter) readStream(body io.Reader, callback func(chunk string)) 
 
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("stream interrupted: %w", err)
+	}
+
+	if tokenUsage != nil {
+		tokenUsage.FinishReason = finishReason
+	} else if finishReason != "" {
+		tokenUsage = &models.TokenUsage{FinishReason: finishReason}
 	}
 
 	return tokenUsage, nil

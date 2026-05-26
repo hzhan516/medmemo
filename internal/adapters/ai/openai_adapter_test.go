@@ -36,7 +36,7 @@ func TestOpenAIAdapter_Chat_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	adapter := NewOpenAIAdapter("test-key", server.URL, "test-model", 30*time.Second)
+	adapter := NewOpenAIAdapter("test-key", server.URL, "test-model", 0, 30*time.Second)
 	msgs := []models.Message{
 		{Role: models.RoleUser, Content: "你好"},
 	}
@@ -62,7 +62,7 @@ func TestOpenAIAdapter_Chat_Unauthorized(t *testing.T) {
 	}))
 	defer server.Close()
 
-	adapter := NewOpenAIAdapter("wrong-key", server.URL, "test-model", 30*time.Second)
+	adapter := NewOpenAIAdapter("wrong-key", server.URL, "test-model", 0, 30*time.Second)
 	msgs := []models.Message{{Role: models.RoleUser, Content: "test"}}
 
 	_, err := adapter.Chat(context.Background(), msgs)
@@ -101,7 +101,7 @@ func TestOpenAIAdapter_Chat_RateLimit(t *testing.T) {
 	}))
 	defer server.Close()
 
-	adapter := NewOpenAIAdapter("test-key", server.URL, "test-model", 30*time.Second)
+	adapter := NewOpenAIAdapter("test-key", server.URL, "test-model", 0, 30*time.Second)
 	msgs := []models.Message{{Role: models.RoleUser, Content: "test"}}
 
 	reply, err := adapter.Chat(context.Background(), msgs)
@@ -126,7 +126,7 @@ func TestOpenAIAdapter_Chat_ModelNotFound(t *testing.T) {
 	}))
 	defer server.Close()
 
-	adapter := NewOpenAIAdapter("test-key", server.URL, "unknown-model", 30*time.Second)
+	adapter := NewOpenAIAdapter("test-key", server.URL, "unknown-model", 0, 30*time.Second)
 	msgs := []models.Message{{Role: models.RoleUser, Content: "test"}}
 
 	_, err := adapter.Chat(context.Background(), msgs)
@@ -142,7 +142,7 @@ func TestOpenAIAdapter_Chat_Timeout(t *testing.T) {
 	}))
 	defer server.Close()
 
-	adapter := NewOpenAIAdapter("test-key", server.URL, "test-model", 30*time.Second)
+	adapter := NewOpenAIAdapter("test-key", server.URL, "test-model", 0, 30*time.Second)
 	// 将超时设为极短，确保触发超时
 	adapter.client.Timeout = 1 * time.Millisecond
 
@@ -180,7 +180,7 @@ func TestOpenAIAdapter_StreamChat_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	adapter := NewOpenAIAdapter("test-key", server.URL, "test-model", 30*time.Second)
+	adapter := NewOpenAIAdapter("test-key", server.URL, "test-model", 0, 30*time.Second)
 	msgs := []models.Message{{Role: models.RoleUser, Content: "打招呼"}}
 
 	var collected strings.Builder
@@ -189,7 +189,8 @@ func TestOpenAIAdapter_StreamChat_Success(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "你好，世界！", collected.String())
-	assert.Nil(t, usage) // 无 usage 数据时返回 nil
+	require.NotNil(t, usage)
+	assert.Equal(t, "stop", usage.FinishReason)
 }
 
 // TestOpenAIAdapter_StreamChat_EmptyContent 验证流式响应中空的 content 不触发回调。
@@ -211,7 +212,7 @@ func TestOpenAIAdapter_StreamChat_EmptyContent(t *testing.T) {
 	}))
 	defer server.Close()
 
-	adapter := NewOpenAIAdapter("test-key", server.URL, "test-model", 30*time.Second)
+	adapter := NewOpenAIAdapter("test-key", server.URL, "test-model", 0, 30*time.Second)
 	msgs := []models.Message{{Role: models.RoleUser, Content: "test"}}
 
 	callCount := 0
@@ -220,7 +221,8 @@ func TestOpenAIAdapter_StreamChat_EmptyContent(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 1, callCount)
-	assert.Nil(t, usage)
+	require.NotNil(t, usage)
+	assert.Equal(t, "stop", usage.FinishReason)
 }
 
 // TestOpenAIAdapter_StreamChat_ErrorStatus 验证流式请求返回错误状态码。
@@ -238,7 +240,7 @@ func TestOpenAIAdapter_StreamChat_ErrorStatus(t *testing.T) {
 	}))
 	defer server.Close()
 
-	adapter := NewOpenAIAdapter("bad-key", server.URL, "test-model", 30*time.Second)
+	adapter := NewOpenAIAdapter("bad-key", server.URL, "test-model", 0, 30*time.Second)
 	msgs := []models.Message{{Role: models.RoleUser, Content: "test"}}
 
 	usage, err := adapter.StreamChat(context.Background(), msgs, func(chunk string) {})
@@ -256,7 +258,7 @@ func TestOpenAIAdapter_CheckAvailability_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	adapter := NewOpenAIAdapter("test-key", server.URL, "test-model", 30*time.Second)
+	adapter := NewOpenAIAdapter("test-key", server.URL, "test-model", 0, 30*time.Second)
 	ok, reason := adapter.CheckAvailability(context.Background())
 	assert.True(t, ok)
 	assert.Equal(t, "available", reason)
@@ -264,7 +266,7 @@ func TestOpenAIAdapter_CheckAvailability_Success(t *testing.T) {
 
 // TestOpenAIAdapter_CheckAvailability_NoKey 验证未配置 API Key 时返回不可用。
 func TestOpenAIAdapter_CheckAvailability_NoKey(t *testing.T) {
-	adapter := NewOpenAIAdapter("", "https://api.example.com", "test-model", 30*time.Second)
+	adapter := NewOpenAIAdapter("", "https://api.example.com", "test-model", 0, 30*time.Second)
 	ok, reason := adapter.CheckAvailability(context.Background())
 	assert.False(t, ok)
 	assert.Equal(t, "API key not configured", reason)
@@ -277,7 +279,7 @@ func TestOpenAIAdapter_CheckAvailability_Unauthorized(t *testing.T) {
 	}))
 	defer server.Close()
 
-	adapter := NewOpenAIAdapter("bad-key", server.URL, "test-model", 30*time.Second)
+	adapter := NewOpenAIAdapter("bad-key", server.URL, "test-model", 0, 30*time.Second)
 	ok, reason := adapter.CheckAvailability(context.Background())
 	assert.False(t, ok)
 	assert.Contains(t, reason, "invalid API key")
@@ -286,7 +288,7 @@ func TestOpenAIAdapter_CheckAvailability_Unauthorized(t *testing.T) {
 // TestOpenAIAdapter_CheckAvailability_NetworkError 验证网络不可达时返回失败。
 func TestOpenAIAdapter_CheckAvailability_NetworkError(t *testing.T) {
 	// 使用一个必然不可达的地址
-	adapter := NewOpenAIAdapter("test-key", "http://127.0.0.1:1", "test-model", 30*time.Second)
+	adapter := NewOpenAIAdapter("test-key", "http://127.0.0.1:1", "test-model", 0, 30*time.Second)
 	adapter.client.Timeout = 100 * time.Millisecond
 	ok, reason := adapter.CheckAvailability(context.Background())
 	assert.False(t, ok)
@@ -300,7 +302,7 @@ func TestOpenAIAdapter_Chat_RateLimitNoErrorBody(t *testing.T) {
 	}))
 	defer server.Close()
 
-	adapter := NewOpenAIAdapter("test-key", server.URL, "test-model", 30*time.Second)
+	adapter := NewOpenAIAdapter("test-key", server.URL, "test-model", 0, 30*time.Second)
 	adapter.client.Timeout = 5 * time.Second
 	msgs := []models.Message{{Role: models.RoleUser, Content: "test"}}
 
@@ -326,7 +328,7 @@ func TestOpenAIAdapter_StreamChat_RateLimitRetry(t *testing.T) {
 	}))
 	defer server.Close()
 
-	adapter := NewOpenAIAdapter("test-key", server.URL, "test-model", 30*time.Second)
+	adapter := NewOpenAIAdapter("test-key", server.URL, "test-model", 0, 30*time.Second)
 	msgs := []models.Message{{Role: models.RoleUser, Content: "test"}}
 
 	var collected strings.Builder
@@ -336,7 +338,8 @@ func TestOpenAIAdapter_StreamChat_RateLimitRetry(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 3, callCount)
 	assert.Equal(t, "ok", collected.String())
-	assert.Nil(t, usage)
+	require.NotNil(t, usage)
+	assert.Equal(t, "stop", usage.FinishReason)
 }
 
 // TestOpenAIAdapter_Chat_RateLimitRetryExhausted 验证 429 重试耗尽后返回错误。
@@ -348,7 +351,7 @@ func TestOpenAIAdapter_Chat_RateLimitRetryExhausted(t *testing.T) {
 	}))
 	defer server.Close()
 
-	adapter := NewOpenAIAdapter("test-key", server.URL, "test-model", 30*time.Second)
+	adapter := NewOpenAIAdapter("test-key", server.URL, "test-model", 0, 30*time.Second)
 	adapter.client.Timeout = 5 * time.Second
 	msgs := []models.Message{{Role: models.RoleUser, Content: "test"}}
 
@@ -368,7 +371,7 @@ func TestOpenAIAdapter_Chat_EmptyChoices(t *testing.T) {
 	}))
 	defer server.Close()
 
-	adapter := NewOpenAIAdapter("test-key", server.URL, "test-model", 30*time.Second)
+	adapter := NewOpenAIAdapter("test-key", server.URL, "test-model", 0, 30*time.Second)
 	msgs := []models.Message{{Role: models.RoleUser, Content: "test"}}
 
 	_, err := adapter.Chat(context.Background(), msgs)

@@ -15,21 +15,26 @@ import (
 
 // LocalAdapter 适配本地 Ollama / llama.cpp 端点。
 type LocalAdapter struct {
-	endpoint string // 如 http://localhost:11434
-	model    string
-	client   *http.Client
+	endpoint  string // 如 http://localhost:11434
+	model     string
+	maxTokens int
+	client    *http.Client
 }
 
 // NewLocalAdapter 构造函数。
 // timeout 为 HTTP 客户端整体超时；若传入 <=0 则默认 120 秒。
-func NewLocalAdapter(endpoint, model string, timeout time.Duration) *LocalAdapter {
+func NewLocalAdapter(endpoint, model string, maxTokens int, timeout time.Duration) *LocalAdapter {
 	if timeout <= 0 {
 		timeout = 120 * time.Second
 	}
+	if maxTokens <= 0 {
+		maxTokens = 4096
+	}
 	return &LocalAdapter{
-		endpoint: endpoint,
-		model:    model,
-		client:   &http.Client{Timeout: timeout},
+		endpoint:  endpoint,
+		model:     model,
+		maxTokens: maxTokens,
+		client:    &http.Client{Timeout: timeout},
 	}
 }
 
@@ -44,6 +49,11 @@ type ollamaChatRequest struct {
 	Model    string          `json:"model"`
 	Messages []ollamaMessage `json:"messages"`
 	Stream   bool            `json:"stream"`
+	Options  ollamaOptions   `json:"options,omitempty"`
+}
+
+type ollamaOptions struct {
+	NumPredict int `json:"num_predict,omitempty"`
 }
 
 // ollamaChatResponse Ollama /api/chat 响应体。
@@ -73,6 +83,7 @@ func (a *LocalAdapter) Chat(ctx context.Context, messages []models.Message) (str
 		Model:    a.model,
 		Messages: toOllamaMessages(messages),
 		Stream:   false,
+		Options:  ollamaOptions{NumPredict: a.maxTokens},
 	}
 
 	jsonBody, err := json.Marshal(reqBody)
@@ -120,6 +131,7 @@ func (a *LocalAdapter) StreamChat(ctx context.Context, messages []models.Message
 		Model:    a.model,
 		Messages: toOllamaMessages(messages),
 		Stream:   true,
+		Options:  ollamaOptions{NumPredict: a.maxTokens},
 	}
 
 	jsonBody, err := json.Marshal(reqBody)

@@ -66,6 +66,7 @@ func (c *OpenAICompatibleClient) Chat(ctx context.Context, req ChatRequest, conf
 		Model:       config.ModelID,
 		Messages:    toInternalMessages(req.Messages),
 		Stream:      true,
+		MaxTokens:   config.MaxTokens,
 		Temperature: temp,
 	}
 
@@ -169,8 +170,8 @@ func (c *OpenAICompatibleClient) readSSE(ctx context.Context, resp *http.Respons
 			if content != "" {
 				ch <- StreamChunk{Type: ChunkContent, Payload: content}
 			}
-			if chunk.Choices[0].FinishReason == "stop" {
-				ch <- StreamChunk{Type: ChunkDone, Payload: ""}
+			if chunk.Choices[0].FinishReason == "stop" || chunk.Choices[0].FinishReason == "length" {
+				ch <- StreamChunk{Type: ChunkDone, Payload: chunk.Choices[0].FinishReason}
 				return
 			}
 		}

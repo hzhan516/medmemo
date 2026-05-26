@@ -220,6 +220,8 @@ export interface ProviderConfig {
   timeoutMs: number
   /** 最大重试次数 */
   maxRetries: number
+  /** 单次请求最大输出 Token 数 */
+  maxTokens: number
   /** 分组名称 */
   group: string
   /** 是否启用 */

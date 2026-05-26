@@ -1,4 +1,4 @@
-import { User, Bot, AlertCircle, Copy, RotateCcw, ShieldAlert, Info, ThumbsDown, CheckCircle } from 'lucide-react'
+import { User, Bot, AlertCircle, Copy, RotateCcw, ShieldAlert, Info, ThumbsDown, CheckCircle, AlertTriangle } from 'lucide-react'
 import type { ChatMessage } from '@/stores/chatStore'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { MarkdownRenderer } from '@/components/markdown/MarkdownRenderer'
@@ -40,7 +40,7 @@ export function MessageBubble({ message, onRetry, onReportCompliance }: MessageB
   const showConfidenceBar = useSettingsStore((s) => s.showConfidenceBar)
   const confidenceBarMode = useSettingsStore((s) => s.confidenceBarMode)
   const setConfidenceBarMode = useSettingsStore((s) => s.setConfidenceBarMode)
-  const { id, role, content, isStreaming, interrupted, error, warnings, replacedTerms, complianceFeedback } = message
+  const { id, role, content, isStreaming, interrupted, error, warnings, replacedTerms, complianceFeedback, truncated } = message
 
   // 解析合规级别
   const hasL1Blocked = warnings?.some((w) => w === 'L1_BLOCKED')
@@ -181,6 +181,17 @@ export function MessageBubble({ message, onRetry, onReportCompliance }: MessageB
             {/* 流式光标 */}
             {isStreaming && content.length > 0 && (
               <span className="inline-block w-1.5 h-4 ml-0.5 bg-current opacity-50 animate-pulse" />
+            )}
+
+            {/* 截断提示 */}
+            {truncated && !isStreaming && (
+              <div className="flex items-start gap-2 mt-2 p-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-xs">
+                <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium">回复已截断（超出长度限制）</p>
+                  <p className="opacity-80">模型输出已达到最大长度限制，部分内容未生成完整。您可以发送「继续」来获取剩余内容。</p>
+                </div>
+              </div>
             )}
 
             {/* L3 提示条 */}

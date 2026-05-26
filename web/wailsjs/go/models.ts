@@ -546,6 +546,7 @@ export namespace models {
 	    temperature: number;
 	    timeoutMs: number;
 	    maxRetries: number;
+    maxTokens: number;
 	    group: string;
 	    enabled: boolean;
 	    sortOrder: number;
@@ -568,6 +569,7 @@ export namespace models {
 	        this.temperature = source["temperature"];
 	        this.timeoutMs = source["timeoutMs"];
 	        this.maxRetries = source["maxRetries"];
+        this.maxTokens = source["maxTokens"];
 	        this.group = source["group"];
 	        this.enabled = source["enabled"];
 	        this.sortOrder = source["sortOrder"];

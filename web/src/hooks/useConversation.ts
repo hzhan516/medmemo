@@ -32,6 +32,7 @@ export function useConversation() {
     setLastMessageReplacedTermsForConversation,
     setLastMessageTokenUsageForConversation,
     setLastMessageConfidenceForConversation,
+    setLastMessageTruncatedForConversation,
     replaceLastMessageForConversation,
     setStreamingForConversation,
     addConversation,
@@ -125,6 +126,7 @@ export function useConversation() {
       prompt_tokens?: number
       completion_tokens?: number
       total_tokens?: number
+      truncated?: boolean
     }) => {
       const convId = payload.conversation_id
       if (!convId) return
@@ -156,6 +158,9 @@ export function useConversation() {
         }
         setLastMessageConfidenceForConversation(convId, confidence)
       }
+      if (payload.truncated) {
+        setLastMessageTruncatedForConversation(convId, true)
+      }
     })
 
     return () => {
@@ -165,7 +170,7 @@ export function useConversation() {
       removeReplace()
       removeConfidence()
     }
-  }, [appendToLastMessageForConversation, setLastMessageErrorForConversation, setLastMessageWarningsForConversation, setLastMessageReplacedTermsForConversation, setLastMessageTokenUsageForConversation, setLastMessageConfidenceForConversation, replaceLastMessageForConversation, setStreamingForConversation, updateConversation])
+  }, [appendToLastMessageForConversation, setLastMessageErrorForConversation, setLastMessageWarningsForConversation, setLastMessageReplacedTermsForConversation, setLastMessageTokenUsageForConversation, setLastMessageConfidenceForConversation, setLastMessageTruncatedForConversation, replaceLastMessageForConversation, setStreamingForConversation, updateConversation])
 
   const sendMessage = useCallback(
     async (content: string) => {

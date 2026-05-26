@@ -123,6 +123,7 @@ export function SettingsPage() {
       temperature: number
       timeoutMs: number
       maxRetries: number
+      maxTokens: number
       group: string
       enabled: boolean
       id?: string
@@ -140,6 +141,7 @@ export function SettingsPage() {
         temperature: data.temperature,
         timeoutMs: data.timeoutMs,
         maxRetries: data.maxRetries,
+        maxTokens: data.maxTokens,
         group: data.group,
         enabled: data.enabled,
         authMethod: data.authMethod as ProviderConfig['authMethod'],
