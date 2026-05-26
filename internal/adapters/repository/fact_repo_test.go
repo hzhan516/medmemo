@@ -43,6 +43,22 @@ func TestFactRepo_SaveAndGet(t *testing.T) {
 	assert.Equal(t, f.Confidence, got.Confidence)
 	assert.Equal(t, []string{"msg_001"}, got.SourceMsgIDs)
 	assert.Equal(t, entity.FactStatusPending, got.Status)
+	assert.False(t, got.IsSensitive, "默认应为非敏感")
+}
+
+func TestFactRepo_SaveAndGet_Sensitive(t *testing.T) {
+	repo, cleanup := setupFactTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	f := entity.NewExtractedFact("用户", "患有", "高血压", 0.85, []string{"msg_001"})
+	f.IsSensitive = true
+	err := repo.Save(ctx, f)
+	require.NoError(t, err)
+
+	got, err := repo.GetByID(ctx, f.FactID)
+	require.NoError(t, err)
+	assert.True(t, got.IsSensitive, "敏感标记应被持久化")
 }
 
 func TestFactRepo_GetByID_NotFound(t *testing.T) {
@@ -143,4 +159,98 @@ func TestFactRepo_GetStats(t *testing.T) {
 	assert.Equal(t, int64(1), approved)
 	assert.Equal(t, int64(1), rejected)
 	assert.Equal(t, int64(2), pending)
+}
+
+func TestFactRepo_ListAllSubjects(t *testing.T) {
+	repo, cleanup := setupFactTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// approved 事实
+	f1 := entity.NewExtractedFact("用户", "患有", "高血压", 0.9, []string{"msg_1"})
+	f1.FactID = "fact_sub1"
+	f1.SetStatus(entity.FactStatusApproved)
+	require.NoError(t, repo.Save(ctx, f1))
+
+	// 不同 subject 的 approved 事实
+	f2 := entity.NewExtractedFact("医生", "建议", "检查", 0.8, []string{"msg_2"})
+	f2.FactID = "fact_sub2"
+	f2.SetStatus(entity.FactStatusApproved)
+	require.NoError(t, repo.Save(ctx, f2))
+
+	// pending 的事实不应出现在 subjects 中
+	f3 := entity.NewExtractedFact("护士", "测量", "血压", 0.7, []string{"msg_3"})
+	f3.FactID = "fact_sub3"
+	require.NoError(t, repo.Save(ctx, f3))
+
+	subjects, err := repo.ListAllSubjects(ctx)
+	require.NoError(t, err)
+	require.Len(t, subjects, 2)
+	assert.Contains(t, subjects, "用户")
+	assert.Contains(t, subjects, "医生")
+}
+
+func TestFactRepo_FindBySubject(t *testing.T) {
+	repo, cleanup := setupFactTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	f1 := entity.NewExtractedFact("用户", "患有", "高血压", 0.9, []string{"msg_1"})
+	f1.FactID = "fact_fs1"
+	f1.SetStatus(entity.FactStatusApproved)
+	require.NoError(t, repo.Save(ctx, f1))
+
+	f2 := entity.NewExtractedFact("用户", "服用", "降压药", 0.85, []string{"msg_2"})
+	f2.FactID = "fact_fs2"
+	f2.SetStatus(entity.FactStatusApproved)
+	require.NoError(t, repo.Save(ctx, f2))
+
+	facts, err := repo.FindBySubject(ctx, "用户")
+	require.NoError(t, err)
+	require.Len(t, facts, 2)
+}
+
+func TestFactRepo_FindBySession(t *testing.T) {
+	repo, cleanup := setupFactTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// 注意：FindBySession 依赖 raw_dialogues 表，需要先插入对话
+	// 这里通过 dialogue_repo 插入（如果可用）或直接用 SQL
+	// 简化：直接测试空会话场景
+	facts, err := repo.FindBySession(ctx, "nonexistent_session")
+	require.NoError(t, err)
+	assert.Len(t, facts, 0)
+}
+
+func TestFactRepo_FindBySession_WithData(t *testing.T) {
+	tmpDir := t.TempDir()
+	connector, err := database.NewSQLiteConnector(tmpDir)
+	require.NoError(t, err)
+	defer connector.Close()
+
+	ctx := context.Background()
+	err = connector.Migrate(ctx)
+	require.NoError(t, err)
+
+	repo := NewFactRepoSQLite(connector)
+
+	// 插入 raw_dialogues
+	db := connector.DB()
+	_, err = db.ExecContext(ctx, `
+		INSERT INTO raw_dialogues (message_id, session_id, role, content, timestamp, created_at)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, "msg_s1", "sess_a", "user", "我有高血压", 1, 1)
+	require.NoError(t, err)
+
+	// 插入关联的 extracted_fact
+	f := entity.NewExtractedFact("用户", "患有", "高血压", 0.9, []string{"msg_s1"})
+	f.FactID = "fact_fs_a"
+	f.SetStatus(entity.FactStatusApproved)
+	require.NoError(t, repo.Save(ctx, f))
+
+	facts, err := repo.FindBySession(ctx, "sess_a")
+	require.NoError(t, err)
+	require.Len(t, facts, 1)
+	assert.Equal(t, "fact_fs_a", facts[0].FactID)
 }

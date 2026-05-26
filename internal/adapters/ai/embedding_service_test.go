@@ -92,6 +92,31 @@ func TestEmbeddingServiceAdapter_ContextCancel(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestEmbeddingServiceAdapter_ModelVersion(t *testing.T) {
+	mock := &mockEmbeddingEngine{}
+	svc := NewEmbeddingServiceAdapter(mock, "test-model-v1")
+	assert.Equal(t, "test-model-v1", svc.ModelVersion())
+}
+
+func TestEmbeddingCache_evictLRU(t *testing.T) {
+	cache := newEmbeddingCache(2)
+
+	cache.Set("a", []float32{1.0})
+	cache.Set("b", []float32{2.0})
+	// 缓存已满，再添加应触发驱逐
+	cache.Set("c", []float32{3.0})
+
+	// "a" 应该被驱逐
+	_, ok := cache.Get("a")
+	assert.False(t, ok, "oldest entry should be evicted")
+
+	// "b" 和 "c" 应该还在
+	_, ok = cache.Get("b")
+	assert.True(t, ok)
+	_, ok = cache.Get("c")
+	assert.True(t, ok)
+}
+
 // mockEmbeddingEngine 用于测试的 mock 引擎
 type mockEmbeddingEngine struct {
 	embeddings   [][]float32

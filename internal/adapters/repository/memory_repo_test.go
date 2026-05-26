@@ -129,3 +129,14 @@ func TestMemoryRepoSQLite_Update(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "更新后的内容", got.Content)
 }
+
+func TestEnsureMemorySchema(t *testing.T) {
+	dir := t.TempDir()
+	connector, err := database.NewSQLiteConnector(dir)
+	require.NoError(t, err)
+	defer connector.Close()
+
+	// 直接调用包级函数
+	err = EnsureMemorySchema(connector.DB())
+	require.NoError(t, err)
+}

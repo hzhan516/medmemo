@@ -177,3 +177,21 @@ func TestDialogueRepo_MarkFailed(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, results, 0)
 }
+
+func TestDialogueRepo_MarkProcessing(t *testing.T) {
+	repo, cleanup := setupDialogueTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	d := entity.NewRawDialogue("session_008", entity.RoleUser, "测试处理中", "")
+	d.MessageID = "msg_processing"
+	err := repo.Insert(ctx, d)
+	require.NoError(t, err)
+
+	err = repo.MarkProcessing(ctx, "msg_processing")
+	require.NoError(t, err)
+
+	results, err := repo.GetUnprocessed(ctx, 10)
+	require.NoError(t, err)
+	assert.Len(t, results, 0)
+}

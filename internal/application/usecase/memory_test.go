@@ -88,6 +88,20 @@ func (s *stubFactRepository) FindBySession(ctx context.Context, sessionID string
 	return nil, nil
 }
 
+// stubFactRepositoryWithSubjects 支持实体提及检测的 stub
+type stubFactRepositoryWithSubjects struct {
+	stubFactRepository
+	subjects []string
+	bySubject map[string][]*entity.ExtractedFact
+}
+
+func (s *stubFactRepositoryWithSubjects) ListAllSubjects(ctx context.Context) ([]string, error) {
+	return s.subjects, nil
+}
+func (s *stubFactRepositoryWithSubjects) FindBySubject(ctx context.Context, subject string) ([]*entity.ExtractedFact, error) {
+	return s.bySubject[subject], nil
+}
+
 // 确保 stub 实现满足接口
 var _ repository.EmbeddingRepository = (*stubEmbeddingRepository)(nil)
 var _ repository.FactRepository = (*stubFactRepository)(nil)
@@ -293,4 +307,77 @@ func TestMemoryRetriever_TokenBudget(t *testing.T) {
 	require.NoError(t, err)
 	// tokenBudget 限制下，返回的记忆数量应受限
 	assert.LessOrEqual(t, len(memories), 5)
+}
+
+func TestMemoryRetriever_SetEnabled(t *testing.T) {
+	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, &stubFactRepository{}, NewDecayScorer())
+	assert.True(t, retriever.IsEnabled())
+
+	retriever.SetEnabled(false)
+	assert.False(t, retriever.IsEnabled())
+
+	retriever.SetEnabled(true)
+	assert.True(t, retriever.IsEnabled())
+}
+
+func TestMemoryRetriever_SetSessionEnabled(t *testing.T) {
+	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, &stubFactRepository{}, NewDecayScorer())
+
+	// 全局开启，会话默认开启
+	assert.True(t, retriever.IsSessionEnabled("sess_1"))
+
+	// 禁用特定会话
+	retriever.SetSessionEnabled("sess_1", false)
+	assert.False(t, retriever.IsSessionEnabled("sess_1"))
+	assert.True(t, retriever.IsSessionEnabled("sess_2"))
+
+	// 重新启用
+	retriever.SetSessionEnabled("sess_1", true)
+	assert.True(t, retriever.IsSessionEnabled("sess_1"))
+
+	// 空 sessionID 等效于全局开关
+	retriever.SetSessionEnabled("", false)
+	assert.False(t, retriever.IsEnabled())
+}
+
+func TestMemoryRetriever_detectEntityMentions(t *testing.T) {
+	factRepo := &stubFactRepositoryWithSubjects{
+		subjects: []string{"用户", "医生"},
+		bySubject: map[string][]*entity.ExtractedFact{
+			"用户": {
+				{FactID: "f1", Subject: "用户", Predicate: "患有", Object: "高血压", Confidence: 0.9, Status: entity.FactStatusApproved},
+			},
+		},
+	}
+	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, factRepo, NewDecayScorer())
+
+	memories, triggered := retriever.detectEntityMentions(context.Background(), "用户最近血压怎么样")
+	assert.True(t, triggered)
+	require.Len(t, memories, 1)
+	assert.Equal(t, "用户 患有 高血压", memories[0].Content)
+}
+
+func TestMemoryRetriever_detectEntityMentions_NoMatch(t *testing.T) {
+	factRepo := &stubFactRepositoryWithSubjects{subjects: []string{"用户"}}
+	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, factRepo, NewDecayScorer())
+
+	memories, triggered := retriever.detectEntityMentions(context.Background(), "今天天气不错")
+	assert.False(t, triggered)
+	assert.Len(t, memories, 0)
+}
+
+func TestFormatMemoriesForInjection(t *testing.T) {
+	memories := []*entity.HealthMemory{
+		{Content: "用户 患有 高血压", Confidence: 0.9},
+		{Content: "用户 服用 降压药", Confidence: 0.85},
+	}
+	result := FormatMemoriesForInjection(memories)
+	assert.Contains(t, result, "[相关记忆]")
+	assert.Contains(t, result, "1. 用户 患有 高血压")
+	assert.Contains(t, result, "2. 用户 服用 降压药")
+}
+
+func TestFormatMemoriesForInjection_Empty(t *testing.T) {
+	result := FormatMemoriesForInjection(nil)
+	assert.Equal(t, "", result)
 }

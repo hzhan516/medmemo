@@ -11,6 +11,37 @@ import (
 	"github.com/hzhan516/medmemo/internal/domain/repository"
 )
 
+// stubDisclaimerRepository 用于测试的免责声明 stub
+type stubDisclaimerRepository struct {
+	acceptance *entity.DisclaimerAcceptance
+}
+
+func (s *stubDisclaimerRepository) GetAcceptance(ctx context.Context) (*entity.DisclaimerAcceptance, error) {
+	return s.acceptance, nil
+}
+func (s *stubDisclaimerRepository) SaveAcceptance(ctx context.Context, record *entity.DisclaimerAcceptance) error {
+	return nil
+}
+
+// stubAuditLogRepository 用于测试的审计日志 stub
+type stubAuditLogRepository struct {
+	logs []*entity.AuditLogEntry
+}
+
+func (s *stubAuditLogRepository) Save(ctx context.Context, entry *entity.AuditLogEntry) error {
+	s.logs = append(s.logs, entry)
+	return nil
+}
+func (s *stubAuditLogRepository) ListByTarget(ctx context.Context, targetType, targetID string, limit int) ([]*entity.AuditLogEntry, error) {
+	var result []*entity.AuditLogEntry
+	for _, log := range s.logs {
+		if log.TargetType == targetType && log.TargetID == targetID {
+			result = append(result, log)
+		}
+	}
+	return result, nil
+}
+
 // stubFactRepository 用于 WailsApp 测试的简单 stub
 type wailsStubFactRepo struct {
 	facts       map[string]*entity.ExtractedFact
@@ -97,10 +128,46 @@ func setupMemoryWailsApp() *WailsApp {
 	pending := []*entity.ExtractedFact{facts["fact_3"]}
 
 	app := &WailsApp{
-		factRepo: &wailsStubFactRepo{facts: facts, pendingList: pending},
+		factRepo:       &wailsStubFactRepo{facts: facts, pendingList: pending},
+		disclaimerRepo: &stubDisclaimerRepository{acceptance: &entity.DisclaimerAcceptance{Version: "1.0"}},
+		auditLogRepo:   &stubAuditLogRepository{},
 	}
 	app.ctx = context.Background()
 	return app
+}
+
+func TestWailsApp_RequireAuth_Authorized(t *testing.T) {
+	app := setupMemoryWailsApp()
+	err := app.requireAuth()
+	require.NoError(t, err)
+}
+
+func TestWailsApp_RequireAuth_Unauthorized(t *testing.T) {
+	app := &WailsApp{
+		ctx:            context.Background(),
+		disclaimerRepo: &stubDisclaimerRepository{acceptance: nil},
+	}
+	err := app.requireAuth()
+	assert.ErrorIs(t, err, entity.ErrUnauthorized)
+}
+
+func TestWailsApp_RequireAuth_NilRepo(t *testing.T) {
+	app := &WailsApp{
+		ctx:            context.Background(),
+		disclaimerRepo: nil,
+	}
+	err := app.requireAuth()
+	assert.ErrorIs(t, err, entity.ErrUnauthorized)
+}
+
+func TestWailsApp_GetMemories_Unauthorized(t *testing.T) {
+	app := &WailsApp{
+		ctx:            context.Background(),
+		factRepo:       &wailsStubFactRepo{},
+		disclaimerRepo: &stubDisclaimerRepository{acceptance: nil},
+	}
+	_, err := app.GetMemories(10, 0)
+	assert.ErrorIs(t, err, entity.ErrUnauthorized)
 }
 
 func TestWailsApp_GetMemories(t *testing.T) {

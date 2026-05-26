@@ -260,3 +260,81 @@ func TestE2E_Memory_RetrieverIntegration(t *testing.T) {
 	}
 	assert.Equal(t, 2, approvedCount)
 }
+
+// e2eMockEmbeddingService 用于 E2E 测试的 mock 嵌入服务，返回预定义向量。
+type e2eMockEmbeddingService struct{}
+
+func (m *e2eMockEmbeddingService) Embed(ctx context.Context, texts []string) ([][]float32, error) {
+	result := make([][]float32, len(texts))
+	for i := range texts {
+		v := make([]float32, entity.EmbeddingDimension)
+		v[0] = 1.0
+		result[i] = v
+	}
+	return result, nil
+}
+
+func (m *e2eMockEmbeddingService) EmbedSingle(ctx context.Context, text string) ([]float32, error) {
+	v := make([]float32, entity.EmbeddingDimension)
+	v[0] = 1.0
+	return v, nil
+}
+
+// TestE2E_Memory_FullPipeline 验证完整数据流：对话→提取→评分→保存→嵌入→索引→召回→注入。
+func TestE2E_Memory_FullPipeline(t *testing.T) {
+	conn := setupTestDB(t)
+	defer conn.Close()
+
+	ctx := context.Background()
+	factRepo := repository.NewFactRepoSQLite(conn)
+	embedRepo := repository.NewEmbeddingRepoSQLite(conn)
+
+	// 1. 模拟用户对话
+	dialogue := entity.NewRawDialogue("sess_full", entity.RoleUser, "我有高血压，最近在服用降压药", "kimi")
+
+	// 2. 事实提取（模拟 LLM 输出）
+	facts := []*entity.ExtractedFact{
+		entity.NewExtractedFact("用户", "患有", "高血压", 0.9, []string{dialogue.MessageID}),
+		entity.NewExtractedFact("用户", "服用", "降压药", 0.85, []string{dialogue.MessageID}),
+	}
+
+	// 3. 置信度评分 + 审核 + 保存
+	scorer := usecase.NewConfidenceScorer()
+	for _, f := range facts {
+		status := scorer.EvaluateStatus(f)
+		f.Status = status
+		require.NoError(t, factRepo.Save(ctx, f))
+	}
+
+	// 4. 生成嵌入向量并保存到索引
+	v1 := make([]float32, entity.EmbeddingDimension)
+	v1[0] = 1.0
+	v2 := make([]float32, entity.EmbeddingDimension)
+	v2[0] = 0.95
+	v2[1] = 0.05
+
+	require.NoError(t, embedRepo.Save(ctx, entity.NewSemanticEmbedding(facts[0].FactID, v1, "all-MiniLM-L6-v2")))
+	require.NoError(t, embedRepo.Save(ctx, entity.NewSemanticEmbedding(facts[1].FactID, v2, "all-MiniLM-L6-v2")))
+
+	// 5. MemoryRetriever 召回
+	mockSvc := &e2eMockEmbeddingService{}
+	retriever := usecase.NewMemoryRetriever(mockSvc, embedRepo, factRepo, usecase.NewDecayScorer())
+
+	memories, err := retriever.RetrieveForContext(ctx, "我的血压情况", "sess_full", 3)
+	require.NoError(t, err)
+	require.Len(t, memories, 2)
+
+	// 6. 验证召回结果包含相关记忆
+	contents := make(map[string]bool)
+	for _, m := range memories {
+		contents[m.Content] = true
+	}
+	assert.True(t, contents["用户 患有 高血压"], "应召回高血压相关记忆")
+	assert.True(t, contents["用户 服用 降压药"], "应召回降压药相关记忆")
+
+	// 7. 验证格式化注入文本
+	injectionText := usecase.FormatMemoriesForInjection(memories)
+	assert.Contains(t, injectionText, "[相关记忆]")
+	assert.Contains(t, injectionText, "高血压")
+	assert.Contains(t, injectionText, "降压药")
+}

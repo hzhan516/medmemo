@@ -98,6 +98,45 @@ func TestFactExtractorWorker_Lifecycle(t *testing.T) {
 	worker.Wait()
 }
 
+func TestFactExtractor_Extract(t *testing.T) {
+	extractor := NewFactExtractor(&mockLLMForFactExtraction{
+		response: `[{"subject":"用户","predicate":"患有","object":"头痛","confidence":0.9}]`,
+	})
+
+	dialogues := []*entity.RawDialogue{
+		entity.NewRawDialogue("sess_1", entity.RoleUser, "我头很痛", "kimi"),
+		entity.NewRawDialogue("sess_1", entity.RoleAssistant, "了解了，请告诉我更多细节", "kimi"),
+	}
+
+	facts, err := extractor.Extract(context.Background(), dialogues)
+	require.NoError(t, err)
+	require.Len(t, facts, 1)
+	assert.Equal(t, "用户", facts[0].Subject)
+	assert.Equal(t, "患有", facts[0].Predicate)
+	assert.Equal(t, "头痛", facts[0].Object)
+	// source_msg_ids 应被正确关联
+	require.Len(t, facts[0].SourceMsgIDs, 2)
+}
+
+func TestFactExtractor_Extract_RateLimited(t *testing.T) {
+	extractor := NewFactExtractor(&mockLLMForFactExtraction{
+		response: `[{"subject":"用户","predicate":"患有","object":"头痛","confidence":0.9}]`,
+	})
+	extractor.rateLimit = 1
+
+	// 第一次调用
+	_, err := extractor.Extract(context.Background(), []*entity.RawDialogue{
+		entity.NewRawDialogue("sess_1", entity.RoleUser, "测试", "kimi"),
+	})
+	require.NoError(t, err)
+
+	// 第二次调用应被限速
+	_, err = extractor.Extract(context.Background(), []*entity.RawDialogue{
+		entity.NewRawDialogue("sess_1", entity.RoleUser, "测试2", "kimi"),
+	})
+	assert.ErrorIs(t, err, ErrRateLimited)
+}
+
 // mockLLMForFactExtraction 用于测试的 mock LLM
 type mockLLMForFactExtraction struct {
 	response string

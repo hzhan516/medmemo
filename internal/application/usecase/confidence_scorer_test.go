@@ -96,3 +96,27 @@ func TestConfidenceScorer_SingleSource(t *testing.T) {
 	// 0.2+0.2+0.2+0.8*0.3+0 = 0.84
 	assert.InDelta(t, 0.84, score, 0.001)
 }
+
+func TestConfidenceScorer_SensitiveFact_Medical(t *testing.T) {
+	scorer := NewConfidenceScorer()
+	f := entity.NewExtractedFact("用户", "患有", "高血压", 0.9, []string{"msg_001"})
+
+	scorer.Score(f)
+	assert.True(t, f.IsSensitive, "医学敏感词应被标记为敏感")
+}
+
+func TestConfidenceScorer_SensitiveFact_PII(t *testing.T) {
+	scorer := NewConfidenceScorer()
+	f := entity.NewExtractedFact("用户", "身份证", "110101199001011234", 0.9, []string{"msg_001"})
+
+	scorer.Score(f)
+	assert.True(t, f.IsSensitive, "PII 应被标记为敏感")
+}
+
+func TestConfidenceScorer_NonSensitiveFact(t *testing.T) {
+	scorer := NewConfidenceScorer()
+	f := entity.NewExtractedFact("用户", "喜欢", "跑步", 0.9, []string{"msg_001"})
+
+	scorer.Score(f)
+	assert.False(t, f.IsSensitive, "非敏感事实不应被标记")
+}
