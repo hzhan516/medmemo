@@ -392,6 +392,31 @@ func migrateSQLiteSchema(ctx context.Context, db *sql.DB) error {
 			CREATE INDEX IF NOT EXISTS idx_embedding_fact ON semantic_embeddings(fact_id);
 			`,
 		},
+		{
+			version: 8,
+			sql: `
+			-- v1.1 DoD A1: 为 extracted_facts 添加敏感信息标记列
+			ALTER TABLE extracted_facts ADD COLUMN is_sensitive INTEGER DEFAULT 0;
+			`,
+		},
+		{
+			version: 9,
+			sql: `
+			-- v1.1 DoD A3: 审计日志表
+			CREATE TABLE IF NOT EXISTS audit_logs (
+				id TEXT PRIMARY KEY,
+				action TEXT NOT NULL CHECK(action IN ('CREATE','APPROVE','REJECT','DELETE')),
+				target_type TEXT NOT NULL DEFAULT 'fact',
+				target_id TEXT NOT NULL,
+				old_value TEXT,
+				new_value TEXT,
+				actor TEXT NOT NULL DEFAULT 'user',
+				timestamp INTEGER NOT NULL
+			);
+			CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_logs(target_type, target_id);
+			CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_logs(timestamp);
+			`,
+		},
 	}
 
 	for _, m := range migrations {

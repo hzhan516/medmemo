@@ -58,6 +58,9 @@ type WailsApp struct {
 
 	// 记忆管理仓库（TASK-060）
 	factRepo repository.FactRepository
+
+	// 审计日志仓库（v1.1 DoD A3）
+	auditLogRepo repository.AuditLogRepository
 }
 
 // NewWailsApp 构造函数，供 Wire 调用。
@@ -76,6 +79,7 @@ func NewWailsApp(
 	tokenRefreshSvc *auth.TokenRefreshService,
 	deviceFlowSvc *auth.OAuthDeviceFlowService,
 	factRepo repository.FactRepository,
+	auditLogRepo repository.AuditLogRepository,
 ) *WailsApp {
 	return &WailsApp{
 		chatOrchestrator: chat,
@@ -92,6 +96,7 @@ func NewWailsApp(
 		tokenRefreshSvc:  tokenRefreshSvc,
 		deviceFlowSvc:    deviceFlowSvc,
 		factRepo:         factRepo,
+		auditLogRepo:     auditLogRepo,
 		callbackServers:  make(map[string]*auth.LocalCallbackServer),
 		activeStreams:    make(map[string]context.CancelFunc),
 	}
@@ -1885,6 +1890,7 @@ type MemoryItem struct {
 	Object      string  `json:"object"`
 	Confidence  float64 `json:"confidence"`
 	Status      string  `json:"status"`
+	IsSensitive bool    `json:"is_sensitive"`
 	CreatedAt   int64   `json:"created_at"`
 }
 
@@ -1898,18 +1904,40 @@ type MemoryStats struct {
 
 func factToMemoryItem(f *entity.ExtractedFact) MemoryItem {
 	return MemoryItem{
-		FactID:     f.FactID,
-		Subject:    f.Subject,
-		Predicate:  f.Predicate,
-		Object:     f.Object,
-		Confidence: f.Confidence,
-		Status:     string(f.Status),
-		CreatedAt:  f.CreatedAt.UnixMilli(),
+		FactID:      f.FactID,
+		Subject:     f.Subject,
+		Predicate:   f.Predicate,
+		Object:      f.Object,
+		Confidence:  f.Confidence,
+		Status:      string(f.Status),
+		IsSensitive: f.IsSensitive,
+		CreatedAt:   f.CreatedAt.UnixMilli(),
 	}
+}
+
+// requireAuth 检查应用是否已通过首次启动的免责声明同意流程。
+// 未授权时返回 ErrUnauthorized，阻止记忆数据的访问。
+func (a *WailsApp) requireAuth() error {
+	if a.disclaimerRepo == nil {
+		return fmt.Errorf("disclaimer repository not initialized: %w", entity.ErrUnauthorized)
+	}
+	ctx, cancel := context.WithTimeout(a.ctx, 5*time.Second)
+	defer cancel()
+	rec, err := a.disclaimerRepo.GetAcceptance(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to check authorization: %w", err)
+	}
+	if rec == nil {
+		return entity.ErrUnauthorized
+	}
+	return nil
 }
 
 // GetMemories 分页获取已审批的记忆列表。
 func (a *WailsApp) GetMemories(limit int, offset int) ([]MemoryItem, error) {
+	if err := a.requireAuth(); err != nil {
+		return nil, err
+	}
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
@@ -1938,6 +1966,9 @@ func (a *WailsApp) GetMemories(limit int, offset int) ([]MemoryItem, error) {
 
 // GetMemoryByID 按 ID 获取单条记忆详情。
 func (a *WailsApp) GetMemoryByID(factID string) (MemoryItem, error) {
+	if err := a.requireAuth(); err != nil {
+		return MemoryItem{}, err
+	}
 	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
 	defer cancel()
 
@@ -1954,6 +1985,9 @@ func (a *WailsApp) GetMemoryByID(factID string) (MemoryItem, error) {
 
 // DeleteMemory 删除指定记忆（级联删除关联嵌入）。
 func (a *WailsApp) DeleteMemory(factID string) error {
+	if err := a.requireAuth(); err != nil {
+		return err
+	}
 	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
 	defer cancel()
 
@@ -1964,11 +1998,20 @@ func (a *WailsApp) DeleteMemory(factID string) error {
 	if err := a.factRepo.Delete(ctx, factID); err != nil {
 		return fmt.Errorf("failed to delete memory: %w", err)
 	}
+
+	// 记录审计日志（失败不影响主流程）
+	if a.auditLogRepo != nil {
+		entry := entity.NewAuditLogEntry(entity.AuditActionDelete, "fact", factID, "user")
+		_ = a.auditLogRepo.Save(ctx, entry)
+	}
 	return nil
 }
 
 // SearchMemories 关键词搜索已审批的记忆。
 func (a *WailsApp) SearchMemories(query string) ([]MemoryItem, error) {
+	if err := a.requireAuth(); err != nil {
+		return nil, err
+	}
 	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
 	defer cancel()
 
@@ -1996,6 +2039,9 @@ func (a *WailsApp) SearchMemories(query string) ([]MemoryItem, error) {
 
 // GetPendingReviews 获取待审核事实列表。
 func (a *WailsApp) GetPendingReviews(limit int, offset int) ([]MemoryItem, error) {
+	if err := a.requireAuth(); err != nil {
+		return nil, err
+	}
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
@@ -2024,6 +2070,9 @@ func (a *WailsApp) GetPendingReviews(limit int, offset int) ([]MemoryItem, error
 
 // ApproveFact 审核通过指定事实。
 func (a *WailsApp) ApproveFact(factID string) error {
+	if err := a.requireAuth(); err != nil {
+		return err
+	}
 	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
 	defer cancel()
 
@@ -2034,11 +2083,20 @@ func (a *WailsApp) ApproveFact(factID string) error {
 	if err := a.factRepo.UpdateStatus(ctx, factID, entity.FactStatusApproved); err != nil {
 		return fmt.Errorf("failed to approve fact: %w", err)
 	}
+
+	// 记录审计日志（失败不影响主流程）
+	if a.auditLogRepo != nil {
+		entry := entity.NewAuditLogEntry(entity.AuditActionApprove, "fact", factID, "user")
+		_ = a.auditLogRepo.Save(ctx, entry)
+	}
 	return nil
 }
 
 // RejectFact 审核拒绝指定事实。
 func (a *WailsApp) RejectFact(factID string) error {
+	if err := a.requireAuth(); err != nil {
+		return err
+	}
 	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
 	defer cancel()
 
@@ -2049,11 +2107,20 @@ func (a *WailsApp) RejectFact(factID string) error {
 	if err := a.factRepo.UpdateStatus(ctx, factID, entity.FactStatusRejected); err != nil {
 		return fmt.Errorf("failed to reject fact: %w", err)
 	}
+
+	// 记录审计日志（失败不影响主流程）
+	if a.auditLogRepo != nil {
+		entry := entity.NewAuditLogEntry(entity.AuditActionReject, "fact", factID, "user")
+		_ = a.auditLogRepo.Save(ctx, entry)
+	}
 	return nil
 }
 
 // GetMemoryStats 获取记忆审核统计。
 func (a *WailsApp) GetMemoryStats() (MemoryStats, error) {
+	if err := a.requireAuth(); err != nil {
+		return MemoryStats{}, err
+	}
 	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
 	defer cancel()
 
@@ -2075,6 +2142,9 @@ func (a *WailsApp) GetMemoryStats() (MemoryStats, error) {
 
 // GetMemoriesBySession 按会话 ID 获取关联的已审批记忆。
 func (a *WailsApp) GetMemoriesBySession(sessionID string) ([]MemoryItem, error) {
+	if err := a.requireAuth(); err != nil {
+		return nil, err
+	}
 	if sessionID == "" {
 		return nil, fmt.Errorf("session_id is required")
 	}
@@ -2100,6 +2170,9 @@ func (a *WailsApp) GetMemoriesBySession(sessionID string) ([]MemoryItem, error) 
 
 // SetMemoryInjectionEnabled 设置记忆注入全局开关。
 func (a *WailsApp) SetMemoryInjectionEnabled(enabled bool) error {
+	if err := a.requireAuth(); err != nil {
+		return err
+	}
 	if a.memoryRetriever == nil {
 		return fmt.Errorf("memory retriever not initialized")
 	}
@@ -2109,6 +2182,9 @@ func (a *WailsApp) SetMemoryInjectionEnabled(enabled bool) error {
 
 // SetSessionMemoryInjection 设置指定会话的记忆注入开关。
 func (a *WailsApp) SetSessionMemoryInjection(sessionID string, enabled bool) error {
+	if err := a.requireAuth(); err != nil {
+		return err
+	}
 	if a.memoryRetriever == nil {
 		return fmt.Errorf("memory retriever not initialized")
 	}

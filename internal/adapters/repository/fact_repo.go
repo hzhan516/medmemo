@@ -41,9 +41,9 @@ func (r *FactRepoSQLite) Save(ctx context.Context, f *entity.ExtractedFact) erro
 	}
 
 	_, err = r.db.ExecContext(ctx, `
-		INSERT INTO extracted_facts (fact_id, subject, predicate, object, confidence, source_msg_ids, status, scored_at, reviewed_at, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, f.FactID, f.Subject, f.Predicate, f.Object, f.Confidence, sourceIDs, f.Status, scoredAt, reviewedAt, f.CreatedAt.UnixMilli())
+		INSERT INTO extracted_facts (fact_id, subject, predicate, object, confidence, source_msg_ids, status, is_sensitive, scored_at, reviewed_at, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, f.FactID, f.Subject, f.Predicate, f.Object, f.Confidence, sourceIDs, f.Status, boolToInt(f.IsSensitive), scoredAt, reviewedAt, f.CreatedAt.UnixMilli())
 	if err != nil {
 		return fmt.Errorf("failed to save fact: %w", err)
 	}
@@ -53,7 +53,7 @@ func (r *FactRepoSQLite) Save(ctx context.Context, f *entity.ExtractedFact) erro
 // GetByID 按 ID 查询事实。
 func (r *FactRepoSQLite) GetByID(ctx context.Context, factID string) (*entity.ExtractedFact, error) {
 	row := r.db.QueryRowContext(ctx, `
-		SELECT fact_id, subject, predicate, object, confidence, source_msg_ids, status, scored_at, reviewed_at, created_at
+		SELECT fact_id, subject, predicate, object, confidence, source_msg_ids, status, is_sensitive, scored_at, reviewed_at, created_at
 		FROM extracted_facts WHERE fact_id = ?
 	`, factID)
 
@@ -66,7 +66,7 @@ func (r *FactRepoSQLite) ListByStatus(ctx context.Context, status entity.FactSta
 		limit = 20
 	}
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT fact_id, subject, predicate, object, confidence, source_msg_ids, status, scored_at, reviewed_at, created_at
+		SELECT fact_id, subject, predicate, object, confidence, source_msg_ids, status, is_sensitive, scored_at, reviewed_at, created_at
 		FROM extracted_facts
 		WHERE status = ?
 		ORDER BY created_at DESC
@@ -132,7 +132,7 @@ func (r *FactRepoSQLite) ListAllSubjects(ctx context.Context) ([]string, error) 
 // FindBySubject 按 subject 查找已审批事实。
 func (r *FactRepoSQLite) FindBySubject(ctx context.Context, subject string) ([]*entity.ExtractedFact, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT fact_id, subject, predicate, object, confidence, source_msg_ids, status, scored_at, reviewed_at, created_at
+		SELECT fact_id, subject, predicate, object, confidence, source_msg_ids, status, is_sensitive, scored_at, reviewed_at, created_at
 		FROM extracted_facts
 		WHERE status = 'approved' AND subject = ?
 		ORDER BY created_at DESC
@@ -173,7 +173,7 @@ func (r *FactRepoSQLite) FindBySession(ctx context.Context, sessionID string) ([
 
 	// 查询所有已审批事实并在应用层过滤
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT fact_id, subject, predicate, object, confidence, source_msg_ids, status, scored_at, reviewed_at, created_at
+		SELECT fact_id, subject, predicate, object, confidence, source_msg_ids, status, is_sensitive, scored_at, reviewed_at, created_at
 		FROM extracted_facts
 		WHERE status = 'approved'
 		ORDER BY created_at DESC
@@ -230,10 +230,11 @@ func (r *FactRepoSQLite) GetStats(ctx context.Context) (total, approved, rejecte
 func scanFact(row *sql.Row) (*entity.ExtractedFact, error) {
 	var f entity.ExtractedFact
 	var sourceIDsJSON string
+	var isSensitive int
 	var scoredAt, reviewedAt *int64
 	var created int64
 
-	if err := row.Scan(&f.FactID, &f.Subject, &f.Predicate, &f.Object, &f.Confidence, &sourceIDsJSON, &f.Status, &scoredAt, &reviewedAt, &created); err != nil {
+	if err := row.Scan(&f.FactID, &f.Subject, &f.Predicate, &f.Object, &f.Confidence, &sourceIDsJSON, &f.Status, &isSensitive, &scoredAt, &reviewedAt, &created); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("fact not found: %w", entity.ErrFactNotFound)
 		}
@@ -243,6 +244,7 @@ func scanFact(row *sql.Row) (*entity.ExtractedFact, error) {
 	if err := json.Unmarshal([]byte(sourceIDsJSON), &f.SourceMsgIDs); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal source_msg_ids: %w", err)
 	}
+	f.IsSensitive = isSensitive != 0
 	if scoredAt != nil {
 		t := time.UnixMilli(*scoredAt).UTC()
 		f.ScoredAt = &t
@@ -260,15 +262,17 @@ func scanFacts(rows *sql.Rows) ([]*entity.ExtractedFact, error) {
 	for rows.Next() {
 		var f entity.ExtractedFact
 		var sourceIDsJSON string
+		var isSensitive int
 		var scoredAt, reviewedAt *int64
 		var created int64
 
-		if err := rows.Scan(&f.FactID, &f.Subject, &f.Predicate, &f.Object, &f.Confidence, &sourceIDsJSON, &f.Status, &scoredAt, &reviewedAt, &created); err != nil {
+		if err := rows.Scan(&f.FactID, &f.Subject, &f.Predicate, &f.Object, &f.Confidence, &sourceIDsJSON, &f.Status, &isSensitive, &scoredAt, &reviewedAt, &created); err != nil {
 			return nil, fmt.Errorf("failed to scan fact: %w", err)
 		}
 		if err := json.Unmarshal([]byte(sourceIDsJSON), &f.SourceMsgIDs); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal source_msg_ids: %w", err)
 		}
+		f.IsSensitive = isSensitive != 0
 		if scoredAt != nil {
 			t := time.UnixMilli(*scoredAt).UTC()
 			f.ScoredAt = &t
@@ -285,6 +289,7 @@ func scanFacts(rows *sql.Rows) ([]*entity.ExtractedFact, error) {
 	}
 	return result, nil
 }
+
 
 // FactRepoSet 供 Wire 使用的 ProviderSet。
 var FactRepoSet = wire.NewSet(

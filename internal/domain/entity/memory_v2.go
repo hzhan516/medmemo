@@ -94,6 +94,7 @@ type ExtractedFact struct {
 	Confidence   float64
 	SourceMsgIDs []string
 	Status       FactStatus
+	IsSensitive  bool
 	ScoredAt     *time.Time
 	ReviewedAt   *time.Time
 	CreatedAt    time.Time
@@ -110,6 +111,7 @@ func NewExtractedFact(subject, predicate, object string, confidence float64, sou
 		Confidence:   confidence,
 		SourceMsgIDs: sourceMsgIDs,
 		Status:       FactStatusPending,
+		IsSensitive:  false,
 		CreatedAt:    now,
 	}
 }
