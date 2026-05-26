@@ -454,8 +454,10 @@ func (a *WailsApp) saveMessages(ctx context.Context, convID string, messages []m
 		if confidence != nil {
 			msg.ConfidenceScore = confidence.OverallScore
 			msg.ConfidenceLevel = string(confidence.Level)
-			if jsonBytes, err := json.Marshal(confidence); err == nil {
-				msg.ConfidenceJSON = string(jsonBytes)
+			if confMap := confidenceResultToMap(confidence); confMap != nil {
+				if jsonBytes, err := json.Marshal(confMap); err == nil {
+					msg.ConfidenceJSON = string(jsonBytes)
+				}
 			}
 		}
 		if err := a.msgRepo.Save(ctx, models.ConversationID(convID), msg); err != nil {
@@ -532,9 +534,16 @@ func (a *WailsApp) GetConversationMessages(convID string) ([]MessageResponse, er
 			TotalTokens:      m.PromptTokens + m.CompletionTokens,
 		}
 		if m.ConfidenceJSON != "" {
-			var conf map[string]interface{}
-			if err := json.Unmarshal([]byte(m.ConfidenceJSON), &conf); err == nil {
-				mr.Confidence = conf
+			// 先反序列化到实体结构（兼容旧数据的大驼峰和新数据的蛇形）
+			var cr entity.ConfidenceResult
+			if err := json.Unmarshal([]byte(m.ConfidenceJSON), &cr); err == nil {
+				mr.Confidence = confidenceResultToMap(&cr)
+			} else {
+				// 降级：直接作为 map 透传
+				var conf map[string]interface{}
+				if err := json.Unmarshal([]byte(m.ConfidenceJSON), &conf); err == nil {
+					mr.Confidence = conf
+				}
 			}
 		}
 		result[len(msgs)-1-i] = mr
