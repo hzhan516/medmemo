@@ -29,6 +29,7 @@ export function SettingsPage() {
   const {
     complianceBarMode, setComplianceBarMode,
     showConfidenceBar, setShowConfidenceBar,
+    confidenceBarMode, setConfidenceBarMode,
     autoCheckUpdate, setAutoCheckUpdate,
     updateChannel, setUpdateChannel: setUpdateChannelStore,
     desensitizationLevel, setDesensitizationLevel,
@@ -385,7 +386,13 @@ export function SettingsPage() {
                 ? 'border-primary bg-primary/5'
                 : 'border-border hover:border-primary/30 hover:bg-accent'
             }`}
-            onClick={() => setShowConfidenceBar(!showConfidenceBar)}
+            onClick={() => {
+              const next = !showConfidenceBar
+              setShowConfidenceBar(next)
+              if (next && confidenceBarMode === 'hidden') {
+                setConfidenceBarMode('compact')
+              }
+            }}
           >
             <div className="flex items-center gap-3">
               <Monitor size={18} className={showConfidenceBar ? 'text-primary' : 'text-muted-foreground'} />

@@ -189,12 +189,21 @@ func (c *ChatOrchestrator) Execute(ctx context.Context, req ChatRequest) (*ChatR
 	if compResult.Level != application.L4Normal.String() {
 		warnings = append(warnings, compResult.Level)
 	}
+	if compResult.Warning != "" {
+		warnings = append(warnings, "WARNING:"+compResult.Warning)
+	}
+	if compResult.Notice != "" {
+		warnings = append(warnings, "NOTICE:"+compResult.Notice)
+	}
+	if compResult.MatchedRule != "" {
+		warnings = append(warnings, "RULE:"+compResult.MatchedRule)
+	}
 
 	// 计算回答置信度
 	confidence := c.calculateConfidence(reply, messages)
 
 	return &ChatResponse{
-		Reply:            compResult.SafeText,
+		Reply:            reply,
 		ConfidenceResult: confidence,
 		Warnings:         warnings,
 	}, nil
@@ -235,16 +244,10 @@ func (c *ChatOrchestrator) StreamExecute(ctx context.Context, req ChatRequest, o
 		})
 	}
 
-	// 合规检测
-	compResult, compErr := c.compliance.Check(ctx, reply)
+	// 合规检测（保留原始回复，不替换 SafeText；合规提示由外层通过 chat:stream:compliance 事件追加）
+	_, compErr := c.compliance.Check(ctx, reply)
 	if compErr != nil {
 		return nil, nil, "", fmt.Errorf("compliance check error: %w", compErr)
-	}
-	// 仅 L1（阻断级）替换为安全文本并结束流式输出
-	// L2/L3 保留原文，由外层通过 chat:stream:compliance 事件追加标签
-	if compResult.Blocked {
-		confidence := c.calculateConfidence(compResult.SafeText, messages)
-		return usage, confidence, compResult.SafeText, nil
 	}
 
 	// 计算回答置信度

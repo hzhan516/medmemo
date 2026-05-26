@@ -136,8 +136,19 @@ export function MessageBubble({ message, onRetry, onReportCompliance }: MessageB
               </div>
             )}
 
-            {/* L1 替换提示 */}
-            {(hasL1Blocked || (replacedTerms && replacedTerms.length > 0)) && (
+            {/* L1 阻断提示 */}
+            {hasL1Blocked && (
+              <div className="flex items-start gap-2 mb-2 p-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-xs">
+                <ShieldAlert size={14} className="shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium">内容风险提示（诊断 / 处方 / 治疗）</p>
+                  <p className="opacity-80">以上内容涉及诊断性表述，仅为信息参考，不能替代专业医疗诊断。如有健康疑虑，请咨询持有合法资质的专业医生。</p>
+                </div>
+              </div>
+            )}
+
+            {/* Inline 替换提示 */}
+            {replacedTerms && replacedTerms.length > 0 && !hasL1Blocked && (
               <div className="flex items-start gap-2 mb-2 p-2 rounded-lg bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-xs">
                 <Info size={14} className="shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
