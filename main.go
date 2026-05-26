@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -113,8 +114,9 @@ type App struct {
 // NewEngineConfig 从 AppConfig 构造 ONNX Engine 配置，供 Wire 注入使用。
 func NewEngineConfig(cfg *entity.AppConfig) onnx.EngineConfig {
 	return onnx.EngineConfig{
-		ResourceDir: "resources",
-		ModelPath:   cfg.ModelDir,
+		ResourceDir:        "resources",
+		ModelPath:          cfg.ModelDir,
+		EmbeddingModelPath: filepath.Join(filepath.Dir(cfg.ModelDir), "all-MiniLM-L6-v2"),
 	}
 }
 

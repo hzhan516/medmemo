@@ -91,8 +91,9 @@ func (s *stubFactRepository) FindBySession(ctx context.Context, sessionID string
 // stubFactRepositoryWithSubjects 支持实体提及检测的 stub
 type stubFactRepositoryWithSubjects struct {
 	stubFactRepository
-	subjects []string
+	subjects  []string
 	bySubject map[string][]*entity.ExtractedFact
+	facts     []*entity.ExtractedFact
 }
 
 func (s *stubFactRepositoryWithSubjects) ListAllSubjects(ctx context.Context) ([]string, error) {
@@ -100,6 +101,15 @@ func (s *stubFactRepositoryWithSubjects) ListAllSubjects(ctx context.Context) ([
 }
 func (s *stubFactRepositoryWithSubjects) FindBySubject(ctx context.Context, subject string) ([]*entity.ExtractedFact, error) {
 	return s.bySubject[subject], nil
+}
+func (s *stubFactRepositoryWithSubjects) ListByStatus(ctx context.Context, status entity.FactStatus, offset, limit int) ([]*entity.ExtractedFact, error) {
+	var result []*entity.ExtractedFact
+	for _, f := range s.facts {
+		if f.Status == status {
+			result = append(result, f)
+		}
+	}
+	return result, nil
 }
 
 // 确保 stub 实现满足接口
@@ -348,6 +358,9 @@ func TestMemoryRetriever_detectEntityMentions(t *testing.T) {
 				{FactID: "f1", Subject: "用户", Predicate: "患有", Object: "高血压", Confidence: 0.9, Status: entity.FactStatusApproved},
 			},
 		},
+		facts: []*entity.ExtractedFact{
+			{FactID: "f1", Subject: "用户", Predicate: "患有", Object: "高血压", Confidence: 0.9, Status: entity.FactStatusApproved},
+		},
 	}
 	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, factRepo, NewDecayScorer())
 
@@ -364,6 +377,29 @@ func TestMemoryRetriever_detectEntityMentions_NoMatch(t *testing.T) {
 	memories, triggered := retriever.detectEntityMentions(context.Background(), "今天天气不错")
 	assert.False(t, triggered)
 	assert.Len(t, memories, 0)
+}
+
+func TestMemoryRetriever_detectEntityMentions_KeywordMatch(t *testing.T) {
+	// 测试 predicate/object 关键词匹配（新增能力）
+	factRepo := &stubFactRepositoryWithSubjects{
+		facts: []*entity.ExtractedFact{
+			{FactID: "f1", Subject: "用户", Predicate: "体重是", Object: "110公斤", Confidence: 0.9, Status: entity.FactStatusApproved},
+			{FactID: "f2", Subject: "用户", Predicate: "患有", Object: "高血压", Confidence: 0.85, Status: entity.FactStatusApproved},
+		},
+	}
+	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, factRepo, NewDecayScorer())
+
+	// "体重" 匹配 predicate "体重是"
+	memories, triggered := retriever.detectEntityMentions(context.Background(), "我体重多少")
+	assert.True(t, triggered)
+	require.Len(t, memories, 1)
+	assert.Equal(t, "用户 体重是 110公斤", memories[0].Content)
+
+	// "血压" 匹配 object "高血压"
+	memories, triggered = retriever.detectEntityMentions(context.Background(), "我血压怎么样")
+	assert.True(t, triggered)
+	require.Len(t, memories, 1)
+	assert.Equal(t, "用户 患有 高血压", memories[0].Content)
 }
 
 func TestFormatMemoriesForInjection(t *testing.T) {
