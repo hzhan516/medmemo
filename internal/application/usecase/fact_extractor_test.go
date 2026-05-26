@@ -141,3 +141,12 @@ func (m *mockFactRepo) Delete(ctx context.Context, factID string) error         
 func (m *mockFactRepo) GetStats(ctx context.Context) (total, approved, rejected, pending int64, err error) {
 	return 0, 0, 0, 0, nil
 }
+func (m *mockFactRepo) ListAllSubjects(ctx context.Context) ([]string, error) {
+	return nil, nil
+}
+func (m *mockFactRepo) FindBySubject(ctx context.Context, subject string) ([]*entity.ExtractedFact, error) {
+	return nil, nil
+}
+func (m *mockFactRepo) FindBySession(ctx context.Context, sessionID string) ([]*entity.ExtractedFact, error) {
+	return nil, nil
+}

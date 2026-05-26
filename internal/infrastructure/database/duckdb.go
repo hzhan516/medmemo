@@ -18,10 +18,9 @@ func init() {
 	_ = engine.RegisterVectorFunctions(nil)
 }
 
-// DuckDBConnector DuckDB 嵌入式数据库连接管理器。
+// DuckDBConnector DuckDB 嵌入式数据库连接管理器（已冻结，项目已降级至 SQLite）。
 type DuckDBConnector struct {
 	path string
-	// TODO(作者): 接入 DuckDB Go 驱动 [Issue#020]
 }
 
 // NewDuckDBConnector 创建 DuckDB 连接。

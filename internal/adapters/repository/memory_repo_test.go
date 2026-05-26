@@ -109,7 +109,7 @@ func TestMemoryRepoSQLite_SemanticSearch_NotSupported(t *testing.T) {
 
 	_, err := repo.SemanticSearch(context.Background(), []float32{0.1, 0.2}, 5)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "DuckDB vss extension")
+	assert.Contains(t, err.Error(), "sqlite-vec")
 }
 
 func TestMemoryRepoSQLite_Update(t *testing.T) {

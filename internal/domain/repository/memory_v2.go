@@ -42,6 +42,12 @@ type FactRepository interface {
 	Delete(ctx context.Context, factID string) error
 	// GetStats 获取审核统计。
 	GetStats(ctx context.Context) (total, approved, rejected, pending int64, err error)
+	// ListAllSubjects 获取所有已审批事实的不重复 subject 列表。
+	ListAllSubjects(ctx context.Context) ([]string, error)
+	// FindBySubject 按 subject 查找已审批事实。
+	FindBySubject(ctx context.Context, subject string) ([]*entity.ExtractedFact, error)
+	// FindBySession 按原始对话会话 ID 查找关联的已审批事实。
+	FindBySession(ctx context.Context, sessionID string) ([]*entity.ExtractedFact, error)
 }
 
 // EmbeddingRepository 定义语义嵌入层的持久化接口。

@@ -117,7 +117,7 @@ type mockMemoryQuerier struct {
 	err      error
 }
 
-func (m *mockMemoryQuerier) RetrieveForContext(ctx context.Context, query string, limit int) ([]*entity.HealthMemory, error) {
+func (m *mockMemoryQuerier) RetrieveForContext(ctx context.Context, query, sessionID string, limit int) ([]*entity.HealthMemory, error) {
 	return m.memories, m.err
 }
 

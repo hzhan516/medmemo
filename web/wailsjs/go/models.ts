@@ -440,6 +440,48 @@ export namespace main {
 	        this.skip_version = source["skip_version"];
 	    }
 	}
+	export class MemoryItem {
+	    fact_id: string;
+	    subject: string;
+	    predicate: string;
+	    object: string;
+	    confidence: number;
+	    status: string;
+	    created_at: number;
+
+	    static createFrom(source: any = {}) {
+	        return new MemoryItem(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.fact_id = source["fact_id"];
+	        this.subject = source["subject"];
+	        this.predicate = source["predicate"];
+	        this.object = source["object"];
+	        this.confidence = source["confidence"];
+	        this.status = source["status"];
+	        this.created_at = source["created_at"];
+	    }
+	}
+	export class MemoryStats {
+	    total: number;
+	    approved: number;
+	    rejected: number;
+	    pending: number;
+
+	    static createFrom(source: any = {}) {
+	        return new MemoryStats(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.total = source["total"];
+	        this.approved = source["approved"];
+	        this.rejected = source["rejected"];
+	        this.pending = source["pending"];
+	    }
+	}
 
 }
 

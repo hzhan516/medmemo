@@ -168,6 +168,50 @@ export function useWails() {
     return await WailsApp.HardDeleteConversation(convID)
   }, [])
 
+  const getMemories = useCallback(async (limit: number, offset: number): Promise<main.MemoryItem[]> => {
+    return await WailsApp.GetMemories(limit, offset)
+  }, [])
+
+  const getMemoryByID = useCallback(async (factID: string): Promise<main.MemoryItem> => {
+    return await WailsApp.GetMemoryByID(factID)
+  }, [])
+
+  const deleteMemory = useCallback(async (factID: string): Promise<void> => {
+    return await WailsApp.DeleteMemory(factID)
+  }, [])
+
+  const searchMemories = useCallback(async (query: string): Promise<main.MemoryItem[]> => {
+    return await WailsApp.SearchMemories(query)
+  }, [])
+
+  const getPendingReviews = useCallback(async (limit: number, offset: number): Promise<main.MemoryItem[]> => {
+    return await WailsApp.GetPendingReviews(limit, offset)
+  }, [])
+
+  const approveFact = useCallback(async (factID: string): Promise<void> => {
+    return await WailsApp.ApproveFact(factID)
+  }, [])
+
+  const rejectFact = useCallback(async (factID: string): Promise<void> => {
+    return await WailsApp.RejectFact(factID)
+  }, [])
+
+  const getMemoryStats = useCallback(async (): Promise<main.MemoryStats> => {
+    return await WailsApp.GetMemoryStats()
+  }, [])
+
+  const getMemoriesBySession = useCallback(async (sessionID: string): Promise<main.MemoryItem[]> => {
+    return await WailsApp.GetMemoriesBySession(sessionID)
+  }, [])
+
+  const setMemoryInjectionEnabled = useCallback(async (enabled: boolean): Promise<void> => {
+    return await WailsApp.SetMemoryInjectionEnabled(enabled)
+  }, [])
+
+  const setSessionMemoryInjection = useCallback(async (sessionID: string, enabled: boolean): Promise<void> => {
+    return await WailsApp.SetSessionMemoryInjection(sessionID, enabled)
+  }, [])
+
   return {
     sendMessage,
     sendMessageStream,
@@ -203,5 +247,16 @@ export function useWails() {
     deleteConversation,
     restoreConversation,
     hardDeleteConversation,
+    getMemories,
+    getMemoryByID,
+    deleteMemory,
+    searchMemories,
+    getPendingReviews,
+    approveFact,
+    rejectFact,
+    getMemoryStats,
+    getMemoriesBySession,
+    setMemoryInjectionEnabled,
+    setSessionMemoryInjection,
   }
 }

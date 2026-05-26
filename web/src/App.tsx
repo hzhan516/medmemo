@@ -4,6 +4,7 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { ChatPage } from '@/pages/ChatPage'
 import { AboutPage } from '@/pages/AboutPage'
+import { MemoryPage } from '@/pages/MemoryPage'
 import { DisclaimerModal } from '@/components/DisclaimerModal'
 import { UpdateModal } from '@/components/UpdateModal'
 import { UpdateBanner } from '@/components/UpdateBanner'
@@ -244,6 +245,7 @@ function App() {
           <Routes>
             <Route element={<AppLayout />}>
               <Route path="/chat" element={<ChatPage />} />
+              <Route path="/memories" element={<MemoryPage />} />
               <Route
                 path="/settings"
                 element={

@@ -105,6 +105,107 @@ func (r *FactRepoSQLite) Delete(ctx context.Context, factID string) error {
 	return nil
 }
 
+// ListAllSubjects 获取所有已审批事实的不重复 subject 列表。
+func (r *FactRepoSQLite) ListAllSubjects(ctx context.Context) ([]string, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT DISTINCT subject FROM extracted_facts WHERE status = 'approved' AND subject != ''
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list subjects: %w", err)
+	}
+	defer rows.Close()
+
+	var subjects []string
+	for rows.Next() {
+		var s string
+		if err := rows.Scan(&s); err != nil {
+			return nil, fmt.Errorf("failed to scan subject: %w", err)
+		}
+		subjects = append(subjects, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate subjects: %w", err)
+	}
+	return subjects, nil
+}
+
+// FindBySubject 按 subject 查找已审批事实。
+func (r *FactRepoSQLite) FindBySubject(ctx context.Context, subject string) ([]*entity.ExtractedFact, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT fact_id, subject, predicate, object, confidence, source_msg_ids, status, scored_at, reviewed_at, created_at
+		FROM extracted_facts
+		WHERE status = 'approved' AND subject = ?
+		ORDER BY created_at DESC
+	`, subject)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find facts by subject: %w", err)
+	}
+	defer rows.Close()
+	return scanFacts(rows)
+}
+
+// FindBySession 按原始对话会话 ID 查找关联的已审批事实。
+// 通过 source_msg_ids 与 raw_dialogues 关联。
+func (r *FactRepoSQLite) FindBySession(ctx context.Context, sessionID string) ([]*entity.ExtractedFact, error) {
+	// 先获取该会话的所有 message_id
+	msgRows, err := r.db.QueryContext(ctx, `
+		SELECT message_id FROM raw_dialogues WHERE session_id = ?
+	`, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list session messages: %w", err)
+	}
+	var msgIDs []string
+	for msgRows.Next() {
+		var id string
+		if err := msgRows.Scan(&id); err != nil {
+			msgRows.Close()
+			return nil, fmt.Errorf("failed to scan message id: %w", err)
+		}
+		msgIDs = append(msgIDs, id)
+	}
+	msgRows.Close()
+	if err := msgRows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate message ids: %w", err)
+	}
+	if len(msgIDs) == 0 {
+		return nil, nil
+	}
+
+	// 查询所有已审批事实并在应用层过滤
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT fact_id, subject, predicate, object, confidence, source_msg_ids, status, scored_at, reviewed_at, created_at
+		FROM extracted_facts
+		WHERE status = 'approved'
+		ORDER BY created_at DESC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list facts: %w", err)
+	}
+	defer rows.Close()
+
+	facts, err := scanFacts(rows)
+	if err != nil {
+		return nil, err
+	}
+
+	// 构建 message_id 集合用于快速查找
+	msgIDSet := make(map[string]struct{}, len(msgIDs))
+	for _, id := range msgIDs {
+		msgIDSet[id] = struct{}{}
+	}
+
+	var result []*entity.ExtractedFact
+	for _, f := range facts {
+		for _, sid := range f.SourceMsgIDs {
+			if _, ok := msgIDSet[sid]; ok {
+				result = append(result, f)
+				break
+			}
+		}
+	}
+	return result, nil
+}
+
 // GetStats 获取审核统计。
 func (r *FactRepoSQLite) GetStats(ctx context.Context) (total, approved, rejected, pending int64, err error) {
 	err = r.db.QueryRowContext(ctx, `SELECT count(*) FROM extracted_facts`).Scan(&total)

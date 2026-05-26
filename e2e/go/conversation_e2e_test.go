@@ -192,7 +192,7 @@ var _ port.ProviderStore = (*mockProviderStore)(nil)
 // mockMemoryQuerier 实现 usecase.MemoryQuerier 的内存版本。
 type mockMemoryQuerier struct{}
 
-func (m *mockMemoryQuerier) RetrieveForContext(ctx context.Context, query string, limit int) ([]*entity.HealthMemory, error) {
+func (m *mockMemoryQuerier) RetrieveForContext(ctx context.Context, query, sessionID string, limit int) ([]*entity.HealthMemory, error) {
 	return nil, nil
 }
 

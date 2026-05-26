@@ -19,11 +19,6 @@ type Deidentifier interface {
 	Execute(ctx context.Context, raw string) (models.DeidentifyResult, error)
 }
 
-// MemoryQuerier 记忆检索接口。
-type MemoryQuerier interface {
-	RetrieveForContext(ctx context.Context, query string, limit int) ([]*entity.HealthMemory, error)
-}
-
 // ChatOrchestrator 对话流程编排器。
 type ChatOrchestrator struct {
 	llmFactory      port.LLMClientFactory
@@ -142,7 +137,7 @@ func (c *ChatOrchestrator) prepareMessages(ctx context.Context, req ChatRequest)
 	if c.memoryRetriever != nil {
 		lastIdx := findLastUserMessage(messages)
 		if lastIdx >= 0 {
-			memories, _ := c.memoryRetriever.RetrieveForContext(ctx, messages[lastIdx].Content, 3)
+			memories, _ := c.memoryRetriever.RetrieveForContext(ctx, messages[lastIdx].Content, string(req.ConversationID), 3)
 			if len(memories) > 0 {
 				messages = injectMemories(messages, memories)
 			}

@@ -78,6 +78,15 @@ func (s *stubFactRepository) Delete(ctx context.Context, factID string) error { 
 func (s *stubFactRepository) GetStats(ctx context.Context) (total, approved, rejected, pending int64, err error) {
 	return 0, 0, 0, 0, nil
 }
+func (s *stubFactRepository) ListAllSubjects(ctx context.Context) ([]string, error) {
+	return nil, nil
+}
+func (s *stubFactRepository) FindBySubject(ctx context.Context, subject string) ([]*entity.ExtractedFact, error) {
+	return nil, nil
+}
+func (s *stubFactRepository) FindBySession(ctx context.Context, sessionID string) ([]*entity.ExtractedFact, error) {
+	return nil, nil
+}
 
 // 确保 stub 实现满足接口
 var _ repository.EmbeddingRepository = (*stubEmbeddingRepository)(nil)
@@ -111,7 +120,7 @@ func TestMemoryRetriever_SemanticSearch(t *testing.T) {
 		NewDecayScorer(),
 	)
 
-	memories, err := retriever.RetrieveForContext(context.Background(), "我的血压怎么样", 2)
+	memories, err := retriever.RetrieveForContext(context.Background(), "我的血压怎么样", "session_001", 2)
 	require.NoError(t, err)
 	require.Len(t, memories, 2)
 
@@ -152,7 +161,7 @@ func TestMemoryRetriever_DecayRanking(t *testing.T) {
 	)
 	retriever.minConfidence = 0.1 // 降低阈值以便测试衰减排序
 
-	memories, err := retriever.RetrieveForContext(context.Background(), "query", 10)
+	memories, err := retriever.RetrieveForContext(context.Background(), "query", "session_001", 10)
 	require.NoError(t, err)
 	require.Len(t, memories, 2)
 
@@ -187,7 +196,7 @@ func TestMemoryRetriever_FilterUnapproved(t *testing.T) {
 		NewDecayScorer(),
 	)
 
-	memories, err := retriever.RetrieveForContext(context.Background(), "query", 10)
+	memories, err := retriever.RetrieveForContext(context.Background(), "query", "session_001", 10)
 	require.NoError(t, err)
 	require.Len(t, memories, 1)
 	assert.Equal(t, "用户 患有 高血压", memories[0].Content)
@@ -220,7 +229,7 @@ func TestMemoryRetriever_MinConfidenceFilter(t *testing.T) {
 	)
 	retriever.minConfidence = 0.6 // 设置较高阈值
 
-	memories, err := retriever.RetrieveForContext(context.Background(), "query", 10)
+	memories, err := retriever.RetrieveForContext(context.Background(), "query", "session_001", 10)
 	require.NoError(t, err)
 	require.Len(t, memories, 1)
 	assert.Equal(t, "用户 患有 高血压", memories[0].Content)
@@ -235,7 +244,7 @@ func TestMemoryRetriever_EmbedFailure(t *testing.T) {
 	)
 
 	// 嵌入失败时应返回空结果而非报错（降级）
-	memories, err := retriever.RetrieveForContext(context.Background(), "query", 3)
+	memories, err := retriever.RetrieveForContext(context.Background(), "query", "session_001", 3)
 	require.NoError(t, err)
 	assert.Empty(t, memories)
 }
@@ -248,7 +257,7 @@ func TestMemoryRetriever_NoResults(t *testing.T) {
 		NewDecayScorer(),
 	)
 
-	memories, err := retriever.RetrieveForContext(context.Background(), "query", 3)
+	memories, err := retriever.RetrieveForContext(context.Background(), "query", "session_001", 3)
 	require.NoError(t, err)
 	assert.Empty(t, memories)
 }
@@ -280,7 +289,7 @@ func TestMemoryRetriever_TokenBudget(t *testing.T) {
 	)
 	retriever.tokenBudget = 50 // 很小的预算，约能容纳 3 条
 
-	memories, err := retriever.RetrieveForContext(context.Background(), "query", 10)
+	memories, err := retriever.RetrieveForContext(context.Background(), "query", "session_001", 10)
 	require.NoError(t, err)
 	// tokenBudget 限制下，返回的记忆数量应受限
 	assert.LessOrEqual(t, len(memories), 5)

@@ -66,6 +66,15 @@ func (s *wailsStubFactRepo) Delete(ctx context.Context, factID string) error {
 func (s *wailsStubFactRepo) GetStats(ctx context.Context) (total, approved, rejected, pending int64, err error) {
 	return 0, 0, 0, 0, nil
 }
+func (s *wailsStubFactRepo) ListAllSubjects(ctx context.Context) ([]string, error) {
+	return nil, nil
+}
+func (s *wailsStubFactRepo) FindBySubject(ctx context.Context, subject string) ([]*entity.ExtractedFact, error) {
+	return nil, nil
+}
+func (s *wailsStubFactRepo) FindBySession(ctx context.Context, sessionID string) ([]*entity.ExtractedFact, error) {
+	return nil, nil
+}
 
 var _ repository.FactRepository = (*wailsStubFactRepo)(nil)
 
