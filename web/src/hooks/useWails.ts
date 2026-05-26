@@ -212,6 +212,14 @@ export function useWails() {
     return await WailsApp.SetSessionMemoryInjection(sessionID, enabled)
   }, [])
 
+  const getEmbeddingStatus = useCallback(async (): Promise<main.EmbeddingStatusResponse> => {
+    return await WailsApp.GetEmbeddingStatus()
+  }, [])
+
+  const openEmbeddingModelDir = useCallback(async (): Promise<void> => {
+    return await WailsApp.OpenEmbeddingModelDir()
+  }, [])
+
   return {
     sendMessage,
     sendMessageStream,
@@ -258,5 +266,7 @@ export function useWails() {
     getMemoriesBySession,
     setMemoryInjectionEnabled,
     setSessionMemoryInjection,
+    getEmbeddingStatus,
+    openEmbeddingModelDir,
   }
 }

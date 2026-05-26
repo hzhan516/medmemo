@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { logger } from '@/lib/logger'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useOnboardingStore } from '@/stores/onboardingStore'
@@ -18,6 +18,7 @@ import {
   Monitor, Moon, Sun, Check, Bell, BellDot, BellOff,
   RefreshCw, Shield, FlaskConical, ShieldCheck, ShieldOff,
   Eye, Trash2, RotateCcw, Plus, FileJson,
+  Brain, FolderOpen, Sparkles, AlertCircle,
 } from 'lucide-react'
 
 /**
@@ -60,7 +61,16 @@ export function SettingsPage() {
   const updateProvider = useProviderStore((s) => s.updateProvider)
   const removeProvider = useProviderStore((s) => s.removeProvider)
   const hasProvider = useProviderStore((s) => s.hasProvider)
-  const { saveAPIKey, createProvider, updateProvider: updateProviderApi, deleteProvider: deleteProviderApi, setUpdateSettings } = useWails()
+  const { saveAPIKey, createProvider, updateProvider: updateProviderApi, deleteProvider: deleteProviderApi, setUpdateSettings, getEmbeddingStatus, openEmbeddingModelDir } = useWails()
+
+  const [embeddingStatus, setEmbeddingStatus] = useState<{ available: boolean; model_path: string; model_name: string } | null>(null)
+
+  useEffect(() => {
+    getEmbeddingStatus()
+      .then((status) => setEmbeddingStatus(status))
+      .catch((err) => logger.error('Failed to get embedding status:', err))
+  }, [getEmbeddingStatus])
+
   const showToast = useCallback((message: string) => {
     // 简单 toast：使用 alert 降级，后续可接入全局 toast 系统
     logger.error('[Toast]', message)
@@ -483,6 +493,91 @@ export function SettingsPage() {
                 ))}
               </div>
             </div>
+          </div>
+        </section>
+
+        {/* 记忆召回模式 */}
+        <section>
+          <h2 className="text-sm font-medium text-muted-foreground mb-3 uppercase tracking-wider">
+            记忆召回模式
+          </h2>
+          <div className="p-4 rounded-lg border border-border bg-card space-y-4">
+            {embeddingStatus?.available ? (
+              /* 语义搜索已启用 */
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center shrink-0">
+                  <Sparkles size={16} className="text-green-600 dark:text-green-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-foreground">语义搜索（智能模式）</div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    AI 通过语义理解来召回你的历史记忆。"意思相近"的内容也会被关联，例如问"我多重"也能找到"体重是110公斤"。
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-2">
+                    模型路径：{embeddingStatus.model_path}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* 关键词匹配基础模式 */
+              <>
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
+                    <Brain size={16} className="text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-foreground">关键词匹配（基础模式）</div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      当前 AI 通过关键词字面匹配来召回你的历史记忆。例如你说"我体重多少"能找到"体重是110公斤"，但说"我多重"可能找不到。
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-border">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                      <Sparkles size={16} className="text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-foreground">可选升级：语义搜索（智能模式）</div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        安装 Embedding 模型后，AI 能理解"意思相近"。"多重"和"体重"也会被关联，召回更自然准确。
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex items-center gap-2">
+                    <button
+                      onClick={() => openEmbeddingModelDir().catch((err) => logger.error('Failed to open model dir:', err))}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-border hover:bg-accent transition-colors"
+                    >
+                      <FolderOpen size={14} />
+                      打开模型目录
+                    </button>
+                  </div>
+
+                  <div className="mt-3 p-3 rounded-md bg-muted/50 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle size={14} className="text-muted-foreground shrink-0" />
+                      <span className="text-xs font-medium text-foreground">如何升级到语义搜索</span>
+                    </div>
+                    <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+                      <li>
+                        下载{' '}
+                        <span className="font-mono text-xs bg-muted px-1 rounded">all-MiniLM-L6-v2</span>{' '}
+                        ONNX 模型（约 50MB）
+                      </li>
+                      <li>
+                        将 <span className="font-mono text-xs bg-muted px-1 rounded">model.onnx</span> 和{' '}
+                        <span className="font-mono text-xs bg-muted px-1 rounded">tokenizer.json</span>{' '}
+                        放入模型目录
+                      </li>
+                      <li>重启应用即可生效（不安装也能继续用关键词匹配）</li>
+                    </ol>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </section>
 

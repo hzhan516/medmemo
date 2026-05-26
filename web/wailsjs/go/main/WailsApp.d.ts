@@ -55,6 +55,8 @@ export function GetConversationMessages(arg1:string):Promise<Array<main.MessageR
 export function GetConversations():Promise<Array<main.ConversationSummary>>;
 
 export function GetDisclaimerStatus():Promise<main.DisclaimerStatus>;
+export function GetEmbeddingStatus():Promise<main.EmbeddingStatusResponse>;
+export function OpenEmbeddingModelDir():Promise<void>;
 
 export function GetModels():Promise<Array<main.ModelInfo>>;
 

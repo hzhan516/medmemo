@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -2019,6 +2020,13 @@ type MemoryStats struct {
 	Pending   int64 `json:"pending"`
 }
 
+// EmbeddingStatusResponse Embedding 模型状态响应。
+type EmbeddingStatusResponse struct {
+	Available bool   `json:"available"`  // 模型是否已下载可用
+	ModelPath string `json:"model_path"` // 模型存放路径
+	ModelName string `json:"model_name"` // 模型名称
+}
+
 func factToMemoryItem(f *entity.ExtractedFact) MemoryItem {
 	return MemoryItem{
 		FactID:      f.FactID,
@@ -2247,6 +2255,36 @@ func (a *WailsApp) RejectFact(factID string) error {
 		entry := entity.NewAuditLogEntry(entity.AuditActionReject, "fact", factID, "user")
 		_ = a.auditLogRepo.Save(ctx, entry)
 	}
+	return nil
+}
+
+// GetEmbeddingStatus 获取本地 Embedding 模型状态。
+func (a *WailsApp) GetEmbeddingStatus() (*EmbeddingStatusResponse, error) {
+	modelPath := filepath.Join(filepath.Dir(a.config.ModelDir), "all-MiniLM-L6-v2")
+	modelFile := filepath.Join(modelPath, "model.onnx")
+
+	_, err := os.Stat(modelFile)
+	available := err == nil
+
+	return &EmbeddingStatusResponse{
+		Available: available,
+		ModelPath: modelPath,
+		ModelName: "all-MiniLM-L6-v2",
+	}, nil
+}
+
+// OpenEmbeddingModelDir 打开 Embedding 模型所在目录。
+func (a *WailsApp) OpenEmbeddingModelDir() error {
+	modelPath := filepath.Join(filepath.Dir(a.config.ModelDir), "all-MiniLM-L6-v2")
+	absPath, err := filepath.Abs(modelPath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve model dir path: %w", err)
+	}
+	// 确保目录存在（如果不存在则创建，方便用户直接放入文件）
+	if err := os.MkdirAll(absPath, 0755); err != nil {
+		return fmt.Errorf("failed to create model dir: %w", err)
+	}
+	runtime.BrowserOpenURL(a.ctx, "file://"+absPath)
 	return nil
 }
 

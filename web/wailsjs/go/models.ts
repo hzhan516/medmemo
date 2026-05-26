@@ -222,6 +222,22 @@ export namespace main {
 	        this.version = source["version"];
 	    }
 	}
+	export class EmbeddingStatusResponse {
+	    available: boolean;
+	    model_path: string;
+	    model_name: string;
+
+	    static createFrom(source: any = {}) {
+	        return new EmbeddingStatusResponse(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.available = source["available"];
+	        this.model_path = source["model_path"];
+	        this.model_name = source["model_name"];
+	    }
+	}
 	export class EmergencyResult {
 	    level: string;
 	    message: string;

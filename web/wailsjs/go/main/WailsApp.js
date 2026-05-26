@@ -98,6 +98,14 @@ export function GetConversations() {
   return window['go']['main']['WailsApp']['GetConversations']();
 }
 
+export function GetEmbeddingStatus() {
+  return window['go']['main']['WailsApp']['GetEmbeddingStatus']();
+}
+
+export function OpenEmbeddingModelDir() {
+  return window['go']['main']['WailsApp']['OpenEmbeddingModelDir']();
+}
+
 export function GetDisclaimerStatus() {
   return window['go']['main']['WailsApp']['GetDisclaimerStatus']();
 }
