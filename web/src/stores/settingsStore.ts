@@ -11,6 +11,7 @@ interface SettingsState {
   theme: Theme
   selectedModel: string
   complianceBarMode: ComplianceBarMode
+  showConfidenceBar: boolean
   autoCheckUpdate: boolean
   updateChannel: UpdateChannel
   desensitizationLevel: DesensitizationLevel
@@ -24,6 +25,7 @@ interface SettingsState {
   setTheme: (theme: Theme) => void
   setSelectedModel: (model: string) => void
   setComplianceBarMode: (mode: ComplianceBarMode) => void
+  setShowConfidenceBar: (show: boolean) => void
   setAutoCheckUpdate: (enabled: boolean) => void
   setUpdateChannel: (channel: UpdateChannel) => void
   setDesensitizationLevel: (level: DesensitizationLevel) => void
@@ -41,6 +43,7 @@ export const useSettingsStore = create<SettingsState>()(
       theme: 'system',
       selectedModel: 'kimi-lite',
       complianceBarMode: 'always',
+      showConfidenceBar: true,
       autoCheckUpdate: true,
       updateChannel: 'beta',
       desensitizationLevel: 'standard',
@@ -54,6 +57,7 @@ export const useSettingsStore = create<SettingsState>()(
       setTheme: (theme) => set({ theme }),
       setSelectedModel: (model) => set({ selectedModel: model }),
       setComplianceBarMode: (mode) => set({ complianceBarMode: mode }),
+      setShowConfidenceBar: (show) => set({ showConfidenceBar: show }),
       setAutoCheckUpdate: (enabled) => set({ autoCheckUpdate: enabled }),
       setUpdateChannel: (channel) => set({ updateChannel: channel }),
       setDesensitizationLevel: (level) => set({ desensitizationLevel: level }),
@@ -73,6 +77,7 @@ export const useSettingsStore = create<SettingsState>()(
         theme: state.theme,
         selectedModel: state.selectedModel,
         complianceBarMode: state.complianceBarMode,
+        showConfidenceBar: state.showConfidenceBar,
         autoCheckUpdate: state.autoCheckUpdate,
         updateChannel: state.updateChannel,
         desensitizationLevel: state.desensitizationLevel,

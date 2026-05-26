@@ -28,6 +28,7 @@ export function SettingsPage() {
   const { theme, setTheme } = useTheme()
   const {
     complianceBarMode, setComplianceBarMode,
+    showConfidenceBar, setShowConfidenceBar,
     autoCheckUpdate, setAutoCheckUpdate,
     updateChannel, setUpdateChannel: setUpdateChannelStore,
     desensitizationLevel, setDesensitizationLevel,
@@ -370,6 +371,42 @@ export function SettingsPage() {
                 </Card>
               )
             })}
+          </div>
+        </section>
+
+        {/* 置信度条设置 */}
+        <section>
+          <h2 className="text-sm font-medium text-muted-foreground mb-3 uppercase tracking-wider">
+            置信度条
+          </h2>
+          <div
+            className={`flex items-center justify-between p-4 rounded-lg border cursor-pointer transition-all ${
+              showConfidenceBar
+                ? 'border-primary bg-primary/5'
+                : 'border-border hover:border-primary/30 hover:bg-accent'
+            }`}
+            onClick={() => setShowConfidenceBar(!showConfidenceBar)}
+          >
+            <div className="flex items-center gap-3">
+              <Monitor size={18} className={showConfidenceBar ? 'text-primary' : 'text-muted-foreground'} />
+              <div>
+                <div className={`text-sm font-medium ${showConfidenceBar ? 'text-primary' : 'text-foreground'}`}>
+                  展示置信度
+                </div>
+                <div className="text-xs text-muted-foreground">在 AI 回复底部显示回答可信度评估</div>
+              </div>
+            </div>
+            <div
+              className={`w-10 h-5 rounded-full transition-colors relative ${
+                showConfidenceBar ? 'bg-primary' : 'bg-muted'
+              }`}
+            >
+              <div
+                className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${
+                  showConfidenceBar ? 'translate-x-5' : 'translate-x-0.5'
+                }`}
+              />
+            </div>
           </div>
         </section>
 

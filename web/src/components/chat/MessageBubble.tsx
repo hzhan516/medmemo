@@ -1,5 +1,6 @@
 import { User, Bot, AlertCircle, Copy, RotateCcw, ShieldAlert, Info, ThumbsDown, CheckCircle } from 'lucide-react'
 import type { ChatMessage } from '@/stores/chatStore'
+import { useSettingsStore } from '@/stores/settingsStore'
 import { MarkdownRenderer } from '@/components/markdown/MarkdownRenderer'
 import { ConfidenceBar } from '@/components/confidence/ConfidenceBar'
 
@@ -17,6 +18,7 @@ interface MessageBubbleProps {
  * 合规标记：L2_WARNING 橙色警告框，L3_NOTICE 蓝色提示条。
  */
 export function MessageBubble({ message, onRetry, onReportCompliance }: MessageBubbleProps) {
+  const showConfidenceBar = useSettingsStore((s) => s.showConfidenceBar)
   const { id, role, content, isStreaming, interrupted, error, warnings, replacedTerms, complianceFeedback } = message
 
   // 解析合规级别
@@ -196,7 +198,7 @@ export function MessageBubble({ message, onRetry, onReportCompliance }: MessageB
             )}
 
             {/* 置信度条 */}
-            {!isStreaming && !error && message.confidence && (
+            {showConfidenceBar && !isStreaming && !error && message.confidence && (
               <div className="mt-2">
                 <ConfidenceBar
                   result={message.confidence}
