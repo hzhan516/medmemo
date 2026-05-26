@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useWails } from '@/hooks/useWails'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Brain, CheckCircle, XCircle, Clock, Search, Trash2, Eye, ShieldCheck, ShieldX } from 'lucide-react'
 import type { main } from '@wails/go/models'
 

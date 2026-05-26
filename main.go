@@ -13,11 +13,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/hzhan516/medmemo/internal/adapters/ai"
 	"github.com/hzhan516/medmemo/internal/application/pipeline"
 	"github.com/hzhan516/medmemo/internal/application/port"
 	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/internal/infrastructure/config"
 	"github.com/hzhan516/medmemo/internal/infrastructure/database"
 	"github.com/hzhan516/medmemo/internal/infrastructure/onnx"
+	"github.com/hzhan516/medmemo/internal/infrastructure/secret"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
@@ -113,6 +116,21 @@ func NewEngineConfig(cfg *entity.AppConfig) onnx.EngineConfig {
 		ResourceDir: "resources",
 		ModelPath:   cfg.ModelDir,
 	}
+}
+
+// NewDefaultLoader 创建使用默认搜索路径的配置加载器。
+func NewDefaultLoader() *config.Loader {
+	return config.NewLoader("")
+}
+
+// NewSQLCipherConnectorFromConfig 从 AppConfig 获取数据目录创建数据库连接。
+func NewSQLCipherConnectorFromConfig(cfg *entity.AppConfig, store secret.Store) (*database.SQLCipherConnector, error) {
+	return database.NewSQLCipherConnector(cfg.DataDir, store)
+}
+
+// NewEmbeddingServiceAdapterWithVersion 创建带固定模型版本的嵌入服务适配器。
+func NewEmbeddingServiceAdapterWithVersion(engine ai.EmbeddingEngine) *ai.EmbeddingServiceAdapter {
+	return ai.NewEmbeddingServiceAdapter(engine, "all-MiniLM-L6-v2")
 }
 
 // NewApp 构造函数，供 Wire 调用。

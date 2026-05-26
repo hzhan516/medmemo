@@ -45,7 +45,6 @@ func InitializeApp() (*App, func(), error) {
 		wire.Bind(new(port.HealthChecker), new(*healthcheck.HealthEngine)),
 		healthcheck.NewHealthEngine,
 		ai.ProviderSet,
-		ai.EmbeddingServiceSet,
 		auth.TokenRefreshProviderSet,
 		auth.OAuthDeviceFlowProviderSet,
 		repository.RepositorySet,
@@ -55,8 +54,9 @@ func InitializeApp() (*App, func(), error) {
 		detector.ProviderSet,
 		detector.ONNXNERSet,
 		pipeline.PipelineSet,
-		config.ConfigSet,
-		database.DatabaseSet,
+		NewDefaultLoader,
+		config.LoadConfig,
+		NewSQLCipherConnectorFromConfig,
 		onnx.ONNXSet,
 		secret.SecretSet,
 		infraUpdater.InstallerSet,
@@ -70,7 +70,7 @@ func InitializeApp() (*App, func(), error) {
 		wire.Bind(new(database.DBConnector), new(*database.SQLCipherConnector)),
 		wire.Bind(new(usecase.Deidentifier), new(*pipeline.DeidentifyPipeline)),
 		wire.Bind(new(usecase.MemoryQuerier), new(*usecase.MemoryRetriever)),
-		wire.Value("all-MiniLM-L6-v2"),
+		NewEmbeddingServiceAdapterWithVersion,
 	)
 	return nil, nil, nil
 }
