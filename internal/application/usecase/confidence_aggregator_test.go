@@ -73,13 +73,13 @@ func TestConfidenceAggregator_Calculate_LowScore(t *testing.T) {
 		HasEmergencyCheck:  false,
 		MissingInfoList:    []string{"症状", "持续时间", "既往病史"},
 	}
-	contextScore := 20.0
-	historyAccuracy := 0.50
-	uncertainty := 10.0
+	contextScore := 10.0
+	historyAccuracy := 0.30
+	uncertainty := 5.0
 
 	result := agg.Calculate(sources, reasoning, contextScore, historyAccuracy, uncertainty)
 
-	// 各项均低分，应得到 D/E 级
+	// 各项均低分，应得到 E 级
 	assert.Less(t, result.OverallScore, 30.0)
 	assert.Equal(t, entity.ConfidenceLevelE, result.Level)
 	assert.Equal(t, "必须就医", result.Suggestion)

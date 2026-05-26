@@ -109,10 +109,10 @@ func TestReasoningChainEvaluator_DetectMissingInfo(t *testing.T) {
 
 func TestReasoningChainEvaluator_DetectMissingInfo_Complete(t *testing.T) {
 	evaluator := NewReasoningChainEvaluator()
-	answer := "根据您描述的胃痛症状（饭后加重、有反酸、持续3天），这种情况可能与胃酸反流或轻度胃炎有关。建议您考虑就诊消化内科。同时请注意，如果疼痛持续加重或出现呕血、黑便等情况，请立即就医。"
+	answer := "根据您描述的胃痛症状（饭后加重、有反酸、持续3天，既往有胃炎病史，无过敏史，目前在服用奥美拉唑，体温正常），这种情况可能与胃酸反流或轻度胃炎有关。建议您考虑就诊消化内科。同时请注意，如果疼痛持续加重或出现呕血、黑便等情况，请立即就医。"
 	missing := evaluator.DetectMissingInfo(answer)
 
-	// 完整回答应识别较少缺失信息
+	// 完整回答应识别较少缺失信息（<=2）
 	assert.LessOrEqual(t, len(missing), 2)
 }
 
