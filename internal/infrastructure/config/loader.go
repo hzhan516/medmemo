@@ -229,6 +229,37 @@ func expandTilde(path string) string {
 	return path
 }
 
+// SaveDataRetentionDays 将数据留存期限持久化到配置文件。
+// 优先写入 ~/.medmemo/config.yaml，不丢失文件中已有其他字段。
+func SaveDataRetentionDays(days int) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get home dir: %w", err)
+	}
+	path := filepath.Join(home, ".medmemo", "config.yaml")
+
+	// 以 map 读取现有配置，避免丢失其他字段
+	var m map[string]interface{}
+	if data, err := os.ReadFile(path); err == nil {
+		_ = yaml.Unmarshal(data, &m)
+	}
+	if m == nil {
+		m = make(map[string]interface{})
+	}
+	m["data_retention_days"] = days
+
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create config dir: %w", err)
+	}
+
+	data, err := yaml.Marshal(m)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
 // ConfigSet 供 Wire 使用的 ProviderSet。
 var ConfigSet = wire.NewSet(
 	NewLoader,

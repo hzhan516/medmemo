@@ -27,6 +27,7 @@ import (
 	"github.com/hzhan516/medmemo/internal/application/usecase"
 	"github.com/hzhan516/medmemo/internal/domain/entity"
 	"github.com/hzhan516/medmemo/internal/domain/repository"
+	"github.com/hzhan516/medmemo/internal/infrastructure/config"
 	"github.com/hzhan516/medmemo/internal/infrastructure/secret"
 	"github.com/hzhan516/medmemo/pkg/models"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -643,6 +644,53 @@ func (a *WailsApp) GetConversations() (result []ConversationSummary, err error) 
 		result[i] = summary
 	}
 	return result, nil
+}
+
+// GetDeletedConversations 获取已软删除的会话列表（回收站）。
+func (a *WailsApp) GetDeletedConversations() (result []ConversationSummary, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("[panic] GetDeletedConversations: %v\n", r)
+			err = fmt.Errorf("internal error: %v", r)
+		}
+	}()
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+
+	if a.convRepo == nil {
+		return nil, fmt.Errorf("conversation repository not initialized")
+	}
+
+	convs, err := a.convRepo.ListDeleted(ctx, 100)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list deleted conversations: %w", err)
+	}
+
+	result = make([]ConversationSummary, len(convs))
+	for i, conv := range convs {
+		summary := ConversationSummary{
+			ID:        string(conv.ID),
+			Title:     conv.Title,
+			UpdatedAt: strconv.FormatInt(conv.UpdatedAt.UnixMilli(), 10),
+		}
+		if conv.DeletedAt != nil {
+			summary.DeletedAt = strconv.FormatInt(conv.DeletedAt.UnixMilli(), 10)
+		}
+		result[i] = summary
+	}
+	return result, nil
+}
+
+// SetDataRetentionDays 设置数据留存期限并持久化到配置文件。
+func (a *WailsApp) SetDataRetentionDays(days int) error {
+	if days < 0 {
+		return fmt.Errorf("data retention days must be non-negative")
+	}
+	a.config.DataRetentionDays = days
+	if err := config.SaveDataRetentionDays(days); err != nil {
+		return fmt.Errorf("failed to save data retention days: %w", err)
+	}
+	return nil
 }
 
 // DeleteConversation 软删除指定会话（移入回收站）。

@@ -47,6 +47,14 @@ export function useWails() {
     return await WailsApp.GetConversations()
   }, [])
 
+  const getDeletedConversations = useCallback(async (): Promise<ConversationSummary[]> => {
+    return await WailsApp.GetDeletedConversations()
+  }, [])
+
+  const setDataRetentionDays = useCallback(async (days: number): Promise<void> => {
+    return await WailsApp.SetDataRetentionDays(days)
+  }, [])
+
   const getConversationMessages = useCallback(async (convID: string): Promise<MessageResponse[]> => {
     return await WailsApp.GetConversationMessages(convID)
   }, [])
@@ -225,6 +233,8 @@ export function useWails() {
     sendMessageStream,
     stopGeneration,
     getConversations,
+    getDeletedConversations,
+    setDataRetentionDays,
     getConversationMessages,
     createConversation,
     getModels,

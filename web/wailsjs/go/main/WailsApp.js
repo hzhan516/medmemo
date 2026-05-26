@@ -98,6 +98,14 @@ export function GetConversations() {
   return window['go']['main']['WailsApp']['GetConversations']();
 }
 
+export function GetDeletedConversations() {
+  return window['go']['main']['WailsApp']['GetDeletedConversations']();
+}
+
+export function SetDataRetentionDays(arg1) {
+  return window['go']['main']['WailsApp']['SetDataRetentionDays'](arg1);
+}
+
 export function GetEmbeddingStatus() {
   return window['go']['main']['WailsApp']['GetEmbeddingStatus']();
 }

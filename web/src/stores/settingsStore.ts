@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { ConfidenceBarMode } from '@/components/confidence/types'
+import { SetDataRetentionDays } from '@wails/go/main/WailsApp'
 
 type Theme = 'light' | 'dark' | 'system'
 type ComplianceBarMode = 'always' | 'first' | 'off'
@@ -66,7 +67,13 @@ export const useSettingsStore = create<SettingsState>()(
       setAutoCheckUpdate: (enabled) => set({ autoCheckUpdate: enabled }),
       setUpdateChannel: (channel) => set({ updateChannel: channel }),
       setDesensitizationLevel: (level) => set({ desensitizationLevel: level }),
-      setDataRetentionDays: (days) => set({ dataRetentionDays: days }),
+      setDataRetentionDays: (days) => {
+        set({ dataRetentionDays: days })
+        // 同步到后端配置文件，确保清理逻辑使用同一数值
+        SetDataRetentionDays(days).catch((err) => {
+          console.error('[settings] 同步数据留存期限到后端失败:', err)
+        })
+      },
       setActiveProviderId: (id) => set({ activeProviderId: id }),
       setActiveModelId: (id) => set({ activeModelId: id }),
       setProviderHealthStatus: (id, status) =>
