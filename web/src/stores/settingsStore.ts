@@ -94,6 +94,16 @@ export const useSettingsStore = create<SettingsState>()(
         lastSeenVersionNotes: state.lastSeenVersionNotes,
         // providerHealthStatus 不持久化（运行时状态）
       }),
+      merge: (persistedState, currentState) => {
+        const persisted = persistedState as Partial<SettingsState>
+        return {
+          ...currentState,
+          ...persisted,
+          // 新字段兜底：旧 localStorage 中缺少时恢复默认值
+          confidenceBarMode: persisted.confidenceBarMode ?? currentState.confidenceBarMode,
+          showConfidenceBar: persisted.showConfidenceBar ?? currentState.showConfidenceBar,
+        }
+      },
     }
   )
 )

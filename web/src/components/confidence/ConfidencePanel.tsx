@@ -1,9 +1,16 @@
-import { type ConfidenceResult, type ConfidenceBarMode, levelConfig, dimensionLabels } from './types'
+import { type ConfidenceResult, type ConfidenceBarMode, type ConfidenceLevel, levelConfig, dimensionLabels } from './types'
 
 interface ConfidencePanelProps {
   result: ConfidenceResult
   onSwitchMode: (mode: ConfidenceBarMode) => void
   currentMode: ConfidenceBarMode
+}
+
+// 合法等级集合，用于防御非法 level 值
+const validLevels: Set<ConfidenceLevel> = new Set(['A', 'B', 'C', 'D', 'E'])
+
+function safeLevel(level: ConfidenceLevel | undefined | ''): ConfidenceLevel {
+  return level && validLevels.has(level) ? level : 'E'
 }
 
 /**
@@ -17,7 +24,8 @@ interface ConfidencePanelProps {
  * - 缺失信息列表
  */
 export function ConfidencePanel({ result, onSwitchMode, currentMode }: ConfidencePanelProps) {
-  const config = levelConfig[result.level]
+  const level = safeLevel(result.level)
+  const config = levelConfig[level]
 
   const dimensions = Object.entries(result.breakdown) as [keyof typeof dimensionLabels, number][]
 
@@ -29,7 +37,7 @@ export function ConfidencePanel({ result, onSwitchMode, currentMode }: Confidenc
           className="w-12 h-12 rounded-full flex items-center justify-center text-white text-lg font-bold shrink-0"
           style={{ backgroundColor: config.color }}
         >
-          {result.level}
+          {level}
         </div>
         <div>
           <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">

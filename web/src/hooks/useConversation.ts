@@ -5,7 +5,14 @@ import { useSettingsStore } from '@/stores/settingsStore'
 import { useProviderStore } from '@/stores/providerStore'
 import { useWails } from './useWails'
 import { EventsOn } from '@wails/runtime/runtime'
-import type { ConfidenceResult } from '@/components/confidence/types'
+import type { ConfidenceResult, ConfidenceLevel } from '@/components/confidence/types'
+
+// 合法置信度等级集合，用于数据校验
+const validConfidenceLevels: Set<ConfidenceLevel> = new Set(['A', 'B', 'C', 'D', 'E'])
+
+function normalizeConfidenceLevel(level: unknown): ConfidenceLevel {
+  return level && validConfidenceLevels.has(level as ConfidenceLevel) ? (level as ConfidenceLevel) : 'E'
+}
 
 /**
  * 会话管理 Hook，封装消息发送、流式输出与状态更新。
@@ -135,7 +142,7 @@ export function useConversation() {
         const raw = payload.confidence
         const confidence: ConfidenceResult = {
           overallScore: (raw.overall_score as number) ?? 0,
-          level: (raw.level as ConfidenceResult['level']) ?? 'E',
+          level: normalizeConfidenceLevel(raw.level),
           breakdown: {
             knowledge_source: ((raw.breakdown as Record<string, number>)?.knowledge_source) ?? 0,
             reasoning: ((raw.breakdown as Record<string, number>)?.reasoning) ?? 0,
@@ -374,7 +381,7 @@ export function useConversation() {
           confidence: msg.confidence
             ? ({
                 overallScore: (msg.confidence as Record<string, unknown>).overall_score as number,
-                level: (msg.confidence as Record<string, unknown>).level as ConfidenceResult['level'],
+                level: normalizeConfidenceLevel((msg.confidence as Record<string, unknown>).level),
                 breakdown: {
                   knowledge_source: ((msg.confidence as Record<string, unknown>).breakdown as Record<string, number>)?.knowledge_source ?? 0,
                   reasoning: ((msg.confidence as Record<string, unknown>).breakdown as Record<string, number>)?.reasoning ?? 0,
