@@ -22,11 +22,16 @@ type Conversation struct {
 
 // Message 是会话中的单条消息，封装 models.Message 并附加领域元数据。
 type Message struct {
-	ID         string
-	Role       models.Role
-	Content    string
-	Timestamp  time.Time
-	IsModified bool // 标记该消息是否被用户编辑过，用于记忆一致性追踪。
+	ID               string
+	Role             models.Role
+	Content          string
+	Timestamp        time.Time
+	IsModified       bool    // 标记该消息是否被用户编辑过，用于记忆一致性追踪。
+	PromptTokens     int     // 输入 token 数
+	CompletionTokens int     // 输出 token 数
+	ConfidenceScore  float64 // 置信度综合分数 0-100
+	ConfidenceLevel  string  // 置信度等级 A/B/C/D/E
+	ConfidenceJSON   string  // ConfidenceResult 完整 JSON 序列化
 }
 
 // NewConversation 创建新会话，标题默认为空，由第一条消息自动生成。

@@ -119,7 +119,7 @@ const defaultGetConversations = async (): Promise<ConversationSummary[]> => {
   return [...mockConversations]
 }
 
-const defaultGetConversationMessages = async (convID: string): Promise<Array<{ id: string; role: string; content: string; timestamp: string }>> => {
+const defaultGetConversationMessages = async (convID: string): Promise<Array<{ id: string; role: string; content: string; timestamp: string; prompt_tokens?: number; completion_tokens?: number; total_tokens?: number; confidence?: Record<string, unknown> }>> => {
   return (mockMessages[convID] ?? []).map((msg, idx) => ({
     id: `msg_${convID}_${idx}`,
     role: msg.role,

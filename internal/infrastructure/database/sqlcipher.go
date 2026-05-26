@@ -417,6 +417,17 @@ func migrateSQLiteSchema(ctx context.Context, db *sql.DB) error {
 			CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_logs(timestamp);
 			`,
 		},
+		{
+			version: 10,
+			sql: `
+			-- v1.1 回答置信度机制: 扩展 messages 表存储 token 拆分与置信度
+			ALTER TABLE messages ADD COLUMN prompt_tokens INTEGER DEFAULT 0;
+			ALTER TABLE messages ADD COLUMN completion_tokens INTEGER DEFAULT 0;
+			ALTER TABLE messages ADD COLUMN confidence_score REAL;
+			ALTER TABLE messages ADD COLUMN confidence_level TEXT;
+			ALTER TABLE messages ADD COLUMN confidence_json TEXT;
+			`,
+		},
 	}
 
 	for _, m := range migrations {

@@ -263,6 +263,10 @@ export namespace main {
 	    role: string;
 	    content: string;
 	    timestamp: string;
+	    prompt_tokens: number;
+	    completion_tokens: number;
+	    total_tokens: number;
+	    confidence?: any;
 
 	    static createFrom(source: any = {}) {
 	        return new MessageResponse(source);
@@ -274,6 +278,10 @@ export namespace main {
 	        this.role = source["role"];
 	        this.content = source["content"];
 	        this.timestamp = source["timestamp"];
+	        this.prompt_tokens = source["prompt_tokens"];
+	        this.completion_tokens = source["completion_tokens"];
+	        this.total_tokens = source["total_tokens"];
+	        this.confidence = source["confidence_result"];
 	    }
 	}
 	export class ModelInfo {
@@ -372,7 +380,7 @@ export namespace main {
 	}
 	export class SendMessageResponse {
 	    reply: string;
-	    confidence: number;
+	    confidence_result?: any;
 	    warnings: string[];
 	
 	    static createFrom(source: any = {}) {
@@ -382,7 +390,7 @@ export namespace main {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.reply = source["reply"];
-	        this.confidence = source["confidence"];
+	        this.confidence_result = source["confidence_result"];
 	        this.warnings = source["warnings"];
 	    }
 	}
@@ -445,7 +453,7 @@ export namespace main {
 	    subject: string;
 	    predicate: string;
 	    object: string;
-	    confidence: number;
+	    confidence?: any;
 	    status: string;
 	    created_at: number;
 
@@ -459,7 +467,7 @@ export namespace main {
 	        this.subject = source["subject"];
 	        this.predicate = source["predicate"];
 	        this.object = source["object"];
-	        this.confidence = source["confidence"];
+	        this.confidence = source["confidence_result"];
 	        this.status = source["status"];
 	        this.created_at = source["created_at"];
 	    }

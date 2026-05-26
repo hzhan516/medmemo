@@ -1,6 +1,7 @@
 import { User, Bot, AlertCircle, Copy, RotateCcw, ShieldAlert, Info, ThumbsDown, CheckCircle } from 'lucide-react'
 import type { ChatMessage } from '@/stores/chatStore'
 import { MarkdownRenderer } from '@/components/markdown/MarkdownRenderer'
+import { ConfidenceBar } from '@/components/confidence/ConfidenceBar'
 
 interface MessageBubbleProps {
   message: ChatMessage
@@ -191,6 +192,16 @@ export function MessageBubble({ message, onRetry, onReportCompliance }: MessageB
                     </>
                   )}
                 </span>
+              </div>
+            )}
+
+            {/* 置信度条 */}
+            {!isStreaming && !error && message.confidence && (
+              <div className="mt-2">
+                <ConfidenceBar
+                  result={message.confidence}
+                  mode="compact"
+                />
               </div>
             )}
 

@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -242,9 +243,9 @@ type SendMessageRequest struct {
 
 // SendMessageResponse 发送消息响应。
 type SendMessageResponse struct {
-	Reply      string   `json:"reply"`
-	Confidence float64  `json:"confidence"`
-	Warnings   []string `json:"warnings"`
+	Reply            string                 `json:"reply"`
+	ConfidenceResult map[string]interface{} `json:"confidence_result"`
+	Warnings         []string               `json:"warnings"`
 }
 
 // SendMessage 发送对话消息，编排完整对话流程（非流式）。
@@ -264,10 +265,14 @@ func (a *WailsApp) SendMessage(req SendMessageRequest) (*SendMessageResponse, er
 		return nil, fmt.Errorf("failed to send message: %w", err)
 	}
 
+	confJSON := map[string]interface{}{}
+	if resp.ConfidenceResult != nil {
+		confJSON = confidenceResultToMap(resp.ConfidenceResult)
+	}
 	return &SendMessageResponse{
-		Reply:      resp.Reply,
-		Confidence: resp.Confidence,
-		Warnings:   resp.Warnings,
+		Reply:            resp.Reply,
+		ConfidenceResult: confJSON,
+		Warnings:         resp.Warnings,
 	}, nil
 }
 
@@ -317,7 +322,7 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) (err error) {
 	// 收集 AI 完整回复用于持久化
 	var fullReply stringsBuilder
 
-	usage, finalContent, err := a.chatOrchestrator.StreamExecute(ctx, chatReq, func(chunk string) {
+	usage, confidenceResult, finalContent, err := a.chatOrchestrator.StreamExecute(ctx, chatReq, func(chunk string) {
 		fullReply.WriteString(chunk)
 		broker.Content(chunk)
 	})
@@ -325,8 +330,8 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) (err error) {
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			broker.Error("生成已中断")
-			// 保存已生成的部分内容
-			a.saveMessages(ctx, req.ConversationID, req.Messages, fullReply.String())
+			// 保存已生成的部分内容（无置信度，token 为 0）
+			a.saveMessages(ctx, req.ConversationID, req.Messages, fullReply.String(), nil, nil)
 			return nil
 		}
 		broker.Error(err.Error())
@@ -341,8 +346,8 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) (err error) {
 		})
 	}
 
-	// 保存用户消息和 AI 回复
-	a.saveMessages(ctx, req.ConversationID, req.Messages, finalContent)
+	// 保存用户消息和 AI 回复（携带 token 与置信度）
+	a.saveMessages(ctx, req.ConversationID, req.Messages, finalContent, usage, confidenceResult)
 
 	// 流式结束后对完整内容做一次合规检测（MVP 简化策略）
 	compResult, compErr := a.chatOrchestrator.CheckCompliance(ctx, finalContent)
@@ -356,6 +361,23 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) (err error) {
 			"matchedRule":     compResult.MatchedRule,
 		}
 		runtime.EventsEmit(a.ctx, "chat:stream:compliance", payload)
+	}
+
+	// 推送置信度与 Token 用量事件
+	if confidenceResult != nil {
+		confidencePayload := map[string]any{
+			"conversation_id":   req.ConversationID,
+			"confidence":        confidenceResultToMap(confidenceResult),
+			"prompt_tokens":     0,
+			"completion_tokens": 0,
+			"total_tokens":      0,
+		}
+		if usage != nil {
+			confidencePayload["prompt_tokens"] = usage.PromptTokens
+			confidencePayload["completion_tokens"] = usage.CompletionTokens
+			confidencePayload["total_tokens"] = usage.TotalTokens
+		}
+		runtime.EventsEmit(a.ctx, "chat:stream:confidence", confidencePayload)
 	}
 
 	broker.Done(usage)
@@ -396,8 +418,8 @@ func (a *WailsApp) saveUserMessage(ctx context.Context, convID string, message m
 	}
 }
 
-// saveMessages 将对话消息持久化到数据库。
-func (a *WailsApp) saveMessages(ctx context.Context, convID string, messages []models.Message, aiReply string) {
+// saveMessages 将对话消息持久化到数据库，可选携带 token 用量与置信度。
+func (a *WailsApp) saveMessages(ctx context.Context, convID string, messages []models.Message, aiReply string, usage *models.TokenUsage, confidence *entity.ConfidenceResult) {
 	if a.msgRepo == nil || convID == "" {
 		return
 	}
@@ -417,12 +439,24 @@ func (a *WailsApp) saveMessages(ctx context.Context, convID string, messages []m
 	}
 	// 保存 AI 回复
 	if aiReply != "" {
-		if err := a.msgRepo.Save(ctx, models.ConversationID(convID), &entity.Message{
+		msg := &entity.Message{
 			ID:        fmt.Sprintf("msg_%d", time.Now().UnixNano()),
 			Role:      models.RoleAssistant,
 			Content:   aiReply,
 			Timestamp: time.Now(),
-		}); err != nil {
+		}
+		if usage != nil {
+			msg.PromptTokens = usage.PromptTokens
+			msg.CompletionTokens = usage.CompletionTokens
+		}
+		if confidence != nil {
+			msg.ConfidenceScore = confidence.OverallScore
+			msg.ConfidenceLevel = string(confidence.Level)
+			if jsonBytes, err := json.Marshal(confidence); err == nil {
+				msg.ConfidenceJSON = string(jsonBytes)
+			}
+		}
+		if err := a.msgRepo.Save(ctx, models.ConversationID(convID), msg); err != nil {
 			fmt.Printf("[saveMessages] 保存 AI 回复失败: %v\n", err)
 		}
 	}
@@ -455,10 +489,14 @@ type ConversationSummary struct {
 
 // MessageResponse 单条消息响应。
 type MessageResponse struct {
-	ID        string `json:"id"`
-	Role      string `json:"role"`
-	Content   string `json:"content"`
-	Timestamp string `json:"timestamp"`
+	ID               string                 `json:"id"`
+	Role             string                 `json:"role"`
+	Content          string                 `json:"content"`
+	Timestamp        string                 `json:"timestamp"`
+	PromptTokens     int                    `json:"prompt_tokens"`
+	CompletionTokens int                    `json:"completion_tokens"`
+	TotalTokens      int                    `json:"total_tokens"`
+	Confidence       map[string]interface{} `json:"confidence,omitempty"`
 }
 
 // GetConversationMessages 获取指定会话的全部消息。
@@ -482,12 +520,22 @@ func (a *WailsApp) GetConversationMessages(convID string) ([]MessageResponse, er
 	// ListByConversation 返回 created_at DESC（最新的在前），需要反转为正序
 	result := make([]MessageResponse, len(msgs))
 	for i, m := range msgs {
-		result[len(msgs)-1-i] = MessageResponse{
-			ID:        m.ID,
-			Role:      string(m.Role),
-			Content:   m.Content,
-			Timestamp: strconv.FormatInt(m.Timestamp.UnixMilli(), 10),
+		mr := MessageResponse{
+			ID:               m.ID,
+			Role:             string(m.Role),
+			Content:          m.Content,
+			Timestamp:        strconv.FormatInt(m.Timestamp.UnixMilli(), 10),
+			PromptTokens:     m.PromptTokens,
+			CompletionTokens: m.CompletionTokens,
+			TotalTokens:      m.PromptTokens + m.CompletionTokens,
 		}
+		if m.ConfidenceJSON != "" {
+			var conf map[string]interface{}
+			if err := json.Unmarshal([]byte(m.ConfidenceJSON), &conf); err == nil {
+				mr.Confidence = conf
+			}
+		}
+		result[len(msgs)-1-i] = mr
 	}
 	return result, nil
 }
@@ -2190,5 +2238,24 @@ func (a *WailsApp) SetSessionMemoryInjection(sessionID string, enabled bool) err
 	}
 	a.memoryRetriever.SetSessionEnabled(sessionID, enabled)
 	return nil
+}
+
+// confidenceResultToMap 将 entity.ConfidenceResult 转为 map[string]interface{}，
+// 供 Wails JSON 绑定序列化。
+func confidenceResultToMap(r *entity.ConfidenceResult) map[string]interface{} {
+	if r == nil {
+		return nil
+	}
+	m := map[string]interface{}{
+		"overall_score": r.OverallScore,
+		"level":         string(r.Level),
+		"explanation":   r.Explanation,
+		"suggestion":    r.Suggestion,
+		"missing_info":  r.MissingInfo,
+	}
+	if r.Breakdown != nil {
+		m["breakdown"] = r.Breakdown
+	}
+	return m
 }
 

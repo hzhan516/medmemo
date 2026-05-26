@@ -160,6 +160,25 @@ function App() {
               role: msg.role as 'user' | 'assistant' | 'system',
               content: msg.content,
               timestamp: Number(msg.timestamp),
+              promptTokens: msg.prompt_tokens,
+              completionTokens: msg.completion_tokens,
+              totalTokens: msg.total_tokens,
+              confidence: msg.confidence
+                ? {
+                    overallScore: (msg.confidence as Record<string, unknown>).overall_score as number,
+                    level: (msg.confidence as Record<string, unknown>).level as 'A' | 'B' | 'C' | 'D' | 'E',
+                    breakdown: {
+                      knowledge_source: ((msg.confidence as Record<string, unknown>).breakdown as Record<string, number>)?.knowledge_source ?? 0,
+                      reasoning: ((msg.confidence as Record<string, unknown>).breakdown as Record<string, number>)?.reasoning ?? 0,
+                      context: ((msg.confidence as Record<string, unknown>).breakdown as Record<string, number>)?.context ?? 0,
+                      history: ((msg.confidence as Record<string, unknown>).breakdown as Record<string, number>)?.history ?? 0,
+                      uncertainty: ((msg.confidence as Record<string, unknown>).breakdown as Record<string, number>)?.uncertainty ?? 0,
+                    },
+                    explanation: (msg.confidence as Record<string, unknown>).explanation as string,
+                    suggestion: (msg.confidence as Record<string, unknown>).suggestion as string,
+                    missingInfo: ((msg.confidence as Record<string, unknown>).missing_info as string[]) ?? [],
+                  }
+                : undefined,
             }))
             setMessages(mappedMessages)
           } catch (msgErr) {

@@ -21,13 +21,14 @@ type Deidentifier interface {
 
 // ChatOrchestrator 对话流程编排器。
 type ChatOrchestrator struct {
-	llmFactory      port.LLMClientFactory
-	providerStore   port.ProviderStore
-	memoryRepo      port.MemoryRepository
-	detector        port.SensitiveDetector
-	compliance      ComplianceChecker
-	deidPipeline    Deidentifier
-	memoryRetriever MemoryQuerier
+	llmFactory          port.LLMClientFactory
+	providerStore       port.ProviderStore
+	memoryRepo          port.MemoryRepository
+	detector            port.SensitiveDetector
+	compliance          ComplianceChecker
+	deidPipeline        Deidentifier
+	memoryRetriever     MemoryQuerier
+	confidenceAggregator *ConfidenceAggregator
 }
 
 // NewChatOrchestrator 构造函数，供 Wire 注入。
@@ -39,15 +40,17 @@ func NewChatOrchestrator(
 	comp ComplianceChecker,
 	deid Deidentifier,
 	retriever MemoryQuerier,
+	confAgg *ConfidenceAggregator,
 ) *ChatOrchestrator {
 	return &ChatOrchestrator{
-		llmFactory:      llmFactory,
-		providerStore:   providerStore,
-		memoryRepo:      mem,
-		detector:        det,
-		compliance:      comp,
-		deidPipeline:    deid,
-		memoryRetriever: retriever,
+		llmFactory:           llmFactory,
+		providerStore:        providerStore,
+		memoryRepo:           mem,
+		detector:             det,
+		compliance:           comp,
+		deidPipeline:         deid,
+		memoryRetriever:      retriever,
+		confidenceAggregator: confAgg,
 	}
 }
 
@@ -61,9 +64,9 @@ type ChatRequest struct {
 
 // ChatResponse 对话响应 DTO。
 type ChatResponse struct {
-	Reply      string
-	Confidence float64
-	Warnings   []string
+	Reply            string
+	ConfidenceResult *entity.ConfidenceResult
+	Warnings         []string
 }
 
 // isLocalModel 判断是否为本地模型（跳过脱敏）。
@@ -176,9 +179,9 @@ func (c *ChatOrchestrator) Execute(ctx context.Context, req ChatRequest) (*ChatR
 	if err != nil {
 		// 降级放行，确保对话不中断
 		return &ChatResponse{
-			Reply:      reply,
-			Confidence: 0.0,
-			Warnings:   []string{"COMPLIANCE_CHECK_ERROR"},
+			Reply:            reply,
+			ConfidenceResult: c.confidenceAggregator.CalculateWithRawScore(0.0, []string{"合规检测异常"}),
+			Warnings:         []string{"COMPLIANCE_CHECK_ERROR"},
 		}, nil
 	}
 
@@ -187,10 +190,13 @@ func (c *ChatOrchestrator) Execute(ctx context.Context, req ChatRequest) (*ChatR
 		warnings = append(warnings, compResult.Level)
 	}
 
+	// 计算回答置信度
+	confidence := c.calculateConfidence(reply, messages)
+
 	return &ChatResponse{
-		Reply:      compResult.SafeText,
-		Confidence: 0.0,
-		Warnings:   warnings,
+		Reply:            compResult.SafeText,
+		ConfidenceResult: confidence,
+		Warnings:         warnings,
 	}, nil
 }
 
@@ -200,14 +206,14 @@ func (c *ChatOrchestrator) Execute(ctx context.Context, req ChatRequest) (*ChatR
 // 若还原或合规替换导致内容变化，返回的 finalContent 与流式过程中推送的内容不同，
 // 由外层通过 chat:stream:replace 事件通知前端替换。
 // 仅 L1（阻断级）返回 SafeText；L2/L3 保留原文，由外层通过
-// chat:stream:compliance 事件追加标签。流式正常结束时返回 TokenUsage 与最终内容。
-func (c *ChatOrchestrator) StreamExecute(ctx context.Context, req ChatRequest, onChunk func(string)) (*models.TokenUsage, string, error) {
+// chat:stream:compliance 事件追加标签。流式正常结束时返回 TokenUsage、置信度与最终内容。
+func (c *ChatOrchestrator) StreamExecute(ctx context.Context, req ChatRequest, onChunk func(string)) (*models.TokenUsage, *entity.ConfidenceResult, string, error) {
 	messages, deidResult := c.prepareMessages(ctx, req)
 
 	// 根据 ProviderID 动态创建 LLMClient
 	llmClient, err := c.resolveLLMClient(ctx, req.ProviderID)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to resolve llm client: %w", err)
+		return nil, nil, "", fmt.Errorf("failed to resolve llm client: %w", err)
 	}
 
 	// 逐 chunk 透传，保持打字机流式效果
@@ -217,7 +223,7 @@ func (c *ChatOrchestrator) StreamExecute(ctx context.Context, req ChatRequest, o
 		onChunk(chunk)
 	})
 	if err != nil {
-		return nil, "", fmt.Errorf("stream execution failed: %w", err)
+		return nil, nil, "", fmt.Errorf("stream execution failed: %w", err)
 	}
 
 	// 输出还原
@@ -232,15 +238,77 @@ func (c *ChatOrchestrator) StreamExecute(ctx context.Context, req ChatRequest, o
 	// 合规检测
 	compResult, compErr := c.compliance.Check(ctx, reply)
 	if compErr != nil {
-		return nil, "", fmt.Errorf("compliance check error: %w", compErr)
+		return nil, nil, "", fmt.Errorf("compliance check error: %w", compErr)
 	}
 	// 仅 L1（阻断级）替换为安全文本并结束流式输出
 	// L2/L3 保留原文，由外层通过 chat:stream:compliance 事件追加标签
 	if compResult.Blocked {
-		return usage, compResult.SafeText, nil
+		confidence := c.calculateConfidence(compResult.SafeText, messages)
+		return usage, confidence, compResult.SafeText, nil
 	}
 
-	return usage, reply, nil
+	// 计算回答置信度
+	confidence := c.calculateConfidence(reply, messages)
+
+	return usage, confidence, reply, nil
+}
+
+// calculateConfidence 为 AI 回复计算置信度结果。
+// 当前 MVP 实现：默认来源为 llm_internal，从回复内容提取推理链，
+// 上下文分数基于用户消息长度，历史准确率使用冷启动默认值 0.75。
+func (c *ChatOrchestrator) calculateConfidence(reply string, messages []models.Message) *entity.ConfidenceResult {
+	if c.confidenceAggregator == nil {
+		// 置信度引擎未注入时返回零值结果，避免 panic
+		return &entity.ConfidenceResult{
+			OverallScore: 0.0,
+			Level:        entity.ConfidenceLevelE,
+			Breakdown:    map[string]float64{},
+			Explanation:  "置信度引擎未初始化",
+			Suggestion:   entity.ConfidenceLevelE.Suggestion(),
+			MissingInfo:  []string{},
+		}
+	}
+
+	// 默认知识来源为 llm_internal（MVP 阶段无 RAG 实际集成）
+	sources := []entity.KnowledgeSource{
+		c.confidenceAggregator.tagger.Tag(entity.SourceLLMInternal, "LLM 内部推理"),
+	}
+
+	// 从回复内容提取推理链
+	reasoning := c.confidenceAggregator.evaluator.ExtractReasoningChain(reply)
+
+	// 上下文分数：基于用户消息长度简单评估（0-100）
+	contextScore := 50.0
+	for _, m := range messages {
+		if m.Role == models.RoleUser {
+			length := len(m.Content)
+			if length > 100 {
+				contextScore = 80.0
+			} else if length > 30 {
+				contextScore = 60.0
+			}
+		}
+	}
+
+	// 历史准确率：冷启动默认值
+	historyAccuracy := 0.75
+
+	// 不确定性分数：检测回复中是否包含不确定性表达
+	uncertaintyScore := 50.0
+	lowerReply := strings.ToLower(reply)
+	if strings.Contains(lowerReply, "不确定") || strings.Contains(lowerReply, "可能") ||
+		strings.Contains(lowerReply, "建议") || strings.Contains(lowerReply, "也许") ||
+		strings.Contains(lowerReply, "仅供参考") {
+		uncertaintyScore = 85.0
+	}
+
+	return c.confidenceAggregator.Calculate(
+		sources,
+		reasoning,
+		contextScore,
+		historyAccuracy,
+		uncertaintyScore,
+	)
 }
 
 // resolveLLMClient 根据 ProviderID 从 store 查找配置并动态创建 LLMClient。
@@ -332,4 +400,5 @@ var ApplicationSet = wire.NewSet(
 	NewChatOrchestrator,
 	NewRuleComplianceChecker,
 	NewTitleGenerator,
+	NewConfidenceAggregator,
 )
