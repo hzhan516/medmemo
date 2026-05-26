@@ -11,6 +11,25 @@ interface MessageBubbleProps {
 }
 
 /**
+ * 将原始技术错误转换为对用户友好的提示文案。
+ */
+function getFriendlyErrorMessage(error: string): string {
+  if (/HTTP 50[234]|server error|服务端错误|服务商暂时不可用/.test(error)) {
+    return '服务商暂时不可用，已自动重试，若仍失败请稍后重试或切换其他模型'
+  }
+  if (/HTTP 429|rate limit|请求过于频繁/.test(error)) {
+    return '请求过于频繁，请稍后再试'
+  }
+  if (/HTTP 401|认证失败|API 认证|Unauthorized/.test(error)) {
+    return 'API 认证失败，请检查 API Key 是否有效'
+  }
+  if (/HTTP 404|模型不存在|Not Found/.test(error)) {
+    return '请求的模型不存在，请检查模型配置'
+  }
+  return error
+}
+
+/**
  * 消息气泡组件。
  * 用户消息：蓝色渐变，右侧对齐，圆角 16px。
  * AI 消息：白色/暗色背景，左侧对齐。
@@ -112,7 +131,7 @@ export function MessageBubble({ message, onRetry, onReportCompliance }: MessageB
                 <AlertCircle size={14} className="shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
                   <p className="font-medium">生成失败</p>
-                  <p className="opacity-80">{error}</p>
+                  <p className="opacity-80">{getFriendlyErrorMessage(error)}</p>
                 </div>
               </div>
             )}

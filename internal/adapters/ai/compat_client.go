@@ -98,7 +98,7 @@ func (c *OpenAICompatibleClient) Chat(ctx context.Context, req ChatRequest, conf
 		}
 	}
 
-	resp, err := client.Do(httpReq)
+	resp, err := c.doChatWithRetry(client, httpReq)
 	if err != nil {
 		retryable := isNetworkError(err)
 		return nil, &LLMError{Code: "network_error", Message: fmt.Sprintf("发送请求失败: %v", err), Retryable: retryable}
@@ -181,6 +181,46 @@ func (c *OpenAICompatibleClient) readSSE(ctx context.Context, resp *http.Respons
 	} else {
 		ch <- StreamChunk{Type: ChunkDone, Payload: ""}
 	}
+}
+
+// doChatWithRetry 执行 HTTP 请求，遇到 429/5xx 时指数退避重试。
+// 最多重试 3 次，退避间隔：500ms、1s、2s（最大 5s）。
+// 重试耗尽后返回最后一次响应，由调用方解析具体错误信息。
+func (c *OpenAICompatibleClient) doChatWithRetry(client *http.Client, req *http.Request) (*http.Response, error) {
+	const maxRetries = 3
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 {
+			if req.GetBody != nil {
+				req.Body, _ = req.GetBody()
+			} else if req.Body != nil {
+				if seeker, ok := req.Body.(io.Seeker); ok {
+					_, _ = seeker.Seek(0, io.SeekStart)
+				}
+			}
+			delay := min(500*time.Millisecond*(1<<(attempt-1)), 5*time.Second)
+			select {
+			case <-time.After(delay):
+			case <-req.Context().Done():
+				return nil, fmt.Errorf("retry cancelled: %w", req.Context().Err())
+			}
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			retryable := isNetworkError(err)
+			if retryable && attempt < maxRetries {
+				continue
+			}
+			return nil, err
+		}
+		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
+			if attempt < maxRetries {
+				_ = resp.Body.Close()
+				continue
+			}
+		}
+		return resp, nil
+	}
+	return nil, fmt.Errorf("retry exhausted")
 }
 
 // FetchModels 调用 /v1/models 端点拉取可用模型列表。

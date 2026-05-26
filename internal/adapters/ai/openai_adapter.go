@@ -167,10 +167,18 @@ func (a *OpenAIAdapter) doWithRetry(req *http.Request) (*http.Response, error) {
 			_ = resp.Body.Close() // 429 重试前关闭响应体，关闭错误不影响重试逻辑
 			continue
 		}
+		if resp.StatusCode >= 500 {
+			lastErr = fmt.Errorf("attempt %d: server error (HTTP %d)", attempt+1, resp.StatusCode)
+			_ = resp.Body.Close() // 5xx 重试前关闭响应体
+			continue
+		}
 
 		return resp, nil
 	}
-	return nil, fmt.Errorf("请求过于频繁，请稍后再试 (HTTP 429, 已重试 %d 次): %w", maxRetries, lastErr)
+	if lastErr != nil && strings.Contains(lastErr.Error(), "rate limited") {
+		return nil, fmt.Errorf("请求过于频繁，请稍后再试 (HTTP 429, 已重试 %d 次): %w", maxRetries, lastErr)
+	}
+	return nil, fmt.Errorf("请求失败，请稍后重试 (已重试 %d 次): %w", maxRetries, lastErr)
 }
 
 // Chat 发送非流式对话请求。
