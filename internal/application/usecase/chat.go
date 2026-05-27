@@ -224,10 +224,13 @@ func (c *ChatOrchestrator) Execute(ctx context.Context, req ChatRequest) (*ChatR
 // 仅 L1（阻断级）返回 SafeText；L2/L3 保留原文，由外层通过
 // chat:stream:compliance 事件追加标签。流式正常结束时返回 TokenUsage、置信度与最终内容。
 func (c *ChatOrchestrator) StreamExecute(ctx context.Context, req ChatRequest, onChunk func(string)) (*models.TokenUsage, *entity.ConfidenceResult, string, error) {
-	messages, deidResult := c.prepareMessages(ctx, req)
+	// 预处理使用独立 context，避免 ONNX 推理消耗 stream budget
+	prepCtx, prepCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer prepCancel()
+	messages, deidResult := c.prepareMessages(prepCtx, req)
 
-	// 根据 ProviderID 动态创建 LLMClient
-	llmClient, err := c.resolveLLMClient(ctx, req.ProviderID)
+	// provider 查询也使用独立 context（避免复用已过期 stream ctx）
+	llmClient, err := c.resolveLLMClient(prepCtx, req.ProviderID)
 	if err != nil {
 		return nil, nil, "", fmt.Errorf("failed to resolve llm client: %w", err)
 	}

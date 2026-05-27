@@ -161,6 +161,9 @@ func (a *WailsApp) Startup(ctx context.Context) {
 		go a.scheduleAutoRefreshesAsync()
 	}
 
+	// ONNX 预热：启动后异步执行一次 dummy 推理，将 warmup 成本从首次对话转移到启动阶段
+	go a.warmupONNX()
+
 	// 初始化 Device Flow 事件回调
 	if a.deviceFlowSvc != nil {
 		a.deviceFlowSvc.SetRefreshService(a.tokenRefreshSvc)
@@ -343,6 +346,7 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) (err error) {
 	// 收集 AI 完整回复用于持久化
 	var fullReply stringsBuilder
 
+	start := time.Now()
 	usage, confidenceResult, finalContent, err := a.chatOrchestrator.StreamExecute(ctx, chatReq, func(chunk string) {
 		fullReply.WriteString(chunk)
 		broker.Content(chunk)
@@ -369,6 +373,8 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) (err error) {
 
 	// 保存用户消息和 AI 回复（携带 token 与置信度）
 	a.saveMessages(ctx, req.ConversationID, req.Messages, finalContent, usage, confidenceResult, req.ProviderID)
+
+	fmt.Printf("[Stream] total execution time: %v\n", time.Since(start))
 
 	// 流式结束后对完整内容做一次合规检测（MVP 简化策略）
 	compResult, compErr := a.chatOrchestrator.CheckCompliance(ctx, finalContent)
@@ -514,6 +520,24 @@ func (a *WailsApp) saveMessages(ctx context.Context, convID string, messages []m
 	if a.convRepo != nil {
 		if err := a.convRepo.UpdateTimestamp(ctx, models.ConversationID(convID), time.Now()); err != nil {
 			fmt.Printf("[saveMessages] 更新会话时间失败: %v\n", err)
+		}
+	}
+}
+
+// warmupONNX 执行一次 dummy 推理，触发 ONNX Runtime 的首次模型 warmup。
+// 使用应用生命周期 context，不设置短 timeout，让 warmup 自然完成。
+// 失败仅记录日志，不影响应用启动。
+func (a *WailsApp) warmupONNX() {
+	// 延迟 2 秒，确保 ONNX engine 已完全初始化
+	time.Sleep(2 * time.Second)
+
+	start := time.Now()
+	if a.embeddingSvc != nil {
+		_, err := a.embeddingSvc.EmbedSingle(a.ctx, "warmup")
+		if err != nil {
+			fmt.Printf("[ONNX Warmup] embedding 预热失败: %v\n", err)
+		} else {
+			fmt.Printf("[ONNX Warmup] embedding 预热完成，耗时 %v\n", time.Since(start))
 		}
 	}
 }
