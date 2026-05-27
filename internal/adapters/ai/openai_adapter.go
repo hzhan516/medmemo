@@ -18,11 +18,12 @@ import (
 
 // OpenAIAdapter 适配 OpenAI 兼容 API。
 type OpenAIAdapter struct {
-	apiKey    string
-	baseURL   string
-	model     string
-	maxTokens int
-	client    *http.Client
+	apiKey       string
+	baseURL      string
+	model        string
+	maxTokens    int
+	client       *http.Client // 非流式，有 timeout
+	streamClient *http.Client // 流式，timeout=0，由 context 控制
 }
 
 // NewOpenAIAdapter 构造函数，返回具体类型供 Wire 绑定。
@@ -35,18 +36,23 @@ func NewOpenAIAdapter(apiKey, baseURL, model string, maxTokens int, timeout time
 	if maxTokens <= 0 {
 		maxTokens = 4096
 	}
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			MinVersion: tls.VersionTLS12,
+		},
+	}
 	return &OpenAIAdapter{
 		apiKey:    apiKey,
 		baseURL:   baseURL,
 		model:     model,
 		maxTokens: maxTokens,
 		client: &http.Client{
-			Timeout: timeout,
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{
-					MinVersion: tls.VersionTLS12,
-				},
-			},
+			Timeout:   timeout,
+			Transport: transport,
+		},
+		streamClient: &http.Client{
+			Timeout:   0, // 流式请求不设 timeout，由 context 控制
+			Transport: transport,
 		},
 	}
 }
@@ -143,7 +149,7 @@ func mapAPIError(statusCode int, apiErr *apiError) error {
 // doWithRetry 执行 HTTP 请求，遇到 429 速率限制时指数退避重试。
 // 最多重试 5 次，退避间隔：2s、4s、8s、16s、32s（最大 60s）。
 // 若响应包含 Retry-After 头则优先使用该值。
-func (a *OpenAIAdapter) doWithRetry(req *http.Request) (*http.Response, error) {
+func (a *OpenAIAdapter) doWithRetry(client *http.Client, req *http.Request) (*http.Response, error) {
 	const maxRetries = 5
 	var lastErr error
 	for attempt := 0; attempt <= maxRetries; attempt++ {
@@ -165,7 +171,7 @@ func (a *OpenAIAdapter) doWithRetry(req *http.Request) (*http.Response, error) {
 			}
 		}
 
-		resp, err := a.client.Do(req)
+		resp, err := client.Do(req)
 		if err != nil {
 			return nil, fmt.Errorf("failed to send request: %w", err)
 		}
@@ -230,7 +236,7 @@ func (a *OpenAIAdapter) Chat(ctx context.Context, messages []models.Message) (st
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+a.apiKey)
 
-	resp, err := a.doWithRetry(req)
+	resp, err := a.doWithRetry(a.client, req)
 	if err != nil {
 		return "", fmt.Errorf("failed to send chat request: %w", err)
 	}
@@ -284,7 +290,7 @@ func (a *OpenAIAdapter) StreamChat(ctx context.Context, messages []models.Messag
 	req.Header.Set("Authorization", "Bearer "+a.apiKey)
 	req.Header.Set("Accept", "text/event-stream")
 
-	resp, err := a.doWithRetry(req)
+	resp, err := a.doWithRetry(a.streamClient, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send stream request: %w", err)
 	}
