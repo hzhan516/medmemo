@@ -9,17 +9,17 @@ VERSION="${2:-dev}"
 case "$OS" in
   linux)
     echo "[TASK-027] Building for Linux..."
-    wails build -ldflags "-s -w -X main.version=${VERSION}" -tags webkit2_41
+    wails build -ldflags "-s -w -X main.version=${VERSION}" -tags "webkit2_41,ORT"
     echo "[TASK-027] Building AppImage..."
     ./build/package/build-appimage.sh
     ;;
   windows)
     echo "[TASK-027] Building for Windows..."
-    wails build -ldflags "-s -w -X main.version=${VERSION}" -nsis
+    wails build -ldflags "-s -w -X main.version=${VERSION}" -tags "ORT" -nsis
     ;;
   darwin)
     echo "[TASK-027] Building for macOS..."
-    wails build -ldflags "-s -w -X main.version=${VERSION}" -platform darwin/universal
+    wails build -ldflags "-s -w -X main.version=${VERSION}" -tags "ORT" -platform darwin/universal
     echo "[TASK-027] Building dmg..."
     ./build/package/build-dmg.sh
     # GoReleaser prebuilt 期望 build/bin/MedMemo，而 Wails macOS 产物为 .app bundle

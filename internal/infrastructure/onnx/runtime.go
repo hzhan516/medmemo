@@ -208,8 +208,10 @@ libFound:
 	e.libPath = libPath
 
 	// 初始化 hugot ORT Session（全局单例，NER 和 Embedding 共享）
+	// WithOnnxLibraryPath 期望目录路径，不是文件路径
 	ctx := context.Background()
-	session, err := hugot.NewORTSession(ctx, options.WithOnnxLibraryPath(libPath))
+	libDir := filepath.Dir(libPath)
+	session, err := hugot.NewORTSession(ctx, options.WithOnnxLibraryPath(libDir))
 	if err != nil {
 		fmt.Printf("[ONNX Engine] Session init failed: %v\n", err)
 		return e, nil // 降级：Session 初始化失败
