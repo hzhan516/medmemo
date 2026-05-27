@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"sync"
 
 	"github.com/google/wire"
@@ -152,7 +154,8 @@ type EngineConfig struct {
 }
 
 // NewEngine 创建推理引擎。
-// 若动态库缺失或模型路径无效，返回 available=false 的引擎，不阻塞应用启动。
+// NER 和 Embedding 独立初始化，任一缺失不影响另一个。
+// 若动态库缺失则两者都不可用，不阻塞应用启动。
 func NewEngine(cfg EngineConfig) (*Engine, error) {
 	e := &Engine{
 		taskCh:          make(chan nerTask, 16),
@@ -160,71 +163,130 @@ func NewEngine(cfg EngineConfig) (*Engine, error) {
 		modelPath:       cfg.ModelPath,
 	}
 
+	// 诊断日志：输出关键路径信息，一次运行即可定位失败层级
+	fmt.Printf("[ONNX Engine] GOOS=%s GOARCH=%s\n", runtime.GOOS, runtime.GOARCH)
+	fmt.Printf("[ONNX Engine] ResourceDir=%s ModelPath=%s EmbeddingModelPath=%s\n",
+		cfg.ResourceDir, cfg.ModelPath, cfg.EmbeddingModelPath)
+
 	libPath, err := PlatformLibPath(cfg.ResourceDir)
 	if err != nil {
-		return e, nil // 降级：不支持的平台，不报错
+		fmt.Printf("[ONNX Engine] PlatformLibPath failed: %v\n", err)
+		return e, nil // 降级：不支持的平台
 	}
-	if _, err := os.Stat(libPath); os.IsNotExist(err) {
-		return e, nil // 降级：动态库不存在，不报错
+	fmt.Printf("[ONNX Engine] Looking for ONNX lib at: %s\n", libPath)
+	if info, err := os.Stat(libPath); err != nil {
+		fmt.Printf("[ONNX Engine] ONNX lib not found: %v\n", err)
+		// fallback: 尝试 .so.1（PlatformLibPath 已处理，这里额外兜底）
+		if strings.HasSuffix(libPath, ".so") {
+			fallback := libPath + ".1"
+			fmt.Printf("[ONNX Engine] Trying fallback: %s\n", fallback)
+			if _, err2 := os.Stat(fallback); err2 == nil {
+				libPath = fallback
+				fmt.Printf("[ONNX Engine] Fallback found, using: %s\n", libPath)
+				goto libFound
+			}
+		}
+		// AppImage fallback: exeDir/../share/resources/
+		if exe, err := os.Executable(); err == nil {
+			exeDir := filepath.Dir(exe)
+			appImageRes := filepath.Join(exeDir, "..", "share", "resources")
+			fallbackLib, _ := PlatformLibPath(appImageRes)
+			fmt.Printf("[ONNX Engine] Trying AppImage fallback: %s\n", fallbackLib)
+			if _, err2 := os.Stat(fallbackLib); err2 == nil {
+				libPath = fallbackLib
+				fmt.Printf("[ONNX Engine] AppImage fallback found, using: %s\n", libPath)
+				goto libFound
+			}
+		}
+		fmt.Printf("[ONNX Engine] ONNX lib not found anywhere, engine unavailable\n")
+		return e, nil // 降级：动态库不存在
+	} else {
+		fmt.Printf("[ONNX Engine] ONNX lib found: size=%d mode=%s isSymlink=%v\n",
+			info.Size(), info.Mode(), info.Mode()&os.ModeSymlink != 0)
 	}
+libFound:
 	e.libPath = libPath
 
-	// 检查模型目录是否存在（包含 model.onnx 和 tokenizer.json）
-	if _, err := os.Stat(cfg.ModelPath); os.IsNotExist(err) {
-		return e, nil // 降级：模型未下载，不报错
-	}
-
-	// 可选 SHA-256 校验：若存在 .sha256 文件则校验模型完整性
-	modelFile := filepath.Join(cfg.ModelPath, "model.onnx")
-	if err := verifyModelSHA256(modelFile); err != nil {
-		return e, nil // 降级：校验失败，不报错
-	}
-
-	// 初始化 hugot ORT Session（全局单例）
+	// 初始化 hugot ORT Session（全局单例，NER 和 Embedding 共享）
 	ctx := context.Background()
 	session, err := hugot.NewORTSession(ctx, options.WithOnnxLibraryPath(libPath))
 	if err != nil {
-		return e, nil // 降级：Session 初始化失败，不报错
+		fmt.Printf("[ONNX Engine] Session init failed: %v\n", err)
+		return e, nil // 降级：Session 初始化失败
 	}
+	fmt.Printf("[ONNX Engine] ORT Session created successfully\n")
 	e.session = session
 
-	// 创建 TokenClassificationPipeline
+	// 独立初始化 NER Pipeline（可选，失败不阻塞 Embedding）
+	e.initNERPipeline(cfg.ModelPath)
+
+	// 独立初始化 Embedding Pipeline（可选，失败不阻塞 NER）
+	if cfg.EmbeddingModelPath != "" {
+		e.initEmbeddingPipeline(cfg.EmbeddingModelPath)
+	}
+
+	// 只要任一 Pipeline 就绪即标记引擎可用
+	e.available = e.pipeline != nil || e.embeddingAvailable
+	if !e.available && e.session != nil {
+		// NER 和 Embedding 都未就绪，释放 Session
+		_ = e.session.Destroy()
+		e.session = nil
+	}
+
+	// 最终状态校验：防止 pipeline 创建成功但状态标记未同步的 bug
+	if e.embeddingPipeline != nil && !e.embeddingAvailable {
+		fmt.Printf("[ONNX Engine] BUG: embeddingPipeline set but embeddingAvailable=false, fixing\n")
+		e.embeddingAvailable = true
+	}
+	if e.pipeline != nil && !e.available {
+		e.available = true
+	}
+
+	fmt.Printf("[ONNX Engine] Final state: available=%v embeddingAvailable=%v\n",
+		e.available, e.embeddingAvailable)
+	return e, nil
+}
+
+// initNERPipeline 初始化 NER 推理 Pipeline（内部方法，失败不返回错误）。
+func (e *Engine) initNERPipeline(modelPath string) {
+	fmt.Printf("[ONNX Engine] initNERPipeline: modelPath=%s session=%v\n",
+		modelPath, e.session != nil)
+	if _, err := os.Stat(modelPath); os.IsNotExist(err) {
+		fmt.Printf("[ONNX Engine] NER model dir not found: %s\n", modelPath)
+		return // NER 模型未下载
+	}
+
+	modelFile := filepath.Join(modelPath, "model.onnx")
+	if err := verifyModelSHA256(modelFile); err != nil {
+		fmt.Printf("[ONNX Engine] NER model SHA256 verify failed: %v\n", err)
+		return // 校验失败
+	}
+
 	config := hugot.TokenClassificationConfig{
-		ModelPath:    cfg.ModelPath,
+		ModelPath:    modelPath,
 		OnnxFilename: "model.onnx",
 		Name:         "ner-default",
 		Options: []hugot.TokenClassificationOption{
 			pipelines.WithSimpleAggregation(),
 		},
 	}
-	pipeline, err := hugot.NewPipeline[*pipelines.TokenClassificationPipeline](session, config)
+	pipeline, err := hugot.NewPipeline[*pipelines.TokenClassificationPipeline](e.session, config)
 	if err != nil {
-		_ = session.Destroy() // Pipeline 创建失败后销毁 session，销毁错误非关键（已降级为不可用）
-		e.session = nil
-		return e, nil // 降级：Pipeline 创建失败，不报错
+		fmt.Printf("[ONNX Engine] NER pipeline creation failed: %v\n", err)
+		return // NER Pipeline 创建失败
 	}
 	e.pipeline = pipeline
 
-	// 创建 2 个 NER Worker
+	// 创建并启动 2 个 NER Worker
 	const workerCount = 2
 	e.workers = make([]*NERWorker, workerCount)
 	for i := 0; i < workerCount; i++ {
 		e.workers[i] = NewNERWorker(i, pipeline)
 	}
-
-	// 启动 NER Worker goroutine
 	for i := 0; i < workerCount; i++ {
 		e.wg.Add(1)
 		go e.workerLoop(e.workers[i])
 	}
-
-	// 尝试初始化嵌入 Pipeline（可选，失败不阻塞）
-	if cfg.EmbeddingModelPath != "" {
-		e.initEmbeddingPipeline(cfg.EmbeddingModelPath)
-	}
-
-	e.available = true
-	return e, nil
 }
 
 func (e *Engine) workerLoop(worker *NERWorker) {
@@ -285,12 +347,23 @@ func (e *Engine) Embed(ctx context.Context, texts []string) ([][]float32, error)
 
 // initEmbeddingPipeline 初始化嵌入 Pipeline（内部方法，失败不返回错误）。
 func (e *Engine) initEmbeddingPipeline(modelPath string) {
+	fmt.Printf("[ONNX Engine] initEmbeddingPipeline: modelPath=%s session=%v\n",
+		modelPath, e.session != nil)
 	if _, err := os.Stat(modelPath); os.IsNotExist(err) {
+		fmt.Printf("[ONNX Engine] Embedding model dir not found: %s\n", modelPath)
 		return // 模型未下载
+	}
+
+	// 列出目录内容，便于诊断
+	entries, _ := os.ReadDir(modelPath)
+	for _, entry := range entries {
+		info, _ := entry.Info()
+		fmt.Printf("[ONNX Engine]   modelDir entry: %s size=%d\n", entry.Name(), info.Size())
 	}
 
 	modelFile := filepath.Join(modelPath, "model.onnx")
 	if err := verifyModelSHA256(modelFile); err != nil {
+		fmt.Printf("[ONNX Engine] Embedding model SHA256 verify failed: %v\n", err)
 		return // 校验失败
 	}
 
@@ -304,6 +377,9 @@ func (e *Engine) initEmbeddingPipeline(modelPath string) {
 	}
 	pipeline, err := hugot.NewPipeline[*pipelines.FeatureExtractionPipeline](e.session, config)
 	if err != nil {
+		fmt.Printf("[ONNX Engine] Embedding pipeline creation failed: %v\n", err)
+		fmt.Printf("[ONNX Engine]   session=%v modelPath=%s onnxFile=%s\n",
+			e.session != nil, modelPath, config.OnnxFilename)
 		return // Pipeline 创建失败
 	}
 	e.embeddingPipeline = pipeline
