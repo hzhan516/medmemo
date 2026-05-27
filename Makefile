@@ -27,13 +27,17 @@ build:
 	cd web && npm install && npm run build
 	wails build -clean -tags "$(BUILD_TAGS)" $(LDFLAGS)
 
+# CGO 库路径（用于测试，go test 时 ${SRCDIR} 解析为临时目录，需显式指定）
+CGO_LDFLAGS_LINUX := -L$(shell pwd)/resources/lib/linux
+CGO_LDFLAGS_DARWIN := -L$(shell pwd)/resources/lib/darwin
+
 # 运行测试（含 ORT 后端）
 test:
-	go test -tags "$(BUILD_TAGS)" -race -coverprofile=coverage.out ./...
+	CGO_LDFLAGS="$(CGO_LDFLAGS_LINUX)" go test -tags "$(BUILD_TAGS)" -race -coverprofile=coverage.out ./...
 
 # 运行集成测试
 test-integration:
-	go test -race -tags=integration,ORT ./...
+	CGO_LDFLAGS="$(CGO_LDFLAGS_LINUX)" go test -race -tags=integration,ORT ./...
 
 # 运行 E2E 测试
 test-e2e:
