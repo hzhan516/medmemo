@@ -84,9 +84,15 @@ func NewSQLCipherConnector(dataDir string, store secret.Store) (*SQLCipherConnec
 		return nil, fmt.Errorf("database key verification failed: %w", err)
 	}
 
-	// 连接池配置
-	db.SetMaxOpenConns(10)
-	db.SetMaxIdleConns(5)
+	// 连接池配置：桌面端并发场景（流式对话 + 异步事实提取 + UI 查询）需要更大池子
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(10)
+
+	// 设置 busy_timeout：锁冲突时自动重试最多 5 秒，避免立即返回 SQLITE_BUSY
+	if _, err := db.Exec("PRAGMA busy_timeout = 5000"); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("failed to set busy timeout: %w", err)
+	}
 
 	// 启用外键约束
 	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {

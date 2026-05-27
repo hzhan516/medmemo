@@ -335,7 +335,8 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) (err error) {
 	if len(req.Messages) > 0 {
 		lastUser := req.Messages[len(req.Messages)-1]
 		if lastUser.Role == models.RoleUser {
-			a.saveUserMessage(ctx, req.ConversationID, lastUser)
+			// 使用应用生命周期 context 异步保存，避免占用 stream 超时 budget
+			go a.saveUserMessage(a.ctx, req.ConversationID, lastUser)
 		}
 	}
 

@@ -1,7 +1,7 @@
 .PHONY: all dev build test lint wire clean install-tools
 
-# 版本号（默认从 Git 标签读取，无标签时显示 dev）
-VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+# 版本号从 wails.json 读取（单一来源）
+VERSION ?= $(shell cat wails.json | grep '"productVersion"' | sed 's/.*"productVersion": *"\(.*\)".*/\1/')
 LDFLAGS := -ldflags "-s -w -X main.version=$(VERSION)"
 
 # 平台检测（用于本地构建）
