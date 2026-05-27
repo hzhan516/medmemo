@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hzhan516/medmemo/internal/domain/entity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/hzhan516/medmemo/internal/domain/entity"
 )
 
 func TestFactExtractor_ParseFacts(t *testing.T) {
@@ -149,8 +149,10 @@ func (m *mockLLMForFactExtraction) Chat(ctx context.Context, messages []string) 
 // mockDialogueRepo 用于测试
 type mockDialogueRepo struct{}
 
-func (m *mockDialogueRepo) Insert(ctx context.Context, d *entity.RawDialogue) error         { return nil }
-func (m *mockDialogueRepo) InsertBatch(ctx context.Context, dialogues []*entity.RawDialogue) error { return nil }
+func (m *mockDialogueRepo) Insert(ctx context.Context, d *entity.RawDialogue) error { return nil }
+func (m *mockDialogueRepo) InsertBatch(ctx context.Context, dialogues []*entity.RawDialogue) error {
+	return nil
+}
 func (m *mockDialogueRepo) GetBySession(ctx context.Context, sessionID string, offset, limit int) ([]*entity.RawDialogue, error) {
 	return nil, nil
 }
@@ -160,23 +162,27 @@ func (m *mockDialogueRepo) GetRecent(ctx context.Context, sessionID string, minu
 func (m *mockDialogueRepo) GetUnprocessed(ctx context.Context, limit int) ([]*entity.RawDialogue, error) {
 	return nil, nil
 }
-func (m *mockDialogueRepo) MarkProcessing(ctx context.Context, messageID string) error  { return nil }
-func (m *mockDialogueRepo) MarkProcessed(ctx context.Context, messageID string) error    { return nil }
-func (m *mockDialogueRepo) MarkFailed(ctx context.Context, messageID string) error       { return nil }
+func (m *mockDialogueRepo) MarkProcessing(ctx context.Context, messageID string) error { return nil }
+func (m *mockDialogueRepo) MarkProcessed(ctx context.Context, messageID string) error  { return nil }
+func (m *mockDialogueRepo) MarkFailed(ctx context.Context, messageID string) error     { return nil }
 
 // mockFactRepo 用于测试
 type mockFactRepo struct{}
 
-func (m *mockFactRepo) Save(ctx context.Context, f *entity.ExtractedFact) error                    { return nil }
-func (m *mockFactRepo) GetByID(ctx context.Context, factID string) (*entity.ExtractedFact, error)  { return nil, nil }
+func (m *mockFactRepo) Save(ctx context.Context, f *entity.ExtractedFact) error { return nil }
+func (m *mockFactRepo) GetByID(ctx context.Context, factID string) (*entity.ExtractedFact, error) {
+	return nil, nil
+}
 func (m *mockFactRepo) ListByStatus(ctx context.Context, status entity.FactStatus, offset, limit int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
 func (m *mockFactRepo) ListPending(ctx context.Context, offset, limit int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (m *mockFactRepo) UpdateStatus(ctx context.Context, factID string, status entity.FactStatus) error { return nil }
-func (m *mockFactRepo) Delete(ctx context.Context, factID string) error                             { return nil }
+func (m *mockFactRepo) UpdateStatus(ctx context.Context, factID string, status entity.FactStatus) error {
+	return nil
+}
+func (m *mockFactRepo) Delete(ctx context.Context, factID string) error { return nil }
 func (m *mockFactRepo) GetStats(ctx context.Context) (total, approved, rejected, pending int64, err error) {
 	return 0, 0, 0, 0, nil
 }

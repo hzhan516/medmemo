@@ -3,8 +3,8 @@ package usecase
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestConfidenceScorer_PerfectFact(t *testing.T) {

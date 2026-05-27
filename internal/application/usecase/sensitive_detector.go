@@ -14,14 +14,14 @@ import (
 
 // SensitiveDetector 检测事实三元组中是否包含敏感信息。
 // 敏感信息分为两类：
-//   1. PII（个人身份信息）：身份证号、手机号、银行卡、邮箱
-//   2. 医学敏感信息：疾病名、药品名等
+//  1. PII（个人身份信息）：身份证号、手机号、银行卡、邮箱
+//  2. 医学敏感信息：疾病名、药品名等
 //
 // 检测仅作标记用途，不影响事实的正常存储与检索流程。
 type SensitiveDetector struct {
-	piiPatterns        []*regexp.Regexp
-	medicalKeywords    []string
-	medicalKeywordSet  map[string]struct{}
+	piiPatterns       []*regexp.Regexp
+	medicalKeywords   []string
+	medicalKeywordSet map[string]struct{}
 }
 
 // NewSensitiveDetector 创建敏感信息检测器，预编译所有正则规则。
@@ -32,11 +32,11 @@ func NewSensitiveDetector() *SensitiveDetector {
 
 	// 预编译 PII 正则模式
 	sd.piiPatterns = []*regexp.Regexp{
-		regexp.MustCompile(`\b\d{17}[\dXx]\b`),                                    // 18位身份证号
-		regexp.MustCompile(`\b\d{15}\b`),                                          // 15位身份证号
-		regexp.MustCompile(`\b1[3-9]\d{9}\b`),                                     // 大陆手机号
-		regexp.MustCompile(`\b\d{16,19}\b`),                                      // 银行卡号
-		regexp.MustCompile(`[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`),      // 邮箱
+		regexp.MustCompile(`\b\d{17}[\dXx]\b`),                               // 18位身份证号
+		regexp.MustCompile(`\b\d{15}\b`),                                     // 15位身份证号
+		regexp.MustCompile(`\b1[3-9]\d{9}\b`),                                // 大陆手机号
+		regexp.MustCompile(`\b\d{16,19}\b`),                                  // 银行卡号
+		regexp.MustCompile(`[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`), // 邮箱
 	}
 
 	// 构建医学关键词快速查找集合

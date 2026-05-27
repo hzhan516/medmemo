@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestFamilyRepoKuzu_BasicOperations(t *testing.T) {

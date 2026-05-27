@@ -14,8 +14,8 @@ type DecayScorer struct {
 
 // scoredItem 内部结构，用于批量排序
 type scoredItem struct {
-	index  int
-	score  float64
+	index int
+	score float64
 }
 
 // NewDecayScorer 使用默认衰减系数（lambda=0.05）创建评分器。

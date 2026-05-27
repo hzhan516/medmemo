@@ -3,8 +3,8 @@ package usecase
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestReasoningChainEvaluator_Evaluate_PerfectAnswer(t *testing.T) {

@@ -39,17 +39,17 @@ func NewLoader(configPath string) *Loader {
 
 // rawConfig 表示配置文件中的原始结构。
 type rawConfig struct {
-	DataDir              string `json:"data_dir" yaml:"data_dir"`
-	DefaultModel         string `json:"default_model" yaml:"default_model"`
-	Language             string `json:"language" yaml:"language"`
-	EnableCloud          *bool  `json:"enable_cloud" yaml:"enable_cloud"`
-	EnableAnalytics      *bool  `json:"enable_analytics" yaml:"enable_analytics"`
-	ProviderType         string `json:"provider_type" yaml:"provider_type"`
-	APIEndpoint          string `json:"api_endpoint" yaml:"api_endpoint"`
-	APIKeyFile           string `json:"api_key_file" yaml:"api_key_file"`
-	ModelDir             string `json:"model_dir" yaml:"model_dir"`
-	UpdateCheckEnabled   *bool  `json:"update_check_enabled" yaml:"update_check_enabled"`
-	UpdateChannel        string `json:"update_channel" yaml:"update_channel"`
+	DataDir                   string `json:"data_dir" yaml:"data_dir"`
+	DefaultModel              string `json:"default_model" yaml:"default_model"`
+	Language                  string `json:"language" yaml:"language"`
+	EnableCloud               *bool  `json:"enable_cloud" yaml:"enable_cloud"`
+	EnableAnalytics           *bool  `json:"enable_analytics" yaml:"enable_analytics"`
+	ProviderType              string `json:"provider_type" yaml:"provider_type"`
+	APIEndpoint               string `json:"api_endpoint" yaml:"api_endpoint"`
+	APIKeyFile                string `json:"api_key_file" yaml:"api_key_file"`
+	ModelDir                  string `json:"model_dir" yaml:"model_dir"`
+	UpdateCheckEnabled        *bool  `json:"update_check_enabled" yaml:"update_check_enabled"`
+	UpdateChannel             string `json:"update_channel" yaml:"update_channel"`
 	DesensitizationLevel      string `json:"desensitization_level" yaml:"desensitization_level"`
 	DataRetentionDays         *int   `json:"data_retention_days" yaml:"data_retention_days"`
 	EmbeddingModelDownloadURL string `json:"embedding_model_download_url" yaml:"embedding_model_download_url"`
@@ -97,14 +97,14 @@ func (l *Loader) loadDefaults() *rawConfig {
 		dataDir = ".medmemo/data"
 	}
 	return &rawConfig{
-		DataDir:              dataDir,
-		DefaultModel:         defaultModel,
-		Language:             defaultLanguage,
-		EnableCloud:          new(defaultEnableCloud),
-		EnableAnalytics:      new(defaultEnableAnalytics),
-		ProviderType:         string(defaultProviderType),
-		APIEndpoint:          "",
-		APIKeyFile:           "",
+		DataDir:                   dataDir,
+		DefaultModel:              defaultModel,
+		Language:                  defaultLanguage,
+		EnableCloud:               new(defaultEnableCloud),
+		EnableAnalytics:           new(defaultEnableAnalytics),
+		ProviderType:              string(defaultProviderType),
+		APIEndpoint:               "",
+		APIKeyFile:                "",
 		ModelDir:                  defaultModelDir,
 		UpdateCheckEnabled:        new(true),
 		UpdateChannel:             updateChannel,
@@ -186,10 +186,10 @@ func (l *Loader) applyEnvOverrides(raw *rawConfig) {
 
 func (l *Loader) toDomain(raw *rawConfig) *entity.AppConfig {
 	cfg := &entity.AppConfig{
-		DataDir:              expandTilde(raw.DataDir),
-		DefaultModel:         raw.DefaultModel,
-		Language:             raw.Language,
-		APIEndpoint:          raw.APIEndpoint,
+		DataDir:                   expandTilde(raw.DataDir),
+		DefaultModel:              raw.DefaultModel,
+		Language:                  raw.Language,
+		APIEndpoint:               raw.APIEndpoint,
 		ModelDir:                  expandTilde(raw.ModelDir),
 		UpdateChannel:             entity.UpdateChannel(raw.UpdateChannel),
 		DesensitizationLevel:      entity.DesensitizationLevel(raw.DesensitizationLevel),

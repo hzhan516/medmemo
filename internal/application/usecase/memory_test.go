@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/hzhan516/medmemo/internal/domain/entity"
 	"github.com/hzhan516/medmemo/internal/domain/repository"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // ========== Stub 实现 ==========
@@ -41,11 +41,15 @@ type stubEmbeddingRepository struct {
 	err     error
 }
 
-func (s *stubEmbeddingRepository) Save(ctx context.Context, e *entity.SemanticEmbedding) error { return nil }
+func (s *stubEmbeddingRepository) Save(ctx context.Context, e *entity.SemanticEmbedding) error {
+	return nil
+}
 func (s *stubEmbeddingRepository) GetByFactID(ctx context.Context, factID string) (*entity.SemanticEmbedding, error) {
 	return nil, nil
 }
-func (s *stubEmbeddingRepository) DeleteByFactID(ctx context.Context, factID string) error { return nil }
+func (s *stubEmbeddingRepository) DeleteByFactID(ctx context.Context, factID string) error {
+	return nil
+}
 func (s *stubEmbeddingRepository) SearchSimilar(ctx context.Context, queryVector []float32, topK int) ([]*entity.ScoredEmbedding, error) {
 	if s.err != nil {
 		return nil, s.err

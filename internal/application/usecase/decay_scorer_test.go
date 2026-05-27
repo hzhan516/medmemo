@@ -69,10 +69,10 @@ func TestDecayScorer_Rank(t *testing.T) {
 		similarity float64
 		ageDays    float64
 	}{
-		{"recent_high", 0.9, 1},    // 0.9 * exp(-0.05) ≈ 0.856
-		{"old_perfect", 1.0, 30},   // 1.0 * exp(-1.5) ≈ 0.223
-		{"recent_low", 0.5, 0},     // 0.5 * exp(0) = 0.5
-		{"mid_high", 0.85, 7},      // 0.85 * exp(-0.35) ≈ 0.600
+		{"recent_high", 0.9, 1},  // 0.9 * exp(-0.05) ≈ 0.856
+		{"old_perfect", 1.0, 30}, // 1.0 * exp(-1.5) ≈ 0.223
+		{"recent_low", 0.5, 0},   // 0.5 * exp(0) = 0.5
+		{"mid_high", 0.85, 7},    // 0.85 * exp(-0.35) ≈ 0.600
 	}
 
 	ranked := s.Rank(items[0].similarity, items[0].ageDays,

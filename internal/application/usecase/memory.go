@@ -344,10 +344,7 @@ func (m *MemoryRetriever) mergeMemories(mentionMemories, semanticMemories []*ent
 
 	// 会话间隙触发时，额外召回该会话相关的记忆
 	if sessionGapTriggered && sessionID != "" {
-		// 通过 raw_dialogues 关联获取该会话相关的事实
-		// 当前实现中，source_msg_ids 关联到 raw_dialogues.message_id
-		// 由于跨表查询较复杂，这里简化为：将语义搜索结果中标记为"会话相关"的优先
-		// 实际项目中可通过新增 repository 方法实现更精确的关联
+		_ = sessionID // TODO: 通过 raw_dialogues 关联实现会话间隙记忆召回
 	}
 
 	// 再加入语义搜索的结果

@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestAccuracyTracker_GetAccuracy_ColdStart(t *testing.T) {
