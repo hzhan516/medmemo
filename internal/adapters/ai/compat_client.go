@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -184,11 +185,27 @@ func (c *OpenAICompatibleClient) readSSE(ctx context.Context, resp *http.Respons
 	}
 }
 
+// parseRetryAfter 从响应头解析 Retry-After 值（秒数）。
+func parseRetryAfter(resp *http.Response) time.Duration {
+	ra := resp.Header.Get("Retry-After")
+	if ra == "" {
+		return 0
+	}
+	// 可能是秒数（数字）或 HTTP-date
+	if sec, err := strconv.Atoi(ra); err == nil {
+		return time.Duration(sec) * time.Second
+	}
+	if t, err := http.ParseTime(ra); err == nil {
+		return time.Until(t)
+	}
+	return 0
+}
+
 // doChatWithRetry 执行 HTTP 请求，遇到 429/5xx 时指数退避重试。
-// 最多重试 3 次，退避间隔：500ms、1s、2s（最大 5s）。
-// 重试耗尽后返回最后一次响应，由调用方解析具体错误信息。
+// 最多重试 5 次，退避间隔：2s、4s、8s、16s、32s（最大 60s）。
+// 若响应包含 Retry-After 头则优先使用该值。
 func (c *OpenAICompatibleClient) doChatWithRetry(client *http.Client, req *http.Request) (*http.Response, error) {
-	const maxRetries = 3
+	const maxRetries = 5
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
 			if req.GetBody != nil {
@@ -198,7 +215,8 @@ func (c *OpenAICompatibleClient) doChatWithRetry(client *http.Client, req *http.
 					_, _ = seeker.Seek(0, io.SeekStart)
 				}
 			}
-			delay := min(500*time.Millisecond*(1<<(attempt-1)), 5*time.Second)
+			// 基础退避：指数退避 2^attempt 秒
+			delay := min(2*time.Second*(1<<(attempt-1)), 60*time.Second)
 			select {
 			case <-time.After(delay):
 			case <-req.Context().Done():
@@ -215,13 +233,24 @@ func (c *OpenAICompatibleClient) doChatWithRetry(client *http.Client, req *http.
 		}
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
 			if attempt < maxRetries {
+				// 优先使用服务器的 Retry-After 建议
+				if ra := parseRetryAfter(resp); ra > 0 {
+					fmt.Printf("[compat_client] 429 received, server suggests Retry-After=%v\n", ra)
+					_ = resp.Body.Close()
+					select {
+					case <-time.After(ra):
+					case <-req.Context().Done():
+						return nil, fmt.Errorf("retry cancelled: %w", req.Context().Err())
+					}
+					continue
+				}
 				_ = resp.Body.Close()
 				continue
 			}
 		}
 		return resp, nil
 	}
-	return nil, fmt.Errorf("retry exhausted")
+	return nil, fmt.Errorf("retry exhausted after %d attempts", maxRetries)
 }
 
 // FetchModels 调用 /v1/models 端点拉取可用模型列表。

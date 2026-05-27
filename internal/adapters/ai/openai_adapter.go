@@ -141,9 +141,10 @@ func mapAPIError(statusCode int, apiErr *apiError) error {
 }
 
 // doWithRetry 执行 HTTP 请求，遇到 429 速率限制时指数退避重试。
-// 最多重试 3 次，退避间隔：500ms、1s、2s（最大 5s）。
+// 最多重试 5 次，退避间隔：2s、4s、8s、16s、32s（最大 60s）。
+// 若响应包含 Retry-After 头则优先使用该值。
 func (a *OpenAIAdapter) doWithRetry(req *http.Request) (*http.Response, error) {
-	const maxRetries = 3
+	const maxRetries = 5
 	var lastErr error
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
@@ -155,7 +156,8 @@ func (a *OpenAIAdapter) doWithRetry(req *http.Request) (*http.Response, error) {
 					_, _ = seeker.Seek(0, io.SeekStart) // 对内存 buffer 执行 Seek 不会失败
 				}
 			}
-			delay := min(500*time.Millisecond*(1<<(attempt-1)), 5*time.Second)
+			// 基础退避：指数退避 2^attempt 秒
+			delay := min(2*time.Second*(1<<(attempt-1)), 60*time.Second)
 			select {
 			case <-time.After(delay):
 			case <-req.Context().Done():
@@ -170,13 +172,32 @@ func (a *OpenAIAdapter) doWithRetry(req *http.Request) (*http.Response, error) {
 
 		if resp.StatusCode == http.StatusTooManyRequests {
 			lastErr = fmt.Errorf("attempt %d: rate limited (HTTP 429)", attempt+1)
-			_ = resp.Body.Close() // 429 重试前关闭响应体，关闭错误不影响重试逻辑
-			continue
+			if attempt < maxRetries {
+				// 优先使用服务器的 Retry-After 建议
+				if ra := parseRetryAfter(resp); ra > 0 {
+					fmt.Printf("[openai_adapter] 429 received, server suggests Retry-After=%v\n", ra)
+					_ = resp.Body.Close()
+					select {
+					case <-time.After(ra):
+					case <-req.Context().Done():
+						return nil, fmt.Errorf("retry cancelled: %w", req.Context().Err())
+					}
+					continue
+				}
+				_ = resp.Body.Close() // 429 重试前关闭响应体，关闭错误不影响重试逻辑
+				continue
+			}
+			_ = resp.Body.Close()
+			break
 		}
 		if resp.StatusCode >= 500 {
 			lastErr = fmt.Errorf("attempt %d: server error (HTTP %d)", attempt+1, resp.StatusCode)
-			_ = resp.Body.Close() // 5xx 重试前关闭响应体
-			continue
+			if attempt < maxRetries {
+				_ = resp.Body.Close() // 5xx 重试前关闭响应体
+				continue
+			}
+			_ = resp.Body.Close()
+			break
 		}
 
 		return resp, nil
