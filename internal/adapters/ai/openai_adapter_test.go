@@ -46,6 +46,23 @@ func TestOpenAIAdapter_Chat_Success(t *testing.T) {
 	assert.Equal(t, "你好，有什么可以帮你的？", reply)
 }
 
+func TestOpenAIAdapter_Chat_ProviderBaseWithPath(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/v1beta/openai/chat/completions", r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(chatResponse{
+			Choices: []choice{{Message: message{Role: "assistant", Content: "ok"}}},
+		})
+	}))
+	defer server.Close()
+
+	adapter := NewOpenAIAdapter("test-key", server.URL+"/v1beta/openai", "gemini-2.5-flash", 0, 30*time.Second)
+	reply, err := adapter.Chat(context.Background(), []models.Message{{Role: models.RoleUser, Content: "hi"}})
+	require.NoError(t, err)
+	assert.Equal(t, "ok", reply)
+}
+
 // TestOpenAIAdapter_Chat_Unauthorized 验证 401 认证失败错误映射。
 func TestOpenAIAdapter_Chat_Unauthorized(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

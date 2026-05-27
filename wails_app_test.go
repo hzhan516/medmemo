@@ -2,8 +2,10 @@ package main
 
 import (
 	"testing"
+	"time"
 
 	"github.com/hzhan516/medmemo/internal/application"
+	"github.com/hzhan516/medmemo/pkg/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -70,6 +72,34 @@ func TestCheckEmergency_Empty(t *testing.T) {
 	result, err := app.CheckEmergency("")
 	require.NoError(t, err)
 	assert.Equal(t, "none", result.Level)
+}
+
+func TestStreamTimeout_UsesProviderTimeout(t *testing.T) {
+	store := newMockProviderStore()
+	require.NoError(t, store.Create(t.Context(), &models.ProviderConfig{
+		ID:        "gemini",
+		TimeoutMs: 300000,
+	}))
+	app := &WailsApp{ctx: t.Context(), providerStore: store}
+
+	assert.Equal(t, 5*time.Minute, app.streamTimeout("gemini"))
+}
+
+func TestStreamTimeout_EnforcesMinimum(t *testing.T) {
+	store := newMockProviderStore()
+	require.NoError(t, store.Create(t.Context(), &models.ProviderConfig{
+		ID:        "gemini",
+		TimeoutMs: 30000,
+	}))
+	app := &WailsApp{ctx: t.Context(), providerStore: store}
+
+	assert.Equal(t, 120*time.Second, app.streamTimeout("gemini"))
+}
+
+func TestStreamTimeout_DefaultsWhenProviderMissing(t *testing.T) {
+	app := &WailsApp{ctx: t.Context(), providerStore: newMockProviderStore()}
+
+	assert.Equal(t, 5*time.Minute, app.streamTimeout("missing"))
 }
 
 // TestCheckEmergency_Delegation 验证 wails_app.go 的 CheckEmergency 正确委托到 application 层。

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -55,6 +56,17 @@ func NewOpenAIAdapter(apiKey, baseURL, model string, maxTokens int, timeout time
 			Transport: transport,
 		},
 	}
+}
+
+func openAICompatibleEndpoint(baseURL, resource string) string {
+	base := strings.TrimRight(baseURL, "/")
+	if base == "" {
+		return "/" + strings.TrimLeft(resource, "/")
+	}
+	if parsed, err := url.Parse(base); err == nil && parsed.Path != "" && parsed.Path != "/" {
+		return base + "/" + strings.TrimLeft(resource, "/")
+	}
+	return base + "/v1/" + strings.TrimLeft(resource, "/")
 }
 
 // chatRequest OpenAI Chat Completion 请求体。
@@ -147,10 +159,10 @@ func mapAPIError(statusCode int, apiErr *apiError) error {
 }
 
 // doWithRetry 执行 HTTP 请求，遇到 429 速率限制时指数退避重试。
-// 最多重试 5 次，退避间隔：2s、4s、8s、16s、32s（最大 60s）。
+// 最多重试 3 次，退避间隔：2s、4s、8s（最大 60s）。
 // 若响应包含 Retry-After 头则优先使用该值。
 func (a *OpenAIAdapter) doWithRetry(client *http.Client, req *http.Request) (*http.Response, error) {
-	const maxRetries = 5
+	const maxRetries = 3
 	var lastErr error
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
@@ -164,6 +176,7 @@ func (a *OpenAIAdapter) doWithRetry(client *http.Client, req *http.Request) (*ht
 			}
 			// 基础退避：指数退避 2^attempt 秒
 			delay := min(2*time.Second*(1<<(attempt-1)), 60*time.Second)
+			fmt.Printf("[DIAG][OpenAI] doWithRetry attempt=%d backing off %v\n", attempt, delay)
 			select {
 			case <-time.After(delay):
 			case <-req.Context().Done():
@@ -171,10 +184,21 @@ func (a *OpenAIAdapter) doWithRetry(client *http.Client, req *http.Request) (*ht
 			}
 		}
 
+		fmt.Printf("[DIAG][OpenAI] doWithRetry attempt=%d client.Timeout=%v ctxDeadline=%v\n",
+			attempt, client.Timeout, func() string {
+				if d, ok := req.Context().Deadline(); ok {
+					return fmt.Sprintf("%v remaining", time.Until(d))
+				}
+				return "none"
+			}())
+		attemptStart := time.Now()
 		resp, err := client.Do(req)
+		fmt.Printf("[DIAG][OpenAI] doWithRetry attempt=%d took %v err=%v\n", attempt, time.Since(attemptStart), err)
 		if err != nil {
+			fmt.Printf("[DIAG][OpenAI] doWithRetry attempt=%d error type=%T value=%v\n", attempt, err, err)
 			return nil, fmt.Errorf("failed to send request: %w", err)
 		}
+		fmt.Printf("[DIAG][OpenAI] doWithRetry attempt=%d status=%d\n", attempt, resp.StatusCode)
 
 		if resp.StatusCode == http.StatusTooManyRequests {
 			lastErr = fmt.Errorf("attempt %d: rate limited (HTTP 429)", attempt+1)
@@ -228,7 +252,7 @@ func (a *OpenAIAdapter) Chat(ctx context.Context, messages []models.Message) (st
 		return "", fmt.Errorf("failed to marshal chat request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, a.baseURL+"/v1/chat/completions", bytes.NewReader(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, openAICompatibleEndpoint(a.baseURL, "chat/completions"), bytes.NewReader(jsonBody))
 	if err != nil {
 		return "", fmt.Errorf("failed to create chat request: %w", err)
 	}
@@ -281,7 +305,18 @@ func (a *OpenAIAdapter) StreamChat(ctx context.Context, messages []models.Messag
 		return nil, fmt.Errorf("failed to marshal stream request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, a.baseURL+"/v1/chat/completions", bytes.NewReader(jsonBody))
+	endpoint := openAICompatibleEndpoint(a.baseURL, "chat/completions")
+	fmt.Printf("[DIAG][OpenAI] StreamChat endpoint=%s model=%s\n", endpoint, a.model)
+	if d, ok := ctx.Deadline(); ok {
+		fmt.Printf("[DIAG][OpenAI] StreamChat ctx deadline=%v remaining=%v\n", d, time.Until(d))
+	} else {
+		fmt.Printf("[DIAG][OpenAI] StreamChat ctx has NO deadline\n")
+	}
+	if err := ctx.Err(); err != nil {
+		fmt.Printf("[DIAG][OpenAI] WARNING: ctx already expired: %v\n", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(jsonBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create stream request: %w", err)
 	}
@@ -290,7 +325,10 @@ func (a *OpenAIAdapter) StreamChat(ctx context.Context, messages []models.Messag
 	req.Header.Set("Authorization", "Bearer "+a.apiKey)
 	req.Header.Set("Accept", "text/event-stream")
 
+	fmt.Printf("[DIAG][OpenAI] sending request...\n")
+	reqStart := time.Now()
 	resp, err := a.doWithRetry(a.streamClient, req)
+	fmt.Printf("[DIAG][OpenAI] request round-trip took %v err=%v\n", time.Since(reqStart), err)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send stream request: %w", err)
 	}
@@ -391,7 +429,7 @@ func (a *OpenAIAdapter) CheckAvailability(ctx context.Context) (bool, string) {
 		return false, "API key not configured"
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, a.baseURL+"/v1/models", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, openAICompatibleEndpoint(a.baseURL, "models"), nil)
 	if err != nil {
 		return false, fmt.Sprintf("failed to create availability request: %v", err)
 	}

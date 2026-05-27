@@ -76,8 +76,8 @@ func (c *OpenAICompatibleClient) Chat(ctx context.Context, req ChatRequest, conf
 		return nil, &LLMError{Code: "marshal_failed", Message: fmt.Sprintf("序列化请求失败: %v", err), Retryable: false}
 	}
 
-	url := config.APIHost + "/v1/chat/completions"
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(jsonBody))
+	endpoint := openAICompatibleEndpoint(config.APIHost, "chat/completions")
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(jsonBody))
 	if err != nil {
 		return nil, &LLMError{Code: "request_failed", Message: fmt.Sprintf("构造请求失败: %v", err), Retryable: false}
 	}
@@ -259,8 +259,8 @@ func (c *OpenAICompatibleClient) FetchModels(ctx context.Context, config models.
 		return nil, &LLMError{Code: "missing_api_host", Message: "APIHost 不能为空", Retryable: false}
 	}
 
-	url := config.APIHost + "/v1/models"
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	endpoint := openAICompatibleEndpoint(config.APIHost, "models")
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, &LLMError{Code: "request_failed", Message: fmt.Sprintf("构造请求失败: %v", err), Retryable: false}
 	}

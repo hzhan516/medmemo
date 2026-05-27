@@ -132,7 +132,9 @@ func (c *ChatOrchestrator) prepareMessages(ctx context.Context, req ChatRequest)
 	if !isLocalModel(req.Model) && c.deidPipeline != nil {
 		lastIdx := findLastUserMessage(req.Messages)
 		if lastIdx >= 0 {
+			deidStart := time.Now()
 			r, err := c.deidPipeline.Execute(ctx, req.Messages[lastIdx].Content)
+			fmt.Printf("[DIAG][Chat] deidPipeline.Execute took %v err=%v\n", time.Since(deidStart), err)
 			if err == nil {
 				deidResult = r
 				messages = make([]models.Message, len(req.Messages))
@@ -147,7 +149,9 @@ func (c *ChatOrchestrator) prepareMessages(ctx context.Context, req ChatRequest)
 	if c.memoryRetriever != nil {
 		lastIdx := findLastUserMessage(messages)
 		if lastIdx >= 0 {
+			memStart := time.Now()
 			memories, _ := c.memoryRetriever.RetrieveForContext(ctx, messages[lastIdx].Content, string(req.ConversationID), 3)
+			fmt.Printf("[DIAG][Chat] memoryRetriever.RetrieveForContext took %v memories=%d\n", time.Since(memStart), len(memories))
 			if len(memories) > 0 {
 				messages = injectMemories(messages, memories)
 			}
@@ -224,18 +228,27 @@ func (c *ChatOrchestrator) Execute(ctx context.Context, req ChatRequest) (*ChatR
 // 仅 L1（阻断级）返回 SafeText；L2/L3 保留原文，由外层通过
 // chat:stream:compliance 事件追加标签。流式正常结束时返回 TokenUsage、置信度与最终内容。
 func (c *ChatOrchestrator) StreamExecute(ctx context.Context, req ChatRequest, onChunk func(string)) (*models.TokenUsage, *entity.ConfidenceResult, string, error) {
+	streamExecStart := time.Now()
+
 	// 预处理使用独立 context，避免 ONNX 推理消耗 stream budget
 	prepCtx, prepCancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer prepCancel()
+	prepStart := time.Now()
 	messages, deidResult := c.prepareMessages(prepCtx, req)
+	fmt.Printf("[DIAG][Chat] prepareMessages took %v\n", time.Since(prepStart))
 
 	// provider 查询使用独立 context，确保不受预处理耗时影响
 	resolveCtx, resolveCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer resolveCancel()
+	resolveStart := time.Now()
 	llmClient, err := c.resolveLLMClient(resolveCtx, req.ProviderID)
+	fmt.Printf("[DIAG][Chat] resolveLLMClient took %v err=%v\n", time.Since(resolveStart), err)
 	if err != nil {
 		return nil, nil, "", fmt.Errorf("failed to resolve llm client: %w", err)
 	}
+
+	fmt.Printf("[DIAG][Chat] StreamExecute pre-StreamChat total=%v streamCtxErr=%v\n",
+		time.Since(streamExecStart), ctx.Err())
 
 	// 逐 chunk 透传，保持打字机流式效果
 	var fullReply strings.Builder
