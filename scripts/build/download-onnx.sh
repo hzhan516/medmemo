@@ -5,7 +5,7 @@
 # 用法:
 #   ./scripts/build/download-onnx.sh              # 下载全部平台
 #   ./scripts/build/download-onnx.sh --platform=linux
-#   ONNX_VERSION=1.20.0 ./scripts/build/download-onnx.sh
+#   ONNX_VERSION=1.26.0 ./scripts/build/download-onnx.sh
 #
 # 支持平台: linux, darwin, windows, all (默认)
 
@@ -14,7 +14,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
-ONNX_VERSION="${ONNX_VERSION:-1.21.0}"
+ONNX_VERSION="${ONNX_VERSION:-1.26.0}"
 PLATFORM="${PLATFORM:-all}"
 
 # 解析命令行参数
@@ -23,7 +23,7 @@ for arg in "$@"; do
         --platform=*) PLATFORM="${arg#*=}" ;;
         --help|-h)
             echo "Usage: $0 [--platform=linux|darwin|windows|all]"
-            echo "Env:   ONNX_VERSION (default: 1.21.0)"
+            echo "Env:   ONNX_VERSION (default: 1.26.0)"
             exit 0
             ;;
     esac

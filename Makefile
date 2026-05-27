@@ -4,28 +4,36 @@
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS := -ldflags "-s -w -X main.version=$(VERSION)"
 
+# 平台检测（用于本地构建）
+UNAME_S := $(shell uname -s)
+BUILD_TAGS := ORT
+ifeq ($(UNAME_S),Linux)
+	BUILD_TAGS := webkit2_41,ORT
+endif
+
 # 默认目标
 all: build
 
 # 开发模式（热重载）
 # Fedora 43+ 使用 webkit2gtk-4.1，需传递 -tags webkit2_41
+# ORT tag 启用 ONNX Runtime 后端（Embedding + NER）
 dev:
 	cd web && npm install
-	wails dev -tags webkit2_41
+	wails dev -tags "$(BUILD_TAGS)"
 
 # 生产构建（当前平台）
 # 先手动构建前端，再调用 wails build（Wails v2.12 在 frontend.dir != frontend 时可能跳过前端构建）
 build:
 	cd web && npm install && npm run build
-	wails build -clean -tags webkit2_41 $(LDFLAGS)
+	wails build -clean -tags "$(BUILD_TAGS)" $(LDFLAGS)
 
-# 运行测试
+# 运行测试（含 ORT 后端）
 test:
-	go test -race -coverprofile=coverage.out ./...
+	go test -tags "$(BUILD_TAGS)" -race -coverprofile=coverage.out ./...
 
 # 运行集成测试
 test-integration:
-	go test -race -tags=integration ./...
+	go test -race -tags=integration,ORT ./...
 
 # 运行 E2E 测试
 test-e2e:
@@ -68,7 +76,7 @@ clean:
 # 交叉编译（需对应平台环境）
 build-darwin:
 	cd web && npm install && npm run build
-	wails build -platform darwin/universal -clean $(LDFLAGS)
+	wails build -platform darwin/universal -clean -tags ORT $(LDFLAGS)
 
 build-windows:
 	cd web && npm install && npm run build
@@ -76,7 +84,7 @@ build-windows:
 
 build-linux:
 	cd web && npm install && npm run build
-	wails build -platform linux/amd64 -clean -tags webkit2_41 $(LDFLAGS)
+	wails build -platform linux/amd64 -clean -tags webkit2_41,ORT $(LDFLAGS)
 
 # 本地完整打包（当前平台，含版本注入与平台安装包）
 release-local:

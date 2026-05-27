@@ -167,8 +167,13 @@ jobs:
       - name: Frontend build check
         run: cd web && npm run build
 
+      - name: Download ONNX Runtime and Tokenizers (Linux)
+        run: |
+          ./scripts/build/download-onnx.sh --platform=linux
+          ./scripts/build/download-tokenizers.sh --platform=linux
+
       - name: Build Linux binary
-        run: wails build -platform linux/amd64 -tags webkit2_41
+        run: wails build -platform linux/amd64 -tags webkit2_41,ORT
 
       - name: Check binary size
         run: |
@@ -227,13 +232,25 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install sqlcipher
 
+      - name: Download ONNX Runtime and Tokenizers (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          ./scripts/build/download-onnx.sh --platform=linux
+          ./scripts/build/download-tokenizers.sh --platform=linux
+
+      - name: Download ONNX Runtime and Tokenizers (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          ./scripts/build/download-onnx.sh --platform=darwin
+          ./scripts/build/download-tokenizers.sh --platform=darwin
+
       - name: Build (Linux)
         if: runner.os == 'Linux'
-        run: wails build -clean -tags webkit2_41
+        run: wails build -clean -tags webkit2_41,ORT
 
       - name: Build (macOS)
         if: runner.os == 'macOS'
-        run: wails build -clean
+        run: wails build -clean -tags ORT
 
       - name: Build (Windows)
         if: runner.os == 'Windows'
