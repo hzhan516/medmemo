@@ -195,3 +195,52 @@ func TestDialogueRepo_MarkProcessing(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, results, 0)
 }
+
+
+func TestDialogueRepo_Insert_DuplicateID(t *testing.T) {
+	repo, cleanup := setupDialogueTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	d1 := entity.NewRawDialogue("session_dup", entity.RoleUser, "第一条消息", "kimi-v1")
+	d1.MessageID = "msg_dup_001"
+	err := repo.Insert(ctx, d1)
+	require.NoError(t, err)
+
+	// 使用相同 MessageID 再次插入，应触发 SQLite UNIQUE 约束冲突
+	d2 := entity.NewRawDialogue("session_dup", entity.RoleAssistant, "第二条消息", "kimi-v1")
+	d2.MessageID = "msg_dup_001"
+	err = repo.Insert(ctx, d2)
+	assert.Error(t, err, "重复 ID 插入应返回错误")
+}
+
+func TestDialogueRepo_GetUnprocessed_Empty(t *testing.T) {
+	repo, cleanup := setupDialogueTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// 空数据库中查询未处理消息，应返回空切片且无错误
+	results, err := repo.GetUnprocessed(ctx, 10)
+	require.NoError(t, err)
+	assert.Empty(t, results, "空表查询应返回空切片")
+}
+
+func TestDialogueRepo_MarkProcessing_NotFound(t *testing.T) {
+	repo, cleanup := setupDialogueTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// 对不存在的 message_id 标记为处理中，SQLite 不会报错
+	err := repo.MarkProcessing(ctx, "nonexistent_msg")
+	assert.NoError(t, err, "标记不存在的记录不应 panic 或返回错误")
+}
+
+func TestDialogueRepo_InsertBatch_Empty(t *testing.T) {
+	repo, cleanup := setupDialogueTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// 传入空切片，事务应正常提交且无错误
+	err := repo.InsertBatch(ctx, []*entity.RawDialogue{})
+	assert.NoError(t, err, "空切片批量插入不应报错")
+}

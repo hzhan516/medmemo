@@ -73,7 +73,7 @@ func TestE2E_Compliance_L1Block(t *testing.T) {
 
 	convRepo := repository.NewConversationRepoSQLite(conn)
 	checker := &mockComplianceChecker{interceptor: comp}
-	chatOrch := usecase.NewChatOrchestrator(&mockLLMClientFactory{client: &mockLLMClient{chatReply: "你患有糖尿病，需要治疗。"}}, newMockProviderStore(), &mockMemoryRepository{}, &mockSensitiveDetector{}, checker, nil, &mockMemoryQuerier{})
+	chatOrch := usecase.NewChatOrchestrator(&mockLLMClientFactory{client: &mockLLMClient{chatReply: "你患有糖尿病，需要治疗。"}}, newMockProviderStore(), &mockMemoryRepository{}, &mockSensitiveDetector{}, checker, nil, &mockMemoryQuerier{}, nil)
 
 	ctx := context.Background()
 	conv := entity.NewConversation(models.ProviderKimi)
@@ -146,7 +146,7 @@ func TestE2E_Compliance_PipelineEndToEnd(t *testing.T) {
 
 	// 使用含 L1 触发词的回复
 	mockLLM := &mockLLMClient{chatReply: "你患有高血压病，建议服用药物。"}
-	chatOrch := usecase.NewChatOrchestrator(&mockLLMClientFactory{client: mockLLM}, newMockProviderStore(), &mockMemoryRepository{}, &mockSensitiveDetector{}, checker, nil, &mockMemoryQuerier{})
+	chatOrch := usecase.NewChatOrchestrator(&mockLLMClientFactory{client: mockLLM}, newMockProviderStore(), &mockMemoryRepository{}, &mockSensitiveDetector{}, checker, nil, &mockMemoryQuerier{}, nil)
 
 	ctx := context.Background()
 	conv := entity.NewConversation(models.ProviderKimi)

@@ -55,8 +55,8 @@ try {
     Write-Host "[tokenizers] Downloading Windows tokenizers library..."
     Invoke-WebRequest -Uri $Url -OutFile $TmpArchive -UseBasicParsing
 } catch {
-    Write-Error "[tokenizers] Download failed: $_`n`nPossible reasons:`n1. The CI-built Windows library has not been published yet.`n2. Network issue or GitHub rate limit.`n`nYou can manually build the library from source (requires Rust + MinGW):`n  git clone https://github.com/daulet/tokenizers.git`n  cd tokenizers/crates/tokenizers`n  cargo build --release --target x86_64-pc-windows-gnu`n  # Copy target/x86_64-pc-windows-gnu/release/libtokenizers_ffi.a to resources/lib/windows/libtokenizers.a"
-    exit 1
+    Write-Warning "[tokenizers] Download failed: $_. Windows local tokenizer library not available, continuing build without it.`n`nPossible reasons:`n1. The CI-built Windows library has not been published yet.`n2. Network issue or GitHub rate limit.`n`nYou can manually build the library from source (requires Rust + MinGW):`n  git clone https://github.com/daulet/tokenizers.git`n  cd tokenizers/crates/tokenizers`n  cargo build --release --target x86_64-pc-windows-gnu`n  # Copy target/x86_64-pc-windows-gnu/release/libtokenizers_ffi.a to resources/lib/windows/libtokenizers.a"
+    exit 0
 }
 
 # 解压 (PowerShell 5.1+ 没有原生 tar.gz 支持，需要 tar 命令)

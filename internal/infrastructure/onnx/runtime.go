@@ -108,13 +108,13 @@ type EntitySpan struct {
 
 // Engine ONNX 推理引擎，管理 NER 和 Embedding 两个 Worker Pool。
 type Engine struct {
-	workers   []*NERWorker
-	taskCh    chan nerTask
-	session   *hugot.Session
-	pipeline  *pipelines.TokenClassificationPipeline
-	wg        sync.WaitGroup
-	modelPath string
-	libPath   string
+	workers      []*NERWorker
+	taskCh       chan nerTask
+	session      *hugot.Session
+	pipeline     *pipelines.TokenClassificationPipeline
+	wg           sync.WaitGroup
+	modelPath    string
+	libPath      string
 	nerAvailable bool
 
 	// 嵌入推理相关
@@ -149,8 +149,8 @@ type embeddingResult struct {
 
 // EngineConfig 是 Engine 的构造参数，避免 Wire 无法区分多个 string 参数。
 type EngineConfig struct {
-	ResourceDir      string
-	ModelPath        string // NER 模型路径
+	ResourceDir        string
+	ModelPath          string // NER 模型路径
 	EmbeddingModelPath string // 嵌入模型路径（可选）
 }
 

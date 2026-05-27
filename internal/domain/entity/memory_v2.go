@@ -32,14 +32,14 @@ const (
 
 // RawDialogue 表示 Layer 1 的原始对话消息实体。
 type RawDialogue struct {
-	MessageID         string
-	SessionID         string
-	Role              DialogueRole
-	Content           string
-	ModelName         string
-	Timestamp         time.Time
-	ExtractionStatus  ExtractionStatus
-	CreatedAt         time.Time
+	MessageID        string
+	SessionID        string
+	Role             DialogueRole
+	Content          string
+	ModelName        string
+	Timestamp        time.Time
+	ExtractionStatus ExtractionStatus
+	CreatedAt        time.Time
 }
 
 // NewRawDialogue 创建新的原始对话记录。

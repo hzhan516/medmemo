@@ -24,8 +24,8 @@ type FactLLMClient interface {
 // FactExtractor 基于 LLM 的事实提取服务。
 type FactExtractor struct {
 	llm       FactLLMClient
-	rateLimit int           // 每分钟最大调用次数
-	callTimes []time.Time   // 最近调用时间戳
+	rateLimit int         // 每分钟最大调用次数
+	callTimes []time.Time // 最近调用时间戳
 	mu        sync.Mutex
 }
 
@@ -178,11 +178,11 @@ func buildFactExtractionPrompt(text string) string {
 
 // FactExtractorWorker 异步消费未处理对话并进行事实提取。
 type FactExtractorWorker struct {
-	extractor     *FactExtractor
-	dialogueRepo  repository.RawDialogueRepository
-	factRepo      repository.FactRepository
-	wg            sync.WaitGroup
-	stopCh        chan struct{}
+	extractor    *FactExtractor
+	dialogueRepo repository.RawDialogueRepository
+	factRepo     repository.FactRepository
+	wg           sync.WaitGroup
+	stopCh       chan struct{}
 }
 
 // NewFactExtractorWorker 构造函数。

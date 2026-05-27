@@ -14,6 +14,7 @@ import (
 //   - linux:   libonnxruntime.so
 //   - darwin:  libonnxruntime.dylib
 //   - windows: onnxruntime.dll
+//
 // fallback: 若 .so 不存在则尝试 .so.1（Linux 版本化库常见情况）。
 func PlatformLibPath(resourceDir string) (string, error) {
 	var libName, fallbackName string

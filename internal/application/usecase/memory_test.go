@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/hzhan516/medmemo/internal/domain/entity"
 	"github.com/hzhan516/medmemo/internal/domain/repository"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // ========== Stub 实现 ==========
@@ -41,11 +41,15 @@ type stubEmbeddingRepository struct {
 	err     error
 }
 
-func (s *stubEmbeddingRepository) Save(ctx context.Context, e *entity.SemanticEmbedding) error { return nil }
+func (s *stubEmbeddingRepository) Save(ctx context.Context, e *entity.SemanticEmbedding) error {
+	return nil
+}
 func (s *stubEmbeddingRepository) GetByFactID(ctx context.Context, factID string) (*entity.SemanticEmbedding, error) {
 	return nil, nil
 }
-func (s *stubEmbeddingRepository) DeleteByFactID(ctx context.Context, factID string) error { return nil }
+func (s *stubEmbeddingRepository) DeleteByFactID(ctx context.Context, factID string) error {
+	return nil
+}
 func (s *stubEmbeddingRepository) SearchSimilar(ctx context.Context, queryVector []float32, topK int) ([]*entity.ScoredEmbedding, error) {
 	if s.err != nil {
 		return nil, s.err
@@ -416,4 +420,76 @@ func TestFormatMemoriesForInjection(t *testing.T) {
 func TestFormatMemoriesForInjection_Empty(t *testing.T) {
 	result := FormatMemoriesForInjection(nil)
 	assert.Equal(t, "", result)
+}
+
+func TestMemoryRetriever_retrieveSemantic_error(t *testing.T) {
+	// 当 embeddingRepo.SearchSimilar 返回错误时，semanticSearch 应正确返回错误
+	retriever := &MemoryRetriever{
+		embeddingSvc:  &stubEmbeddingService{vectors: [][]float32{{1, 2, 3}}},
+		embeddingRepo: &stubEmbeddingRepository{err: fmt.Errorf("search failed")},
+		factRepo:      &stubFactRepository{},
+		decayScorer:   NewDecayScorer(),
+	}
+
+	_, err := retriever.semanticSearch(context.Background(), []float32{1, 2, 3}, 3)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "search failed")
+}
+
+func TestMemoryRetriever_mergeMemories_sessionGap(t *testing.T) {
+	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, &stubFactRepository{}, NewDecayScorer())
+
+	mentionMemories := []*entity.HealthMemory{
+		{ID: "m1", Content: "mention 1"},
+		{ID: "m2", Content: "mention 2"},
+	}
+	semanticMemories := []*entity.HealthMemory{
+		{ID: "m2", Content: "semantic 2"}, // 与 mention 重复，应去重
+		{ID: "s3", Content: "semantic 3"}, // 新记忆
+	}
+
+	result := retriever.mergeMemories(mentionMemories, semanticMemories, true, "test-session")
+
+	require.Len(t, result, 3)
+	assert.Equal(t, "mention 1", result[0].Content)
+	assert.Equal(t, "mention 2", result[1].Content)
+	assert.Equal(t, "semantic 3", result[2].Content)
+}
+
+func TestMemoryRetriever_checkSessionGap(t *testing.T) {
+	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, &stubFactRepository{}, NewDecayScorer())
+
+	// 空 sessionID 应返回 false
+	assert.False(t, retriever.checkSessionGap(""))
+
+	// 首次访问应返回 false
+	assert.False(t, retriever.checkSessionGap("sess_1"))
+
+	// 记录访问时间
+	retriever.recordSessionAccess("sess_1")
+
+	// 10 分钟内再次访问应返回 false
+	assert.False(t, retriever.checkSessionGap("sess_1"))
+
+	// 模拟超过 10 分钟前的访问时间
+	retriever.mu.Lock()
+	retriever.sessionAccessTimes["sess_1"] = time.Now().UTC().Add(-11 * time.Minute)
+	retriever.mu.Unlock()
+
+	// 超过 10 分钟应返回 true
+	assert.True(t, retriever.checkSessionGap("sess_1"))
+}
+
+func TestMemoryRetriever_recordSessionAccess(t *testing.T) {
+	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, &stubFactRepository{}, NewDecayScorer())
+
+	sessionID := "sess_test"
+	retriever.recordSessionAccess(sessionID)
+
+	retriever.mu.RLock()
+	accessTime, ok := retriever.sessionAccessTimes[sessionID]
+	retriever.mu.RUnlock()
+
+	require.True(t, ok, "应记录会话访问时间")
+	assert.WithinDuration(t, time.Now().UTC(), accessTime, 2*time.Second)
 }

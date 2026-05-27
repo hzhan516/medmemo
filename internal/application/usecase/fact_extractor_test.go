@@ -2,12 +2,13 @@ package usecase
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/hzhan516/medmemo/internal/domain/entity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/hzhan516/medmemo/internal/domain/entity"
 )
 
 func TestFactExtractor_ParseFacts(t *testing.T) {
@@ -140,17 +141,20 @@ func TestFactExtractor_Extract_RateLimited(t *testing.T) {
 // mockLLMForFactExtraction 用于测试的 mock LLM
 type mockLLMForFactExtraction struct {
 	response string
+	err      error
 }
 
 func (m *mockLLMForFactExtraction) Chat(ctx context.Context, messages []string) (string, error) {
-	return m.response, nil
+	return m.response, m.err
 }
 
 // mockDialogueRepo 用于测试
 type mockDialogueRepo struct{}
 
-func (m *mockDialogueRepo) Insert(ctx context.Context, d *entity.RawDialogue) error         { return nil }
-func (m *mockDialogueRepo) InsertBatch(ctx context.Context, dialogues []*entity.RawDialogue) error { return nil }
+func (m *mockDialogueRepo) Insert(ctx context.Context, d *entity.RawDialogue) error { return nil }
+func (m *mockDialogueRepo) InsertBatch(ctx context.Context, dialogues []*entity.RawDialogue) error {
+	return nil
+}
 func (m *mockDialogueRepo) GetBySession(ctx context.Context, sessionID string, offset, limit int) ([]*entity.RawDialogue, error) {
 	return nil, nil
 }
@@ -160,23 +164,27 @@ func (m *mockDialogueRepo) GetRecent(ctx context.Context, sessionID string, minu
 func (m *mockDialogueRepo) GetUnprocessed(ctx context.Context, limit int) ([]*entity.RawDialogue, error) {
 	return nil, nil
 }
-func (m *mockDialogueRepo) MarkProcessing(ctx context.Context, messageID string) error  { return nil }
-func (m *mockDialogueRepo) MarkProcessed(ctx context.Context, messageID string) error    { return nil }
-func (m *mockDialogueRepo) MarkFailed(ctx context.Context, messageID string) error       { return nil }
+func (m *mockDialogueRepo) MarkProcessing(ctx context.Context, messageID string) error { return nil }
+func (m *mockDialogueRepo) MarkProcessed(ctx context.Context, messageID string) error  { return nil }
+func (m *mockDialogueRepo) MarkFailed(ctx context.Context, messageID string) error     { return nil }
 
 // mockFactRepo 用于测试
 type mockFactRepo struct{}
 
-func (m *mockFactRepo) Save(ctx context.Context, f *entity.ExtractedFact) error                    { return nil }
-func (m *mockFactRepo) GetByID(ctx context.Context, factID string) (*entity.ExtractedFact, error)  { return nil, nil }
+func (m *mockFactRepo) Save(ctx context.Context, f *entity.ExtractedFact) error { return nil }
+func (m *mockFactRepo) GetByID(ctx context.Context, factID string) (*entity.ExtractedFact, error) {
+	return nil, nil
+}
 func (m *mockFactRepo) ListByStatus(ctx context.Context, status entity.FactStatus, offset, limit int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
 func (m *mockFactRepo) ListPending(ctx context.Context, offset, limit int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (m *mockFactRepo) UpdateStatus(ctx context.Context, factID string, status entity.FactStatus) error { return nil }
-func (m *mockFactRepo) Delete(ctx context.Context, factID string) error                             { return nil }
+func (m *mockFactRepo) UpdateStatus(ctx context.Context, factID string, status entity.FactStatus) error {
+	return nil
+}
+func (m *mockFactRepo) Delete(ctx context.Context, factID string) error { return nil }
 func (m *mockFactRepo) GetStats(ctx context.Context) (total, approved, rejected, pending int64, err error) {
 	return 0, 0, 0, 0, nil
 }
@@ -188,4 +196,77 @@ func (m *mockFactRepo) FindBySubject(ctx context.Context, subject string) ([]*en
 }
 func (m *mockFactRepo) FindBySession(ctx context.Context, sessionID string) ([]*entity.ExtractedFact, error) {
 	return nil, nil
+}
+
+func TestFactExtractor_ParseFacts_rateLimitExceeded(t *testing.T) {
+	// 直接构造 FactExtractor，设置较低的速率限制以便快速触发限流
+	extractor := &FactExtractor{
+		llm:       &mockLLMForFactExtraction{response: `[]`},
+		rateLimit: 2,
+		callTimes: []time.Time{},
+	}
+
+	// 前两次调用应在速率限制内
+	_, err := extractor.ParseFacts("第一次")
+	require.NoError(t, err)
+	_, err = extractor.ParseFacts("第二次")
+	require.NoError(t, err)
+
+	// 第三次调用超出限制，应返回包含 rate limit 的错误
+	_, err = extractor.ParseFacts("第三次")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "rate limit")
+}
+
+func TestFactExtractor_ParseFacts_llmError(t *testing.T) {
+	// 模拟 LLM 返回错误，验证 ParseFacts 是否正确包装并向上返回
+	extractor := NewFactExtractor(&mockLLMForFactExtraction{
+		err: fmt.Errorf("llm failed"),
+	})
+
+	_, err := extractor.ParseFacts("用户说头疼")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "llm chat failed")
+}
+
+func TestFactExtractor_Extract_llmError(t *testing.T) {
+	// 模拟 LLM 返回错误，验证 Extract 是否正确包装并向上返回
+	extractor := NewFactExtractor(&mockLLMForFactExtraction{
+		err: fmt.Errorf("llm failed"),
+	})
+
+	dialogues := []*entity.RawDialogue{
+		entity.NewRawDialogue("sess_1", entity.RoleUser, "我头很痛", "kimi"),
+	}
+
+	_, err := extractor.Extract(context.Background(), dialogues)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "llm extraction failed")
+}
+
+func TestFactExtractor_checkRateLimit(t *testing.T) {
+	extractor := &FactExtractor{
+		rateLimit: 2,
+		callTimes: []time.Time{},
+	}
+
+	// 首次调用应成功
+	err := extractor.checkRateLimit()
+	require.NoError(t, err, "首次调用应在速率限制内")
+
+	// 第二次调用应成功（当前仅 1 条记录，小于限制 2）
+	err = extractor.checkRateLimit()
+	require.NoError(t, err, "第二次调用仍应在速率限制内")
+
+	// 第三次调用应失败（已达限制 2）
+	err = extractor.checkRateLimit()
+	require.ErrorIs(t, err, ErrRateLimited, "第三次调用应触发速率限制")
+
+	// 将历史调用时间设置为超过 1 分钟前，模拟时间窗口过期
+	oldTime := time.Now().Add(-2 * time.Minute)
+	extractor.callTimes = []time.Time{oldTime}
+
+	// 过期时间窗口被清除后，调用应再次成功
+	err = extractor.checkRateLimit()
+	require.NoError(t, err, "过期时间窗口清除后应恢复可用")
 }

@@ -254,3 +254,42 @@ func TestFactRepo_FindBySession_WithData(t *testing.T) {
 	require.Len(t, facts, 1)
 	assert.Equal(t, "fact_fs_a", facts[0].FactID)
 }
+
+
+func TestFactRepo_Save_DuplicateID(t *testing.T) {
+	repo, cleanup := setupFactTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	f1 := entity.NewExtractedFact("用户", "患有", "偏头痛", 0.85, []string{"msg_001"})
+	f1.FactID = "fact_dup_001"
+	err := repo.Save(ctx, f1)
+	require.NoError(t, err)
+
+	// 使用相同 FactID 再次插入，应触发 SQLite UNIQUE 约束冲突
+	f2 := entity.NewExtractedFact("用户", "服用", "阿司匹林", 0.9, []string{"msg_002"})
+	f2.FactID = "fact_dup_001"
+	err = repo.Save(ctx, f2)
+	assert.Error(t, err, "重复 ID 插入应返回错误")
+}
+
+func TestFactRepo_UpdateStatus_NotFound(t *testing.T) {
+	repo, cleanup := setupFactTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// 对不存在的 fact_id 更新状态，SQLite 不会报错（RowsAffected 为 0）
+	err := repo.UpdateStatus(ctx, "nonexistent_fact", entity.FactStatusApproved)
+	assert.NoError(t, err, "更新不存在的记录不应 panic 或返回错误")
+}
+
+func TestFactRepo_ListByStatus_Empty(t *testing.T) {
+	repo, cleanup := setupFactTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// 数据库为空时查询指定状态，应返回空切片且无错误
+	results, err := repo.ListByStatus(ctx, entity.FactStatusApproved, 0, 10)
+	require.NoError(t, err)
+	assert.Empty(t, results, "空表查询应返回空切片")
+}
