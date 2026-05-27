@@ -164,6 +164,9 @@ func (a *WailsApp) Startup(ctx context.Context) {
 	// ONNX 预热：启动后异步执行一次 dummy 推理，将 warmup 成本从首次对话转移到启动阶段
 	go a.warmupONNX()
 
+	// 补全历史事实的 embedding 缺失（TASK-060 修复）
+	go a.backfillEmbeddings()
+
 	// 初始化 Device Flow 事件回调
 	if a.deviceFlowSvc != nil {
 		a.deviceFlowSvc.SetRefreshService(a.tokenRefreshSvc)
@@ -615,9 +618,61 @@ func (a *WailsApp) extractFactsAsync(userContent, aiReply, providerID string) {
 	for _, f := range facts {
 		if err := a.factRepo.Save(ctx, f); err != nil {
 			fmt.Printf("[extractFactsAsync] 保存事实失败 %s: %v\n", f.FactID, err)
+			continue
+		}
+		// 生成并保存 embedding，语义搜索依赖此数据
+		if a.embeddingSvc != nil && a.embeddingRepo != nil {
+			embedText := fmt.Sprintf("%s %s %s", f.Subject, f.Predicate, f.Object)
+			vector, embedErr := a.embeddingSvc.EmbedSingle(ctx, embedText)
+			if embedErr == nil {
+				emb := entity.NewSemanticEmbedding(f.FactID, vector, "all-MiniLM-L6-v2")
+				if saveErr := a.embeddingRepo.Save(ctx, emb); saveErr != nil {
+					fmt.Printf("[extractFactsAsync] 保存 embedding 失败 %s: %v\n", f.FactID, saveErr)
+				}
+			} else {
+				fmt.Printf("[extractFactsAsync] 生成 embedding 失败 %s: %v\n", f.FactID, embedErr)
+			}
 		}
 	}
 	fmt.Printf("[extractFactsAsync] 提取并保存 %d 条事实\n", len(facts))
+}
+
+// backfillEmbeddings 补全已有事实中缺失的 embedding。
+// 在应用启动时异步执行一次，修复历史事实的 embedding 缺失问题。
+func (a *WailsApp) backfillEmbeddings() {
+	if a.factRepo == nil || a.embeddingSvc == nil || a.embeddingRepo == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(a.ctx, 5*time.Minute)
+	defer cancel()
+
+	facts, err := a.factRepo.ListByStatus(ctx, entity.FactStatusApproved, 0, 10000)
+	if err != nil {
+		fmt.Printf("[backfillEmbeddings] 读取事实列表失败: %v\n", err)
+		return
+	}
+
+	var backfilled int
+	for _, f := range facts {
+		if _, err := a.embeddingRepo.GetByFactID(ctx, f.FactID); err == nil {
+			continue // 已存在 embedding，跳过
+		}
+		embedText := fmt.Sprintf("%s %s %s", f.Subject, f.Predicate, f.Object)
+		vector, embedErr := a.embeddingSvc.EmbedSingle(ctx, embedText)
+		if embedErr != nil {
+			fmt.Printf("[backfillEmbeddings] 生成 embedding 失败 %s: %v\n", f.FactID, embedErr)
+			continue
+		}
+		emb := entity.NewSemanticEmbedding(f.FactID, vector, "all-MiniLM-L6-v2")
+		if saveErr := a.embeddingRepo.Save(ctx, emb); saveErr != nil {
+			fmt.Printf("[backfillEmbeddings] 保存 embedding 失败 %s: %v\n", f.FactID, saveErr)
+			continue
+		}
+		backfilled++
+	}
+	if backfilled > 0 {
+		fmt.Printf("[backfillEmbeddings] 补全 %d 条事实的 embedding\n", backfilled)
+	}
 }
 
 // StopGeneration 中断所有正在进行的流式生成。
