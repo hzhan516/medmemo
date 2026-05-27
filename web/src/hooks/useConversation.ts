@@ -194,7 +194,7 @@ export function useConversation() {
           }
           addConversation(newConv)
           selectConversation(convId)
-        } catch (e) {
+        } catch {
           setError('创建会话失败')
           return
         }
@@ -366,7 +366,7 @@ export function useConversation() {
       setError(null)
       // 新建会话时清除紧急症状状态
       setEmergencyAlert(null)
-    } catch (e) {
+    } catch {
       setError('创建新会话失败')
     }
   }, [wails, addConversation, selectConversation, setMessages, setEmergencyAlert])
