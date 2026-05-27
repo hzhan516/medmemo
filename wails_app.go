@@ -298,7 +298,14 @@ func (a *WailsApp) SendMessage(req SendMessageRequest) (*SendMessageResponse, er
 	if resp.ConfidenceResult != nil {
 		confJSON = confidenceResultToMap(resp.ConfidenceResult)
 	}
-	// 保存用户消息和 AI 回复（非流式路径同样需要归档）
+	// 保存用户消息（非流式路径）
+	if len(req.Messages) > 0 {
+		lastUser := req.Messages[len(req.Messages)-1]
+		if lastUser.Role == models.RoleUser {
+			a.saveUserMessage(ctx, req.ConversationID, lastUser)
+		}
+	}
+	// 保存 AI 回复
 	a.saveMessages(ctx, req.ConversationID, req.Messages, resp.Reply, nil, resp.ConfidenceResult, req.ProviderID)
 
 	return &SendMessageResponse{
@@ -510,29 +517,12 @@ func (a *WailsApp) saveUserMessage(ctx context.Context, convID string, message m
 	}
 }
 
-// saveMessages 将对话消息持久化到数据库，可选携带 token 用量与置信度。
+// saveMessages 保存 AI 回复消息到数据库，可选携带 token 用量与置信度。
+// 用户消息应由调用方通过 saveUserMessage 单独保存，避免重复。
 // providerID 用于异步事实提取时创建对应的 LLM client。
 func (a *WailsApp) saveMessages(ctx context.Context, convID string, messages []models.Message, aiReply string, usage *models.TokenUsage, confidence *entity.ConfidenceResult, providerID string) {
 	if a.msgRepo == nil || convID == "" {
 		return
-	}
-	// 保存最后一条用户消息
-	if len(messages) > 0 {
-		lastUser := messages[len(messages)-1]
-		if lastUser.Role == models.RoleUser {
-			if err := a.msgRepo.Save(ctx, models.ConversationID(convID), &entity.Message{
-				ID:        fmt.Sprintf("msg_%d", time.Now().UnixNano()),
-				Role:      lastUser.Role,
-				Content:   lastUser.Content,
-				Timestamp: time.Now(),
-			}); err != nil {
-				fmt.Printf("[saveMessages] 保存用户消息失败: %v\n", err)
-			}
-			// 同步归档到 raw_dialogues
-			if a.dialogueRepo != nil {
-				_ = a.dialogueRepo.Insert(ctx, entity.NewRawDialogue(convID, entity.RoleUser, lastUser.Content, ""))
-			}
-		}
 	}
 	// 保存 AI 回复
 	if aiReply != "" {
@@ -554,6 +544,8 @@ func (a *WailsApp) saveMessages(ctx context.Context, convID string, messages []m
 					msg.ConfidenceJSON = string(jsonBytes)
 				}
 			}
+			fmt.Printf("[DIAG][Confidence][saveMessages] OverallScore=%.2f Level=%s Breakdown=%v JSON=%s\n",
+				confidence.OverallScore, confidence.Level, confidence.Breakdown, msg.ConfidenceJSON)
 		}
 		if err := a.msgRepo.Save(ctx, models.ConversationID(convID), msg); err != nil {
 			fmt.Printf("[saveMessages] 保存 AI 回复失败: %v\n", err)
@@ -741,13 +733,22 @@ func (a *WailsApp) GetConversationMessages(convID string) ([]MessageResponse, er
 			var cr entity.ConfidenceResult
 			if err := json.Unmarshal([]byte(m.ConfidenceJSON), &cr); err == nil {
 				mr.Confidence = confidenceResultToMap(&cr)
+				// 防御性修复：若 JSON 解析后 overall_score 为 0 但 ConfidenceScore > 0，用 ConfidenceScore 覆盖
+				if cr.OverallScore == 0 && m.ConfidenceScore > 0 {
+					fmt.Printf("[DIAG][Confidence][GetConversationMessages] OverallScore=0 but ConfidenceScore=%.2f, using ConfidenceScore as fallback. JSON=%s\n",
+						m.ConfidenceScore, m.ConfidenceJSON)
+					mr.Confidence["overall_score"] = m.ConfidenceScore
+				}
 			} else {
 				// 降级：直接作为 map 透传
 				var conf map[string]interface{}
 				if err := json.Unmarshal([]byte(m.ConfidenceJSON), &conf); err == nil {
 					mr.Confidence = conf
+					fmt.Printf("[DIAG][Confidence][GetConversationMessages] fallback map parse. JSON=%s\n", m.ConfidenceJSON)
 				}
 			}
+			fmt.Printf("[DIAG][Confidence][GetConversationMessages] msgID=%s overall_score=%v breakdown=%v\n",
+				m.ID, mr.Confidence["overall_score"], mr.Confidence["breakdown"])
 		}
 		result[len(msgs)-1-i] = mr
 	}

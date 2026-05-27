@@ -384,20 +384,38 @@ export function useConversation() {
           completionTokens: msg.completion_tokens,
           totalTokens: msg.total_tokens,
           confidence: msg.confidence
-            ? ({
-                overallScore: (msg.confidence as Record<string, unknown>).overall_score as number,
-                level: normalizeConfidenceLevel((msg.confidence as Record<string, unknown>).level),
-                breakdown: {
-                  knowledge_source: ((msg.confidence as Record<string, unknown>).breakdown as Record<string, number>)?.knowledge_source ?? 0,
-                  reasoning: ((msg.confidence as Record<string, unknown>).breakdown as Record<string, number>)?.reasoning ?? 0,
-                  context: ((msg.confidence as Record<string, unknown>).breakdown as Record<string, number>)?.context ?? 0,
-                  history: ((msg.confidence as Record<string, unknown>).breakdown as Record<string, number>)?.history ?? 0,
-                  uncertainty: ((msg.confidence as Record<string, unknown>).breakdown as Record<string, number>)?.uncertainty ?? 0,
-                },
-                explanation: (msg.confidence as Record<string, unknown>).explanation as string,
-                suggestion: (msg.confidence as Record<string, unknown>).suggestion as string,
-                missingInfo: ((msg.confidence as Record<string, unknown>).missing_info as string[]) ?? [],
-              } as ConfidenceResult)
+            ? (() => {
+                const raw = msg.confidence as Record<string, unknown>
+                const bd = (raw.breakdown as Record<string, number>) || {}
+                let overallScore = (raw.overall_score as number) ?? 0
+                // 防御性修复：若 overallScore 为 0 但 breakdown 有非零值，使用加权平均值回退
+                if (overallScore === 0) {
+                  const hasNonZeroBreakdown = Object.values(bd).some((v) => (v ?? 0) > 0)
+                  if (hasNonZeroBreakdown) {
+                    overallScore =
+                      (bd.knowledge_source ?? 0) * 0.30 +
+                      (bd.reasoning ?? 0) * 0.25 +
+                      (bd.context ?? 0) * 0.20 +
+                      (bd.history ?? 0) * 0.15 +
+                      (bd.uncertainty ?? 0) * 0.10
+                    console.warn('[DIAG][Confidence] overallScore was 0, recalculated from breakdown:', overallScore, bd)
+                  }
+                }
+                return {
+                  overallScore,
+                  level: normalizeConfidenceLevel(raw.level),
+                  breakdown: {
+                    knowledge_source: bd.knowledge_source ?? 0,
+                    reasoning: bd.reasoning ?? 0,
+                    context: bd.context ?? 0,
+                    history: bd.history ?? 0,
+                    uncertainty: bd.uncertainty ?? 0,
+                  },
+                  explanation: (raw.explanation as string) ?? '',
+                  suggestion: (raw.suggestion as string) ?? '',
+                  missingInfo: (raw.missing_info as string[]) ?? [],
+                } as ConfidenceResult
+              })()
             : undefined,
         }))
         setMessages(mappedMessages)

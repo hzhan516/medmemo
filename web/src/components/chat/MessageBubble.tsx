@@ -114,14 +114,6 @@ export function MessageBubble({ message, onRetry, onReportCompliance }: MessageB
             {isStreaming && (
               <span className="inline-block w-1.5 h-4 ml-0.5 bg-current opacity-50 animate-pulse" />
             )}
-            {/* 用户消息 token 统计 */}
-            {message.totalTokens !== undefined && (
-              <div className="flex items-center justify-end mt-2 pt-2 border-t border-white/20">
-                <span className="text-xs text-white/70">
-                  {message.totalTokens} tokens
-                </span>
-              </div>
-            )}
           </div>
         ) : (
           <div className="break-words">
