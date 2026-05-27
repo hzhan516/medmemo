@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/hzhan516/medmemo/internal/application"
 	"github.com/hzhan516/medmemo/internal/application/port"
@@ -415,4 +416,73 @@ func TestIsLocalModel(t *testing.T) {
 	assert.False(t, isLocalModel(models.ProviderOpenAI))
 	assert.False(t, isLocalModel(models.ProviderQwen))
 	assert.False(t, isLocalModel(models.ProviderSiliconFlow))
+}
+
+// mockProviderStoreCtxErr 是一个在 context 已取消时返回 context 错误的 ProviderStore Mock。
+type mockProviderStoreCtxErr struct{}
+
+func (m *mockProviderStoreCtxErr) Create(ctx context.Context, provider *models.ProviderConfig) error { return nil }
+func (m *mockProviderStoreCtxErr) Update(ctx context.Context, provider *models.ProviderConfig) error { return nil }
+func (m *mockProviderStoreCtxErr) Delete(ctx context.Context, id string) error                       { return nil }
+func (m *mockProviderStoreCtxErr) Get(ctx context.Context, id string) (*models.ProviderConfig, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return &models.ProviderConfig{ID: id, APIHost: "https://api.example.com", ModelID: "test-model"}, nil
+}
+func (m *mockProviderStoreCtxErr) List(ctx context.Context) ([]*models.ProviderConfig, error) {
+	return []*models.ProviderConfig{}, nil
+}
+
+var _ port.ProviderStore = (*mockProviderStoreCtxErr)(nil)
+
+// TestChatOrchestrator_calculateConfidence_nilAggregator 验证 confidenceAggregator 为 nil 时返回零值结果。
+func TestChatOrchestrator_calculateConfidence_nilAggregator(t *testing.T) {
+	mock := &mockLLMClient{}
+	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
+	factory := &mockLLMClientFactory{client: mock}
+	store := &mockProviderStore{}
+	// 显式将 confidenceAggregator 传为 nil
+	orch := NewChatOrchestrator(factory, store, nil, nil, comp, nil, nil, nil)
+
+	result := orch.calculateConfidence("测试回复", nil)
+
+	require.NotNil(t, result)
+	assert.Equal(t, 0.0, result.OverallScore)
+	assert.Equal(t, entity.ConfidenceLevelE, result.Level)
+	assert.Equal(t, "置信度引擎未初始化", result.Explanation)
+	assert.Equal(t, entity.ConfidenceLevelE.Suggestion(), result.Suggestion)
+	assert.Empty(t, result.MissingInfo)
+}
+
+// TestChatOrchestrator_resolveLLMClient_cancelledContext 验证传入已取消的 context 时返回错误。
+func TestChatOrchestrator_resolveLLMClient_cancelledContext(t *testing.T) {
+	mock := &mockLLMClient{}
+	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
+	factory := &mockLLMClientFactory{client: mock}
+	store := &mockProviderStoreCtxErr{}
+	orch := NewChatOrchestrator(factory, store, nil, nil, comp, nil, nil, NewConfidenceAggregator())
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // 立即取消
+
+	_, err := orch.resolveLLMClient(ctx, "test-provider")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to get provider")
+}
+
+// TestChatOrchestrator_resolveLLMClient_contextDeadline 验证传入带 deadline 的 context 时正常返回。
+func TestChatOrchestrator_resolveLLMClient_contextDeadline(t *testing.T) {
+	mock := &mockLLMClient{}
+	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
+	factory := &mockLLMClientFactory{client: mock}
+	store := &mockProviderStore{}
+	orch := NewChatOrchestrator(factory, store, nil, nil, comp, nil, nil, NewConfidenceAggregator())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	client, err := orch.resolveLLMClient(ctx, "test-provider")
+	require.NoError(t, err)
+	assert.NotNil(t, client)
 }
