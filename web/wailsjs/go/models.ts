@@ -222,6 +222,24 @@ export namespace main {
 	        this.version = source["version"];
 	    }
 	}
+	export class EmbeddingStatusResponse {
+	    available: boolean;
+	    model_path: string;
+	    model_name: string;
+	    download_url: string;
+
+	    static createFrom(source: any = {}) {
+	        return new EmbeddingStatusResponse(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.available = source["available"];
+	        this.model_path = source["model_path"];
+	        this.model_name = source["model_name"];
+	        this.download_url = source["download_url"];
+	    }
+	}
 	export class EmergencyResult {
 	    level: string;
 	    message: string;
@@ -263,6 +281,10 @@ export namespace main {
 	    role: string;
 	    content: string;
 	    timestamp: string;
+	    prompt_tokens: number;
+	    completion_tokens: number;
+	    total_tokens: number;
+	    confidence?: any;
 
 	    static createFrom(source: any = {}) {
 	        return new MessageResponse(source);
@@ -274,6 +296,10 @@ export namespace main {
 	        this.role = source["role"];
 	        this.content = source["content"];
 	        this.timestamp = source["timestamp"];
+	        this.prompt_tokens = source["prompt_tokens"];
+	        this.completion_tokens = source["completion_tokens"];
+	        this.total_tokens = source["total_tokens"];
+	        this.confidence = source["confidence_result"];
 	    }
 	}
 	export class ModelInfo {
@@ -372,7 +398,7 @@ export namespace main {
 	}
 	export class SendMessageResponse {
 	    reply: string;
-	    confidence: number;
+	    confidence_result?: any;
 	    warnings: string[];
 	
 	    static createFrom(source: any = {}) {
@@ -382,7 +408,7 @@ export namespace main {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.reply = source["reply"];
-	        this.confidence = source["confidence"];
+	        this.confidence_result = source["confidence_result"];
 	        this.warnings = source["warnings"];
 	    }
 	}
@@ -445,7 +471,7 @@ export namespace main {
 	    subject: string;
 	    predicate: string;
 	    object: string;
-	    confidence: number;
+	    confidence?: any;
 	    status: string;
 	    created_at: number;
 
@@ -459,7 +485,7 @@ export namespace main {
 	        this.subject = source["subject"];
 	        this.predicate = source["predicate"];
 	        this.object = source["object"];
-	        this.confidence = source["confidence"];
+	        this.confidence = source["confidence_result"];
 	        this.status = source["status"];
 	        this.created_at = source["created_at"];
 	    }
@@ -538,6 +564,7 @@ export namespace models {
 	    temperature: number;
 	    timeoutMs: number;
 	    maxRetries: number;
+    maxTokens: number;
 	    group: string;
 	    enabled: boolean;
 	    sortOrder: number;
@@ -560,6 +587,7 @@ export namespace models {
 	        this.temperature = source["temperature"];
 	        this.timeoutMs = source["timeoutMs"];
 	        this.maxRetries = source["maxRetries"];
+        this.maxTokens = source["maxTokens"];
 	        this.group = source["group"];
 	        this.enabled = source["enabled"];
 	        this.sortOrder = source["sortOrder"];

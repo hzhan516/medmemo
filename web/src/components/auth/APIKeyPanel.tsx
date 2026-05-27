@@ -147,6 +147,7 @@ export function APIKeyPanel({ status, onProviderCreated }: APIKeyPanelProps) {
         temperature: 0.7,
         timeoutMs: 30000,
         maxRetries: 3,
+        maxTokens: 4096,
         group: '云端',
         enabled: true,
         sortOrder: 0,

@@ -70,7 +70,8 @@ func InitializeApp() (*App, func(), error) {
 	factRepoSQLite := repository.NewFactRepoSQLite(sqlCipherConnector)
 	decayScorer := usecase.NewDecayScorer()
 	memoryRetriever := usecase.NewMemoryRetriever(embeddingServiceAdapter, embeddingRepoSQLite, factRepoSQLite, decayScorer)
-	chatOrchestrator := usecase.NewChatOrchestrator(llmClientFactory, providerRepoSQLite, memoryRepoSQLite, ruleDetector, ruleComplianceChecker, deidentifyPipeline, memoryRetriever)
+	confidenceAggregator := usecase.NewConfidenceAggregator()
+	chatOrchestrator := usecase.NewChatOrchestrator(llmClientFactory, providerRepoSQLite, memoryRepoSQLite, ruleDetector, ruleComplianceChecker, deidentifyPipeline, memoryRetriever, confidenceAggregator)
 	conversationRepoSQLite := repository.NewConversationRepoSQLite(sqlCipherConnector)
 	messageRepoSQLite := repository.NewMessageRepoSQLite(sqlCipherConnector)
 	disclaimerRepoSQLite := repository.NewDisclaimerRepoSQLite(sqlCipherConnector)
@@ -84,7 +85,8 @@ func InitializeApp() (*App, func(), error) {
 	tokenRefreshService := auth.NewTokenRefreshServiceBare(providerRepoSQLite)
 	oAuthDeviceFlowService := auth.NewOAuthDeviceFlowServiceBare(providerRepoSQLite)
 	auditLogRepoSQLite := repository.NewAuditLogRepoSQLite(sqlCipherConnector)
-	wailsApp := NewWailsApp(chatOrchestrator, memoryRetriever, appConfig, conversationRepoSQLite, messageRepoSQLite, disclaimerRepoSQLite, providerRepoSQLite, healthEngine, titleGenerator, service, keyringStore, tokenRefreshService, oAuthDeviceFlowService, factRepoSQLite, auditLogRepoSQLite)
+	dialogueRepoSQLite := repository.NewDialogueRepoSQLite(sqlCipherConnector)
+	wailsApp := NewWailsApp(chatOrchestrator, memoryRetriever, appConfig, conversationRepoSQLite, messageRepoSQLite, disclaimerRepoSQLite, providerRepoSQLite, healthEngine, titleGenerator, service, keyringStore, tokenRefreshService, oAuthDeviceFlowService, factRepoSQLite, auditLogRepoSQLite, dialogueRepoSQLite, embeddingServiceAdapter, embeddingRepoSQLite)
 	app, cleanup, err := NewApp(wailsApp, sqlCipherConnector, deidentifyPipeline, healthEngine)
 	if err != nil {
 		return nil, nil, err

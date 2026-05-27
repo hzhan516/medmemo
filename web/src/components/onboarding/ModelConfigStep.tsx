@@ -55,6 +55,7 @@ export function ModelConfigStep({ onComplete, onBack, onSkip }: ModelConfigStepP
       temperature: number
       timeoutMs: number
       maxRetries: number
+      maxTokens: number
       group: string
       enabled: boolean
       authMethod: string
@@ -73,6 +74,7 @@ export function ModelConfigStep({ onComplete, onBack, onSkip }: ModelConfigStepP
         temperature: data.temperature,
         timeoutMs: data.timeoutMs,
         maxRetries: data.maxRetries,
+        maxTokens: data.maxTokens,
         group: data.group,
         enabled: data.enabled,
         authMethod: data.authMethod as ProviderConfig['authMethod'],

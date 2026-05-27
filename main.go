@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -111,11 +112,60 @@ type App struct {
 }
 
 // NewEngineConfig 从 AppConfig 构造 ONNX Engine 配置，供 Wire 注入使用。
+// 在返回前确保 embedding 模型已复制到用户数据目录，保证 onnx.NewEngine 能正确加载。
 func NewEngineConfig(cfg *entity.AppConfig) onnx.EngineConfig {
+	userPath := filepath.Join(cfg.DataDir, "models", "all-MiniLM-L6-v2")
+	prepareEmbeddingModels(userPath)
+
 	return onnx.EngineConfig{
-		ResourceDir: "resources",
-		ModelPath:   cfg.ModelDir,
+		ResourceDir:        "resources",
+		ModelPath:          cfg.ModelDir,
+		EmbeddingModelPath: userPath,
 	}
+}
+
+// prepareEmbeddingModels 首次启动时将打包的模型文件复制到用户数据目录。
+// 若用户目录已有模型，或找不到打包模型，则静默跳过。
+func prepareEmbeddingModels(userDir string) {
+	if _, err := os.Stat(filepath.Join(userDir, "model.onnx")); err == nil {
+		return
+	}
+
+	bundledDir := findBundledModelDir()
+	if bundledDir == "" {
+		return
+	}
+
+	_ = os.MkdirAll(userDir, 0755)
+	for _, name := range []string{"model.onnx", "tokenizer.json"} {
+		src := filepath.Join(bundledDir, name)
+		dst := filepath.Join(userDir, name)
+		if _, err := os.Stat(src); err != nil {
+			continue
+		}
+		data, err := os.ReadFile(src)
+		if err != nil {
+			continue
+		}
+		_ = os.WriteFile(dst, data, 0644)
+	}
+}
+
+// findBundledModelDir 查找应用包内打包的模型目录。
+func findBundledModelDir() string {
+	// 1. 相对于可执行文件（生产环境）
+	if exe, err := os.Executable(); err == nil {
+		dir := filepath.Join(filepath.Dir(exe), "resources", "models", "all-MiniLM-L6-v2")
+		if _, err := os.Stat(filepath.Join(dir, "model.onnx")); err == nil {
+			return dir
+		}
+	}
+	// 2. 相对于工作目录（开发模式 go run）
+	dir := filepath.Join("resources", "models", "all-MiniLM-L6-v2")
+	if _, err := os.Stat(filepath.Join(dir, "model.onnx")); err == nil {
+		return dir
+	}
+	return ""
 }
 
 // NewDefaultLoader 创建使用默认搜索路径的配置加载器。

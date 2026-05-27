@@ -33,7 +33,7 @@ func NewONNXNERDetector(engine *onnx.Engine) *ONNXNERDetector {
 // Predict 执行 NER 推理并返回标准化实体列表。
 // 引擎不可用或推理出错时降级返回空列表，不阻断调用方流水线。
 func (d *ONNXNERDetector) Predict(ctx context.Context, text string) ([]models.SensitiveEntity, error) {
-	if d.engine == nil || !d.engine.IsAvailable() {
+	if d.engine == nil || !d.engine.IsNERAvailable() {
 		return nil, nil
 	}
 
@@ -64,9 +64,9 @@ func (d *ONNXNERDetector) Predict(ctx context.Context, text string) ([]models.Se
 	return entities, nil
 }
 
-// IsAvailable 返回底层 ONNX 引擎是否已就绪。
+// IsAvailable 返回底层 ONNX NER 引擎是否已就绪。
 func (d *ONNXNERDetector) IsAvailable() bool {
-	return d.engine != nil && d.engine.IsAvailable()
+	return d.engine != nil && d.engine.IsNERAvailable()
 }
 
 // mapNERLabel 将 hugot BIO 标签归一化为中文实体类型。

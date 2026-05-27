@@ -1,8 +1,15 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
-import { type ConfidenceResult, type ConfidenceBarMode, levelConfig, levelSuggestion } from './types'
+import { type ConfidenceResult, type ConfidenceBarMode, type ConfidenceLevel, levelConfig, levelSuggestion } from './types'
 import { ConfidencePanel } from './ConfidencePanel'
 import { ConfidenceFollowup } from './ConfidenceFollowup'
+
+// 合法等级集合，用于防御非法 level 值
+const validLevels: Set<ConfidenceLevel> = new Set(['A', 'B', 'C', 'D', 'E'])
+
+function safeLevel(level: ConfidenceLevel | undefined | ''): ConfidenceLevel {
+  return level && validLevels.has(level) ? level : 'E'
+}
 
 interface ConfidenceBarProps {
   result: ConfidenceResult
@@ -29,13 +36,14 @@ export function ConfidenceBar({
   onFollowupClick,
 }: ConfidenceBarProps) {
   const [panelOpen, setPanelOpen] = useState(false)
-  const config = levelConfig[result.level]
+  const level = safeLevel(result.level)
+  const config = levelConfig[level]
 
   if (mode === 'hidden') {
     return null
   }
 
-  const isLowConfidence = result.level === 'C' || result.level === 'D' || result.level === 'E'
+  const isLowConfidence = level === 'C' || level === 'D' || level === 'E'
 
   const handleBarClick = () => {
     setPanelOpen((prev) => !prev)
@@ -66,7 +74,7 @@ export function ConfidenceBar({
 
           {mode === 'expanded' ? (
             <span className="text-xs text-gray-600 dark:text-gray-400 truncate">
-              ── 置信度: {config.icon} {config.label}({result.overallScore}%) · {result.explanation} · {levelSuggestion[result.level]} ──
+              ── 置信度: {config.icon} {config.label}({result.overallScore}%) · {result.explanation} · {levelSuggestion[level]} ──
             </span>
           ) : (
             <span className="text-xs text-gray-600 dark:text-gray-400">
@@ -83,11 +91,11 @@ export function ConfidenceBar({
       {/* 展开面板 */}
       <div
         className={`overflow-hidden transition-all duration-200 ease-in-out ${
-          panelOpen ? 'max-h-[600px] opacity-100 mt-1' : 'max-h-0 opacity-0'
+          panelOpen ? 'max-h-[400px] opacity-100 mt-1' : 'max-h-0 opacity-0'
         }`}
       >
         <ConfidencePanel
-          result={result}
+          result={{ ...result, level }}
           onSwitchMode={handleSwitchMode}
           currentMode={mode}
         />

@@ -58,8 +58,15 @@ func NewSQLiteConnector(dataDir string) (*SQLiteConnector, error) {
 		return nil, fmt.Errorf("failed to open sqlite database: %w", err)
 	}
 
-	db.SetMaxOpenConns(10)
-	db.SetMaxIdleConns(5)
+	// 连接池配置：桌面端并发场景需要更大池子
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(10)
+
+	// 设置 busy_timeout：锁冲突时自动重试最多 5 秒
+	if _, err := db.Exec("PRAGMA busy_timeout = 5000"); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("failed to set busy timeout: %w", err)
+	}
 
 	// 启用外键约束
 	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {

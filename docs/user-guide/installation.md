@@ -10,9 +10,11 @@
 
 | Platform | Minimum Version | Architecture | Disk Space |
 |----------|----------------|--------------|------------|
-| Windows | Windows 10 | x64, ARM64 | 200 MB |
+| Windows | Windows 10 | x64, ARM64 | 250 MB |
 | macOS | macOS 12 (Monterey) | Intel, Apple Silicon | 200 MB |
 | Linux | Ubuntu 20.04+ / Fedora 38+ | x64, ARM64 | 200 MB |
+
+> **Note for Windows users:** On first launch, MedMemo may automatically download ~55 MB of local AI runtime libraries (ONNX Runtime + Tokenizers) if they are not bundled with the installer. This requires an internet connection during the first run.
 
 **Additional requirements:**
 - Internet connection (for downloading AI models and cloud API access)
@@ -47,7 +49,16 @@ Download the latest release from [GitHub Releases](https://github.com/hzhan516/m
 - From the Start Menu: **MedMemo**
 - From the desktop shortcut (if selected during install)
 
-### Step 3: Complete Onboarding
+### Step 3: Local AI Model Setup (First Launch)
+
+On first launch, MedMemo checks for local AI runtime libraries required for semantic memory retrieval and sensitive information detection:
+
+- **If libraries are bundled** — Setup continues automatically.
+- **If libraries need to be downloaded** — A brief download (~55 MB) will start automatically. This usually takes 10–30 seconds depending on your connection.
+
+> 💡 The downloaded libraries are saved to `%LOCALAPPDATA%\medmemo\lib\` and reused on subsequent launches. No re-download is needed unless you update MedMemo.
+
+### Step 4: Complete Onboarding
 
 The first launch will show the onboarding wizard. See [First-Time Setup](./README.md#first-time-setup-3-steps).
 
@@ -56,7 +67,7 @@ The first launch will show the onboarding wizard. See [First-Time Setup](./READM
 1. Open **Settings → Apps → Installed apps**
 2. Find **MedMemo**
 3. Click **Uninstall**
-4. Optional: Delete user data folder at `%LOCALAPPDATA%\medmemo`
+4. Optional: Delete user data folder at `%LOCALAPPDATA%\medmemo` (this also removes downloaded AI libraries)
 
 ---
 
@@ -154,7 +165,34 @@ After installing, verify everything works:
 - [ ] You can type a message in the input box
 - [ ] Settings page opens (gear icon in header)
 
-If any step fails, see [Troubleshooting](./troubleshooting.md).
+### Windows-Specific Issues
+
+#### "Failed to initialize local AI models" or download error
+
+If the automatic library download fails on first launch:
+
+1. **Check your internet connection** — The download requires a stable connection.
+2. **Check Windows Defender / antivirus** — They may block the download. Temporarily disable or add MedMemo to the allowlist.
+3. **Manual download** (advanced users):
+   ```powershell
+   # Run PowerShell as Administrator in the MedMemo installation directory
+   .\scripts\build\download-onnx.ps1 -Platform windows
+   .\scripts\build\download-tokenizers.ps1
+   ```
+4. **Firewall / corporate proxy** — If behind a restrictive proxy, set the proxy environment variable before launching:
+   ```powershell
+   $env:HTTP_PROXY = "http://proxy.company.com:8080"
+   ```
+
+#### Embedding features unavailable on Windows
+
+If you see "semantic search unavailable" or "embedding engine not available":
+
+- This means the ONNX Runtime or Tokenizers library failed to load.
+- MedMemo will automatically fall back to keyword-based memory retrieval, which works without embedding.
+- Core chat functionality is **not affected**.
+
+If any other step fails, see [Troubleshooting](./troubleshooting.md).
 
 ---
 

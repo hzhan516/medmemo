@@ -26,9 +26,20 @@ func NewMessageRepoSQLite(connector database.DBConnector) *MessageRepoSQLite {
 // Save 保存单条消息。
 func (r *MessageRepoSQLite) Save(ctx context.Context, convID models.ConversationID, msg *entity.Message) error {
 	_, err := r.db.ExecContext(ctx, `
-		INSERT INTO messages (id, conversation_id, role, content, tokens, created_at)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, msg.ID, convID, msg.Role, msg.Content, 0, msg.Timestamp.UnixMilli())
+		INSERT INTO messages (
+			id, conversation_id, role, content, tokens,
+			prompt_tokens, completion_tokens,
+			confidence_score, confidence_level, confidence_json,
+			created_at
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`,
+		msg.ID, convID, msg.Role, msg.Content,
+		msg.PromptTokens+msg.CompletionTokens, // tokens 保持兼容
+		msg.PromptTokens, msg.CompletionTokens,
+		msg.ConfidenceScore, msg.ConfidenceLevel, msg.ConfidenceJSON,
+		msg.Timestamp.UnixMilli(),
+	)
 	if err != nil {
 		return fmt.Errorf("failed to save message: %w", err)
 	}
@@ -41,7 +52,10 @@ func (r *MessageRepoSQLite) ListByConversation(ctx context.Context, convID model
 	args = append(args, convID)
 
 	query := `
-		SELECT id, role, content, created_at
+		SELECT
+			id, role, content, created_at,
+			prompt_tokens, completion_tokens,
+			confidence_score, confidence_level, confidence_json
 		FROM messages
 		WHERE conversation_id = ? AND deleted_at IS NULL
 	`
@@ -68,10 +82,26 @@ func (r *MessageRepoSQLite) ListByConversation(ctx context.Context, convID model
 	for rows.Next() {
 		var msg entity.Message
 		var createdAt int64
-		if err := rows.Scan(&msg.ID, &msg.Role, &msg.Content, &createdAt); err != nil {
+		var confidenceScore sql.NullFloat64
+		var confidenceLevel sql.NullString
+		var confidenceJSON sql.NullString
+		if err := rows.Scan(
+			&msg.ID, &msg.Role, &msg.Content, &createdAt,
+			&msg.PromptTokens, &msg.CompletionTokens,
+			&confidenceScore, &confidenceLevel, &confidenceJSON,
+		); err != nil {
 			return nil, "", fmt.Errorf("failed to scan message: %w", err)
 		}
 		msg.Timestamp = time.UnixMilli(createdAt)
+		if confidenceScore.Valid {
+			msg.ConfidenceScore = confidenceScore.Float64
+		}
+		if confidenceLevel.Valid {
+			msg.ConfidenceLevel = confidenceLevel.String
+		}
+		if confidenceJSON.Valid {
+			msg.ConfidenceJSON = confidenceJSON.String
+		}
 		result = append(result, &msg)
 	}
 	if err := rows.Err(); err != nil {

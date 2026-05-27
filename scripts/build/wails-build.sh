@@ -9,17 +9,29 @@ VERSION="${2:-dev}"
 case "$OS" in
   linux)
     echo "[TASK-027] Building for Linux..."
-    wails build -ldflags "-s -w -X main.version=${VERSION}" -tags webkit2_41
+    export CGO_LDFLAGS="-L$(pwd)/resources/lib/linux"
+    wails build -ldflags "-s -w -X main.version=${VERSION}" -tags "webkit2_41,ORT"
     echo "[TASK-027] Building AppImage..."
     ./build/package/build-appimage.sh
     ;;
   windows)
     echo "[TASK-027] Building for Windows..."
-    wails build -ldflags "-s -w -X main.version=${VERSION}" -nsis
+    # 下载 ONNX Runtime 与 Tokenizers Windows 库
+    if command -v pwsh &>/dev/null; then
+      pwsh -ExecutionPolicy Bypass -File scripts/build/download-onnx.ps1 -Platform windows
+      pwsh -ExecutionPolicy Bypass -File scripts/build/download-tokenizers.ps1
+    elif command -v powershell &>/dev/null; then
+      powershell -ExecutionPolicy Bypass -File scripts/build/download-onnx.ps1 -Platform windows
+      powershell -ExecutionPolicy Bypass -File scripts/build/download-tokenizers.ps1
+    else
+      echo "[TASK-027] Warning: PowerShell not found. Skipping library download."
+      echo "[TASK-027] Please manually download libraries to resources/lib/windows/"
+    fi
+    wails build -ldflags "-s -w -X main.version=${VERSION}" -tags "ORT" -nsis
     ;;
   darwin)
     echo "[TASK-027] Building for macOS..."
-    wails build -ldflags "-s -w -X main.version=${VERSION}" -platform darwin/universal
+    wails build -ldflags "-s -w -X main.version=${VERSION}" -tags "ORT" -platform darwin/universal
     echo "[TASK-027] Building dmg..."
     ./build/package/build-dmg.sh
     # GoReleaser prebuilt 期望 build/bin/MedMemo，而 Wails macOS 产物为 .app bundle

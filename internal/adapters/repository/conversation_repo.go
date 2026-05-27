@@ -105,6 +105,40 @@ func (r *ConversationRepoSQLite) ListRecent(ctx context.Context, limit int) ([]*
 	return result, nil
 }
 
+// ListDeleted 查询已软删除的会话列表（回收站）。
+func (r *ConversationRepoSQLite) ListDeleted(ctx context.Context, limit int) ([]*entity.Conversation, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id, title, model, created_at, updated_at, deleted_at
+		FROM conversations
+		WHERE deleted_at IS NOT NULL
+		ORDER BY deleted_at DESC
+		LIMIT ?
+	`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list deleted conversations: %w", err)
+	}
+	defer rows.Close()
+
+	var result []*entity.Conversation
+	for rows.Next() {
+		var conv entity.Conversation
+		var createdAt, updatedAt, deletedAt int64
+		if err := rows.Scan(&conv.ID, &conv.Title, &conv.Model, &createdAt, &updatedAt, &deletedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan deleted conversation: %w", err)
+		}
+		conv.CreatedAt = time.UnixMilli(createdAt)
+		conv.UpdatedAt = time.UnixMilli(updatedAt)
+		dt := time.UnixMilli(deletedAt)
+		conv.DeletedAt = &dt
+		conv.Messages = make([]entity.Message, 0)
+		result = append(result, &conv)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate deleted conversations: %w", err)
+	}
+	return result, nil
+}
+
 // Delete 软删除会话。使用显式事务确保写操作在单连接上完成并提交，
 // 避免多连接连接池下的读不一致问题。
 func (r *ConversationRepoSQLite) Delete(ctx context.Context, id models.ConversationID) error {
@@ -130,11 +164,12 @@ func (r *ConversationRepoSQLite) Delete(ctx context.Context, id models.Conversat
 	return nil
 }
 
-// ArchiveOlderThan 将 cutoff 时间之前更新的所有未删除会话归档。
+// ArchiveOlderThan 将 cutoff 时间之前更新的所有未删除会话移入回收站（软删除）。
+// 与用户手动删除共用 deleted_at 语义，确保 cleanup 流程统一。
 func (r *ConversationRepoSQLite) ArchiveOlderThan(ctx context.Context, cutoff time.Time) error {
 	_, err := r.db.ExecContext(ctx, `
-		UPDATE conversations SET archived_at = ?
-		WHERE updated_at < ? AND deleted_at IS NULL AND archived_at IS NULL
+		UPDATE conversations SET deleted_at = ?
+		WHERE updated_at < ? AND deleted_at IS NULL
 	`, time.Now().UnixMilli(), cutoff.UnixMilli())
 	if err != nil {
 		return fmt.Errorf("failed to archive conversations older than %v: %w", cutoff, err)

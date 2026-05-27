@@ -127,7 +127,7 @@ var _ MemoryQuerier = (*mockMemoryQuerier)(nil)
 func newTestOrchestrator(mock *mockLLMClient, comp *RuleComplianceChecker, deid Deidentifier, retriever MemoryQuerier) *ChatOrchestrator {
 	factory := &mockLLMClientFactory{client: mock}
 	store := &mockProviderStore{}
-	return NewChatOrchestrator(factory, store, nil, nil, comp, deid, retriever)
+	return NewChatOrchestrator(factory, store, nil, nil, comp, deid, retriever, NewConfidenceAggregator())
 }
 
 // TestChatOrchestrator_Execute_Success 验证非流式对话正常返回。
@@ -305,7 +305,7 @@ func TestChatOrchestrator_StreamExecute_Success(t *testing.T) {
 	}
 
 	var collected []string
-	_, finalContent, err := orch.StreamExecute(context.Background(), req, func(chunk string) {
+	_, _, finalContent, err := orch.StreamExecute(context.Background(), req, func(chunk string) {
 		collected = append(collected, chunk)
 	})
 	require.NoError(t, err)
@@ -326,7 +326,7 @@ func TestChatOrchestrator_StreamExecute_Error(t *testing.T) {
 		ProviderID: "test-provider",
 	}
 
-	_, _, err := orch.StreamExecute(context.Background(), req, func(chunk string) {})
+	_, _, _, err := orch.StreamExecute(context.Background(), req, func(chunk string) {})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "stream execution failed")
 }
@@ -351,7 +351,7 @@ func TestChatOrchestrator_StreamExecute_WithDeidentify(t *testing.T) {
 	}
 
 	var full string
-	_, finalContent, err := orch.StreamExecute(context.Background(), req, func(chunk string) {
+	_, _, finalContent, err := orch.StreamExecute(context.Background(), req, func(chunk string) {
 		full += chunk
 	})
 	require.NoError(t, err)

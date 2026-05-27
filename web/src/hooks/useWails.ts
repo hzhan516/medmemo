@@ -47,6 +47,14 @@ export function useWails() {
     return await WailsApp.GetConversations()
   }, [])
 
+  const getDeletedConversations = useCallback(async (): Promise<ConversationSummary[]> => {
+    return await WailsApp.GetDeletedConversations()
+  }, [])
+
+  const setDataRetentionDays = useCallback(async (days: number): Promise<void> => {
+    return await WailsApp.SetDataRetentionDays(days)
+  }, [])
+
   const getConversationMessages = useCallback(async (convID: string): Promise<MessageResponse[]> => {
     return await WailsApp.GetConversationMessages(convID)
   }, [])
@@ -212,11 +220,25 @@ export function useWails() {
     return await WailsApp.SetSessionMemoryInjection(sessionID, enabled)
   }, [])
 
+  const getEmbeddingStatus = useCallback(async (): Promise<main.EmbeddingStatusResponse> => {
+    return await WailsApp.GetEmbeddingStatus()
+  }, [])
+
+  const getEmbeddingModelDirPath = useCallback(async (): Promise<string> => {
+    return await WailsApp.GetEmbeddingModelDirPath()
+  }, [])
+
+  const openEmbeddingModelDir = useCallback(async (): Promise<void> => {
+    return await WailsApp.OpenEmbeddingModelDir()
+  }, [])
+
   return {
     sendMessage,
     sendMessageStream,
     stopGeneration,
     getConversations,
+    getDeletedConversations,
+    setDataRetentionDays,
     getConversationMessages,
     createConversation,
     getModels,
@@ -258,5 +280,8 @@ export function useWails() {
     getMemoriesBySession,
     setMemoryInjectionEnabled,
     setSessionMemoryInjection,
+    getEmbeddingStatus,
+    getEmbeddingModelDirPath,
+    openEmbeddingModelDir,
   }
 }

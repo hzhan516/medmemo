@@ -119,7 +119,23 @@ const defaultGetConversations = async (): Promise<ConversationSummary[]> => {
   return [...mockConversations]
 }
 
-const defaultGetConversationMessages = async (convID: string): Promise<Array<{ id: string; role: string; content: string; timestamp: string }>> => {
+const defaultGetDeletedConversations = async (): Promise<ConversationSummary[]> => {
+  return []
+}
+
+const defaultSetDataRetentionDays = async (_days: number): Promise<void> => {}
+
+const defaultGetEmbeddingStatus = async (): Promise<Record<string, unknown>> => {
+  return { available: false, model_path: '', model_name: '', download_url: '' }
+}
+
+const defaultGetEmbeddingModelDirPath = async (): Promise<string> => {
+  return '/tmp/medmemo/models/all-MiniLM-L6-v2'
+}
+
+const defaultOpenEmbeddingModelDir = async (): Promise<void> => {}
+
+const defaultGetConversationMessages = async (convID: string): Promise<Array<{ id: string; role: string; content: string; timestamp: string; prompt_tokens?: number; completion_tokens?: number; total_tokens?: number; confidence?: Record<string, unknown> }>> => {
   return (mockMessages[convID] ?? []).map((msg, idx) => ({
     id: `msg_${convID}_${idx}`,
     role: msg.role,
@@ -401,6 +417,8 @@ export const MockWailsApp = {
   SendMessageStream: (req: SendMessageRequest) => resolveHandler('SendMessageStream', defaultSendMessageStream)(req),
   StopGeneration: () => resolveHandler('StopGeneration', defaultStopGeneration)(),
   GetConversations: () => resolveHandler('GetConversations', defaultGetConversations)(),
+  GetDeletedConversations: () => resolveHandler('GetDeletedConversations', defaultGetDeletedConversations)(),
+  SetDataRetentionDays: (days: number) => resolveHandler('SetDataRetentionDays', defaultSetDataRetentionDays)(days),
   GetConversationMessages: (convID: string) => resolveHandler('GetConversationMessages', defaultGetConversationMessages)(convID),
   CreateConversation: () => resolveHandler('CreateConversation', defaultCreateConversation)(),
   GetModels: () => resolveHandler('GetModels', defaultGetModels)(),
@@ -447,6 +465,9 @@ export const MockWailsApp = {
   DisableAutoRefresh: (id: string) => resolveHandler('DisableAutoRefresh', defaultDisableAutoRefresh)(id),
   EnableAutoRefresh: (id: string) => resolveHandler('EnableAutoRefresh', defaultEnableAutoRefresh)(id),
   GetVersionNotes: () => resolveHandler('GetVersionNotes', defaultGetVersionNotes)(),
+  GetEmbeddingStatus: () => resolveHandler('GetEmbeddingStatus', defaultGetEmbeddingStatus)(),
+  GetEmbeddingModelDirPath: () => resolveHandler('GetEmbeddingModelDirPath', defaultGetEmbeddingModelDirPath)(),
+  OpenEmbeddingModelDir: () => resolveHandler('OpenEmbeddingModelDir', defaultOpenEmbeddingModelDir)(),
 }
 
 // --- 辅助工具函数 ---

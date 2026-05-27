@@ -47,6 +47,7 @@ export function ProviderAddDialog({ template, open, onClose, onSave }: ProviderA
       temperature,
       timeoutMs: 30000,
       maxRetries: 3,
+        maxTokens: 4096,
       group: isLocal ? '本地' : '云端',
       enabled: true,
       sortOrder: 0,

@@ -54,7 +54,14 @@ export function GetConversationMessages(arg1:string):Promise<Array<main.MessageR
 
 export function GetConversations():Promise<Array<main.ConversationSummary>>;
 
+export function GetDeletedConversations():Promise<Array<main.ConversationSummary>>;
+
+export function SetDataRetentionDays(arg1:number):Promise<void>;
+
 export function GetDisclaimerStatus():Promise<main.DisclaimerStatus>;
+export function GetEmbeddingStatus():Promise<main.EmbeddingStatusResponse>;
+export function GetEmbeddingModelDirPath():Promise<string>;
+export function OpenEmbeddingModelDir():Promise<void>;
 
 export function GetModels():Promise<Array<main.ModelInfo>>;
 

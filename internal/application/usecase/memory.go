@@ -128,10 +128,15 @@ func (m *MemoryRetriever) RetrieveForContext(ctx context.Context, query, session
 	m.recordSessionAccess(sessionID)
 
 	// 4. 生成查询向量（语义搜索）
+	// 使用独立超时，避免 ONNX 推理耗时影响整体对话流程
 	var semanticMemories []*entity.HealthMemory
-	queryVector, err := m.embeddingSvc.EmbedSingle(ctx, query)
+	embedCtx, embedCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	queryVector, err := m.embeddingSvc.EmbedSingle(embedCtx, query)
+	embedCancel()
 	if err == nil {
 		semanticMemories, _ = m.semanticSearch(ctx, queryVector, limit)
+	} else {
+		fmt.Printf("[MemoryRetriever] embedding 生成失败，语义搜索降级: %v\n", err)
 	}
 
 	// 5. 合并结果并去重
@@ -141,29 +146,44 @@ func (m *MemoryRetriever) RetrieveForContext(ctx context.Context, query, session
 	return m.applyTokenBudget(merged, limit), nil
 }
 
-// detectEntityMentions 检测 query 中是否包含已记忆实体的 subject。
+// detectEntityMentions 检测 query 中是否包含已记忆实体的关键词。
+// 原逻辑只匹配 subject，现扩展为匹配完整事实内容（subject + predicate + object）中的关键词。
 // 命中时返回相关记忆，未命中时返回 nil 和 false。
 func (m *MemoryRetriever) detectEntityMentions(ctx context.Context, query string) ([]*entity.HealthMemory, bool) {
-	subjects, err := m.factRepo.ListAllSubjects(ctx)
-	if err != nil || len(subjects) == 0 {
+	facts, err := m.factRepo.ListByStatus(ctx, entity.FactStatusApproved, 0, 1000)
+	if err != nil || len(facts) == 0 {
 		return nil, false
 	}
 
 	queryLower := strings.ToLower(query)
 	var matched []*entity.HealthMemory
-	for _, subject := range subjects {
-		if subject == "" {
-			continue
-		}
-		if strings.Contains(queryLower, strings.ToLower(subject)) {
-			facts, err := m.factRepo.FindBySubject(ctx, subject)
-			if err != nil {
-				continue
-			}
-			for _, f := range facts {
+	seen := make(map[string]bool)
+
+	for _, f := range facts {
+		content := fmt.Sprintf("%s %s %s", f.Subject, f.Predicate, f.Object)
+		contentLower := strings.ToLower(content)
+
+		// 原逻辑：query 包含 subject
+		if f.Subject != "" && strings.Contains(queryLower, strings.ToLower(f.Subject)) {
+			if !seen[f.FactID] {
+				seen[f.FactID] = true
 				matched = append(matched, &entity.HealthMemory{
 					ID:         models.MemoryID(f.FactID),
-					Content:    fmt.Sprintf("%s %s %s", f.Subject, f.Predicate, f.Object),
+					Content:    content,
+					Confidence: f.Confidence,
+					CreatedAt:  f.CreatedAt,
+				})
+			}
+			continue
+		}
+
+		// 新增：query 中包含事实内容里的非停用词
+		if m.hasKeywordMatch(queryLower, contentLower) {
+			if !seen[f.FactID] {
+				seen[f.FactID] = true
+				matched = append(matched, &entity.HealthMemory{
+					ID:         models.MemoryID(f.FactID),
+					Content:    content,
 					Confidence: f.Confidence,
 					CreatedAt:  f.CreatedAt,
 				})
@@ -171,6 +191,61 @@ func (m *MemoryRetriever) detectEntityMentions(ctx context.Context, query string
 		}
 	}
 	return matched, len(matched) > 0
+}
+
+// 常见中文停用词，用于关键词匹配时过滤。
+var stopWords = map[string]bool{
+	"的": true, "了": true, "是": true, "在": true, "我": true, "你": true,
+	"吗": true, "知道": true, "现在": true, "有": true, "什么": true,
+	"呢": true, "啊": true, "吧": true, "就": true, "都": true,
+	"很": true, "还": true, "也": true, "要": true, "会": true,
+	"能": true, "可以": true, "和": true, "或": true, "与": true,
+	"对": true, "为": true, "从": true, "到": true, "把": true,
+	"被": true, "给": true, "让": true, "向": true, "比": true,
+	"跟": true, "同": true, "及": true, "而": true, "但": true,
+	"不过": true, "虽然": true, "如果": true, "因为": true, "所以": true,
+	"怎样": true, "怎么": true, "如何": true, "多少": true, "几": true,
+}
+
+// hasKeywordMatch 检查 query 中是否包含事实内容里的任何非停用词。
+func (m *MemoryRetriever) hasKeywordMatch(queryLower, contentLower string) bool {
+	// 提取事实内容中的候选词（2-8 个字符的连续词组）
+	runes := []rune(contentLower)
+	for i := 0; i < len(runes); i++ {
+		for length := 2; length <= 8 && i+length <= len(runes); length++ {
+			word := string(runes[i : i+length])
+			if stopWords[word] {
+				continue
+			}
+			// 过滤纯数字、纯英文短词
+			if isMeaninglessWord(word) {
+				continue
+			}
+			if strings.Contains(queryLower, word) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// isMeaninglessWord 过滤无意义的短词（纯数字或纯单字母）。
+func isMeaninglessWord(word string) bool {
+	if len(word) <= 1 {
+		return true
+	}
+	// 纯数字
+	allDigit := true
+	for _, r := range word {
+		if r < '0' || r > '9' {
+			allDigit = false
+			break
+		}
+	}
+	if allDigit && len(word) <= 3 {
+		return true
+	}
+	return false
 }
 
 // checkSessionGap 检测会话消息间隔是否超过 10 分钟。
