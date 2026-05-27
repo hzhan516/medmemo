@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/google/wire"
 	"github.com/hzhan516/medmemo/internal/application"
@@ -21,14 +23,18 @@ type Deidentifier interface {
 
 // ChatOrchestrator 对话流程编排器。
 type ChatOrchestrator struct {
-	llmFactory          port.LLMClientFactory
-	providerStore       port.ProviderStore
-	memoryRepo          port.MemoryRepository
-	detector            port.SensitiveDetector
-	compliance          ComplianceChecker
-	deidPipeline        Deidentifier
-	memoryRetriever     MemoryQuerier
+	llmFactory           port.LLMClientFactory
+	providerStore        port.ProviderStore
+	memoryRepo           port.MemoryRepository
+	detector             port.SensitiveDetector
+	compliance           ComplianceChecker
+	deidPipeline         Deidentifier
+	memoryRetriever      MemoryQuerier
 	confidenceAggregator *ConfidenceAggregator
+	// 全局事实提取限流器，跨调用共享速率限制
+	factExtractMu       sync.Mutex
+	factExtractLastCall time.Time
+	factExtractMinGap   time.Duration // 最小调用间隔
 }
 
 // NewChatOrchestrator 构造函数，供 Wire 注入。
@@ -51,6 +57,7 @@ func NewChatOrchestrator(
 		deidPipeline:         deid,
 		memoryRetriever:      retriever,
 		confidenceAggregator: confAgg,
+		factExtractMinGap:    15 * time.Second, // 最小 15 秒间隔，避免与主对话竞争
 	}
 }
 
@@ -349,10 +356,29 @@ func (a *llmClientAdapter) Chat(ctx context.Context, messages []string) (string,
 
 // ExtractFactsFromReply 从完整对话轮次（用户消息 + AI 回复）中提取结构化事实三元组。
 // 使用当前会话的 Provider 创建 LLM client，异步调用时不阻塞主流程。
+// 全局限流：确保事实提取与主对话、其他事实提取之间有足够间隔，避免触发 429。
 func (c *ChatOrchestrator) ExtractFactsFromReply(ctx context.Context, userContent, aiReply, providerID string) ([]*entity.ExtractedFact, error) {
 	if providerID == "" {
 		return nil, nil
 	}
+
+	// 全局限流：确保事实提取与主对话、其他事实提取之间有足够间隔
+	c.factExtractMu.Lock()
+	elapsed := time.Since(c.factExtractLastCall)
+	if elapsed < c.factExtractMinGap {
+		wait := c.factExtractMinGap - elapsed
+		c.factExtractMu.Unlock()
+		fmt.Printf("[ExtractFacts] rate limited, waiting %v\n", wait)
+		select {
+		case <-time.After(wait):
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+		c.factExtractMu.Lock()
+	}
+	c.factExtractLastCall = time.Now()
+	c.factExtractMu.Unlock()
+
 	// 拼接完整对话内容作为提取源；用户消息和 AI 回复都可能包含事实
 	combined := userContent
 	if aiReply != "" {
