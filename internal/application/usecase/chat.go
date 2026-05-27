@@ -231,7 +231,8 @@ func (c *ChatOrchestrator) StreamExecute(ctx context.Context, req ChatRequest, o
 	streamExecStart := time.Now()
 
 	// 预处理使用独立 context，避免 ONNX 推理消耗 stream budget
-	prepCtx, prepCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	// L1 规则引擎 <1ms，L2 NER 正常 <100ms，30s 足够覆盖异常场景
+	prepCtx, prepCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer prepCancel()
 	prepStart := time.Now()
 	messages, deidResult := c.prepareMessages(prepCtx, req)

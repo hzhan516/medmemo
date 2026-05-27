@@ -115,7 +115,7 @@ type Engine struct {
 	wg        sync.WaitGroup
 	modelPath string
 	libPath   string
-	available bool
+	nerAvailable bool
 
 	// 嵌入推理相关
 	embeddingPipeline  *pipelines.FeatureExtractionPipeline
@@ -228,9 +228,9 @@ libFound:
 		e.initEmbeddingPipeline(cfg.EmbeddingModelPath)
 	}
 
-	// 只要任一 Pipeline 就绪即标记引擎可用
-	e.available = e.pipeline != nil || e.embeddingAvailable
-	if !e.available && e.session != nil {
+	// NER 和 Embedding 各自独立标记可用性，避免混为一谈导致 Predict/Embed 调用死等
+	e.nerAvailable = e.pipeline != nil
+	if !e.nerAvailable && !e.embeddingAvailable && e.session != nil {
 		// NER 和 Embedding 都未就绪，释放 Session
 		_ = e.session.Destroy()
 		e.session = nil
@@ -241,12 +241,13 @@ libFound:
 		fmt.Printf("[ONNX Engine] BUG: embeddingPipeline set but embeddingAvailable=false, fixing\n")
 		e.embeddingAvailable = true
 	}
-	if e.pipeline != nil && !e.available {
-		e.available = true
+	if e.pipeline != nil && !e.nerAvailable {
+		fmt.Printf("[ONNX Engine] BUG: pipeline set but nerAvailable=false, fixing\n")
+		e.nerAvailable = true
 	}
 
-	fmt.Printf("[ONNX Engine] Final state: available=%v embeddingAvailable=%v\n",
-		e.available, e.embeddingAvailable)
+	fmt.Printf("[ONNX Engine] Final state: nerAvailable=%v embeddingAvailable=%v\n",
+		e.nerAvailable, e.embeddingAvailable)
 	return e, nil
 }
 
@@ -302,8 +303,8 @@ func (e *Engine) workerLoop(worker *NERWorker) {
 
 // Predict 向 Worker Pool 提交推理任务，等待结果返回。
 func (e *Engine) Predict(ctx context.Context, text string) ([]EntitySpan, error) {
-	if !e.available {
-		return nil, fmt.Errorf("ONNX engine not available")
+	if !e.nerAvailable {
+		return nil, fmt.Errorf("NER pipeline not available")
 	}
 	resultCh := make(chan nerResult, 1)
 	select {
@@ -319,9 +320,20 @@ func (e *Engine) Predict(ctx context.Context, text string) ([]EntitySpan, error)
 	}
 }
 
-// IsAvailable 返回引擎是否已就绪（动态库、模型、Session、Pipeline 均初始化成功）。
+// IsAvailable 返回引擎整体是否已就绪（NER 或 Embedding 任一可用即视为就绪）。
+// 供上层做粗略状态判断；调用 Predict/Embed 前建议使用更精确的 IsNERAvailable/IsEmbeddingAvailable。
 func (e *Engine) IsAvailable() bool {
-	return e.available
+	return e.nerAvailable || e.embeddingAvailable
+}
+
+// IsNERAvailable 返回 NER Pipeline 是否已初始化成功。
+func (e *Engine) IsNERAvailable() bool {
+	return e.nerAvailable
+}
+
+// IsEmbeddingAvailable 返回嵌入 Pipeline 是否已初始化成功。
+func (e *Engine) IsEmbeddingAvailable() bool {
+	return e.embeddingAvailable
 }
 
 // HasEmbeddingPipeline 返回嵌入 Pipeline 是否已初始化。
