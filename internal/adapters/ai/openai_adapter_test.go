@@ -478,3 +478,65 @@ func TestOpenAIAdapter_doWithRetry_maxRetries3(t *testing.T) {
 	assert.Equal(t, 4, callCount) // 初始 1 次 + 3 次重试
 	assert.Contains(t, err.Error(), "请求过于频繁")
 }
+
+// TestOpenAIAdapter_StreamChat_ServerError 验证流式请求遇到持续 500 服务端错误时返回错误。
+// doWithRetry 对 5xx 同样会执行 3 次重试，本测试执行耗时约 14s。
+func TestOpenAIAdapter_StreamChat_ServerError(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping slow test in short mode: ~14s due to exponential backoff")
+	}
+	var callCount int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	adapter := NewOpenAIAdapter("test-key", server.URL, "test-model", 0, 30*time.Second)
+	msgs := []models.Message{{Role: models.RoleUser, Content: "test"}}
+
+	usage, err := adapter.StreamChat(context.Background(), msgs, func(chunk string) {})
+	require.Error(t, err)
+	assert.Nil(t, usage)
+	assert.Equal(t, 4, callCount) // 初始 1 次 + 3 次重试
+	assert.Contains(t, err.Error(), "failed to send stream request")
+}
+
+// TestOpenAIAdapter_Chat_500Error 验证非流式请求遇到持续 500 服务端错误时，重试耗尽后返回错误。
+// 退避间隔为 2s/4s/8s，本测试执行耗时约 14s。
+func TestOpenAIAdapter_Chat_500Error(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping slow test in short mode: ~14s due to exponential backoff")
+	}
+	var callCount int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	adapter := NewOpenAIAdapter("test-key", server.URL, "test-model", 0, 30*time.Second)
+	msgs := []models.Message{{Role: models.RoleUser, Content: "test"}}
+
+	_, err := adapter.Chat(context.Background(), msgs)
+	require.Error(t, err)
+	assert.Equal(t, 4, callCount) // 初始 1 次 + 3 次重试
+	assert.Contains(t, err.Error(), "failed to send chat request")
+}
+
+// TestOpenAIAdapter_Chat_InvalidJSON 验证服务端返回 200 但响应体为非法 JSON 时返回解析错误。
+func TestOpenAIAdapter_Chat_InvalidJSON(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{invalid json`))
+	}))
+	defer server.Close()
+
+	adapter := NewOpenAIAdapter("test-key", server.URL, "test-model", 0, 30*time.Second)
+	msgs := []models.Message{{Role: models.RoleUser, Content: "test"}}
+
+	_, err := adapter.Chat(context.Background(), msgs)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to unmarshal chat response")
+}
