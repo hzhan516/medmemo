@@ -84,7 +84,9 @@ build-darwin:
 
 build-windows:
 	cd web && npm install && npm run build
-	wails build -platform windows/amd64 -clean $(LDFLAGS)
+	# Windows 上若缺少 libtokenizers.a，ORT tag 会导致编译失败。
+	# 首次构建前请运行: .\scripts\build\download-tokenizers.ps1
+	wails build -platform windows/amd64 -clean -tags ORT $(LDFLAGS)
 
 build-linux:
 	cd web && npm install && npm run build

@@ -15,6 +15,17 @@ case "$OS" in
     ;;
   windows)
     echo "[TASK-027] Building for Windows..."
+    # 下载 ONNX Runtime 与 Tokenizers Windows 库
+    if command -v pwsh &>/dev/null; then
+      pwsh -ExecutionPolicy Bypass -File scripts/build/download-onnx.ps1 -Platform windows
+      pwsh -ExecutionPolicy Bypass -File scripts/build/download-tokenizers.ps1
+    elif command -v powershell &>/dev/null; then
+      powershell -ExecutionPolicy Bypass -File scripts/build/download-onnx.ps1 -Platform windows
+      powershell -ExecutionPolicy Bypass -File scripts/build/download-tokenizers.ps1
+    else
+      echo "[TASK-027] Warning: PowerShell not found. Skipping library download."
+      echo "[TASK-027] Please manually download libraries to resources/lib/windows/"
+    fi
     wails build -ldflags "-s -w -X main.version=${VERSION}" -tags "ORT" -nsis
     ;;
   darwin)

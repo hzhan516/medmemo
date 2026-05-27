@@ -10,9 +10,11 @@
 
 | 平台 | 最低版本 | 架构 | 磁盘空间 |
 |------|---------|------|---------|
-| Windows | Windows 10 | x64, ARM64 | 200 MB |
+| Windows | Windows 10 | x64, ARM64 | 250 MB |
 | macOS | macOS 12 (Monterey) | Intel, Apple Silicon | 200 MB |
 | Linux | Ubuntu 20.04+ / Fedora 38+ | x64, ARM64 | 200 MB |
+
+> **Windows 用户注意：** 首次启动时，若安装包未捆绑 AI 运行库，MedMemo 可能会自动下载约 55 MB 的本地 AI 运行库（ONNX Runtime + Tokenizers）。首次运行需要互联网连接。
 
 **额外要求：**
 - 互联网连接（用于下载 AI 模型和访问云端 API）
@@ -47,7 +49,16 @@
 - 从开始菜单：**MedMemo**
 - 从桌面快捷方式（安装时选择创建）
 
-### 第 3 步：完成引导
+### 第 3 步：本地 AI 模型初始化（首次启动）
+
+首次启动时，MedMemo 会检查本地 AI 运行库（用于语义记忆检索和敏感信息检测）：
+
+- **如果库已捆绑** — 自动继续，无需额外操作。
+- **如果需要下载** — 将自动开始下载（约 55 MB），根据网络状况通常需要 10–30 秒。
+
+> 💡 下载的库保存到 `%LOCALAPPDATA%\medmemo\lib\`，后续启动直接复用。升级 MedMemo 时才可能需要重新下载。
+
+### 第 4 步：完成引导
 
 首次启动将显示引导向导。详见 [首次设置](./README.md#首次设置3-步)。
 
@@ -56,7 +67,7 @@
 1. 打开**设置 → 应用 → 已安装的应用**
 2. 找到 **MedMemo**
 3. 点击**卸载**
-4. （可选）删除用户数据文件夹 `%LOCALAPPDATA%\medmemo`
+4. （可选）删除用户数据文件夹 `%LOCALAPPDATA%\medmemo`（包含已下载的 AI 运行库）
 
 ---
 
@@ -154,7 +165,34 @@ make build
 - [ ] 可以在输入框中输入消息
 - [ ] 设置页面可以打开（标题栏齿轮图标）
 
-如有任何步骤失败，请查阅 [故障排查](./troubleshooting.md)。
+### Windows 专属问题
+
+#### "本地 AI 模型初始化失败" 或下载错误
+
+如果首次启动时自动下载库失败：
+
+1. **检查网络连接** — 下载需要稳定的互联网连接。
+2. **检查 Windows Defender / 杀毒软件** — 可能拦截下载。尝试临时关闭或将 MedMemo 加入白名单。
+3. **手动下载**（高级用户）：
+   ```powershell
+   # 在 MedMemo 安装目录下以管理员身份运行 PowerShell
+   .\scripts\build\download-onnx.ps1 -Platform windows
+   .\scripts\build\download-tokenizers.ps1
+   ```
+4. **防火墙 / 企业代理** — 如果处于受限代理环境，可在启动前设置代理：
+   ```powershell
+   $env:HTTP_PROXY = "http://proxy.company.com:8080"
+   ```
+
+#### Windows 上 Embedding 功能不可用
+
+如果看到"语义搜索不可用"或"embedding 引擎不可用"：
+
+- 说明 ONNX Runtime 或 Tokenizers 库加载失败。
+- MedMemo 会自动降级为基于关键词的记忆检索，无需 embedding 也可正常工作。
+- **核心对话功能不受影响**。
+
+如有其他步骤失败，请查阅 [故障排查](./troubleshooting.md)。
 
 ---
 

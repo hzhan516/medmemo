@@ -252,6 +252,14 @@ jobs:
         if: runner.os == 'macOS'
         run: wails build -clean -tags ORT
 
+      - name: Download ONNX Runtime (Windows)
+        if: runner.os == 'Windows'
+        run: .\scripts\build\download-onnx.ps1 -Platform windows
+
+      - name: Download Tokenizers (Windows)
+        if: runner.os == 'Windows'
+        run: .\scripts\build\download-tokenizers.ps1
+
       - name: Build (Windows)
         if: runner.os == 'Windows'
-        run: wails build -clean
+        run: wails build -clean -tags ORT
