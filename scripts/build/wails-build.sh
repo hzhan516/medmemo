@@ -9,6 +9,7 @@ VERSION="${2:-dev}"
 case "$OS" in
   linux)
     echo "[TASK-027] Building for Linux..."
+    export CGO_LDFLAGS="-L$(pwd)/resources/lib/linux"
     wails build -ldflags "-s -w -X main.version=${VERSION}" -tags "webkit2_41,ORT"
     echo "[TASK-027] Building AppImage..."
     ./build/package/build-appimage.sh

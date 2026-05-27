@@ -128,8 +128,11 @@ func (m *MemoryRetriever) RetrieveForContext(ctx context.Context, query, session
 	m.recordSessionAccess(sessionID)
 
 	// 4. 生成查询向量（语义搜索）
+	// 使用独立超时，避免 ONNX 推理耗时影响整体对话流程
 	var semanticMemories []*entity.HealthMemory
-	queryVector, err := m.embeddingSvc.EmbedSingle(ctx, query)
+	embedCtx, embedCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	queryVector, err := m.embeddingSvc.EmbedSingle(embedCtx, query)
+	embedCancel()
 	if err == nil {
 		semanticMemories, _ = m.semanticSearch(ctx, queryVector, limit)
 	} else {

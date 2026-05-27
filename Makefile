@@ -25,7 +25,7 @@ dev:
 # 先手动构建前端，再调用 wails build（Wails v2.12 在 frontend.dir != frontend 时可能跳过前端构建）
 build:
 	cd web && npm install && npm run build
-	wails build -clean -tags "$(BUILD_TAGS)" $(LDFLAGS)
+	CGO_LDFLAGS="$(CGO_LDFLAGS_LINUX)" wails build -clean -tags "$(BUILD_TAGS)" $(LDFLAGS)
 
 # CGO 库路径（用于测试，go test 时 ${SRCDIR} 解析为临时目录，需显式指定）
 CGO_LDFLAGS_LINUX := -L$(shell pwd)/resources/lib/linux
@@ -90,11 +90,11 @@ build-windows:
 
 build-linux:
 	cd web && npm install && npm run build
-	wails build -platform linux/amd64 -clean -tags webkit2_41,ORT $(LDFLAGS)
+	CGO_LDFLAGS="$(CGO_LDFLAGS_LINUX)" wails build -platform linux/amd64 -clean -tags webkit2_41,ORT $(LDFLAGS)
 
 # 本地完整打包（当前平台，含版本注入与平台安装包）
 release-local:
-	./scripts/build/wails-build.sh $(shell go env GOOS) $(VERSION)
+	CGO_LDFLAGS="$(CGO_LDFLAGS_LINUX)" ./scripts/build/wails-build.sh $(shell go env GOOS) $(VERSION)
 
 # GoReleaser 本地快照验证（不发布，仅验证配置与归档）
 release-dry-run:

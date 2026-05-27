@@ -229,8 +229,10 @@ func (c *ChatOrchestrator) StreamExecute(ctx context.Context, req ChatRequest, o
 	defer prepCancel()
 	messages, deidResult := c.prepareMessages(prepCtx, req)
 
-	// provider 查询也使用独立 context（避免复用已过期 stream ctx）
-	llmClient, err := c.resolveLLMClient(prepCtx, req.ProviderID)
+	// provider 查询使用独立 context，确保不受预处理耗时影响
+	resolveCtx, resolveCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer resolveCancel()
+	llmClient, err := c.resolveLLMClient(resolveCtx, req.ProviderID)
 	if err != nil {
 		return nil, nil, "", fmt.Errorf("failed to resolve llm client: %w", err)
 	}
@@ -328,6 +330,14 @@ func (c *ChatOrchestrator) calculateConfidence(reply string, messages []models.M
 func (c *ChatOrchestrator) resolveLLMClient(ctx context.Context, providerID string) (port.LLMClient, error) {
 	if providerID == "" {
 		return nil, fmt.Errorf("provider_id is required")
+	}
+
+	// 诊断日志：检查传入 context 的剩余时间
+	if deadline, ok := ctx.Deadline(); ok {
+		fmt.Printf("[resolveLLMClient] context deadline in %v, providerID=%s\n",
+			time.Until(deadline), providerID)
+	} else {
+		fmt.Printf("[resolveLLMClient] context has no deadline, providerID=%s\n", providerID)
 	}
 
 	provider, err := c.providerStore.Get(ctx, providerID)

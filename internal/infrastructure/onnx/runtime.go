@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/wire"
 	"github.com/knights-analytics/hugot"
@@ -385,6 +386,19 @@ func (e *Engine) initEmbeddingPipeline(modelPath string) {
 		return // Pipeline 创建失败
 	}
 	e.embeddingPipeline = pipeline
+
+	// 预热推理：ONNX Runtime 首次推理时执行图优化（JIT），耗时可达 30-60 秒。
+	// 在初始化阶段提前完成，避免用户首次提问时触发 context deadline exceeded。
+	fmt.Printf("[ONNX Engine] Warming up embedding pipeline...\n")
+	warmupStart := time.Now()
+	warmupCtx, warmupCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	_, warmupErr := pipeline.RunPipeline(warmupCtx, []string{"warmup"})
+	warmupCancel()
+	if warmupErr != nil {
+		fmt.Printf("[ONNX Engine] Embedding warmup failed (non-fatal): %v\n", warmupErr)
+	} else {
+		fmt.Printf("[ONNX Engine] Embedding warmup completed in %v\n", time.Since(warmupStart))
+	}
 
 	// 创建 2 个 Embedding Worker
 	const embWorkerCount = 2
