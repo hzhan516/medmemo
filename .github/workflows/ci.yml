@@ -271,4 +271,4 @@ jobs:
         run: wails build -clean -tags ORT
         env:
           CGO_CFLAGS: "-IC:/msys64/mingw64/include"
-          CGO_LDFLAGS: "-LC:/msys64/mingw64/lib -L${{ github.workspace }}/resources/lib/windows"
+          CGO_LDFLAGS: "-LC:/msys64/mingw64/lib -L${{ github.workspace }}/resources/lib/windows -ldl"
