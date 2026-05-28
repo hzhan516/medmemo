@@ -16,6 +16,8 @@ case "$OS" in
     ;;
   windows)
     echo "[TASK-027] Building for Windows..."
+    export CGO_CFLAGS="-IC:/msys64/mingw64/include"
+    export CGO_LDFLAGS="-LC:/msys64/mingw64/lib -L$(pwd)/resources/lib/windows -ldl"
     # 下载 ONNX Runtime 与 Tokenizers Windows 库
     if command -v pwsh &>/dev/null; then
       pwsh -ExecutionPolicy Bypass -File scripts/build/download-onnx.ps1 -Platform windows
