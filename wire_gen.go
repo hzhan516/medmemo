@@ -17,7 +17,6 @@ import (
 	updater3 "github.com/hzhan516/medmemo/internal/application/updater"
 	"github.com/hzhan516/medmemo/internal/application/usecase"
 	"github.com/hzhan516/medmemo/internal/infrastructure/config"
-	"github.com/hzhan516/medmemo/internal/infrastructure/database"
 	"github.com/hzhan516/medmemo/internal/infrastructure/onnx"
 	"github.com/hzhan516/medmemo/internal/infrastructure/secret"
 	updater2 "github.com/hzhan516/medmemo/internal/infrastructure/updater"
@@ -33,12 +32,16 @@ import (
 // 返回 (func()) 作为资源清理回调，由 main 函数通过 defer 调用。
 func InitializeApp() (*App, func(), error) {
 	llmClientFactory := ai.NewLLMClientFactory()
-	string2 := _wireStringValue
+	loader := NewDefaultLoader()
+	appConfig, err := config.LoadConfig(loader)
+	if err != nil {
+		return nil, nil, err
+	}
 	keyringStore, err := secret.NewKeyringStore()
 	if err != nil {
 		return nil, nil, err
 	}
-	sqlCipherConnector, err := database.NewSQLCipherConnector(string2, keyringStore)
+	sqlCipherConnector, err := NewSQLCipherConnectorFromConfig(appConfig, keyringStore)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -53,11 +56,6 @@ func InitializeApp() (*App, func(), error) {
 		return nil, nil, err
 	}
 	l1RuleStage := pipeline.NewL1RuleStage()
-	loader := config.NewLoader(string2)
-	appConfig, err := config.LoadConfig(loader)
-	if err != nil {
-		return nil, nil, err
-	}
 	engineConfig := NewEngineConfig(appConfig)
 	engine, err := onnx.NewEngine(engineConfig)
 	if err != nil {
@@ -67,8 +65,13 @@ func InitializeApp() (*App, func(), error) {
 	l2NERStage := pipeline.NewL2NERStage(onnxnerDetector)
 	l3KeywordStage := pipeline.NewL3KeywordStage()
 	deidentifyPipeline := pipeline.NewDefaultDeidentifyPipeline(l1RuleStage, l2NERStage, l3KeywordStage)
-	memoryRetriever := usecase.NewMemoryRetriever(memoryRepoSQLite)
-	chatOrchestrator := usecase.NewChatOrchestrator(llmClientFactory, providerRepoSQLite, memoryRepoSQLite, ruleDetector, ruleComplianceChecker, deidentifyPipeline, memoryRetriever)
+	embeddingServiceAdapter := NewEmbeddingServiceAdapterWithVersion(engine)
+	embeddingRepoSQLite := repository.NewEmbeddingRepoSQLite(sqlCipherConnector)
+	factRepoSQLite := repository.NewFactRepoSQLite(sqlCipherConnector)
+	decayScorer := usecase.NewDecayScorer()
+	memoryRetriever := usecase.NewMemoryRetriever(embeddingServiceAdapter, embeddingRepoSQLite, factRepoSQLite, decayScorer)
+	confidenceAggregator := usecase.NewConfidenceAggregator()
+	chatOrchestrator := usecase.NewChatOrchestrator(llmClientFactory, providerRepoSQLite, memoryRepoSQLite, ruleDetector, ruleComplianceChecker, deidentifyPipeline, memoryRetriever, confidenceAggregator)
 	conversationRepoSQLite := repository.NewConversationRepoSQLite(sqlCipherConnector)
 	messageRepoSQLite := repository.NewMessageRepoSQLite(sqlCipherConnector)
 	disclaimerRepoSQLite := repository.NewDisclaimerRepoSQLite(sqlCipherConnector)
@@ -81,7 +84,9 @@ func InitializeApp() (*App, func(), error) {
 	service := updater3.NewService(gitHubUpdater, installer)
 	tokenRefreshService := auth.NewTokenRefreshServiceBare(providerRepoSQLite)
 	oAuthDeviceFlowService := auth.NewOAuthDeviceFlowServiceBare(providerRepoSQLite)
-	wailsApp := NewWailsApp(chatOrchestrator, memoryRetriever, appConfig, conversationRepoSQLite, messageRepoSQLite, disclaimerRepoSQLite, providerRepoSQLite, healthEngine, titleGenerator, service, keyringStore, tokenRefreshService, oAuthDeviceFlowService)
+	auditLogRepoSQLite := repository.NewAuditLogRepoSQLite(sqlCipherConnector)
+	dialogueRepoSQLite := repository.NewDialogueRepoSQLite(sqlCipherConnector)
+	wailsApp := NewWailsApp(chatOrchestrator, memoryRetriever, appConfig, conversationRepoSQLite, messageRepoSQLite, disclaimerRepoSQLite, providerRepoSQLite, healthEngine, titleGenerator, service, keyringStore, tokenRefreshService, oAuthDeviceFlowService, factRepoSQLite, auditLogRepoSQLite, dialogueRepoSQLite, embeddingServiceAdapter, embeddingRepoSQLite)
 	app, cleanup, err := NewApp(wailsApp, sqlCipherConnector, deidentifyPipeline, healthEngine)
 	if err != nil {
 		return nil, nil, err
@@ -90,7 +95,3 @@ func InitializeApp() (*App, func(), error) {
 		cleanup()
 	}, nil
 }
-
-var (
-	_wireStringValue = ""
-)

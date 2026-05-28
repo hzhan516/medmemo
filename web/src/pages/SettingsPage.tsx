@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { logger } from '@/lib/logger'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useOnboardingStore } from '@/stores/onboardingStore'
@@ -18,6 +18,7 @@ import {
   Monitor, Moon, Sun, Check, Bell, BellDot, BellOff,
   RefreshCw, Shield, FlaskConical, ShieldCheck, ShieldOff,
   Eye, Trash2, RotateCcw, Plus, FileJson,
+  Brain, FolderOpen, Sparkles, AlertCircle, ExternalLink,
 } from 'lucide-react'
 
 /**
@@ -28,6 +29,8 @@ export function SettingsPage() {
   const { theme, setTheme } = useTheme()
   const {
     complianceBarMode, setComplianceBarMode,
+    showConfidenceBar, setShowConfidenceBar,
+    confidenceBarMode, setConfidenceBarMode,
     autoCheckUpdate, setAutoCheckUpdate,
     updateChannel, setUpdateChannel: setUpdateChannelStore,
     desensitizationLevel, setDesensitizationLevel,
@@ -58,10 +61,24 @@ export function SettingsPage() {
   const updateProvider = useProviderStore((s) => s.updateProvider)
   const removeProvider = useProviderStore((s) => s.removeProvider)
   const hasProvider = useProviderStore((s) => s.hasProvider)
-  const { saveAPIKey, createProvider, updateProvider: updateProviderApi, deleteProvider: deleteProviderApi, setUpdateSettings } = useWails()
+  const { saveAPIKey, createProvider, updateProvider: updateProviderApi, deleteProvider: deleteProviderApi, setUpdateSettings, getEmbeddingStatus, getEmbeddingModelDirPath, openEmbeddingModelDir, openDownloadURL } = useWails()
+
+  const [embeddingStatus, setEmbeddingStatus] = useState<{ available: boolean; model_path: string; model_name: string; download_url: string } | null>(null)
+  const [modelDirPath, setModelDirPath] = useState<string>('')
+  const [toastMsg, setToastMsg] = useState<string | null>(null)
+
+  useEffect(() => {
+    getEmbeddingStatus()
+      .then((status) => setEmbeddingStatus(status))
+      .catch((err) => logger.error('Failed to get embedding status:', err))
+    getEmbeddingModelDirPath()
+      .then((path) => setModelDirPath(path))
+      .catch((err) => logger.error('Failed to get model dir path:', err))
+  }, [getEmbeddingStatus, getEmbeddingModelDirPath])
+
   const showToast = useCallback((message: string) => {
-    // 简单 toast：使用 alert 降级，后续可接入全局 toast 系统
-    logger.error('[Toast]', message)
+    setToastMsg(message)
+    setTimeout(() => setToastMsg(null), 3000)
   }, [])
 
   /**
@@ -121,6 +138,7 @@ export function SettingsPage() {
       temperature: number
       timeoutMs: number
       maxRetries: number
+      maxTokens: number
       group: string
       enabled: boolean
       id?: string
@@ -138,6 +156,7 @@ export function SettingsPage() {
         temperature: data.temperature,
         timeoutMs: data.timeoutMs,
         maxRetries: data.maxRetries,
+        maxTokens: data.maxTokens,
         group: data.group,
         enabled: data.enabled,
         authMethod: data.authMethod as ProviderConfig['authMethod'],
@@ -373,6 +392,48 @@ export function SettingsPage() {
           </div>
         </section>
 
+        {/* 置信度条设置 */}
+        <section>
+          <h2 className="text-sm font-medium text-muted-foreground mb-3 uppercase tracking-wider">
+            置信度条
+          </h2>
+          <div
+            className={`flex items-center justify-between p-4 rounded-lg border cursor-pointer transition-all ${
+              showConfidenceBar
+                ? 'border-primary bg-primary/5'
+                : 'border-border hover:border-primary/30 hover:bg-accent'
+            }`}
+            onClick={() => {
+              const next = !showConfidenceBar
+              setShowConfidenceBar(next)
+              if (next && confidenceBarMode === 'hidden') {
+                setConfidenceBarMode('compact')
+              }
+            }}
+          >
+            <div className="flex items-center gap-3">
+              <Monitor size={18} className={showConfidenceBar ? 'text-primary' : 'text-muted-foreground'} />
+              <div>
+                <div className={`text-sm font-medium ${showConfidenceBar ? 'text-primary' : 'text-foreground'}`}>
+                  展示置信度
+                </div>
+                <div className="text-xs text-muted-foreground">在 AI 回复底部显示回答可信度评估</div>
+              </div>
+            </div>
+            <div
+              className={`w-10 h-5 rounded-full transition-colors relative ${
+                showConfidenceBar ? 'bg-primary' : 'bg-muted'
+              }`}
+            >
+              <div
+                className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${
+                  showConfidenceBar ? 'translate-x-5' : 'translate-x-0.5'
+                }`}
+              />
+            </div>
+          </div>
+        </section>
+
         {/* 隐私设置 */}
         <section>
           <h2 className="text-sm font-medium text-muted-foreground mb-3 uppercase tracking-wider">
@@ -437,6 +498,118 @@ export function SettingsPage() {
                 ))}
               </div>
             </div>
+          </div>
+        </section>
+
+        {/* 记忆召回模式 */}
+        <section>
+          <h2 className="text-sm font-medium text-muted-foreground mb-3 uppercase tracking-wider">
+            记忆召回模式
+          </h2>
+          <div className="p-4 rounded-lg border border-border bg-card space-y-4">
+            {embeddingStatus?.available ? (
+              /* 语义搜索已启用 */
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center shrink-0">
+                  <Sparkles size={16} className="text-green-600 dark:text-green-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-foreground">语义搜索（智能模式）</div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    AI 通过语义理解来召回你的历史记忆。"意思相近"的内容也会被关联，例如问"我多重"也能找到"体重是110公斤"。
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-2">
+                    模型路径：{embeddingStatus.model_path}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* 关键词匹配基础模式 */
+              <>
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
+                    <Brain size={16} className="text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-foreground">关键词匹配（基础模式）</div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      当前 AI 通过关键词字面匹配来召回你的历史记忆。例如你说"我体重多少"能找到"体重是110公斤"，但说"我多重"可能找不到。
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-border">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                      <Sparkles size={16} className="text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-foreground">可选升级：语义搜索（智能模式）</div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        安装 Embedding 模型后，AI 能理解"意思相近"。"多重"和"体重"也会被关联，召回更自然准确。
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        openEmbeddingModelDir()
+                          .then(() => showToast('已打开模型目录'))
+                          .catch((err) => {
+                            logger.error('Failed to open model dir:', err)
+                            showToast('无法自动打开目录，请手动前往')
+                          })
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-border hover:bg-accent transition-colors"
+                    >
+                      <FolderOpen size={14} />
+                      打开模型目录
+                    </button>
+                    {embeddingStatus?.download_url && (
+                      <button
+                        onClick={() => {
+                          if (embeddingStatus.download_url) {
+                            openDownloadURL(embeddingStatus.download_url)
+                          }
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-border hover:bg-accent transition-colors"
+                      >
+                        <ExternalLink size={14} />
+                        下载模型
+                      </button>
+                    )}
+                  </div>
+
+                  {modelDirPath && (
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      模型目录：
+                      <span className="font-mono bg-muted px-1 rounded">{modelDirPath}</span>
+                    </div>
+                  )}
+
+                  <div className="mt-3 p-3 rounded-md bg-muted/50 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle size={14} className="text-muted-foreground shrink-0" />
+                      <span className="text-xs font-medium text-foreground">如何升级到语义搜索</span>
+                    </div>
+                    <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+                      <li>
+                        点击上方"下载模型"按钮获取{' '}
+                        <span className="font-mono text-xs bg-muted px-1 rounded">all-MiniLM-L6-v2</span>{' '}
+                        ONNX 模型（约 50MB）
+                      </li>
+                      <li>
+                        将 <span className="font-mono text-xs bg-muted px-1 rounded">model.onnx</span> 和{' '}
+                        <span className="font-mono text-xs bg-muted px-1 rounded">tokenizer.json</span>{' '}
+                        放入模型目录
+                      </li>
+                      <li>重启应用即可生效（不安装也能继续用关键词匹配）</li>
+                    </ol>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </section>
 
@@ -595,6 +768,13 @@ export function SettingsPage() {
           </div>
         </section>
       </div>
+
+      {/* Toast 提示 */}
+      {toastMsg && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium shadow-lg z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
+          {toastMsg}
+        </div>
+      )}
 
       {/* 模型服务配置弹窗（CherryStudio 风格） */}
       <ModelServiceDialog

@@ -4,13 +4,18 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
+	"path/filepath"
+	goruntime "runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,6 +28,8 @@ import (
 	"github.com/hzhan516/medmemo/internal/application/updater"
 	"github.com/hzhan516/medmemo/internal/application/usecase"
 	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/internal/domain/repository"
+	"github.com/hzhan516/medmemo/internal/infrastructure/config"
 	"github.com/hzhan516/medmemo/internal/infrastructure/secret"
 	"github.com/hzhan516/medmemo/pkg/models"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -53,6 +60,19 @@ type WailsApp struct {
 
 	// Ollama 操作互斥锁，防止并发启动/下载冲突
 	ollamaMu sync.Mutex
+
+	// 记忆管理仓库（TASK-060）
+	factRepo repository.FactRepository
+
+	// 审计日志仓库（v1.1 DoD A3）
+	auditLogRepo repository.AuditLogRepository
+
+	// 原始对话仓库（记忆归档）
+	dialogueRepo repository.RawDialogueRepository
+
+	// 语义嵌入服务与仓库（向量索引）
+	embeddingSvc  port.EmbeddingService
+	embeddingRepo repository.EmbeddingRepository
 }
 
 // NewWailsApp 构造函数，供 Wire 调用。
@@ -70,6 +90,11 @@ func NewWailsApp(
 	secretStore secret.Store,
 	tokenRefreshSvc *auth.TokenRefreshService,
 	deviceFlowSvc *auth.OAuthDeviceFlowService,
+	factRepo repository.FactRepository,
+	auditLogRepo repository.AuditLogRepository,
+	dialogueRepo repository.RawDialogueRepository,
+	embeddingSvc port.EmbeddingService,
+	embeddingRepo repository.EmbeddingRepository,
 ) *WailsApp {
 	return &WailsApp{
 		chatOrchestrator: chat,
@@ -85,6 +110,11 @@ func NewWailsApp(
 		secretStore:      secretStore,
 		tokenRefreshSvc:  tokenRefreshSvc,
 		deviceFlowSvc:    deviceFlowSvc,
+		factRepo:         factRepo,
+		auditLogRepo:     auditLogRepo,
+		dialogueRepo:     dialogueRepo,
+		embeddingSvc:     embeddingSvc,
+		embeddingRepo:    embeddingRepo,
 		callbackServers:  make(map[string]*auth.LocalCallbackServer),
 		activeStreams:    make(map[string]context.CancelFunc),
 	}
@@ -130,6 +160,12 @@ func (a *WailsApp) Startup(ctx context.Context) {
 	if a.tokenRefreshSvc != nil {
 		go a.scheduleAutoRefreshesAsync()
 	}
+
+	// ONNX 预热：启动后异步执行一次 dummy 推理，将 warmup 成本从首次对话转移到启动阶段
+	go a.warmupONNX()
+
+	// 补全历史事实的 embedding 缺失（TASK-060 修复）
+	go a.backfillEmbeddings()
 
 	// 初始化 Device Flow 事件回调
 	if a.deviceFlowSvc != nil {
@@ -230,14 +266,20 @@ type SendMessageRequest struct {
 
 // SendMessageResponse 发送消息响应。
 type SendMessageResponse struct {
-	Reply      string   `json:"reply"`
-	Confidence float64  `json:"confidence"`
-	Warnings   []string `json:"warnings"`
+	Reply            string                 `json:"reply"`
+	ConfidenceResult map[string]interface{} `json:"confidence_result"`
+	Warnings         []string               `json:"warnings"`
 }
+
+const (
+	defaultChatTimeout   = 30 * time.Second
+	defaultStreamTimeout = 5 * time.Minute
+	minStreamTimeout     = 120 * time.Second
+)
 
 // SendMessage 发送对话消息，编排完整对话流程（非流式）。
 func (a *WailsApp) SendMessage(req SendMessageRequest) (*SendMessageResponse, error) {
-	ctx, cancel := context.WithTimeout(a.ctx, 30*time.Second)
+	ctx, cancel := context.WithTimeout(a.ctx, defaultChatTimeout)
 	defer cancel()
 
 	chatReq := usecase.ChatRequest{
@@ -252,10 +294,24 @@ func (a *WailsApp) SendMessage(req SendMessageRequest) (*SendMessageResponse, er
 		return nil, fmt.Errorf("failed to send message: %w", err)
 	}
 
+	confJSON := map[string]interface{}{}
+	if resp.ConfidenceResult != nil {
+		confJSON = confidenceResultToMap(resp.ConfidenceResult)
+	}
+	// 保存用户消息（非流式路径）
+	if len(req.Messages) > 0 {
+		lastUser := req.Messages[len(req.Messages)-1]
+		if lastUser.Role == models.RoleUser {
+			a.saveUserMessage(ctx, req.ConversationID, lastUser)
+		}
+	}
+	// 保存 AI 回复
+	a.saveMessages(ctx, req.ConversationID, req.Messages, resp.Reply, nil, resp.ConfidenceResult, req.ProviderID)
+
 	return &SendMessageResponse{
-		Reply:      resp.Reply,
-		Confidence: resp.Confidence,
-		Warnings:   resp.Warnings,
+		Reply:            resp.Reply,
+		ConfidenceResult: confJSON,
+		Warnings:         resp.Warnings,
 	}, nil
 }
 
@@ -267,7 +323,24 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) (err error) {
 			err = fmt.Errorf("stream internal error: %v", r)
 		}
 	}()
-	ctx, cancel := context.WithTimeout(a.ctx, 120*time.Second)
+	// 诊断日志：检查 a.ctx 和 stream context 的 deadline
+	streamTimeoutVal := a.streamTimeout(req.ProviderID)
+	if d, ok := a.ctx.Deadline(); ok {
+		fmt.Printf("[DIAG][Wails] a.ctx deadline=%v remaining=%v\n", d, time.Until(d))
+	} else {
+		fmt.Printf("[DIAG][Wails] a.ctx has NO deadline\n")
+	}
+	fmt.Printf("[DIAG][Wails] streamTimeout=%v providerID=%s\n", streamTimeoutVal, req.ProviderID)
+
+	ctx, cancel := context.WithTimeout(a.ctx, streamTimeoutVal)
+	if d, ok := ctx.Deadline(); ok {
+		fmt.Printf("[DIAG][Wails] stream ctx deadline=%v remaining=%v\n", d, time.Until(d))
+	} else {
+		fmt.Printf("[DIAG][Wails] stream ctx has NO deadline\n")
+	}
+	if err := ctx.Err(); err != nil {
+		fmt.Printf("[DIAG][Wails] WARNING: stream ctx already expired: %v\n", err)
+	}
 
 	a.streamMu.Lock()
 	a.activeStreams[req.ConversationID] = cancel
@@ -298,14 +371,16 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) (err error) {
 	if len(req.Messages) > 0 {
 		lastUser := req.Messages[len(req.Messages)-1]
 		if lastUser.Role == models.RoleUser {
-			a.saveUserMessage(ctx, req.ConversationID, lastUser)
+			// 使用应用生命周期 context 异步保存，避免占用 stream 超时 budget
+			go a.saveUserMessage(a.ctx, req.ConversationID, lastUser)
 		}
 	}
 
 	// 收集 AI 完整回复用于持久化
 	var fullReply stringsBuilder
 
-	usage, finalContent, err := a.chatOrchestrator.StreamExecute(ctx, chatReq, func(chunk string) {
+	start := time.Now()
+	usage, confidenceResult, finalContent, err := a.chatOrchestrator.StreamExecute(ctx, chatReq, func(chunk string) {
 		fullReply.WriteString(chunk)
 		broker.Content(chunk)
 	})
@@ -313,8 +388,8 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) (err error) {
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			broker.Error("生成已中断")
-			// 保存已生成的部分内容
-			a.saveMessages(ctx, req.ConversationID, req.Messages, fullReply.String())
+			// 保存已生成的部分内容（无置信度，token 为 0）
+			a.saveMessages(ctx, req.ConversationID, req.Messages, fullReply.String(), nil, nil, req.ProviderID)
 			return nil
 		}
 		broker.Error(err.Error())
@@ -329,8 +404,10 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) (err error) {
 		})
 	}
 
-	// 保存用户消息和 AI 回复
-	a.saveMessages(ctx, req.ConversationID, req.Messages, finalContent)
+	// 保存用户消息和 AI 回复（携带 token 与置信度）
+	a.saveMessages(ctx, req.ConversationID, req.Messages, finalContent, usage, confidenceResult, req.ProviderID)
+
+	fmt.Printf("[Stream] total execution time: %v\n", time.Since(start))
 
 	// 流式结束后对完整内容做一次合规检测（MVP 简化策略）
 	compResult, compErr := a.chatOrchestrator.CheckCompliance(ctx, finalContent)
@@ -346,8 +423,59 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) (err error) {
 		runtime.EventsEmit(a.ctx, "chat:stream:compliance", payload)
 	}
 
+	// 推送置信度与 Token 用量事件
+	if confidenceResult != nil {
+		confidencePayload := map[string]any{
+			"conversation_id":   req.ConversationID,
+			"confidence":        confidenceResultToMap(confidenceResult),
+			"prompt_tokens":     0,
+			"completion_tokens": 0,
+			"total_tokens":      0,
+			"truncated":         false,
+		}
+		if usage != nil {
+			confidencePayload["prompt_tokens"] = usage.PromptTokens
+			confidencePayload["completion_tokens"] = usage.CompletionTokens
+			confidencePayload["total_tokens"] = usage.TotalTokens
+			confidencePayload["truncated"] = usage.FinishReason == "length"
+		}
+		runtime.EventsEmit(a.ctx, "chat:stream:confidence", confidencePayload)
+	}
+
 	broker.Done(usage)
 	return nil
+}
+
+func (a *WailsApp) streamTimeout(providerID string) time.Duration {
+	timeout := defaultStreamTimeout
+	if a.providerStore == nil || providerID == "" {
+		fmt.Printf("[DIAG][streamTimeout] using default=%v (providerStore=nil=%v providerID=empty=%v)\n",
+			timeout, a.providerStore == nil, providerID == "")
+		return timeout
+	}
+
+	ctx, cancel := context.WithTimeout(a.ctx, 3*time.Second)
+	defer cancel()
+
+	provider, err := a.providerStore.Get(ctx, providerID)
+	if err != nil || provider == nil {
+		fmt.Printf("[DIAG][streamTimeout] using default=%v (get provider err=%v provider=nil=%v)\n",
+			timeout, err, provider == nil)
+		return timeout
+	}
+	if provider.TimeoutMs <= 0 {
+		fmt.Printf("[DIAG][streamTimeout] using default=%v (TimeoutMs=%d <= 0)\n", timeout, provider.TimeoutMs)
+		return timeout
+	}
+
+	configured := time.Duration(provider.TimeoutMs) * time.Millisecond
+	if configured < minStreamTimeout {
+		fmt.Printf("[DIAG][streamTimeout] using minStreamTimeout=%v (configured=%v < min=%v)\n",
+			minStreamTimeout, configured, minStreamTimeout)
+		return minStreamTimeout
+	}
+	fmt.Printf("[DIAG][streamTimeout] using configured=%v (TimeoutMs=%d)\n", configured, provider.TimeoutMs)
+	return configured
 }
 
 // stringsBuilder 是 strings.Builder 的别名，用于收集流式内容。
@@ -369,13 +497,18 @@ func (a *WailsApp) saveUserMessage(ctx context.Context, convID string, message m
 	if a.msgRepo == nil || convID == "" || message.Role != models.RoleUser {
 		return
 	}
+	msgID := fmt.Sprintf("msg_%d", time.Now().UnixNano())
 	if err := a.msgRepo.Save(ctx, models.ConversationID(convID), &entity.Message{
-		ID:        fmt.Sprintf("msg_%d", time.Now().UnixNano()),
+		ID:        msgID,
 		Role:      message.Role,
 		Content:   message.Content,
 		Timestamp: time.Now(),
 	}); err != nil {
 		fmt.Printf("[saveUserMessage] 保存用户消息失败: %v\n", err)
+	}
+	// 同步归档到 raw_dialogues，为事实提取提供源数据
+	if a.dialogueRepo != nil {
+		_ = a.dialogueRepo.Insert(ctx, entity.NewRawDialogue(convID, entity.RoleUser, message.Content, ""))
 	}
 	if a.convRepo != nil {
 		if err := a.convRepo.UpdateTimestamp(ctx, models.ConversationID(convID), time.Now()); err != nil {
@@ -384,34 +517,53 @@ func (a *WailsApp) saveUserMessage(ctx context.Context, convID string, message m
 	}
 }
 
-// saveMessages 将对话消息持久化到数据库。
-func (a *WailsApp) saveMessages(ctx context.Context, convID string, messages []models.Message, aiReply string) {
+// saveMessages 保存 AI 回复消息到数据库，可选携带 token 用量与置信度。
+// 用户消息应由调用方通过 saveUserMessage 单独保存，避免重复。
+// providerID 用于异步事实提取时创建对应的 LLM client。
+func (a *WailsApp) saveMessages(ctx context.Context, convID string, messages []models.Message, aiReply string, usage *models.TokenUsage, confidence *entity.ConfidenceResult, providerID string) {
 	if a.msgRepo == nil || convID == "" {
 		return
 	}
-	// 保存最后一条用户消息
-	if len(messages) > 0 {
-		lastUser := messages[len(messages)-1]
-		if lastUser.Role == models.RoleUser {
-			if err := a.msgRepo.Save(ctx, models.ConversationID(convID), &entity.Message{
-				ID:        fmt.Sprintf("msg_%d", time.Now().UnixNano()),
-				Role:      lastUser.Role,
-				Content:   lastUser.Content,
-				Timestamp: time.Now(),
-			}); err != nil {
-				fmt.Printf("[saveMessages] 保存用户消息失败: %v\n", err)
-			}
-		}
-	}
 	// 保存 AI 回复
 	if aiReply != "" {
-		if err := a.msgRepo.Save(ctx, models.ConversationID(convID), &entity.Message{
+		msg := &entity.Message{
 			ID:        fmt.Sprintf("msg_%d", time.Now().UnixNano()),
 			Role:      models.RoleAssistant,
 			Content:   aiReply,
 			Timestamp: time.Now(),
-		}); err != nil {
+		}
+		if usage != nil {
+			msg.PromptTokens = usage.PromptTokens
+			msg.CompletionTokens = usage.CompletionTokens
+		}
+		if confidence != nil {
+			msg.ConfidenceScore = confidence.OverallScore
+			msg.ConfidenceLevel = string(confidence.Level)
+			if confMap := confidenceResultToMap(confidence); confMap != nil {
+				if jsonBytes, err := json.Marshal(confMap); err == nil {
+					msg.ConfidenceJSON = string(jsonBytes)
+				}
+			}
+			fmt.Printf("[DIAG][Confidence][saveMessages] OverallScore=%.2f Level=%s Breakdown=%v JSON=%s\n",
+				confidence.OverallScore, confidence.Level, confidence.Breakdown, msg.ConfidenceJSON)
+		}
+		if err := a.msgRepo.Save(ctx, models.ConversationID(convID), msg); err != nil {
 			fmt.Printf("[saveMessages] 保存 AI 回复失败: %v\n", err)
+		}
+		// 同步归档 AI 回复到 raw_dialogues
+		if a.dialogueRepo != nil {
+			_ = a.dialogueRepo.Insert(ctx, entity.NewRawDialogue(convID, entity.RoleAssistant, aiReply, ""))
+		}
+		// 异步执行事实提取（不阻塞主流程）
+		if a.chatOrchestrator != nil && providerID != "" {
+			var userContent string
+			if len(messages) > 0 {
+				lastUser := messages[len(messages)-1]
+				if lastUser.Role == models.RoleUser {
+					userContent = lastUser.Content
+				}
+			}
+			go a.extractFactsAsync(userContent, aiReply, providerID)
 		}
 	}
 	// 更新会话时间
@@ -419,6 +571,99 @@ func (a *WailsApp) saveMessages(ctx context.Context, convID string, messages []m
 		if err := a.convRepo.UpdateTimestamp(ctx, models.ConversationID(convID), time.Now()); err != nil {
 			fmt.Printf("[saveMessages] 更新会话时间失败: %v\n", err)
 		}
+	}
+}
+
+// warmupONNX 执行一次 dummy 推理，触发 ONNX Runtime 的首次模型 warmup。
+// 使用应用生命周期 context，不设置短 timeout，让 warmup 自然完成。
+// 失败仅记录日志，不影响应用启动。
+func (a *WailsApp) warmupONNX() {
+	// 延迟 2 秒，确保 ONNX engine 已完全初始化
+	time.Sleep(2 * time.Second)
+
+	start := time.Now()
+	if a.embeddingSvc != nil {
+		_, err := a.embeddingSvc.EmbedSingle(a.ctx, "warmup")
+		if err != nil {
+			fmt.Printf("[ONNX Warmup] embedding 预热失败: %v\n", err)
+		} else {
+			fmt.Printf("[ONNX Warmup] embedding 预热完成，耗时 %v\n", time.Since(start))
+		}
+	}
+}
+
+// extractFactsAsync 异步从完整对话（用户消息 + AI 回复）中提取事实并保存到 factRepo。
+// 由 ChatOrchestrator 统一调度限流，避免与主对话竞争 API 配额触发 429。
+func (a *WailsApp) extractFactsAsync(userContent, aiReply, providerID string) {
+	ctx, cancel := context.WithTimeout(a.ctx, 60*time.Second)
+	defer cancel()
+	facts, err := a.chatOrchestrator.ExtractFactsFromReply(ctx, userContent, aiReply, providerID)
+	if err != nil {
+		// 429 限流时静默跳过，不记录错误（这是预期行为）
+		if strings.Contains(err.Error(), "429") || strings.Contains(err.Error(), "rate limit") || strings.Contains(err.Error(), "rate limited") {
+			fmt.Printf("[extractFactsAsync] skipped due to rate limit (expected)\n")
+			return
+		}
+		fmt.Printf("[extractFactsAsync] 事实提取失败: %v\n", err)
+		return
+	}
+	for _, f := range facts {
+		if err := a.factRepo.Save(ctx, f); err != nil {
+			fmt.Printf("[extractFactsAsync] 保存事实失败 %s: %v\n", f.FactID, err)
+			continue
+		}
+		// 生成并保存 embedding，语义搜索依赖此数据
+		if a.embeddingSvc != nil && a.embeddingRepo != nil {
+			embedText := fmt.Sprintf("%s %s %s", f.Subject, f.Predicate, f.Object)
+			vector, embedErr := a.embeddingSvc.EmbedSingle(ctx, embedText)
+			if embedErr == nil {
+				emb := entity.NewSemanticEmbedding(f.FactID, vector, "all-MiniLM-L6-v2")
+				if saveErr := a.embeddingRepo.Save(ctx, emb); saveErr != nil {
+					fmt.Printf("[extractFactsAsync] 保存 embedding 失败 %s: %v\n", f.FactID, saveErr)
+				}
+			} else {
+				fmt.Printf("[extractFactsAsync] 生成 embedding 失败 %s: %v\n", f.FactID, embedErr)
+			}
+		}
+	}
+	fmt.Printf("[extractFactsAsync] 提取并保存 %d 条事实\n", len(facts))
+}
+
+// backfillEmbeddings 补全已有事实中缺失的 embedding。
+// 在应用启动时异步执行一次，修复历史事实的 embedding 缺失问题。
+func (a *WailsApp) backfillEmbeddings() {
+	if a.factRepo == nil || a.embeddingSvc == nil || a.embeddingRepo == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(a.ctx, 5*time.Minute)
+	defer cancel()
+
+	facts, err := a.factRepo.ListByStatus(ctx, entity.FactStatusApproved, 0, 10000)
+	if err != nil {
+		fmt.Printf("[backfillEmbeddings] 读取事实列表失败: %v\n", err)
+		return
+	}
+
+	var backfilled int
+	for _, f := range facts {
+		if _, err := a.embeddingRepo.GetByFactID(ctx, f.FactID); err == nil {
+			continue // 已存在 embedding，跳过
+		}
+		embedText := fmt.Sprintf("%s %s %s", f.Subject, f.Predicate, f.Object)
+		vector, embedErr := a.embeddingSvc.EmbedSingle(ctx, embedText)
+		if embedErr != nil {
+			fmt.Printf("[backfillEmbeddings] 生成 embedding 失败 %s: %v\n", f.FactID, embedErr)
+			continue
+		}
+		emb := entity.NewSemanticEmbedding(f.FactID, vector, "all-MiniLM-L6-v2")
+		if saveErr := a.embeddingRepo.Save(ctx, emb); saveErr != nil {
+			fmt.Printf("[backfillEmbeddings] 保存 embedding 失败 %s: %v\n", f.FactID, saveErr)
+			continue
+		}
+		backfilled++
+	}
+	if backfilled > 0 {
+		fmt.Printf("[backfillEmbeddings] 补全 %d 条事实的 embedding\n", backfilled)
 	}
 }
 
@@ -443,10 +688,14 @@ type ConversationSummary struct {
 
 // MessageResponse 单条消息响应。
 type MessageResponse struct {
-	ID        string `json:"id"`
-	Role      string `json:"role"`
-	Content   string `json:"content"`
-	Timestamp string `json:"timestamp"`
+	ID               string                 `json:"id"`
+	Role             string                 `json:"role"`
+	Content          string                 `json:"content"`
+	Timestamp        string                 `json:"timestamp"`
+	PromptTokens     int                    `json:"prompt_tokens"`
+	CompletionTokens int                    `json:"completion_tokens"`
+	TotalTokens      int                    `json:"total_tokens"`
+	Confidence       map[string]interface{} `json:"confidence,omitempty"`
 }
 
 // GetConversationMessages 获取指定会话的全部消息。
@@ -470,12 +719,38 @@ func (a *WailsApp) GetConversationMessages(convID string) ([]MessageResponse, er
 	// ListByConversation 返回 created_at DESC（最新的在前），需要反转为正序
 	result := make([]MessageResponse, len(msgs))
 	for i, m := range msgs {
-		result[len(msgs)-1-i] = MessageResponse{
-			ID:        m.ID,
-			Role:      string(m.Role),
-			Content:   m.Content,
-			Timestamp: strconv.FormatInt(m.Timestamp.UnixMilli(), 10),
+		mr := MessageResponse{
+			ID:               m.ID,
+			Role:             string(m.Role),
+			Content:          m.Content,
+			Timestamp:        strconv.FormatInt(m.Timestamp.UnixMilli(), 10),
+			PromptTokens:     m.PromptTokens,
+			CompletionTokens: m.CompletionTokens,
+			TotalTokens:      m.PromptTokens + m.CompletionTokens,
 		}
+		if m.ConfidenceJSON != "" {
+			// 先反序列化到实体结构（兼容旧数据的大驼峰和新数据的蛇形）
+			var cr entity.ConfidenceResult
+			if err := json.Unmarshal([]byte(m.ConfidenceJSON), &cr); err == nil {
+				mr.Confidence = confidenceResultToMap(&cr)
+				// 防御性修复：若 JSON 解析后 overall_score 为 0 但 ConfidenceScore > 0，用 ConfidenceScore 覆盖
+				if cr.OverallScore == 0 && m.ConfidenceScore > 0 {
+					fmt.Printf("[DIAG][Confidence][GetConversationMessages] OverallScore=0 but ConfidenceScore=%.2f, using ConfidenceScore as fallback. JSON=%s\n",
+						m.ConfidenceScore, m.ConfidenceJSON)
+					mr.Confidence["overall_score"] = m.ConfidenceScore
+				}
+			} else {
+				// 降级：直接作为 map 透传
+				var conf map[string]interface{}
+				if err := json.Unmarshal([]byte(m.ConfidenceJSON), &conf); err == nil {
+					mr.Confidence = conf
+					fmt.Printf("[DIAG][Confidence][GetConversationMessages] fallback map parse. JSON=%s\n", m.ConfidenceJSON)
+				}
+			}
+			fmt.Printf("[DIAG][Confidence][GetConversationMessages] msgID=%s overall_score=%v breakdown=%v\n",
+				m.ID, mr.Confidence["overall_score"], mr.Confidence["breakdown"])
+		}
+		result[len(msgs)-1-i] = mr
 	}
 	return result, nil
 }
@@ -513,6 +788,53 @@ func (a *WailsApp) GetConversations() (result []ConversationSummary, err error) 
 		result[i] = summary
 	}
 	return result, nil
+}
+
+// GetDeletedConversations 获取已软删除的会话列表（回收站）。
+func (a *WailsApp) GetDeletedConversations() (result []ConversationSummary, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("[panic] GetDeletedConversations: %v\n", r)
+			err = fmt.Errorf("internal error: %v", r)
+		}
+	}()
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+
+	if a.convRepo == nil {
+		return nil, fmt.Errorf("conversation repository not initialized")
+	}
+
+	convs, err := a.convRepo.ListDeleted(ctx, 100)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list deleted conversations: %w", err)
+	}
+
+	result = make([]ConversationSummary, len(convs))
+	for i, conv := range convs {
+		summary := ConversationSummary{
+			ID:        string(conv.ID),
+			Title:     conv.Title,
+			UpdatedAt: strconv.FormatInt(conv.UpdatedAt.UnixMilli(), 10),
+		}
+		if conv.DeletedAt != nil {
+			summary.DeletedAt = strconv.FormatInt(conv.DeletedAt.UnixMilli(), 10)
+		}
+		result[i] = summary
+	}
+	return result, nil
+}
+
+// SetDataRetentionDays 设置数据留存期限并持久化到配置文件。
+func (a *WailsApp) SetDataRetentionDays(days int) error {
+	if days < 0 {
+		return fmt.Errorf("data retention days must be non-negative")
+	}
+	a.config.DataRetentionDays = days
+	if err := config.SaveDataRetentionDays(days); err != nil {
+		return fmt.Errorf("failed to save data retention days: %w", err)
+	}
+	return nil
 }
 
 // DeleteConversation 软删除指定会话（移入回收站）。
@@ -946,7 +1268,7 @@ func (a *WailsApp) TestAPIKey(providerType string, apiKey string, apiHost string
 	}
 
 	// 其他厂商使用 OpenAI 兼容格式 /v1/models
-	adapter := ai.NewOpenAIAdapter(apiKey, apiHost, "", 30*time.Second)
+	adapter := ai.NewOpenAIAdapter(apiKey, apiHost, "", 0, 30*time.Second)
 	ok, msg := adapter.CheckAvailability(ctx)
 	if ok {
 		return &TestAPIKeyResult{
@@ -1864,4 +2186,446 @@ func computeRecommendation(results []AuthMethodDetectStatus) (string, bool) {
 
 	// 全部不可用时兜底推荐 local
 	return "local", allUnavailable
+}
+
+// =============================================================================
+// 记忆管理 API（TASK-060）
+// =============================================================================
+
+// MemoryItem 记忆列表项 DTO，供前端管理界面展示。
+type MemoryItem struct {
+	FactID      string  `json:"fact_id"`
+	Subject     string  `json:"subject"`
+	Predicate   string  `json:"predicate"`
+	Object      string  `json:"object"`
+	Confidence  float64 `json:"confidence"`
+	Status      string  `json:"status"`
+	IsSensitive bool    `json:"is_sensitive"`
+	CreatedAt   int64   `json:"created_at"`
+}
+
+// MemoryStats 记忆统计 DTO。
+type MemoryStats struct {
+	Total    int64 `json:"total"`
+	Approved int64 `json:"approved"`
+	Rejected int64 `json:"rejected"`
+	Pending  int64 `json:"pending"`
+}
+
+// EmbeddingStatusResponse Embedding 模型状态响应。
+type EmbeddingStatusResponse struct {
+	Available   bool   `json:"available"`    // 模型是否已下载可用
+	ModelPath   string `json:"model_path"`   // 模型存放路径
+	ModelName   string `json:"model_name"`   // 模型名称
+	DownloadURL string `json:"download_url"` // 模型下载页面 URL
+}
+
+func factToMemoryItem(f *entity.ExtractedFact) MemoryItem {
+	return MemoryItem{
+		FactID:      f.FactID,
+		Subject:     f.Subject,
+		Predicate:   f.Predicate,
+		Object:      f.Object,
+		Confidence:  f.Confidence,
+		Status:      string(f.Status),
+		IsSensitive: f.IsSensitive,
+		CreatedAt:   f.CreatedAt.UnixMilli(),
+	}
+}
+
+// requireAuth 检查应用是否已通过首次启动的免责声明同意流程。
+// 未授权时返回 ErrUnauthorized，阻止记忆数据的访问。
+func (a *WailsApp) requireAuth() error {
+	if a.disclaimerRepo == nil {
+		return fmt.Errorf("disclaimer repository not initialized: %w", entity.ErrUnauthorized)
+	}
+	ctx, cancel := context.WithTimeout(a.ctx, 5*time.Second)
+	defer cancel()
+	rec, err := a.disclaimerRepo.GetAcceptance(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to check authorization: %w", err)
+	}
+	if rec == nil {
+		return entity.ErrUnauthorized
+	}
+	return nil
+}
+
+// GetMemories 分页获取已审批的记忆列表。
+func (a *WailsApp) GetMemories(limit int, offset int) ([]MemoryItem, error) {
+	if err := a.requireAuth(); err != nil {
+		return nil, err
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+
+	if a.factRepo == nil {
+		return nil, fmt.Errorf("fact repository not initialized")
+	}
+
+	facts, err := a.factRepo.ListByStatus(ctx, entity.FactStatusApproved, offset, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list memories: %w", err)
+	}
+
+	items := make([]MemoryItem, 0, len(facts))
+	for _, f := range facts {
+		items = append(items, factToMemoryItem(f))
+	}
+	return items, nil
+}
+
+// GetMemoryByID 按 ID 获取单条记忆详情。
+func (a *WailsApp) GetMemoryByID(factID string) (MemoryItem, error) {
+	if err := a.requireAuth(); err != nil {
+		return MemoryItem{}, err
+	}
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+
+	if a.factRepo == nil {
+		return MemoryItem{}, fmt.Errorf("fact repository not initialized")
+	}
+
+	f, err := a.factRepo.GetByID(ctx, factID)
+	if err != nil {
+		return MemoryItem{}, fmt.Errorf("failed to get memory: %w", err)
+	}
+	return factToMemoryItem(f), nil
+}
+
+// DeleteMemory 删除指定记忆（级联删除关联嵌入）。
+func (a *WailsApp) DeleteMemory(factID string) error {
+	if err := a.requireAuth(); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+
+	if a.factRepo == nil {
+		return fmt.Errorf("fact repository not initialized")
+	}
+
+	if err := a.factRepo.Delete(ctx, factID); err != nil {
+		return fmt.Errorf("failed to delete memory: %w", err)
+	}
+
+	// 记录审计日志（失败不影响主流程）
+	if a.auditLogRepo != nil {
+		entry := entity.NewAuditLogEntry(entity.AuditActionDelete, "fact", factID, "user")
+		_ = a.auditLogRepo.Save(ctx, entry)
+	}
+	return nil
+}
+
+// SearchMemories 关键词搜索已审批的记忆。
+func (a *WailsApp) SearchMemories(query string) ([]MemoryItem, error) {
+	if err := a.requireAuth(); err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+
+	if a.factRepo == nil {
+		return nil, fmt.Errorf("fact repository not initialized")
+	}
+
+	facts, err := a.factRepo.ListByStatus(ctx, entity.FactStatusApproved, 0, 1000)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search memories: %w", err)
+	}
+
+	query = strings.ToLower(strings.TrimSpace(query))
+	var items []MemoryItem
+	for _, f := range facts {
+		if query == "" ||
+			strings.Contains(strings.ToLower(f.Subject), query) ||
+			strings.Contains(strings.ToLower(f.Predicate), query) ||
+			strings.Contains(strings.ToLower(f.Object), query) {
+			items = append(items, factToMemoryItem(f))
+		}
+	}
+	return items, nil
+}
+
+// GetPendingReviews 获取待审核事实列表。
+func (a *WailsApp) GetPendingReviews(limit int, offset int) ([]MemoryItem, error) {
+	if err := a.requireAuth(); err != nil {
+		return nil, err
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+
+	if a.factRepo == nil {
+		return nil, fmt.Errorf("fact repository not initialized")
+	}
+
+	facts, err := a.factRepo.ListPending(ctx, offset, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list pending reviews: %w", err)
+	}
+
+	items := make([]MemoryItem, 0, len(facts))
+	for _, f := range facts {
+		items = append(items, factToMemoryItem(f))
+	}
+	return items, nil
+}
+
+// ApproveFact 审核通过指定事实。
+func (a *WailsApp) ApproveFact(factID string) error {
+	if err := a.requireAuth(); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+
+	if a.factRepo == nil {
+		return fmt.Errorf("fact repository not initialized")
+	}
+
+	if err := a.factRepo.UpdateStatus(ctx, factID, entity.FactStatusApproved); err != nil {
+		return fmt.Errorf("failed to approve fact: %w", err)
+	}
+
+	// 审批通过后生成语义嵌入（向量索引），供记忆召回使用
+	if a.embeddingSvc != nil && a.embeddingRepo != nil {
+		fact, err := a.factRepo.GetByID(ctx, factID)
+		if err == nil && fact != nil {
+			content := fmt.Sprintf("%s %s %s", fact.Subject, fact.Predicate, fact.Object)
+			vector, embErr := a.embeddingSvc.EmbedSingle(ctx, content)
+			if embErr == nil {
+				embedding := entity.NewSemanticEmbedding(factID, vector, "all-MiniLM-L6-v2")
+				if saveErr := a.embeddingRepo.Save(ctx, embedding); saveErr != nil {
+					fmt.Printf("[ApproveFact] 保存嵌入向量失败 %s: %v\n", factID, saveErr)
+				}
+			} else {
+				fmt.Printf("[ApproveFact] 生成嵌入向量失败 %s: %v\n", factID, embErr)
+			}
+		}
+	}
+
+	// 记录审计日志（失败不影响主流程）
+	if a.auditLogRepo != nil {
+		entry := entity.NewAuditLogEntry(entity.AuditActionApprove, "fact", factID, "user")
+		_ = a.auditLogRepo.Save(ctx, entry)
+	}
+	return nil
+}
+
+// RejectFact 审核拒绝指定事实。
+func (a *WailsApp) RejectFact(factID string) error {
+	if err := a.requireAuth(); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+
+	if a.factRepo == nil {
+		return fmt.Errorf("fact repository not initialized")
+	}
+
+	if err := a.factRepo.UpdateStatus(ctx, factID, entity.FactStatusRejected); err != nil {
+		return fmt.Errorf("failed to reject fact: %w", err)
+	}
+
+	// 记录审计日志（失败不影响主流程）
+	if a.auditLogRepo != nil {
+		entry := entity.NewAuditLogEntry(entity.AuditActionReject, "fact", factID, "user")
+		_ = a.auditLogRepo.Save(ctx, entry)
+	}
+	return nil
+}
+
+// embeddingModelDir 返回 Embedding 模型目录的绝对路径。
+// 始终使用用户数据目录 ~/.medmemo/data/models/all-MiniLM-L6-v2，
+// 确保在 AppImage（只读 FS）、macOS .app bundle 及 Windows 安装目录中均可正常读写。
+func (a *WailsApp) embeddingModelDir() string {
+	return filepath.Join(a.config.DataDir, "models", "all-MiniLM-L6-v2")
+}
+
+// GetEmbeddingStatus 获取本地 Embedding 模型状态。
+func (a *WailsApp) GetEmbeddingStatus() (*EmbeddingStatusResponse, error) {
+	modelPath := a.embeddingModelDir()
+	modelFile := filepath.Join(modelPath, "model.onnx")
+
+	_, err := os.Stat(modelFile)
+	available := err == nil
+
+	downloadURL := a.config.EmbeddingModelDownloadURL
+	if downloadURL == "" {
+		// 默认指向 GitHub Release 下载页面，用户可在 config.yaml 中自定义
+		downloadURL = "https://github.com/hzhan516/medmemo/releases/tag/embedding-model-v1"
+	}
+
+	// 向前端返回绝对路径，便于展示
+	absPath, _ := filepath.Abs(modelPath)
+	if absPath != "" {
+		modelPath = absPath
+	}
+
+	return &EmbeddingStatusResponse{
+		Available:   available,
+		ModelPath:   modelPath,
+		ModelName:   "all-MiniLM-L6-v2",
+		DownloadURL: downloadURL,
+	}, nil
+}
+
+// GetEmbeddingModelDirPath 返回 Embedding 模型目录的绝对路径。
+func (a *WailsApp) GetEmbeddingModelDirPath() (string, error) {
+	modelPath := a.embeddingModelDir()
+	absPath, err := filepath.Abs(modelPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve model dir path: %w", err)
+	}
+	// 确保目录存在（使用用户可写路径，不会在只读 FS 上失败）
+	if err := os.MkdirAll(absPath, 0755); err != nil {
+		return "", fmt.Errorf("failed to create model dir: %w", err)
+	}
+	return absPath, nil
+}
+
+// OpenEmbeddingModelDir 打开 Embedding 模型所在目录。
+// 使用平台特定命令打开文件管理器，比 BrowserOpenURL 更可靠。
+func (a *WailsApp) OpenEmbeddingModelDir() error {
+	absPath, err := a.GetEmbeddingModelDirPath()
+	if err != nil {
+		return err
+	}
+
+	var cmd string
+	var args []string
+	switch goruntime.GOOS {
+	case "windows":
+		cmd = "explorer.exe"
+		args = []string{absPath}
+	case "darwin":
+		cmd = "open"
+		args = []string{absPath}
+	default: // linux and others
+		cmd = "xdg-open"
+		args = []string{absPath}
+	}
+
+	c := exec.Command(cmd, args...)
+	if err := c.Start(); err != nil {
+		// 命令启动失败时，弹窗提示用户手动前往
+		_, _ = runtime.MessageDialog(a.ctx, runtime.MessageDialogOptions{
+			Type:    runtime.InfoDialog,
+			Title:   "打开模型目录",
+			Message: fmt.Sprintf("无法自动打开文件管理器，请手动前往以下目录：\n\n%s", absPath),
+		})
+		return fmt.Errorf("failed to open model dir with %s: %w", cmd, err)
+	}
+	return nil
+}
+
+// GetMemoryStats 获取记忆审核统计。
+func (a *WailsApp) GetMemoryStats() (MemoryStats, error) {
+	if err := a.requireAuth(); err != nil {
+		return MemoryStats{}, err
+	}
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+
+	if a.factRepo == nil {
+		return MemoryStats{}, fmt.Errorf("fact repository not initialized")
+	}
+
+	total, approved, rejected, pending, err := a.factRepo.GetStats(ctx)
+	if err != nil {
+		return MemoryStats{}, fmt.Errorf("failed to get memory stats: %w", err)
+	}
+	return MemoryStats{
+		Total:    total,
+		Approved: approved,
+		Rejected: rejected,
+		Pending:  pending,
+	}, nil
+}
+
+// GetMemoriesBySession 按会话 ID 获取关联的已审批记忆。
+func (a *WailsApp) GetMemoriesBySession(sessionID string) ([]MemoryItem, error) {
+	if err := a.requireAuth(); err != nil {
+		return nil, err
+	}
+	if sessionID == "" {
+		return nil, fmt.Errorf("session_id is required")
+	}
+
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+
+	if a.factRepo == nil {
+		return nil, fmt.Errorf("fact repository not initialized")
+	}
+
+	facts, err := a.factRepo.FindBySession(ctx, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get memories by session: %w", err)
+	}
+
+	items := make([]MemoryItem, 0, len(facts))
+	for _, f := range facts {
+		items = append(items, factToMemoryItem(f))
+	}
+	return items, nil
+}
+
+// SetMemoryInjectionEnabled 设置记忆注入全局开关。
+func (a *WailsApp) SetMemoryInjectionEnabled(enabled bool) error {
+	if err := a.requireAuth(); err != nil {
+		return err
+	}
+	if a.memoryRetriever == nil {
+		return fmt.Errorf("memory retriever not initialized")
+	}
+	a.memoryRetriever.SetEnabled(enabled)
+	return nil
+}
+
+// SetSessionMemoryInjection 设置指定会话的记忆注入开关。
+func (a *WailsApp) SetSessionMemoryInjection(sessionID string, enabled bool) error {
+	if err := a.requireAuth(); err != nil {
+		return err
+	}
+	if a.memoryRetriever == nil {
+		return fmt.Errorf("memory retriever not initialized")
+	}
+	a.memoryRetriever.SetSessionEnabled(sessionID, enabled)
+	return nil
+}
+
+// confidenceResultToMap 将 entity.ConfidenceResult 转为 map[string]interface{}，
+// 供 Wails JSON 绑定序列化。
+func confidenceResultToMap(r *entity.ConfidenceResult) map[string]interface{} {
+	if r == nil {
+		return nil
+	}
+	m := map[string]interface{}{
+		"overall_score": r.OverallScore,
+		"level":         string(r.Level),
+		"explanation":   r.Explanation,
+		"suggestion":    r.Suggestion,
+		"missing_info":  r.MissingInfo,
+	}
+	if r.Breakdown != nil {
+		m["breakdown"] = r.Breakdown
+	}
+	return m
 }

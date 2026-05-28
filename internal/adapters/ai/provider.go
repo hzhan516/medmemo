@@ -61,7 +61,7 @@ func ProviderFactory(cfg *entity.AppConfig) port.LLMClient {
 		if model == "" {
 			model = localDefaultModels[models.ProviderOllama]
 		}
-		return NewLocalAdapter(endpoint, model, defaultRequestTimeout)
+		return NewLocalAdapter(endpoint, model, 0, defaultRequestTimeout)
 	}
 
 	// 通用本地端点路由
@@ -74,7 +74,7 @@ func ProviderFactory(cfg *entity.AppConfig) port.LLMClient {
 		if model == "" {
 			model = localDefaultModels[models.ProviderLocal]
 		}
-		return NewOpenAIAdapter("", endpoint, model, defaultRequestTimeout)
+		return NewOpenAIAdapter("", endpoint, model, 0, defaultRequestTimeout)
 	}
 
 	// 云端模型路由
@@ -92,7 +92,7 @@ func ProviderFactory(cfg *entity.AppConfig) port.LLMClient {
 		model = "kimi-lite"
 	}
 
-	return NewOpenAIAdapter("", baseURL, model, defaultRequestTimeout)
+	return NewOpenAIAdapter("", baseURL, model, 0, defaultRequestTimeout)
 }
 
 // llmClientFactory 实现 port.LLMClientFactory，根据 ProviderConfig 动态创建 adapter。
@@ -147,14 +147,14 @@ func resolveTimeout(timeoutMs int) time.Duration {
 func createOllamaClient(cfg *models.ProviderConfig) port.LLMClient {
 	endpoint := resolveEndpoint(cfg.APIHost, localEndpoints[models.ProviderOllama])
 	model := resolveModel(cfg.ModelID, cfg.Models, localDefaultModels[models.ProviderOllama])
-	return NewLocalAdapter(endpoint, model, resolveTimeout(cfg.TimeoutMs))
+	return NewLocalAdapter(endpoint, model, cfg.MaxTokens, resolveTimeout(cfg.TimeoutMs))
 }
 
 // createLocalClient 创建通用本地端点适配器。
 func createLocalClient(cfg *models.ProviderConfig) port.LLMClient {
 	endpoint := resolveEndpoint(cfg.APIHost, localEndpoints[models.ProviderLocal])
 	model := resolveModel(cfg.ModelID, cfg.Models, localDefaultModels[models.ProviderLocal])
-	return NewOpenAIAdapter("", endpoint, model, resolveTimeout(cfg.TimeoutMs))
+	return NewOpenAIAdapter("", endpoint, model, cfg.MaxTokens, resolveTimeout(cfg.TimeoutMs))
 }
 
 // createCloudClient 创建云端模型适配器。
@@ -164,7 +164,7 @@ func createCloudClient(cfg *models.ProviderConfig, providerType models.ProviderT
 		baseURL = defaultEndpoints[models.ProviderKimi]
 	}
 	model := resolveModel(cfg.ModelID, cfg.Models, "kimi-lite")
-	return NewOpenAIAdapter(cfg.APIKey, baseURL, model, resolveTimeout(cfg.TimeoutMs))
+	return NewOpenAIAdapter(cfg.APIKey, baseURL, model, cfg.MaxTokens, resolveTimeout(cfg.TimeoutMs))
 }
 
 // resolveEndpoint 返回有效的 API 端点，优先使用用户配置，否则使用默认值。

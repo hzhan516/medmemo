@@ -214,19 +214,19 @@ func TestConversationRepo_ArchiveOlderThan(t *testing.T) {
 	cutoff := now.Add(-1 * time.Hour)
 	require.NoError(t, repo.ArchiveOlderThan(ctx, cutoff))
 
-	// 旧会话应被归档（archived_at 非空）
-	var archivedAt sql.NullInt64
+	// 旧会话应被自动移入回收站（deleted_at 非空）
+	var deletedAt sql.NullInt64
 	err := conn.DB().QueryRowContext(ctx,
-		"SELECT archived_at FROM conversations WHERE id = ?", oldConv.ID).Scan(&archivedAt)
+		"SELECT deleted_at FROM conversations WHERE id = ?", oldConv.ID).Scan(&deletedAt)
 	require.NoError(t, err)
-	assert.True(t, archivedAt.Valid && archivedAt.Int64 > 0, "旧会话应被归档")
+	assert.True(t, deletedAt.Valid && deletedAt.Int64 > 0, "旧会话应被自动移入回收站")
 
-	// 新会话不应被归档
-	var newArchivedAt sql.NullInt64
+	// 新会话不应被移入回收站
+	var newDeletedAt sql.NullInt64
 	err = conn.DB().QueryRowContext(ctx,
-		"SELECT archived_at FROM conversations WHERE id = ?", newConv.ID).Scan(&newArchivedAt)
+		"SELECT deleted_at FROM conversations WHERE id = ?", newConv.ID).Scan(&newDeletedAt)
 	require.NoError(t, err)
-	assert.False(t, newArchivedAt.Valid, "新会话不应被归档")
+	assert.False(t, newDeletedAt.Valid, "新会话不应被移入回收站")
 }
 
 // TestConversationRepo_Restore 验证 Restore 可恢复已软删除的会话。
@@ -393,6 +393,39 @@ func TestConversationRepo_Save_DBClosed(t *testing.T) {
 
 	err := repo.Save(ctx, conv)
 	require.Error(t, err, "数据库已关闭，Save 应返回错误")
+}
+
+// TestConversationRepo_ListDeleted 验证 ListDeleted 返回已软删除的会话。
+func TestConversationRepo_ListDeleted(t *testing.T) {
+	conn := setupTestConnector(t)
+	repo := NewConversationRepoSQLite(conn)
+	ctx := context.Background()
+
+	conv1 := &entity.Conversation{
+		ID:        "conv_deleted_1",
+		Title:     "已删除会话1",
+		Model:     models.ProviderKimi,
+		CreatedAt: time.Now().UTC().Truncate(time.Millisecond),
+		UpdatedAt: time.Now().UTC().Truncate(time.Millisecond),
+		Messages:  make([]entity.Message, 0),
+	}
+	conv2 := &entity.Conversation{
+		ID:        "conv_active",
+		Title:     "活跃会话",
+		Model:     models.ProviderKimi,
+		CreatedAt: time.Now().UTC().Truncate(time.Millisecond),
+		UpdatedAt: time.Now().UTC().Truncate(time.Millisecond),
+		Messages:  make([]entity.Message, 0),
+	}
+	require.NoError(t, repo.Save(ctx, conv1))
+	require.NoError(t, repo.Save(ctx, conv2))
+	require.NoError(t, repo.Delete(ctx, conv1.ID))
+
+	deleted, err := repo.ListDeleted(ctx, 10)
+	require.NoError(t, err)
+	require.Len(t, deleted, 1)
+	assert.Equal(t, conv1.ID, deleted[0].ID)
+	assert.NotNil(t, deleted[0].DeletedAt)
 }
 
 // TestConversationRepo_Delete_DBClosed 验证数据库关闭后 Delete 返回错误。

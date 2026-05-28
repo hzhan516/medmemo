@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/google/wire"
 	"github.com/hzhan516/medmemo/internal/application"
@@ -19,20 +21,20 @@ type Deidentifier interface {
 	Execute(ctx context.Context, raw string) (models.DeidentifyResult, error)
 }
 
-// MemoryQuerier 记忆检索接口。
-type MemoryQuerier interface {
-	RetrieveForContext(ctx context.Context, query string, limit int) ([]*entity.HealthMemory, error)
-}
-
 // ChatOrchestrator 对话流程编排器。
 type ChatOrchestrator struct {
-	llmFactory      port.LLMClientFactory
-	providerStore   port.ProviderStore
-	memoryRepo      port.MemoryRepository
-	detector        port.SensitiveDetector
-	compliance      ComplianceChecker
-	deidPipeline    Deidentifier
-	memoryRetriever MemoryQuerier
+	llmFactory           port.LLMClientFactory
+	providerStore        port.ProviderStore
+	memoryRepo           port.MemoryRepository
+	detector             port.SensitiveDetector
+	compliance           ComplianceChecker
+	deidPipeline         Deidentifier
+	memoryRetriever      MemoryQuerier
+	confidenceAggregator *ConfidenceAggregator
+	// 全局事实提取限流器，跨调用共享速率限制
+	factExtractMu       sync.Mutex
+	factExtractLastCall time.Time
+	factExtractMinGap   time.Duration // 最小调用间隔
 }
 
 // NewChatOrchestrator 构造函数，供 Wire 注入。
@@ -44,15 +46,18 @@ func NewChatOrchestrator(
 	comp ComplianceChecker,
 	deid Deidentifier,
 	retriever MemoryQuerier,
+	confAgg *ConfidenceAggregator,
 ) *ChatOrchestrator {
 	return &ChatOrchestrator{
-		llmFactory:      llmFactory,
-		providerStore:   providerStore,
-		memoryRepo:      mem,
-		detector:        det,
-		compliance:      comp,
-		deidPipeline:    deid,
-		memoryRetriever: retriever,
+		llmFactory:           llmFactory,
+		providerStore:        providerStore,
+		memoryRepo:           mem,
+		detector:             det,
+		compliance:           comp,
+		deidPipeline:         deid,
+		memoryRetriever:      retriever,
+		confidenceAggregator: confAgg,
+		factExtractMinGap:    15 * time.Second, // 最小 15 秒间隔，避免与主对话竞争
 	}
 }
 
@@ -66,9 +71,9 @@ type ChatRequest struct {
 
 // ChatResponse 对话响应 DTO。
 type ChatResponse struct {
-	Reply      string
-	Confidence float64
-	Warnings   []string
+	Reply            string
+	ConfidenceResult *entity.ConfidenceResult
+	Warnings         []string
 }
 
 // isLocalModel 判断是否为本地模型（跳过脱敏）。
@@ -127,7 +132,9 @@ func (c *ChatOrchestrator) prepareMessages(ctx context.Context, req ChatRequest)
 	if !isLocalModel(req.Model) && c.deidPipeline != nil {
 		lastIdx := findLastUserMessage(req.Messages)
 		if lastIdx >= 0 {
+			deidStart := time.Now()
 			r, err := c.deidPipeline.Execute(ctx, req.Messages[lastIdx].Content)
+			fmt.Printf("[DIAG][Chat] deidPipeline.Execute took %v err=%v\n", time.Since(deidStart), err)
 			if err == nil {
 				deidResult = r
 				messages = make([]models.Message, len(req.Messages))
@@ -142,7 +149,9 @@ func (c *ChatOrchestrator) prepareMessages(ctx context.Context, req ChatRequest)
 	if c.memoryRetriever != nil {
 		lastIdx := findLastUserMessage(messages)
 		if lastIdx >= 0 {
-			memories, _ := c.memoryRetriever.RetrieveForContext(ctx, messages[lastIdx].Content, 3)
+			memStart := time.Now()
+			memories, _ := c.memoryRetriever.RetrieveForContext(ctx, messages[lastIdx].Content, string(req.ConversationID), 3)
+			fmt.Printf("[DIAG][Chat] memoryRetriever.RetrieveForContext took %v memories=%d\n", time.Since(memStart), len(memories))
 			if len(memories) > 0 {
 				messages = injectMemories(messages, memories)
 			}
@@ -181,9 +190,9 @@ func (c *ChatOrchestrator) Execute(ctx context.Context, req ChatRequest) (*ChatR
 	if err != nil {
 		// 降级放行，确保对话不中断
 		return &ChatResponse{
-			Reply:      reply,
-			Confidence: 0.0,
-			Warnings:   []string{"COMPLIANCE_CHECK_ERROR"},
+			Reply:            reply,
+			ConfidenceResult: c.confidenceAggregator.CalculateWithRawScore(0.0, []string{"合规检测异常"}),
+			Warnings:         []string{"COMPLIANCE_CHECK_ERROR"},
 		}, nil
 	}
 
@@ -191,11 +200,23 @@ func (c *ChatOrchestrator) Execute(ctx context.Context, req ChatRequest) (*ChatR
 	if compResult.Level != application.L4Normal.String() {
 		warnings = append(warnings, compResult.Level)
 	}
+	if compResult.Warning != "" {
+		warnings = append(warnings, "WARNING:"+compResult.Warning)
+	}
+	if compResult.Notice != "" {
+		warnings = append(warnings, "NOTICE:"+compResult.Notice)
+	}
+	if compResult.MatchedRule != "" {
+		warnings = append(warnings, "RULE:"+compResult.MatchedRule)
+	}
+
+	// 计算回答置信度
+	confidence := c.calculateConfidence(reply, messages)
 
 	return &ChatResponse{
-		Reply:      compResult.SafeText,
-		Confidence: 0.0,
-		Warnings:   warnings,
+		Reply:            reply,
+		ConfidenceResult: confidence,
+		Warnings:         warnings,
 	}, nil
 }
 
@@ -205,15 +226,30 @@ func (c *ChatOrchestrator) Execute(ctx context.Context, req ChatRequest) (*ChatR
 // 若还原或合规替换导致内容变化，返回的 finalContent 与流式过程中推送的内容不同，
 // 由外层通过 chat:stream:replace 事件通知前端替换。
 // 仅 L1（阻断级）返回 SafeText；L2/L3 保留原文，由外层通过
-// chat:stream:compliance 事件追加标签。流式正常结束时返回 TokenUsage 与最终内容。
-func (c *ChatOrchestrator) StreamExecute(ctx context.Context, req ChatRequest, onChunk func(string)) (*models.TokenUsage, string, error) {
-	messages, deidResult := c.prepareMessages(ctx, req)
+// chat:stream:compliance 事件追加标签。流式正常结束时返回 TokenUsage、置信度与最终内容。
+func (c *ChatOrchestrator) StreamExecute(ctx context.Context, req ChatRequest, onChunk func(string)) (*models.TokenUsage, *entity.ConfidenceResult, string, error) {
+	streamExecStart := time.Now()
 
-	// 根据 ProviderID 动态创建 LLMClient
-	llmClient, err := c.resolveLLMClient(ctx, req.ProviderID)
+	// 预处理使用独立 context，避免 ONNX 推理消耗 stream budget
+	// L1 规则引擎 <1ms，L2 NER 正常 <100ms，30s 足够覆盖异常场景
+	prepCtx, prepCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer prepCancel()
+	prepStart := time.Now()
+	messages, deidResult := c.prepareMessages(prepCtx, req)
+	fmt.Printf("[DIAG][Chat] prepareMessages took %v\n", time.Since(prepStart))
+
+	// provider 查询使用独立 context，确保不受预处理耗时影响
+	resolveCtx, resolveCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer resolveCancel()
+	resolveStart := time.Now()
+	llmClient, err := c.resolveLLMClient(resolveCtx, req.ProviderID)
+	fmt.Printf("[DIAG][Chat] resolveLLMClient took %v err=%v\n", time.Since(resolveStart), err)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to resolve llm client: %w", err)
+		return nil, nil, "", fmt.Errorf("failed to resolve llm client: %w", err)
 	}
+
+	fmt.Printf("[DIAG][Chat] StreamExecute pre-StreamChat total=%v streamCtxErr=%v\n",
+		time.Since(streamExecStart), ctx.Err())
 
 	// 逐 chunk 透传，保持打字机流式效果
 	var fullReply strings.Builder
@@ -222,7 +258,7 @@ func (c *ChatOrchestrator) StreamExecute(ctx context.Context, req ChatRequest, o
 		onChunk(chunk)
 	})
 	if err != nil {
-		return nil, "", fmt.Errorf("stream execution failed: %w", err)
+		return nil, nil, "", fmt.Errorf("stream execution failed: %w", err)
 	}
 
 	// 输出还原
@@ -234,24 +270,88 @@ func (c *ChatOrchestrator) StreamExecute(ctx context.Context, req ChatRequest, o
 		})
 	}
 
-	// 合规检测
-	compResult, compErr := c.compliance.Check(ctx, reply)
+	// 合规检测（保留原始回复，不替换 SafeText；合规提示由外层通过 chat:stream:compliance 事件追加）
+	_, compErr := c.compliance.Check(ctx, reply)
 	if compErr != nil {
-		return nil, "", fmt.Errorf("compliance check error: %w", compErr)
-	}
-	// 仅 L1（阻断级）替换为安全文本并结束流式输出
-	// L2/L3 保留原文，由外层通过 chat:stream:compliance 事件追加标签
-	if compResult.Blocked {
-		return usage, compResult.SafeText, nil
+		return nil, nil, "", fmt.Errorf("compliance check error: %w", compErr)
 	}
 
-	return usage, reply, nil
+	// 计算回答置信度
+	confidence := c.calculateConfidence(reply, messages)
+
+	return usage, confidence, reply, nil
+}
+
+// calculateConfidence 为 AI 回复计算置信度结果。
+// 当前 MVP 实现：默认来源为 llm_internal，从回复内容提取推理链，
+// 上下文分数基于用户消息长度，历史准确率使用冷启动默认值 0.75。
+func (c *ChatOrchestrator) calculateConfidence(reply string, messages []models.Message) *entity.ConfidenceResult {
+	if c.confidenceAggregator == nil {
+		// 置信度引擎未注入时返回零值结果，避免 panic
+		return &entity.ConfidenceResult{
+			OverallScore: 0.0,
+			Level:        entity.ConfidenceLevelE,
+			Breakdown:    map[string]float64{},
+			Explanation:  "置信度引擎未初始化",
+			Suggestion:   entity.ConfidenceLevelE.Suggestion(),
+			MissingInfo:  []string{},
+		}
+	}
+
+	// 默认知识来源为 llm_internal（MVP 阶段无 RAG 实际集成）
+	sources := []entity.KnowledgeSource{
+		c.confidenceAggregator.tagger.Tag(entity.SourceLLMInternal, "LLM 内部推理"),
+	}
+
+	// 从回复内容提取推理链
+	reasoning := c.confidenceAggregator.evaluator.ExtractReasoningChain(reply)
+
+	// 上下文分数：基于用户消息长度简单评估（0-100）
+	contextScore := 50.0
+	for _, m := range messages {
+		if m.Role == models.RoleUser {
+			length := len(m.Content)
+			if length > 100 {
+				contextScore = 80.0
+			} else if length > 30 {
+				contextScore = 60.0
+			}
+		}
+	}
+
+	// 历史准确率：冷启动默认值
+	historyAccuracy := 0.75
+
+	// 不确定性分数：检测回复中是否包含不确定性表达
+	uncertaintyScore := 50.0
+	lowerReply := strings.ToLower(reply)
+	if strings.Contains(lowerReply, "不确定") || strings.Contains(lowerReply, "可能") ||
+		strings.Contains(lowerReply, "建议") || strings.Contains(lowerReply, "也许") ||
+		strings.Contains(lowerReply, "仅供参考") {
+		uncertaintyScore = 85.0
+	}
+
+	return c.confidenceAggregator.Calculate(
+		sources,
+		reasoning,
+		contextScore,
+		historyAccuracy,
+		uncertaintyScore,
+	)
 }
 
 // resolveLLMClient 根据 ProviderID 从 store 查找配置并动态创建 LLMClient。
 func (c *ChatOrchestrator) resolveLLMClient(ctx context.Context, providerID string) (port.LLMClient, error) {
 	if providerID == "" {
 		return nil, fmt.Errorf("provider_id is required")
+	}
+
+	// 诊断日志：检查传入 context 的剩余时间
+	if deadline, ok := ctx.Deadline(); ok {
+		fmt.Printf("[resolveLLMClient] context deadline in %v, providerID=%s\n",
+			time.Until(deadline), providerID)
+	} else {
+		fmt.Printf("[resolveLLMClient] context has no deadline, providerID=%s\n", providerID)
 	}
 
 	provider, err := c.providerStore.Get(ctx, providerID)
@@ -265,6 +365,65 @@ func (c *ChatOrchestrator) resolveLLMClient(ctx context.Context, providerID stri
 	}
 
 	return client, nil
+}
+
+// llmClientAdapter 将 port.LLMClient 适配为 FactLLMClient。
+// 用于复用已配置的 Provider 进行事实提取，避免单独维护 LLM 配置。
+type llmClientAdapter struct {
+	client port.LLMClient
+}
+
+func (a *llmClientAdapter) Chat(ctx context.Context, messages []string) (string, error) {
+	msgs := make([]models.Message, len(messages))
+	for i, m := range messages {
+		msgs[i] = models.Message{Role: models.RoleUser, Content: m}
+	}
+	return a.client.Chat(ctx, msgs)
+}
+
+// ExtractFactsFromReply 从完整对话轮次（用户消息 + AI 回复）中提取结构化事实三元组。
+// 使用当前会话的 Provider 创建 LLM client，异步调用时不阻塞主流程。
+// 全局限流：确保事实提取与主对话、其他事实提取之间有足够间隔，避免触发 429。
+func (c *ChatOrchestrator) ExtractFactsFromReply(ctx context.Context, userContent, aiReply, providerID string) ([]*entity.ExtractedFact, error) {
+	if providerID == "" {
+		return nil, nil
+	}
+
+	// 全局限流：确保事实提取与主对话、其他事实提取之间有足够间隔
+	c.factExtractMu.Lock()
+	elapsed := time.Since(c.factExtractLastCall)
+	if elapsed < c.factExtractMinGap {
+		wait := c.factExtractMinGap - elapsed
+		c.factExtractMu.Unlock()
+		fmt.Printf("[ExtractFacts] rate limited, waiting %v\n", wait)
+		select {
+		case <-time.After(wait):
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+		c.factExtractMu.Lock()
+	}
+	c.factExtractLastCall = time.Now()
+	c.factExtractMu.Unlock()
+
+	// 拼接完整对话内容作为提取源；用户消息和 AI 回复都可能包含事实
+	combined := userContent
+	if aiReply != "" {
+		if combined != "" {
+			combined += "\n"
+		}
+		combined += aiReply
+	}
+	if combined == "" {
+		return nil, nil
+	}
+	client, err := c.resolveLLMClient(ctx, providerID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve llm client for fact extraction: %w", err)
+	}
+	adapter := &llmClientAdapter{client: client}
+	extractor := NewFactExtractor(adapter)
+	return extractor.ParseFacts(combined)
 }
 
 // CheckCompliance 对文本执行合规检测。
@@ -337,4 +496,5 @@ var ApplicationSet = wire.NewSet(
 	NewChatOrchestrator,
 	NewRuleComplianceChecker,
 	NewTitleGenerator,
+	NewConfidenceAggregator,
 )

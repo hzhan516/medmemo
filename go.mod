@@ -8,6 +8,7 @@ require (
 	github.com/knights-analytics/hugot v0.7.3
 	github.com/mutecomm/go-sqlcipher v0.0.0-20190227152316-55dbde17881f
 	github.com/stretchr/testify v1.11.1
+	github.com/viant/sqlite-vec v0.3.0
 	github.com/wailsapp/wails/v2 v2.12.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.50.1

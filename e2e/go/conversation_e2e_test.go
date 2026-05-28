@@ -192,7 +192,7 @@ var _ port.ProviderStore = (*mockProviderStore)(nil)
 // mockMemoryQuerier 实现 usecase.MemoryQuerier 的内存版本。
 type mockMemoryQuerier struct{}
 
-func (m *mockMemoryQuerier) RetrieveForContext(ctx context.Context, query string, limit int) ([]*entity.HealthMemory, error) {
+func (m *mockMemoryQuerier) RetrieveForContext(ctx context.Context, query, sessionID string, limit int) ([]*entity.HealthMemory, error) {
 	return nil, nil
 }
 
@@ -238,7 +238,7 @@ func TestE2E_Conversation_FullFlow(t *testing.T) {
 		streamChunks: []string{"流", "式", "回", "复"},
 	}
 	checker := &mockComplianceChecker{interceptor: comp}
-	chatOrch := usecase.NewChatOrchestrator(&mockLLMClientFactory{client: mockLLM}, newMockProviderStore(), &mockMemoryRepository{}, &mockSensitiveDetector{}, checker, nil, &mockMemoryQuerier{})
+	chatOrch := usecase.NewChatOrchestrator(&mockLLMClientFactory{client: mockLLM}, newMockProviderStore(), &mockMemoryRepository{}, &mockSensitiveDetector{}, checker, nil, &mockMemoryQuerier{}, nil)
 
 	ctx := context.Background()
 
@@ -279,7 +279,7 @@ func TestE2E_Conversation_FullFlow(t *testing.T) {
 	require.NoError(t, msgRepo.Save(ctx, conv.ID, userMsg2))
 
 	var streamResult string
-	_, _, err = chatOrch.StreamExecute(ctx, usecase.ChatRequest{
+	_, _, _, err = chatOrch.StreamExecute(ctx, usecase.ChatRequest{
 		ConversationID: conv.ID,
 		Messages:       []models.Message{{Role: models.RoleUser, Content: "流式测试"}},
 		Model:          models.ProviderKimi,
@@ -311,7 +311,7 @@ func TestE2E_Conversation_MultipleSessions(t *testing.T) {
 	convRepo := repository.NewConversationRepoSQLite(conn)
 	msgRepo := repository.NewMessageRepoSQLite(conn)
 	checker := &mockComplianceChecker{interceptor: comp}
-	chatOrch := usecase.NewChatOrchestrator(&mockLLMClientFactory{client: &mockLLMClient{chatReply: "回复"}}, newMockProviderStore(), &mockMemoryRepository{}, &mockSensitiveDetector{}, checker, nil, &mockMemoryQuerier{})
+	chatOrch := usecase.NewChatOrchestrator(&mockLLMClientFactory{client: &mockLLMClient{chatReply: "回复"}}, newMockProviderStore(), &mockMemoryRepository{}, &mockSensitiveDetector{}, checker, nil, &mockMemoryQuerier{}, nil)
 
 	ctx := context.Background()
 

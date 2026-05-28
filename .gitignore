@@ -53,8 +53,9 @@ coverage.html
 /resources/models/*.param
 
 # === ONNX Runtime dynamic libraries (use scripts/build/download-onnx.*) ===
-/resources/lib/*/
+/resources/lib/*/*
 !/resources/lib/*/.gitkeep
+!/resources/lib/windows/libtokenizers.a
 
 # === ONNX NER models (use scripts/build/download-model.*) ===
 /resources/models/*/
