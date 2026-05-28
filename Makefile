@@ -3,6 +3,7 @@
 # 版本号从 wails.json 读取（单一来源）
 VERSION ?= $(shell cat wails.json | grep '"productVersion"' | sed 's/.*"productVersion": *"\(.*\)".*/\1/')
 LDFLAGS := -ldflags "-s -w -X main.version=$(VERSION)"
+WINDOWS_LDFLAGS := -ldflags "-s -w -X main.version=$(VERSION) -extldflags=-lntdll"
 
 # 平台检测（用于本地构建）
 UNAME_S := $(shell uname -s)
@@ -30,6 +31,7 @@ build:
 # CGO 库路径（用于测试，go test 时 ${SRCDIR} 解析为临时目录，需显式指定）
 CGO_LDFLAGS_LINUX := -L$(shell pwd)/resources/lib/linux
 CGO_LDFLAGS_DARWIN := -L$(shell pwd)/resources/lib/darwin
+CGO_LDFLAGS_WINDOWS := -L$(shell pwd)/resources/lib/windows -LC:/msys64/mingw64/lib -ldl
 
 # 运行测试（含 ORT 后端）
 test:
@@ -86,7 +88,7 @@ build-windows:
 	cd web && npm install && npm run build
 	# Windows 上若缺少 libtokenizers.a，ORT tag 会导致编译失败。
 	# 首次构建前请运行: .\scripts\build\download-tokenizers.ps1
-	wails build -platform windows/amd64 -clean -tags ORT $(LDFLAGS)
+	CGO_LDFLAGS="$(CGO_LDFLAGS_WINDOWS)" wails build -platform windows/amd64 -clean -tags ORT $(WINDOWS_LDFLAGS)
 
 build-linux:
 	cd web && npm install && npm run build
