@@ -40,7 +40,7 @@ func (r *DialogueRepoSQLite) InsertBatch(ctx context.Context, dialogues []*entit
 	if err != nil {
 		return fmt.Errorf("failed to begin batch insert transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	stmt, err := tx.PrepareContext(ctx, `
 		INSERT INTO raw_dialogues (message_id, session_id, role, content, model_name, timestamp, extraction_status, created_at)

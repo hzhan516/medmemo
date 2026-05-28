@@ -421,9 +421,13 @@ func TestIsLocalModel(t *testing.T) {
 // mockProviderStoreCtxErr 是一个在 context 已取消时返回 context 错误的 ProviderStore Mock。
 type mockProviderStoreCtxErr struct{}
 
-func (m *mockProviderStoreCtxErr) Create(ctx context.Context, provider *models.ProviderConfig) error { return nil }
-func (m *mockProviderStoreCtxErr) Update(ctx context.Context, provider *models.ProviderConfig) error { return nil }
-func (m *mockProviderStoreCtxErr) Delete(ctx context.Context, id string) error                       { return nil }
+func (m *mockProviderStoreCtxErr) Create(ctx context.Context, provider *models.ProviderConfig) error {
+	return nil
+}
+func (m *mockProviderStoreCtxErr) Update(ctx context.Context, provider *models.ProviderConfig) error {
+	return nil
+}
+func (m *mockProviderStoreCtxErr) Delete(ctx context.Context, id string) error { return nil }
 func (m *mockProviderStoreCtxErr) Get(ctx context.Context, id string) (*models.ProviderConfig, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err

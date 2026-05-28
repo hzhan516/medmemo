@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/hzhan516/medmemo/internal/domain/entity"
 	"github.com/hzhan516/medmemo/internal/infrastructure/database"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func setupDialogueTestDB(t *testing.T) (*DialogueRepoSQLite, func()) {
@@ -195,7 +195,6 @@ func TestDialogueRepo_MarkProcessing(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, results, 0)
 }
-
 
 func TestDialogueRepo_Insert_DuplicateID(t *testing.T) {
 	repo, cleanup := setupDialogueTestDB(t)

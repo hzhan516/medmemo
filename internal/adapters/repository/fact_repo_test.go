@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/hzhan516/medmemo/internal/domain/entity"
 	"github.com/hzhan516/medmemo/internal/infrastructure/database"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func setupFactTestDB(t *testing.T) (*FactRepoSQLite, func()) {
@@ -254,7 +254,6 @@ func TestFactRepo_FindBySession_WithData(t *testing.T) {
 	require.Len(t, facts, 1)
 	assert.Equal(t, "fact_fs_a", facts[0].FactID)
 }
-
 
 func TestFactRepo_Save_DuplicateID(t *testing.T) {
 	repo, cleanup := setupFactTestDB(t)

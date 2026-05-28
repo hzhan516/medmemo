@@ -2458,64 +2458,6 @@ func (a *WailsApp) embeddingModelDir() string {
 	return filepath.Join(a.config.DataDir, "models", "all-MiniLM-L6-v2")
 }
 
-// bundledModelDir 返回应用包内打包的模型目录路径。
-// 优先相对于可执行文件查找（适用于 AppImage、安装包），
-// 其次相对于工作目录查找（适用于 go run 开发模式）。
-func (a *WailsApp) bundledModelDir() string {
-	// 1. 相对于可执行文件（生产环境：AppImage / macOS .app / Windows 安装目录）
-	if exe, err := os.Executable(); err == nil {
-		dir := filepath.Join(filepath.Dir(exe), "resources", "models", "all-MiniLM-L6-v2")
-		if _, err := os.Stat(filepath.Join(dir, "model.onnx")); err == nil {
-			return dir
-		}
-	}
-
-	// 2. 相对于工作目录（开发模式 go run）
-	dir := filepath.Join("resources", "models", "all-MiniLM-L6-v2")
-	if _, err := os.Stat(filepath.Join(dir, "model.onnx")); err == nil {
-		return dir
-	}
-
-	return ""
-}
-
-// initEmbeddingModels 首次启动时将打包的模型文件复制到用户数据目录。
-// 若用户目录已存在模型，或找不到打包模型，则跳过。
-func (a *WailsApp) initEmbeddingModels() error {
-	userDir := a.embeddingModelDir()
-
-	// 用户目录已有模型，跳过
-	if _, err := os.Stat(filepath.Join(userDir, "model.onnx")); err == nil {
-		return nil
-	}
-
-	bundledDir := a.bundledModelDir()
-	if bundledDir == "" {
-		return nil // 未找到打包模型，由用户自行下载
-	}
-
-	if err := os.MkdirAll(userDir, 0755); err != nil {
-		return fmt.Errorf("failed to create user model dir: %w", err)
-	}
-
-	for _, name := range []string{"model.onnx", "tokenizer.json"} {
-		src := filepath.Join(bundledDir, name)
-		dst := filepath.Join(userDir, name)
-		if _, err := os.Stat(src); err != nil {
-			continue // 单个文件缺失不影响其他文件复制
-		}
-		data, err := os.ReadFile(src)
-		if err != nil {
-			return fmt.Errorf("failed to read bundled model %s: %w", name, err)
-		}
-		if err := os.WriteFile(dst, data, 0644); err != nil {
-			return fmt.Errorf("failed to write model %s to user dir: %w", name, err)
-		}
-	}
-
-	return nil
-}
-
 // GetEmbeddingStatus 获取本地 Embedding 模型状态。
 func (a *WailsApp) GetEmbeddingStatus() (*EmbeddingStatusResponse, error) {
 	modelPath := a.embeddingModelDir()

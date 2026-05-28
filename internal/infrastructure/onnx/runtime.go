@@ -175,7 +175,8 @@ func NewEngine(cfg EngineConfig) (*Engine, error) {
 		return e, nil // 降级：不支持的平台
 	}
 	fmt.Printf("[ONNX Engine] Looking for ONNX lib at: %s\n", libPath)
-	if info, err := os.Stat(libPath); err != nil {
+	info, err := os.Stat(libPath)
+	if err != nil {
 		fmt.Printf("[ONNX Engine] ONNX lib not found: %v\n", err)
 		// fallback: 尝试 .so.1（PlatformLibPath 已处理，这里额外兜底）
 		if strings.HasSuffix(libPath, ".so") {
@@ -201,10 +202,9 @@ func NewEngine(cfg EngineConfig) (*Engine, error) {
 		}
 		fmt.Printf("[ONNX Engine] ONNX lib not found anywhere, engine unavailable\n")
 		return e, nil // 降级：动态库不存在
-	} else {
-		fmt.Printf("[ONNX Engine] ONNX lib found: size=%d mode=%s isSymlink=%v\n",
-			info.Size(), info.Mode(), info.Mode()&os.ModeSymlink != 0)
 	}
+	fmt.Printf("[ONNX Engine] ONNX lib found: size=%d mode=%s isSymlink=%v\n",
+		info.Size(), info.Mode(), info.Mode()&os.ModeSymlink != 0)
 libFound:
 	e.libPath = libPath
 

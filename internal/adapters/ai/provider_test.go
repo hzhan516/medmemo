@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/hzhan516/medmemo/internal/domain/entity"
 	"github.com/hzhan516/medmemo/pkg/models"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestProviderFactory_Ollama(t *testing.T) {
