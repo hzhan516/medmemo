@@ -268,9 +268,26 @@ jobs:
 
       - name: Prepare ntdll import lib for tokenizers (Windows)
         if: runner.os == 'Windows'
-        shell: cmd
+        shell: bash
         run: |
-          copy C:\msys64\mingw64\lib\libntdll.a resources\lib\windows\libntdll.a
+          for path in \
+            "C:/msys64/mingw64/lib/libntdll.a" \
+            "C:/mingw64/lib/libntdll.a" \
+            "C:/msys64/usr/lib/libntdll.a"; do
+            if [ -f "$path" ]; then
+              echo "Found libntdll.a at $path"
+              cp "$path" resources/lib/windows/libntdll.a
+              exit 0
+            fi
+          done
+          echo "libntdll.a not found, installing mingw-w64-x86_64-crt via pacman..."
+          C:/msys64/usr/bin/pacman.exe -S --noconfirm mingw-w64-x86_64-crt
+          if [ -f "C:/msys64/mingw64/lib/libntdll.a" ]; then
+            cp "C:/msys64/mingw64/lib/libntdll.a" resources/lib/windows/libntdll.a
+          else
+            echo "ERROR: Still cannot find libntdll.a after installing CRT"
+            exit 1
+          fi
 
       - name: Build (Windows)
         if: runner.os == 'Windows'
