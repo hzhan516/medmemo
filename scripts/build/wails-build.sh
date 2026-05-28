@@ -17,7 +17,7 @@ case "$OS" in
   windows)
     echo "[TASK-027] Building for Windows..."
     export CGO_CFLAGS="-IC:/msys64/mingw64/include"
-    export CGO_LDFLAGS="-LC:/msys64/mingw64/lib -L$(pwd)/resources/lib/windows -ldl -lntdll"
+    export CGO_LDFLAGS="-L$(pwd)/resources/lib/windows -LC:/msys64/mingw64/lib -ldl"
     # 下载 ONNX Runtime 与 Tokenizers Windows 库
     if command -v pwsh &>/dev/null; then
       pwsh -ExecutionPolicy Bypass -File scripts/build/download-onnx.ps1 -Platform windows
@@ -41,7 +41,7 @@ case "$OS" in
 
     dlltool -D ntdll.dll -d /tmp/ntdll.def -l resources/lib/windows/libntdll.a
     echo "[TASK-027] Generated libntdll.a with $(wc -l < /tmp/ntdll_exports.txt) exports"
-    wails build -ldflags "-s -w -X main.version=${VERSION}" -tags "ORT" -nsis
+    wails build -ldflags "-s -w -X main.version=${VERSION} -extldflags=-lntdll" -tags "ORT" -nsis
     ;;
   darwin)
     echo "[TASK-027] Building for macOS..."

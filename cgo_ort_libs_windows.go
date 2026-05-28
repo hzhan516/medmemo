@@ -2,5 +2,5 @@
 
 package main
 
-// #cgo LDFLAGS: -L${SRCDIR}/resources/lib/windows -lntdll
+// #cgo LDFLAGS: -L${SRCDIR}/resources/lib/windows
 import "C"

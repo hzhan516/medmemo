@@ -286,7 +286,7 @@ jobs:
 
       - name: Build (Windows)
         if: runner.os == 'Windows'
-        run: wails build -clean -tags ORT
+        run: wails build -clean -tags ORT -ldflags "-extldflags=-lntdll"
         env:
           CGO_CFLAGS: "-IC:/msys64/mingw64/include"
-          CGO_LDFLAGS: "-LC:/msys64/mingw64/lib -L${{ github.workspace }}/resources/lib/windows -ldl -lntdll"
+          CGO_LDFLAGS: "-L${{ github.workspace }}/resources/lib/windows -LC:/msys64/mingw64/lib -ldl"
