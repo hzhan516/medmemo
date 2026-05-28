@@ -149,11 +149,11 @@ type cacheEntry struct {
 }
 
 type embeddingCache struct {
-	mu        sync.RWMutex
-	capacity  int
-	entries   map[string]*cacheEntry
-	head      *cacheEntry // 最近使用
-	tail      *cacheEntry // 最久未使用
+	mu       sync.RWMutex
+	capacity int
+	entries  map[string]*cacheEntry
+	head     *cacheEntry // 最近使用
+	tail     *cacheEntry // 最久未使用
 }
 
 func newEmbeddingCache(capacity int) *embeddingCache {

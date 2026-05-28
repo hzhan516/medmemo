@@ -290,7 +290,6 @@ func scanFacts(rows *sql.Rows) ([]*entity.ExtractedFact, error) {
 	return result, nil
 }
 
-
 // FactRepoSet 供 Wire 使用的 ProviderSet。
 var FactRepoSet = wire.NewSet(
 	NewFactRepoSQLite,

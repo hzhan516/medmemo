@@ -396,7 +396,6 @@ func TestOpenAIAdapter_Chat_EmptyChoices(t *testing.T) {
 	assert.Contains(t, err.Error(), "empty response")
 }
 
-
 // TestOpenAICompatibleEndpoint 验证 endpoint 拼接逻辑在各种 baseURL 下的正确性。
 func TestOpenAICompatibleEndpoint(t *testing.T) {
 	tests := []struct {
