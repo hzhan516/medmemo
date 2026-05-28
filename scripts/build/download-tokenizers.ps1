@@ -36,7 +36,14 @@ $Url = "$BaseUrl/$ReleaseTag/$ArchiveName"
 
 # 检查是否已存在
 if (Test-Path (Join-Path $OutDir "libtokenizers.a")) {
-    Write-Host "[tokenizers] libtokenizers.a already exists, skipping"
+    Write-Host "[tokenizers] libtokenizers.a already exists, skipping download"
+
+    # 确保也存在于 MSYS2 库目录（CI 构建需要）
+    $MsysLibDir = "C:\msys64\mingw64\lib"
+    if (Test-Path $MsysLibDir) {
+        Copy-Item (Join-Path $OutDir "libtokenizers.a") $MsysLibDir -Force
+        Write-Host "[tokenizers] Copied to $MsysLibDir"
+    }
     exit 0
 }
 
@@ -55,7 +62,13 @@ try {
     Write-Host "[tokenizers] Downloading Windows tokenizers library..."
     Invoke-WebRequest -Uri $Url -OutFile $TmpArchive -UseBasicParsing
 } catch {
-    Write-Warning "[tokenizers] Download failed: $_. Windows local tokenizer library not available, continuing build without it.`n`nPossible reasons:`n1. The CI-built Windows library has not been published yet.`n2. Network issue or GitHub rate limit.`n`nYou can manually build the library from source (requires Rust + MinGW):`n  git clone https://github.com/daulet/tokenizers.git`n  cd tokenizers/crates/tokenizers`n  cargo build --release --target x86_64-pc-windows-gnu`n  # Copy target/x86_64-pc-windows-gnu/release/libtokenizers_ffi.a to resources/lib/windows/libtokenizers.a"
+    $msg = "[tokenizers] Download failed: $_. Windows local tokenizer library not available.`n`nPossible reasons:`n1. The CI-built Windows library has not been published yet.`n2. Network issue or GitHub rate limit.`n`nYou can manually build the library from source (requires Rust + MinGW):`n  git clone https://github.com/daulet/tokenizers.git`n  cd tokenizers/crates/tokenizers`n  cargo build --release --target x86_64-pc-windows-gnu`n  # Copy target/x86_64-pc-windows-gnu/release/libtokenizers_ffi.a to resources/lib/windows/libtokenizers.a"
+
+    # CI 环境：严格失败，避免静默跳过导致后续链接错误
+    if ($env:CI -eq "true") {
+        throw $msg
+    }
+    Write-Warning $msg
     exit 0
 }
 
@@ -74,6 +87,13 @@ Remove-Item -Path $TmpArchive -Force -ErrorAction SilentlyContinue
 if (Test-Path (Join-Path $OutDir "libtokenizers.a")) {
     $Size = (Get-Item (Join-Path $OutDir "libtokenizers.a")).Length
     Write-Host "[tokenizers] Done → $OutDir\libtokenizers.a ($Size bytes)"
+
+    # 同时复制到 MSYS2 库目录，确保 -LC:/msys64/mingw64/lib 能找到
+    $MsysLibDir = "C:\msys64\mingw64\lib"
+    if (Test-Path $MsysLibDir) {
+        Copy-Item (Join-Path $OutDir "libtokenizers.a") $MsysLibDir -Force
+        Write-Host "[tokenizers] Copied to $MsysLibDir"
+    }
 } else {
     throw "[tokenizers] Extraction failed: libtokenizers.a not found in output directory"
 }
