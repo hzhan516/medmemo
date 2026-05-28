@@ -266,6 +266,12 @@ jobs:
         run: |
           C:\msys64\usr\bin\pacman.exe -S --noconfirm mingw-w64-x86_64-dlfcn
 
+      - name: Prepare ntdll import lib for tokenizers (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: |
+          copy C:\msys64\mingw64\lib\libntdll.a resources\lib\windows\libntdll.a
+
       - name: Build (Windows)
         if: runner.os == 'Windows'
         run: wails build -clean -tags ORT

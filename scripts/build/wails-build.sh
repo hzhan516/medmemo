@@ -29,6 +29,11 @@ case "$OS" in
       echo "[TASK-027] Warning: PowerShell not found. Skipping library download."
       echo "[TASK-027] Please manually download libraries to resources/lib/windows/"
     fi
+    # 确保 Rust std 需要的 ntdll 导入库在项目目录中可用
+    if [ -f "C:/msys64/mingw64/lib/libntdll.a" ]; then
+      cp "C:/msys64/mingw64/lib/libntdll.a" resources/lib/windows/libntdll.a
+      echo "[TASK-027] Copied libntdll.a to resources/lib/windows/"
+    fi
     wails build -ldflags "-s -w -X main.version=${VERSION}" -tags "ORT" -nsis
     ;;
   darwin)
