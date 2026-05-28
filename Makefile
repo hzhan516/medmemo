@@ -3,7 +3,6 @@
 # 版本号从 wails.json 读取（单一来源）
 VERSION ?= $(shell cat wails.json | grep '"productVersion"' | sed 's/.*"productVersion": *"\(.*\)".*/\1/')
 LDFLAGS := -ldflags "-s -w -X main.version=$(VERSION)"
-WINDOWS_LDFLAGS := -ldflags "-s -w -X main.version=$(VERSION) -extldflags=-lntdll"
 
 # 平台检测（用于本地构建）
 UNAME_S := $(shell uname -s)
@@ -88,7 +87,7 @@ build-windows:
 	cd web && npm install && npm run build
 	# Windows 上若缺少 libtokenizers.a，ORT tag 会导致编译失败。
 	# 首次构建前请运行: .\scripts\build\download-tokenizers.ps1
-	CGO_LDFLAGS="$(CGO_LDFLAGS_WINDOWS)" wails build -platform windows/amd64 -clean -tags ORT $(WINDOWS_LDFLAGS)
+	CGO_LDFLAGS="$(CGO_LDFLAGS_WINDOWS)" wails build -platform windows/amd64 -clean -tags ORT $(LDFLAGS)
 
 build-linux:
 	cd web && npm install && npm run build

@@ -41,7 +41,7 @@ case "$OS" in
 
     dlltool -D ntdll.dll -d /tmp/ntdll.def -l resources/lib/windows/libntdll.a
     echo "[TASK-027] Generated libntdll.a with $(wc -l < /tmp/ntdll_exports.txt) exports"
-    wails build -ldflags "-s -w -X main.version=${VERSION} -extldflags=-lntdll" -tags "ORT" -nsis
+    wails build -ldflags "-s -w -X main.version=${VERSION}" -tags "ORT" -nsis
     ;;
   darwin)
     echo "[TASK-027] Building for macOS..."
