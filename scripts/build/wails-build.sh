@@ -29,27 +29,18 @@ case "$OS" in
       echo "[TASK-027] Warning: PowerShell not found. Skipping library download."
       echo "[TASK-027] Please manually download libraries to resources/lib/windows/"
     fi
-    # 确保 Rust std 需要的 ntdll 导入库在项目目录中可用
-    ntdll_found=false
-    for path in "C:/msys64/mingw64/lib/libntdll.a" "C:/mingw64/lib/libntdll.a"; do
-      if [ -f "$path" ]; then
-        cp "$path" resources/lib/windows/libntdll.a
-        echo "[TASK-027] Copied libntdll.a from $path"
-        ntdll_found=true
-        break
-      fi
-    done
-    if [ "$ntdll_found" != "true" ]; then
-      echo "[TASK-027] libntdll.a not found, installing mingw-w64-x86_64-crt..."
-      C:/msys64/usr/bin/pacman.exe -S --noconfirm mingw-w64-x86_64-crt
-      if [ -f "C:/msys64/mingw64/lib/libntdll.a" ]; then
-        cp "C:/msys64/mingw64/lib/libntdll.a" resources/lib/windows/libntdll.a
-        echo "[TASK-027] Copied libntdll.a after install"
-      else
-        echo "[TASK-027] ERROR: Still cannot find libntdll.a"
-        exit 1
-      fi
-    fi
+    # MinGW-w64 官方 libntdll.a 不包含 Native API 符号，必须从 ntdll.dll 现场生成
+    echo "[TASK-027] Generating libntdll.a from system ntdll.dll..."
+    objdump -p /c/Windows/System32/ntdll.dll | \
+      awk '/Ordinal.*Hint.*Name/{start=1; next} start && /^[[:space:]]*$/ {exit} start {last=$NF; if(last ~ /[a-zA-Z]/) print last}' \
+      > /tmp/ntdll_exports.txt
+
+    echo "LIBRARY ntdll.dll" > /tmp/ntdll.def
+    echo "EXPORTS" >> /tmp/ntdll.def
+    cat /tmp/ntdll_exports.txt >> /tmp/ntdll.def
+
+    dlltool -D ntdll.dll -d /tmp/ntdll.def -l resources/lib/windows/libntdll.a
+    echo "[TASK-027] Generated libntdll.a with $(wc -l < /tmp/ntdll_exports.txt) exports"
     wails build -ldflags "-s -w -X main.version=${VERSION}" -tags "ORT" -nsis
     ;;
   darwin)

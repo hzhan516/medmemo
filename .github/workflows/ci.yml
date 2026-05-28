@@ -270,24 +270,19 @@ jobs:
         if: runner.os == 'Windows'
         shell: bash
         run: |
-          for path in \
-            "C:/msys64/mingw64/lib/libntdll.a" \
-            "C:/mingw64/lib/libntdll.a" \
-            "C:/msys64/usr/lib/libntdll.a"; do
-            if [ -f "$path" ]; then
-              echo "Found libntdll.a at $path"
-              cp "$path" resources/lib/windows/libntdll.a
-              exit 0
-            fi
-          done
-          echo "libntdll.a not found, installing mingw-w64-x86_64-crt via pacman..."
-          C:/msys64/usr/bin/pacman.exe -S --noconfirm mingw-w64-x86_64-crt
-          if [ -f "C:/msys64/mingw64/lib/libntdll.a" ]; then
-            cp "C:/msys64/mingw64/lib/libntdll.a" resources/lib/windows/libntdll.a
-          else
-            echo "ERROR: Still cannot find libntdll.a after installing CRT"
-            exit 1
-          fi
+          # MinGW-w64 官方 libntdll.a 不包含 Native API 符号（NtReadFile 等）。
+          # 必须从系统 ntdll.dll 现场生成一个完整的导入库。
+          echo "Generating libntdll.a from C:/Windows/System32/ntdll.dll..."
+          objdump -p /c/Windows/System32/ntdll.dll | \
+            awk '/Ordinal.*Hint.*Name/{start=1; next} start && /^[[:space:]]*$/ {exit} start {last=$NF; if(last ~ /[a-zA-Z]/) print last}' \
+            > /tmp/ntdll_exports.txt
+
+          echo "LIBRARY ntdll.dll" > /tmp/ntdll.def
+          echo "EXPORTS" >> /tmp/ntdll.def
+          cat /tmp/ntdll_exports.txt >> /tmp/ntdll.def
+
+          dlltool -D ntdll.dll -d /tmp/ntdll.def -l resources/lib/windows/libntdll.a
+          echo "Generated libntdll.a with $(wc -l < /tmp/ntdll_exports.txt) exports"
 
       - name: Build (Windows)
         if: runner.os == 'Windows'
