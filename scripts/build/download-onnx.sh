@@ -29,7 +29,7 @@ for arg in "$@"; do
     esac
 done
 
-BASE_URL="https://github.com/microsoft/onnxruntime/releases/download/v${ONNX_VERSION}"
+BASE_URL="${MEDMEMO_ONNX_BASE_URL:-https://github.com/microsoft/onnxruntime/releases/download/v${ONNX_VERSION}}"
 
 download_linux() {
     local out_dir="${PROJECT_ROOT}/resources/lib/linux"

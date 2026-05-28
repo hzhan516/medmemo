@@ -9,6 +9,10 @@ VERSION="${2:-dev}"
 case "$OS" in
   linux)
     echo "[TASK-027] Building for Linux..."
+    export MEDMEMO_ONNX_BASE_URL="https://github.com/hzhan516/medmemo/releases/download/onnx-runtime-v1.26.0"
+    export MEDMEMO_TOKENIZERS_BASE_URL="https://github.com/hzhan516/medmemo/releases/download/tokenizers-v1.27.0"
+    ./scripts/build/download-onnx.sh --platform=linux
+    ./scripts/build/download-tokenizers.sh --platform=linux
     export CGO_LDFLAGS="-L$(pwd)/resources/lib/linux"
     wails build -ldflags "-s -w -X main.version=${VERSION}" -tags "webkit2_41,ORT"
     echo "[TASK-027] Building AppImage..."
@@ -16,8 +20,9 @@ case "$OS" in
     ;;
   windows)
     echo "[TASK-027] Building for Windows..."
-    export CGO_CFLAGS="-IC:/msys64/mingw64/include"
-    export CGO_LDFLAGS="-L$(pwd)/resources/lib/windows -LC:/msys64/mingw64/lib -ldl"
+    # 不再 export CGO_CFLAGS / CGO_LDFLAGS —— 避免含空格路径被 Go CGO 安全检查拒绝
+    # cgo_ort_libs_windows.go 已提供 -L${SRCDIR}/resources/lib/windows -lntdll
+    # ortgenai / onnxruntime_go 已自动注入 -ldl
     # 下载 ONNX Runtime 与 Tokenizers Windows 库
     if command -v pwsh &>/dev/null; then
       pwsh -ExecutionPolicy Bypass -File scripts/build/download-onnx.ps1 -Platform windows
@@ -45,6 +50,10 @@ case "$OS" in
     ;;
   darwin)
     echo "[TASK-027] Building for macOS..."
+    export MEDMEMO_ONNX_BASE_URL="https://github.com/hzhan516/medmemo/releases/download/onnx-runtime-v1.26.0"
+    export MEDMEMO_TOKENIZERS_BASE_URL="https://github.com/hzhan516/medmemo/releases/download/tokenizers-v1.27.0"
+    ./scripts/build/download-onnx.sh --platform=darwin
+    ./scripts/build/download-tokenizers.sh --platform=darwin
     wails build -ldflags "-s -w -X main.version=${VERSION}" -tags "ORT" -platform darwin/universal
     echo "[TASK-027] Building dmg..."
     ./build/package/build-dmg.sh
