@@ -224,6 +224,11 @@ export namespace main {
 	}
 	export class EmbeddingStatusResponse {
 	    available: boolean;
+	    model_present: boolean;
+	    engine_available: boolean;
+	    runtime_lib_present: boolean;
+	    runtime_lib_path: string;
+	    failure_reason: string;
 	    model_path: string;
 	    model_name: string;
 	    download_url: string;
@@ -235,6 +240,11 @@ export namespace main {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.available = source["available"];
+	        this.model_present = source["model_present"];
+	        this.engine_available = source["engine_available"];
+	        this.runtime_lib_present = source["runtime_lib_present"];
+	        this.runtime_lib_path = source["runtime_lib_path"];
+	        this.failure_reason = source["failure_reason"];
 	        this.model_path = source["model_path"];
 	        this.model_name = source["model_name"];
 	        this.download_url = source["download_url"];
@@ -617,4 +627,3 @@ export namespace models {
 	}
 
 }
-

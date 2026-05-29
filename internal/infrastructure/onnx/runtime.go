@@ -123,6 +123,7 @@ type Engine struct {
 	embeddingTaskCh    chan embeddingTask
 	embeddingWg        sync.WaitGroup
 	embeddingAvailable bool
+	embeddingFailure   string
 }
 
 type nerTask struct {
@@ -172,8 +173,10 @@ func NewEngine(cfg EngineConfig) (*Engine, error) {
 	libPath, err := PlatformLibPath(cfg.ResourceDir)
 	if err != nil {
 		fmt.Printf("[ONNX Engine] PlatformLibPath failed: %v\n", err)
+		e.embeddingFailure = fmt.Sprintf("platform library path failed: %v", err)
 		return e, nil // 降级：不支持的平台
 	}
+	e.libPath = libPath
 	fmt.Printf("[ONNX Engine] Looking for ONNX lib at: %s\n", libPath)
 	info, err := os.Stat(libPath)
 	if err != nil {
@@ -201,6 +204,7 @@ func NewEngine(cfg EngineConfig) (*Engine, error) {
 			}
 		}
 		fmt.Printf("[ONNX Engine] ONNX lib not found anywhere, engine unavailable\n")
+		e.embeddingFailure = fmt.Sprintf("ONNX Runtime library not found: %s: %v", libPath, err)
 		return e, nil // 降级：动态库不存在
 	}
 	fmt.Printf("[ONNX Engine] ONNX lib found: size=%d mode=%s isSymlink=%v\n",
@@ -215,6 +219,7 @@ libFound:
 	session, err := hugot.NewORTSession(ctx, options.WithOnnxLibraryPath(libDir))
 	if err != nil {
 		fmt.Printf("[ONNX Engine] Session init failed: %v\n", err)
+		e.embeddingFailure = fmt.Sprintf("ONNX Runtime session init failed: %v", err)
 		return e, nil // 降级：Session 初始化失败
 	}
 	fmt.Printf("[ONNX Engine] ORT Session created successfully\n")
@@ -226,6 +231,8 @@ libFound:
 	// 独立初始化 Embedding Pipeline（可选，失败不阻塞 NER）
 	if cfg.EmbeddingModelPath != "" {
 		e.initEmbeddingPipeline(cfg.EmbeddingModelPath)
+	} else {
+		e.embeddingFailure = "embedding model path not configured"
 	}
 
 	// NER 和 Embedding 各自独立标记可用性，避免混为一谈导致 Predict/Embed 调用死等
@@ -341,6 +348,16 @@ func (e *Engine) HasEmbeddingPipeline() bool {
 	return e.embeddingAvailable
 }
 
+// EmbeddingFailureReason 返回嵌入引擎不可用的最近原因。
+func (e *Engine) EmbeddingFailureReason() string {
+	return e.embeddingFailure
+}
+
+// RuntimeLibPath 返回当前解析到的 ONNX Runtime 动态库路径。
+func (e *Engine) RuntimeLibPath() string {
+	return e.libPath
+}
+
 // Embed 向 Embedding Worker Pool 提交嵌入推理任务。
 func (e *Engine) Embed(ctx context.Context, texts []string) ([][]float32, error) {
 	if !e.embeddingAvailable {
@@ -366,6 +383,7 @@ func (e *Engine) initEmbeddingPipeline(modelPath string) {
 		modelPath, e.session != nil)
 	if _, err := os.Stat(modelPath); os.IsNotExist(err) {
 		fmt.Printf("[ONNX Engine] Embedding model dir not found: %s\n", modelPath)
+		e.embeddingFailure = fmt.Sprintf("embedding model dir not found: %s", modelPath)
 		return // 模型未下载
 	}
 
@@ -379,6 +397,7 @@ func (e *Engine) initEmbeddingPipeline(modelPath string) {
 	modelFile := filepath.Join(modelPath, "model.onnx")
 	if err := verifyModelSHA256(modelFile); err != nil {
 		fmt.Printf("[ONNX Engine] Embedding model SHA256 verify failed: %v\n", err)
+		e.embeddingFailure = fmt.Sprintf("embedding model SHA256 verify failed: %v", err)
 		return // 校验失败
 	}
 
@@ -395,9 +414,9 @@ func (e *Engine) initEmbeddingPipeline(modelPath string) {
 		fmt.Printf("[ONNX Engine] Embedding pipeline creation failed: %v\n", err)
 		fmt.Printf("[ONNX Engine]   session=%v modelPath=%s onnxFile=%s\n",
 			e.session != nil, modelPath, config.OnnxFilename)
+		e.embeddingFailure = fmt.Sprintf("embedding pipeline creation failed: %v", err)
 		return // Pipeline 创建失败
 	}
-	e.embeddingPipeline = pipeline
 
 	// 预热推理：ONNX Runtime 首次推理时执行图优化（JIT），耗时可达 30-60 秒。
 	// 在初始化阶段提前完成，避免用户首次提问时触发 context deadline exceeded。
@@ -407,10 +426,13 @@ func (e *Engine) initEmbeddingPipeline(modelPath string) {
 	_, warmupErr := pipeline.RunPipeline(warmupCtx, []string{"warmup"})
 	warmupCancel()
 	if warmupErr != nil {
-		fmt.Printf("[ONNX Engine] Embedding warmup failed (non-fatal): %v\n", warmupErr)
+		fmt.Printf("[ONNX Engine] Embedding warmup failed: %v\n", warmupErr)
+		e.embeddingFailure = fmt.Sprintf("embedding warmup failed: %v", warmupErr)
+		return
 	} else {
 		fmt.Printf("[ONNX Engine] Embedding warmup completed in %v\n", time.Since(warmupStart))
 	}
+	e.embeddingPipeline = pipeline
 
 	// 创建 2 个 Embedding Worker
 	const embWorkerCount = 2
@@ -426,6 +448,7 @@ func (e *Engine) initEmbeddingPipeline(modelPath string) {
 	}
 
 	e.embeddingAvailable = true
+	e.embeddingFailure = ""
 }
 
 func (e *Engine) embeddingWorkerLoop(worker *EmbeddingWorker) {

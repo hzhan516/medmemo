@@ -265,11 +265,16 @@ func TestFactRepo_Save_DuplicateID(t *testing.T) {
 	err := repo.Save(ctx, f1)
 	require.NoError(t, err)
 
-	// 使用相同 FactID 再次插入，应触发 SQLite UNIQUE 约束冲突
+	// 使用相同 FactID 再次插入，应按 fact_id 幂等忽略
 	f2 := entity.NewExtractedFact("用户", "服用", "阿司匹林", 0.9, []string{"msg_002"})
 	f2.FactID = "fact_dup_001"
 	err = repo.Save(ctx, f2)
-	assert.Error(t, err, "重复 ID 插入应返回错误")
+	require.NoError(t, err)
+
+	got, err := repo.GetByID(ctx, "fact_dup_001")
+	require.NoError(t, err)
+	assert.Equal(t, "患有", got.Predicate)
+	assert.Equal(t, "偏头痛", got.Object)
 }
 
 func TestFactRepo_UpdateStatus_NotFound(t *testing.T) {

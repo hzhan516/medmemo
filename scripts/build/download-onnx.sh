@@ -52,10 +52,9 @@ download_linux() {
 
 download_darwin() {
     local out_dir="${PROJECT_ROOT}/resources/lib/darwin"
-    # ONNX Runtime v1.26.0 仅提供 arm64 包（GitHub Actions macOS runner 已迁移至 ARM）
-    local archive="onnxruntime-osx-arm64-${ONNX_VERSION}.tgz"
+    local archive="onnxruntime-osx-universal2-${ONNX_VERSION}.tgz"
     local url="${BASE_URL}/${archive}"
-    local extract_dir="onnxruntime-osx-arm64-${ONNX_VERSION}"
+    local extract_dir="onnxruntime-osx-universal2-${ONNX_VERSION}"
 
     if [[ -f "${out_dir}/libonnxruntime.dylib" ]]; then
         echo "[darwin] ONNX Runtime already exists, skipping"

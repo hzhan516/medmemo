@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -104,6 +106,42 @@ func TestStreamTimeout_DefaultsWhenProviderMissing(t *testing.T) {
 	assert.Equal(t, 5*time.Minute, app.streamTimeout("missing"))
 }
 
+func TestGetEmbeddingStatus_ModelPresentEngineUnavailable(t *testing.T) {
+	app, _ := newEmbeddingStatusTestApp(t, false, "embedding warmup failed", true)
+
+	status, err := app.GetEmbeddingStatus()
+	require.NoError(t, err)
+	assert.False(t, status.Available)
+	assert.True(t, status.ModelPresent)
+	assert.False(t, status.EngineAvailable)
+	assert.True(t, status.RuntimeLibPresent)
+	assert.Equal(t, "embedding warmup failed", status.FailureReason)
+}
+
+func TestGetEmbeddingStatus_RuntimeLibMissing(t *testing.T) {
+	app, runtimePath := newEmbeddingStatusTestApp(t, false, "session init failed", false)
+
+	status, err := app.GetEmbeddingStatus()
+	require.NoError(t, err)
+	assert.False(t, status.Available)
+	assert.True(t, status.ModelPresent)
+	assert.False(t, status.RuntimeLibPresent)
+	assert.Equal(t, runtimePath, status.RuntimeLibPath)
+	assert.Contains(t, status.FailureReason, "ONNX Runtime library not found")
+}
+
+func TestGetEmbeddingStatus_EngineAvailable(t *testing.T) {
+	app, _ := newEmbeddingStatusTestApp(t, true, "", true)
+
+	status, err := app.GetEmbeddingStatus()
+	require.NoError(t, err)
+	assert.True(t, status.Available)
+	assert.True(t, status.ModelPresent)
+	assert.True(t, status.EngineAvailable)
+	assert.True(t, status.RuntimeLibPresent)
+	assert.Empty(t, status.FailureReason)
+}
+
 // TestCheckEmergency_Delegation 验证 wails_app.go 的 CheckEmergency 正确委托到 application 层。
 func TestCheckEmergency_Delegation(t *testing.T) {
 	app := &WailsApp{}
@@ -122,6 +160,65 @@ func TestCheckEmergency_Delegation(t *testing.T) {
 	result, err = app.CheckEmergency("普通感冒吃什么好")
 	require.NoError(t, err)
 	assert.Equal(t, "none", result.Level)
+}
+
+func newEmbeddingStatusTestApp(t *testing.T, available bool, failureReason string, runtimePresent bool) (*WailsApp, string) {
+	t.Helper()
+	tmpDir := t.TempDir()
+	modelDir := filepath.Join(tmpDir, "models", "all-MiniLM-L6-v2")
+	require.NoError(t, os.MkdirAll(modelDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(modelDir, "model.onnx"), []byte("test"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(modelDir, "tokenizer.json"), []byte("{}"), 0644))
+
+	runtimePath := filepath.Join(tmpDir, "libonnxruntime.dylib")
+	if runtimePresent {
+		require.NoError(t, os.WriteFile(runtimePath, []byte("test"), 0644))
+	}
+
+	app := &WailsApp{
+		ctx: context.Background(),
+		config: &entity.AppConfig{
+			DataDir: tmpDir,
+		},
+		embeddingSvc: &mockEmbeddingStatusService{
+			available:     available,
+			failureReason: failureReason,
+			runtimePath:   runtimePath,
+		},
+	}
+	return app, runtimePath
+}
+
+type mockEmbeddingStatusService struct {
+	available     bool
+	failureReason string
+	runtimePath   string
+}
+
+func (m *mockEmbeddingStatusService) Embed(ctx context.Context, texts []string) ([][]float32, error) {
+	if !m.available {
+		return nil, assert.AnError
+	}
+	return make([][]float32, len(texts)), nil
+}
+
+func (m *mockEmbeddingStatusService) EmbedSingle(ctx context.Context, text string) ([]float32, error) {
+	if !m.available {
+		return nil, assert.AnError
+	}
+	return []float32{1}, nil
+}
+
+func (m *mockEmbeddingStatusService) IsAvailable() bool {
+	return m.available
+}
+
+func (m *mockEmbeddingStatusService) FailureReason() string {
+	return m.failureReason
+}
+
+func (m *mockEmbeddingStatusService) RuntimeLibPath() string {
+	return m.runtimePath
 }
 
 // TestEvaluateEmergency_Integration 直接测试 application 层紧急检测引擎。

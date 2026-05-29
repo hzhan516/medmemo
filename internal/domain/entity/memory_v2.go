@@ -2,10 +2,24 @@ package entity
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
+	"sync/atomic"
 	"time"
 )
+
+var fallbackIDCounter uint64
+
+func newMemoryID(prefix string, now time.Time) string {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err == nil {
+		return prefix + hex.EncodeToString(b[:])
+	}
+	n := atomic.AddUint64(&fallbackIDCounter, 1)
+	return fmt.Sprintf("%s%d_%d", prefix, now.UnixNano(), n)
+}
 
 // =============================================================================
 // Layer 1: 原始对话 (RawDialogue)
@@ -46,7 +60,7 @@ type RawDialogue struct {
 func NewRawDialogue(sessionID string, role DialogueRole, content, modelName string) *RawDialogue {
 	now := time.Now().UTC()
 	return &RawDialogue{
-		MessageID:        fmt.Sprintf("msg_%d", now.UnixNano()),
+		MessageID:        newMemoryID("msg_", now),
 		SessionID:        sessionID,
 		Role:             role,
 		Content:          content,
@@ -104,7 +118,7 @@ type ExtractedFact struct {
 func NewExtractedFact(subject, predicate, object string, confidence float64, sourceMsgIDs []string) *ExtractedFact {
 	now := time.Now().UTC()
 	return &ExtractedFact{
-		FactID:       fmt.Sprintf("fact_%d", now.UnixNano()),
+		FactID:       newMemoryID("fact_", now),
 		Subject:      subject,
 		Predicate:    predicate,
 		Object:       object,
@@ -171,7 +185,7 @@ func NewSemanticEmbedding(factID string, vector []float32, modelVersion string) 
 	}
 	now := time.Now().UTC()
 	return &SemanticEmbedding{
-		EmbeddingID:  fmt.Sprintf("emb_%d", now.UnixNano()),
+		EmbeddingID:  newMemoryID("emb_", now),
 		FactID:       factID,
 		Vector:       vector,
 		ModelVersion: modelVersion,

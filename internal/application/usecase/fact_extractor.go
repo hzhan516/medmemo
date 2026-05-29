@@ -140,18 +140,35 @@ func (f *FactExtractor) parseResponse(response string) ([]*entity.ExtractedFact,
 		return nil, fmt.Errorf("failed to parse fact json: %w", err)
 	}
 
+	seen := make(map[string]struct{}, len(rawFacts))
 	var facts []*entity.ExtractedFact
 	for _, rf := range rawFacts {
-		if rf.Subject == "" || rf.Predicate == "" || rf.Object == "" {
+		subject := strings.TrimSpace(rf.Subject)
+		predicate := strings.TrimSpace(rf.Predicate)
+		object := strings.TrimSpace(rf.Object)
+		if subject == "" || predicate == "" || object == "" {
 			continue // 过滤不完整三元组
 		}
+		key := factTripleKey(subject, predicate, object)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
 		if rf.Confidence < 0 || rf.Confidence > 1 {
 			rf.Confidence = 0.5 // 默认置信度
 		}
-		facts = append(facts, entity.NewExtractedFact(rf.Subject, rf.Predicate, rf.Object, rf.Confidence, nil))
+		facts = append(facts, entity.NewExtractedFact(subject, predicate, object, rf.Confidence, nil))
 	}
 
 	return facts, nil
+}
+
+func factTripleKey(subject, predicate, object string) string {
+	parts := []string{subject, predicate, object}
+	for i, part := range parts {
+		parts[i] = strings.ToLower(strings.TrimSpace(part))
+	}
+	return strings.Join(parts, "\x00")
 }
 
 func buildFactExtractionPrompt(text string) string {

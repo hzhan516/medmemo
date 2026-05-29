@@ -1,6 +1,7 @@
 package entity
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -44,6 +45,18 @@ func TestExtractedFact_New(t *testing.T) {
 	assert.Nil(t, f.ScoredAt)
 	assert.Nil(t, f.ReviewedAt)
 	assert.WithinDuration(t, time.Now().UTC(), f.CreatedAt, time.Second)
+}
+
+func TestExtractedFact_New_GeneratesUniqueIDs(t *testing.T) {
+	ids := make(map[string]struct{}, 10000)
+	for i := 0; i < 10000; i++ {
+		f := NewExtractedFact("用户", "患有", "头痛", 0.8, []string{"msg_001"})
+		require.True(t, strings.HasPrefix(f.FactID, "fact_"))
+		if _, ok := ids[f.FactID]; ok {
+			t.Fatalf("duplicate fact id generated: %s", f.FactID)
+		}
+		ids[f.FactID] = struct{}{}
+	}
 }
 
 func TestExtractedFact_Validate_Complete(t *testing.T) {

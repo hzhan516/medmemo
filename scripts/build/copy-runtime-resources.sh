@@ -34,3 +34,19 @@ if [ -d "resources/lib/${PLATFORM}" ]; then
     cp "${libs[@]}" "$RESOURCE_ROOT/lib/${PLATFORM}/"
   fi
 fi
+
+if [ "$PLATFORM" = "darwin" ]; then
+  darwin_lib="$RESOURCE_ROOT/lib/darwin/libonnxruntime.dylib"
+  if [ ! -f "$darwin_lib" ]; then
+    echo "Error: missing macOS ONNX Runtime dylib in app bundle: $darwin_lib" >&2
+    exit 1
+  fi
+
+  if command -v lipo >/dev/null 2>&1; then
+    lipo_info="$(lipo -info "$darwin_lib")"
+    if [[ "$lipo_info" != *"arm64"* || "$lipo_info" != *"x86_64"* ]]; then
+      echo "Error: macOS ONNX Runtime dylib must be universal arm64/x86_64: $lipo_info" >&2
+      exit 1
+    fi
+  fi
+fi
