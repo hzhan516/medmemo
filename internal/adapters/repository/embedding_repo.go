@@ -28,9 +28,11 @@ func (r *EmbeddingRepoSQLite) Save(ctx context.Context, e *entity.SemanticEmbedd
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO semantic_embeddings (embedding_id, fact_id, vector, model_version, created_at)
 		VALUES (?, ?, ?, ?, ?)
-		ON CONFLICT(fact_id) DO NOTHING
 	`, e.EmbeddingID, e.FactID, e.VectorToBytes(), e.ModelVersion, e.CreatedAt.UnixMilli())
 	if err != nil {
+		if database.IsSQLiteUniqueConstraintOn(err, "semantic_embeddings.fact_id") {
+			return nil
+		}
 		return fmt.Errorf("failed to save embedding: %w", err)
 	}
 	return nil

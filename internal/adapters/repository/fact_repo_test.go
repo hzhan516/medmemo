@@ -277,6 +277,17 @@ func TestFactRepo_Save_DuplicateID(t *testing.T) {
 	assert.Equal(t, "偏头痛", got.Object)
 }
 
+func TestFactRepo_Save_CheckConstraintError(t *testing.T) {
+	repo, cleanup := setupFactTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	f := entity.NewExtractedFact("用户", "患有", "偏头痛", 1.2, []string{"msg_001"})
+	err := repo.Save(ctx, f)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to save fact")
+}
+
 func TestFactRepo_UpdateStatus_NotFound(t *testing.T) {
 	repo, cleanup := setupFactTestDB(t)
 	defer cleanup()
