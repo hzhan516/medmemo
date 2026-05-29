@@ -124,6 +124,12 @@ func NewWailsApp(
 func (a *WailsApp) Startup(ctx context.Context) {
 	a.ctx = ctx
 
+	// 校验前端嵌入资源是否完整（编译时 embed，运行时读取）
+	if err := validateEmbeddedAssets(); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to load frontend assets: %v\n", err)
+		os.Exit(1)
+	}
+
 	// 初始化 token 刷新降级回调
 	if a.tokenRefreshSvc != nil {
 		a.tokenRefreshSvc.SetOnDegraded(func(providerID, reason string) {
@@ -2628,4 +2634,17 @@ func confidenceResultToMap(r *entity.ConfidenceResult) map[string]interface{} {
 		m["breakdown"] = r.Breakdown
 	}
 	return m
+}
+
+// validateEmbeddedAssets 校验嵌入的前端资源是否完整可用。
+// 放在 Startup 中执行而非 main() 开头，避免 Wails binding 生成阶段触发误报。
+func validateEmbeddedAssets() error {
+	data, err := assets.ReadFile("web/dist/index.html")
+	if err != nil {
+		return fmt.Errorf("embedded web/dist/index.html missing: %w", err)
+	}
+	if strings.TrimSpace(string(data)) == "" {
+		return fmt.Errorf("embedded web/dist/index.html is empty")
+	}
+	return nil
 }

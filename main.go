@@ -75,11 +75,6 @@ func main() {
 
 	_ = ctx // 供后续 graceful shutdown 使用，当前由 cleanup 回调处理资源释放
 
-	if err := validateEmbeddedAssets(); err != nil {
-		fmt.Fprintf(os.Stderr, "failed to load frontend assets: %v\n", err)
-		os.Exit(1)
-	}
-
 	// 初始化应用（通过 Wire 生成的 InitializeApp）
 	app, cleanup, err := InitializeApp()
 	if err != nil {
@@ -110,17 +105,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "app run error: %v\n", err)
 		return
 	}
-}
-
-func validateEmbeddedAssets() error {
-	data, err := assets.ReadFile("web/dist/index.html")
-	if err != nil {
-		return fmt.Errorf("embedded web/dist/index.html missing: %w", err)
-	}
-	if strings.TrimSpace(string(data)) == "" {
-		return fmt.Errorf("embedded web/dist/index.html is empty")
-	}
-	return nil
 }
 
 // App 应用顶层封装，供 Wire 注入后返回。
