@@ -20,7 +20,8 @@ case "$OS" in
     ;;
   windows)
     echo "[TASK-027] Building for Windows..."
-    # 不再 export CGO_CFLAGS / CGO_LDFLAGS —— 避免含空格路径被 Go CGO 安全检查拒绝
+    export CGO_CFLAGS="-IC:/msys64/mingw64/include"
+    # 不再 export CGO_LDFLAGS —— 避免含空格路径被 Go CGO 安全检查拒绝
     # cgo_ort_libs_windows.go 已提供 -L${SRCDIR}/resources/lib/windows -lntdll
     # ortgenai / onnxruntime_go 已自动注入 -ldl
     # 下载 ONNX Runtime 与 Tokenizers Windows 库
