@@ -78,11 +78,14 @@ clean:
 	rm -rf web/dist/
 	rm -f coverage.out coverage.html
 
+DARWIN_PLATFORM ?= darwin/arm64
+DARWIN_REQUIRE_UNIVERSAL = $(if $(filter darwin/universal,$(DARWIN_PLATFORM)),true,false)
+
 # 交叉编译（需对应平台环境）
 build-darwin:
 	./scripts/build/build-frontend.sh
-	wails build -s -platform darwin/universal -clean -tags ORT $(LDFLAGS)
-	./scripts/build/copy-runtime-resources.sh build/bin/MedMemo.app/Contents/Resources darwin
+	wails build -s -platform $(DARWIN_PLATFORM) -clean -tags ORT $(LDFLAGS)
+	./scripts/build/copy-runtime-resources.sh build/bin/MedMemo.app/Contents/Resources darwin $(DARWIN_REQUIRE_UNIVERSAL)
 
 build-windows:
 	./scripts/build/build-frontend.sh

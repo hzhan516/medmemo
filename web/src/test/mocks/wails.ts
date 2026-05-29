@@ -126,7 +126,17 @@ const defaultGetDeletedConversations = async (): Promise<ConversationSummary[]> 
 const defaultSetDataRetentionDays = async (_days: number): Promise<void> => {}
 
 const defaultGetEmbeddingStatus = async (): Promise<Record<string, unknown>> => {
-  return { available: false, model_path: '', model_name: '', download_url: '' }
+  return {
+    available: false,
+    model_present: false,
+    engine_available: false,
+    runtime_lib_present: false,
+    runtime_lib_path: '',
+    failure_reason: 'embedding model file is missing',
+    model_path: '',
+    model_name: '',
+    download_url: '',
+  }
 }
 
 const defaultGetEmbeddingModelDirPath = async (): Promise<string> => {

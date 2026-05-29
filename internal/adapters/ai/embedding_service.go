@@ -20,6 +20,14 @@ type EmbeddingEngine interface {
 	HasEmbeddingPipeline() bool
 }
 
+type embeddingFailureReporter interface {
+	EmbeddingFailureReason() string
+}
+
+type runtimeLibPathReporter interface {
+	RuntimeLibPath() string
+}
+
 // EmbeddingServiceAdapter 实现 port.EmbeddingService，包装 ONNX 嵌入引擎。
 // 提供批量推理、LRU 缓存和 L2 归一化能力。
 type EmbeddingServiceAdapter struct {
@@ -43,7 +51,7 @@ func NewEmbeddingServiceAdapter(engine EmbeddingEngine, modelVersion string) *Em
 
 // Embed 批量生成文本嵌入。
 func (s *EmbeddingServiceAdapter) Embed(ctx context.Context, texts []string) ([][]float32, error) {
-	if !s.engine.HasEmbeddingPipeline() {
+	if s.engine == nil || !s.engine.HasEmbeddingPipeline() {
 		return nil, fmt.Errorf("embedding engine not available")
 	}
 
@@ -106,12 +114,42 @@ func (s *EmbeddingServiceAdapter) Embed(ctx context.Context, texts []string) ([]
 func (s *EmbeddingServiceAdapter) EmbedSingle(ctx context.Context, text string) ([]float32, error) {
 	result, err := s.Embed(ctx, []string{text})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to embed single text: %w", err)
 	}
 	if len(result) == 0 {
 		return nil, fmt.Errorf("empty embedding result")
 	}
 	return result[0], nil
+}
+
+// IsAvailable 返回真实嵌入推理能力是否可用。
+func (s *EmbeddingServiceAdapter) IsAvailable() bool {
+	return s.engine != nil && s.engine.HasEmbeddingPipeline()
+}
+
+// FailureReason 返回嵌入引擎最近一次初始化失败原因。
+func (s *EmbeddingServiceAdapter) FailureReason() string {
+	if s.engine == nil {
+		return "embedding engine not initialized"
+	}
+	if reporter, ok := s.engine.(embeddingFailureReporter); ok {
+		return reporter.EmbeddingFailureReason()
+	}
+	if !s.engine.HasEmbeddingPipeline() {
+		return "embedding engine not available"
+	}
+	return ""
+}
+
+// RuntimeLibPath 返回嵌入引擎解析到的 ONNX Runtime 动态库路径。
+func (s *EmbeddingServiceAdapter) RuntimeLibPath() string {
+	if s.engine == nil {
+		return ""
+	}
+	if reporter, ok := s.engine.(runtimeLibPathReporter); ok {
+		return reporter.RuntimeLibPath()
+	}
+	return ""
 }
 
 // ModelVersion 返回当前使用的模型版本。
