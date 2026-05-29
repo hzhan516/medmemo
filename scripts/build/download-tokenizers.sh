@@ -28,7 +28,7 @@ for arg in "$@"; do
     esac
 done
 
-BASE_URL="https://github.com/daulet/tokenizers/releases/download/${TOKENIZERS_VERSION}"
+BASE_URL="${MEDMEMO_TOKENIZERS_BASE_URL:-https://github.com/daulet/tokenizers/releases/download/${TOKENIZERS_VERSION}}"
 
 download_linux() {
     local out_dir="${PROJECT_ROOT}/resources/lib/linux"
