@@ -82,12 +82,14 @@ clean:
 build-darwin:
 	cd web && npm install && npm run build
 	wails build -platform darwin/universal -clean -tags ORT $(LDFLAGS)
+	./scripts/build/copy-runtime-resources.sh build/bin/MedMemo.app/Contents/Resources darwin
 
 build-windows:
 	cd web && npm install && npm run build
 	# Windows 上若缺少 libtokenizers.a，ORT tag 会导致编译失败。
 	# 首次构建前请运行: .\scripts\build\download-tokenizers.ps1
 	CGO_LDFLAGS="$(CGO_LDFLAGS_WINDOWS)" wails build -platform windows/amd64 -clean -tags ORT $(LDFLAGS)
+	./scripts/build/copy-runtime-resources.sh build/bin windows
 
 build-linux:
 	cd web && npm install && npm run build

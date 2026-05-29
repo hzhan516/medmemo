@@ -46,6 +46,7 @@ case "$OS" in
     dlltool -D ntdll.dll -d /tmp/ntdll.def -l resources/lib/windows/libntdll.a
     echo "[TASK-027] Generated libntdll.a with $(wc -l < /tmp/ntdll_exports.txt) exports"
     wails build -ldflags "-s -w -X main.version=${VERSION}" -tags "ORT" -nsis
+    ./scripts/build/copy-runtime-resources.sh "build/bin" "windows"
     ;;
   darwin)
     echo "[TASK-027] Building for macOS..."
@@ -54,6 +55,7 @@ case "$OS" in
     ./scripts/build/download-onnx.sh --platform=darwin
     ./scripts/build/download-tokenizers.sh --platform=darwin
     wails build -ldflags "-s -w -X main.version=${VERSION}" -tags "ORT" -platform darwin/universal
+    ./scripts/build/copy-runtime-resources.sh "build/bin/MedMemo.app/Contents/Resources" "darwin"
     echo "[TASK-027] Building dmg..."
     ./build/package/build-dmg.sh
     # GoReleaser prebuilt 期望 build/bin/MedMemo，而 Wails macOS 产物为 .app bundle
