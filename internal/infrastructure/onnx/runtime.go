@@ -429,9 +429,8 @@ func (e *Engine) initEmbeddingPipeline(modelPath string) {
 		fmt.Printf("[ONNX Engine] Embedding warmup failed: %v\n", warmupErr)
 		e.embeddingFailure = fmt.Sprintf("embedding warmup failed: %v", warmupErr)
 		return
-	} else {
-		fmt.Printf("[ONNX Engine] Embedding warmup completed in %v\n", time.Since(warmupStart))
 	}
+	fmt.Printf("[ONNX Engine] Embedding warmup completed in %v\n", time.Since(warmupStart))
 	e.embeddingPipeline = pipeline
 
 	// 创建 2 个 Embedding Worker

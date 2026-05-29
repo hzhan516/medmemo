@@ -2525,17 +2525,18 @@ func (a *WailsApp) GetEmbeddingStatus() (*EmbeddingStatusResponse, error) {
 	if reporter, ok := a.embeddingSvc.(embeddingFailureReasonReporter); ok {
 		failureReason = reporter.FailureReason()
 	}
-	if !modelPresent {
+	switch {
+	case !modelPresent:
 		failureReason = "embedding model file is missing"
-	} else if !tokenizerPresent && !engineAvailable {
+	case !tokenizerPresent && !engineAvailable:
 		failureReason = fmt.Sprintf("embedding tokenizer file is missing: %s", tokenizerFile)
-	} else if !runtimeLibPresent {
+	case !runtimeLibPresent:
 		if runtimeLibPath == "" {
 			failureReason = "ONNX Runtime library path could not be resolved"
 		} else {
 			failureReason = fmt.Sprintf("ONNX Runtime library not found: %s", runtimeLibPath)
 		}
-	} else if !engineAvailable && failureReason == "" {
+	case !engineAvailable && failureReason == "":
 		failureReason = "embedding engine not available"
 	}
 

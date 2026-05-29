@@ -56,8 +56,13 @@ case "$OS" in
     export MEDMEMO_TOKENIZERS_BASE_URL="https://github.com/hzhan516/medmemo/releases/download/tokenizers-v1.27.0"
     ./scripts/build/download-onnx.sh --platform=darwin
     ./scripts/build/download-tokenizers.sh --platform=darwin
-    wails build -s -ldflags "-s -w -X main.version=${VERSION}" -tags "ORT" -platform darwin/universal
-    ./scripts/build/copy-runtime-resources.sh "build/bin/MedMemo.app/Contents/Resources" "darwin"
+    DARWIN_PLATFORM="${MEDMEMO_DARWIN_PLATFORM:-darwin/arm64}"
+    REQUIRE_UNIVERSAL="false"
+    if [ "$DARWIN_PLATFORM" = "darwin/universal" ]; then
+      REQUIRE_UNIVERSAL="true"
+    fi
+    wails build -s -ldflags "-s -w -X main.version=${VERSION}" -tags "ORT" -platform "$DARWIN_PLATFORM"
+    ./scripts/build/copy-runtime-resources.sh "build/bin/MedMemo.app/Contents/Resources" "darwin" "$REQUIRE_UNIVERSAL"
     echo "[TASK-027] Building dmg..."
     ./build/package/build-dmg.sh
     # GoReleaser prebuilt 期望 build/bin/MedMemo，而 Wails macOS 产物为 .app bundle
