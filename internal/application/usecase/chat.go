@@ -14,6 +14,7 @@ import (
 	"github.com/hzhan516/medmemo/internal/domain/entity"
 	"github.com/hzhan516/medmemo/pkg/desensitizer"
 	"github.com/hzhan516/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/pkg/resourcepath"
 )
 
 // Deidentifier 脱敏流水线接口。
@@ -456,7 +457,7 @@ type RuleComplianceChecker struct {
 
 // NewRuleComplianceChecker 从默认规则库路径创建合规检查器。
 func NewRuleComplianceChecker() (*RuleComplianceChecker, error) {
-	ci, err := application.NewComplianceInterceptor("resources/rules/compliance_rules_v1.json")
+	ci, err := application.NewComplianceInterceptor(resourcepath.Path("rules", "compliance_rules_v1.json"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create compliance interceptor: %w", err)
 	}
