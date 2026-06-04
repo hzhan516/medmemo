@@ -1,0 +1,88 @@
+name: Build Tokenizers for Windows
+
+# 手动触发或当 tokenizers 相关文件变更时触发
+on:
+  workflow_dispatch:
+    inputs:
+      tokenizers_version:
+        description: 'Tokenizers version tag (e.g. v1.27.0)'
+        required: true
+        default: 'v1.27.0'
+  push:
+    paths:
+      - '.github/workflows/build-tokenizers-windows.yml'
+      - 'scripts/build/download-tokenizers.sh'
+      - 'scripts/build/download-tokenizers.ps1'
+
+env:
+  TOKENIZERS_VERSION: ${{ github.event.inputs.tokenizers_version || 'v1.27.0' }}
+
+jobs:
+  build-windows-tokenizers:
+    name: Cross-compile libtokenizers.a for Windows
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-gnu
+
+      - name: Install MinGW cross-compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mingw-w64
+
+      - name: Clone daulet/tokenizers
+        run: |
+          git clone --depth 1 --branch ${{ env.TOKENIZERS_VERSION }} https://github.com/daulet/tokenizers.git /tmp/tokenizers
+
+      - name: Configure Cargo for cross-compilation
+        run: |
+          mkdir -p /tmp/tokenizers/crates/tokenizers/.cargo
+          cat > /tmp/tokenizers/crates/tokenizers/.cargo/config.toml << 'EOF'
+          [target.x86_64-pc-windows-gnu]
+          linker = "x86_64-w64-mingw32-gcc"
+          EOF
+
+      - name: Build Windows static library
+        run: |
+          cd /tmp/tokenizers/crates/tokenizers
+          cargo build --release --target x86_64-pc-windows-gnu
+          ls -la /tmp/tokenizers/target/x86_64-pc-windows-gnu/release/
+
+      - name: Package library
+        run: |
+          mkdir -p /tmp/tokenizers-release
+          cp /tmp/tokenizers/target/x86_64-pc-windows-gnu/release/libtokenizers_ffi.a /tmp/tokenizers-release/libtokenizers.a
+          cd /tmp/tokenizers-release
+          tar -czf libtokenizers.windows-amd64.tar.gz libtokenizers.a
+          sha256sum libtokenizers.windows-amd64.tar.gz > libtokenizers.windows-amd64.tar.gz.sha256
+          cat libtokenizers.windows-amd64.tar.gz.sha256
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: libtokenizers-windows-${{ env.TOKENIZERS_VERSION }}
+          path: /tmp/tokenizers-release/*
+          retention-days: 90
+
+      # 当手动触发且带有 release 标志时，上传到 GitHub release
+      - name: Upload to GitHub Release
+        if: github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: tokenizers-${{ env.TOKENIZERS_VERSION }}
+          name: "Tokenizers Windows ${{ env.TOKENIZERS_VERSION }}"
+          body: |
+            Pre-built Windows static library for daulet/tokenizers ${{ env.TOKENIZERS_VERSION }}.
+
+            - Target: `x86_64-pc-windows-gnu` (MinGW-w64)
+            - Build: Cross-compiled on Ubuntu + mingw-w64
+            - Usage: Extract `libtokenizers.a` to `resources/lib/windows/`
+
+            This is an automated build for MedMemo's Windows ONNX Runtime support.
+          files: |
+            /tmp/tokenizers-release/libtokenizers.windows-amd64.tar.gz
+            /tmp/tokenizers-release/libtokenizers.windows-amd64.tar.gz.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

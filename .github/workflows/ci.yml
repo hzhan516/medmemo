@@ -167,8 +167,13 @@ jobs:
       - name: Frontend build check
         run: cd web && npm run build
 
+      - name: Download ONNX Runtime and Tokenizers (Linux)
+        run: |
+          ./scripts/build/download-onnx.sh --platform=linux
+          ./scripts/build/download-tokenizers.sh --platform=linux
+
       - name: Build Linux binary
-        run: wails build -platform linux/amd64 -tags webkit2_41
+        run: wails build -platform linux/amd64 -tags webkit2_41,ORT
 
       - name: Check binary size
         run: |
@@ -227,14 +232,69 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install sqlcipher
 
+      - name: Download ONNX Runtime and Tokenizers (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          ./scripts/build/download-onnx.sh --platform=linux
+          ./scripts/build/download-tokenizers.sh --platform=linux
+
+      - name: Download ONNX Runtime and Tokenizers (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          ./scripts/build/download-onnx.sh --platform=darwin
+          ./scripts/build/download-tokenizers.sh --platform=darwin
+
+      - name: Build frontend
+        if: runner.os != 'Windows'
+        run: cd web && npm run build
+
       - name: Build (Linux)
         if: runner.os == 'Linux'
-        run: wails build -clean -tags webkit2_41
+        run: wails build -clean -tags webkit2_41,ORT
 
       - name: Build (macOS)
         if: runner.os == 'macOS'
-        run: wails build -clean
+        run: wails build -clean -tags ORT
+
+      - name: Download ONNX Runtime (Windows)
+        if: runner.os == 'Windows'
+        run: .\scripts\build\download-onnx.ps1 -Platform windows
+
+      - name: Download Tokenizers (Windows)
+        if: runner.os == 'Windows'
+        run: .\scripts\build\download-tokenizers.ps1
+
+      - name: Install dlfcn-win32 for ortgenai (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: |
+          C:\msys64\usr\bin\pacman.exe -S --noconfirm mingw-w64-x86_64-dlfcn
+
+      - name: Prepare ntdll import lib for tokenizers (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          # MinGW-w64 官方 libntdll.a 不包含 Native API 符号（NtReadFile 等）。
+          # 必须从系统 ntdll.dll 现场生成一个完整的导入库。
+          echo "Generating libntdll.a from C:/Windows/System32/ntdll.dll..."
+          objdump -p /c/Windows/System32/ntdll.dll | \
+            awk '/Ordinal.*Hint.*Name/{start=1; next} start && /^[[:space:]]*$/ {exit} start {last=$NF; if(last ~ /[a-zA-Z]/) print last}' \
+            > /tmp/ntdll_exports.txt
+
+          echo "LIBRARY ntdll.dll" > /tmp/ntdll.def
+          echo "EXPORTS" >> /tmp/ntdll.def
+          cat /tmp/ntdll_exports.txt >> /tmp/ntdll.def
+
+          dlltool -D ntdll.dll -d /tmp/ntdll.def -l resources/lib/windows/libntdll.a
+          echo "Generated libntdll.a with $(wc -l < /tmp/ntdll_exports.txt) exports"
+
+      - name: Build frontend
+        if: runner.os == 'Windows'
+        run: cd web && npm run build
 
       - name: Build (Windows)
         if: runner.os == 'Windows'
-        run: wails build -clean
+        run: wails build -clean -tags ORT
+        env:
+          CGO_CFLAGS: "-IC:/msys64/mingw64/include"
+          CGO_LDFLAGS: "-L${{ github.workspace }}/resources/lib/windows -LC:/msys64/mingw64/lib -ldl"

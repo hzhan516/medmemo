@@ -222,6 +222,34 @@ export namespace main {
 	        this.version = source["version"];
 	    }
 	}
+	export class EmbeddingStatusResponse {
+	    available: boolean;
+	    model_present: boolean;
+	    engine_available: boolean;
+	    runtime_lib_present: boolean;
+	    runtime_lib_path: string;
+	    failure_reason: string;
+	    model_path: string;
+	    model_name: string;
+	    download_url: string;
+
+	    static createFrom(source: any = {}) {
+	        return new EmbeddingStatusResponse(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.available = source["available"];
+	        this.model_present = source["model_present"];
+	        this.engine_available = source["engine_available"];
+	        this.runtime_lib_present = source["runtime_lib_present"];
+	        this.runtime_lib_path = source["runtime_lib_path"];
+	        this.failure_reason = source["failure_reason"];
+	        this.model_path = source["model_path"];
+	        this.model_name = source["model_name"];
+	        this.download_url = source["download_url"];
+	    }
+	}
 	export class EmergencyResult {
 	    level: string;
 	    message: string;
@@ -263,6 +291,10 @@ export namespace main {
 	    role: string;
 	    content: string;
 	    timestamp: string;
+	    prompt_tokens: number;
+	    completion_tokens: number;
+	    total_tokens: number;
+	    confidence?: any;
 
 	    static createFrom(source: any = {}) {
 	        return new MessageResponse(source);
@@ -274,6 +306,10 @@ export namespace main {
 	        this.role = source["role"];
 	        this.content = source["content"];
 	        this.timestamp = source["timestamp"];
+	        this.prompt_tokens = source["prompt_tokens"];
+	        this.completion_tokens = source["completion_tokens"];
+	        this.total_tokens = source["total_tokens"];
+	        this.confidence = source["confidence_result"];
 	    }
 	}
 	export class ModelInfo {
@@ -372,7 +408,7 @@ export namespace main {
 	}
 	export class SendMessageResponse {
 	    reply: string;
-	    confidence: number;
+	    confidence_result?: any;
 	    warnings: string[];
 	
 	    static createFrom(source: any = {}) {
@@ -382,7 +418,7 @@ export namespace main {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.reply = source["reply"];
-	        this.confidence = source["confidence"];
+	        this.confidence_result = source["confidence_result"];
 	        this.warnings = source["warnings"];
 	    }
 	}
@@ -438,6 +474,48 @@ export namespace main {
 	        this.check_enabled = source["check_enabled"];
 	        this.channel = source["channel"];
 	        this.skip_version = source["skip_version"];
+	    }
+	}
+	export class MemoryItem {
+	    fact_id: string;
+	    subject: string;
+	    predicate: string;
+	    object: string;
+	    confidence?: any;
+	    status: string;
+	    created_at: number;
+
+	    static createFrom(source: any = {}) {
+	        return new MemoryItem(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.fact_id = source["fact_id"];
+	        this.subject = source["subject"];
+	        this.predicate = source["predicate"];
+	        this.object = source["object"];
+	        this.confidence = source["confidence_result"];
+	        this.status = source["status"];
+	        this.created_at = source["created_at"];
+	    }
+	}
+	export class MemoryStats {
+	    total: number;
+	    approved: number;
+	    rejected: number;
+	    pending: number;
+
+	    static createFrom(source: any = {}) {
+	        return new MemoryStats(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.total = source["total"];
+	        this.approved = source["approved"];
+	        this.rejected = source["rejected"];
+	        this.pending = source["pending"];
 	    }
 	}
 
@@ -496,6 +574,7 @@ export namespace models {
 	    temperature: number;
 	    timeoutMs: number;
 	    maxRetries: number;
+    maxTokens: number;
 	    group: string;
 	    enabled: boolean;
 	    sortOrder: number;
@@ -518,6 +597,7 @@ export namespace models {
 	        this.temperature = source["temperature"];
 	        this.timeoutMs = source["timeoutMs"];
 	        this.maxRetries = source["maxRetries"];
+        this.maxTokens = source["maxTokens"];
 	        this.group = source["group"];
 	        this.enabled = source["enabled"];
 	        this.sortOrder = source["sortOrder"];
@@ -547,4 +627,3 @@ export namespace models {
 	}
 
 }
-

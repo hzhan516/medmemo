@@ -1,11 +1,32 @@
-import { User, Bot, AlertCircle, Copy, RotateCcw, ShieldAlert, Info, ThumbsDown, CheckCircle } from 'lucide-react'
+import { User, Bot, AlertCircle, Copy, RotateCcw, ShieldAlert, Info, ThumbsDown, CheckCircle, AlertTriangle } from 'lucide-react'
 import type { ChatMessage } from '@/stores/chatStore'
+import { useSettingsStore } from '@/stores/settingsStore'
 import { MarkdownRenderer } from '@/components/markdown/MarkdownRenderer'
+import { ConfidenceBar } from '@/components/confidence/ConfidenceBar'
 
 interface MessageBubbleProps {
   message: ChatMessage
   onRetry?: (messageId: string) => void
   onReportCompliance?: (messageId: string, ruleID: string) => void
+}
+
+/**
+ * 将原始技术错误转换为对用户友好的提示文案。
+ */
+function getFriendlyErrorMessage(error: string): string {
+  if (/HTTP 50[234]|server error|服务端错误|服务商暂时不可用/.test(error)) {
+    return '服务商暂时不可用，已自动重试，若仍失败请稍后重试或切换其他模型'
+  }
+  if (/HTTP 429|rate limit|请求过于频繁/.test(error)) {
+    return '请求过于频繁，请稍后再试'
+  }
+  if (/HTTP 401|认证失败|API 认证|Unauthorized/.test(error)) {
+    return 'API 认证失败，请检查 API Key 是否有效'
+  }
+  if (/HTTP 404|模型不存在|Not Found/.test(error)) {
+    return '请求的模型不存在，请检查模型配置'
+  }
+  return error
 }
 
 /**
@@ -16,7 +37,10 @@ interface MessageBubbleProps {
  * 合规标记：L2_WARNING 橙色警告框，L3_NOTICE 蓝色提示条。
  */
 export function MessageBubble({ message, onRetry, onReportCompliance }: MessageBubbleProps) {
-  const { id, role, content, isStreaming, interrupted, error, warnings, replacedTerms, complianceFeedback } = message
+  const showConfidenceBar = useSettingsStore((s) => s.showConfidenceBar)
+  const confidenceBarMode = useSettingsStore((s) => s.confidenceBarMode)
+  const setConfidenceBarMode = useSettingsStore((s) => s.setConfidenceBarMode)
+  const { id, role, content, isStreaming, interrupted, error, warnings, replacedTerms, complianceFeedback, truncated } = message
 
   // 解析合规级别
   const hasL1Blocked = warnings?.some((w) => w === 'L1_BLOCKED')
@@ -90,14 +114,6 @@ export function MessageBubble({ message, onRetry, onReportCompliance }: MessageB
             {isStreaming && (
               <span className="inline-block w-1.5 h-4 ml-0.5 bg-current opacity-50 animate-pulse" />
             )}
-            {/* 用户消息 token 统计 */}
-            {message.totalTokens !== undefined && (
-              <div className="flex items-center justify-end mt-2 pt-2 border-t border-white/20">
-                <span className="text-xs text-white/70">
-                  {message.totalTokens} tokens
-                </span>
-              </div>
-            )}
           </div>
         ) : (
           <div className="break-words">
@@ -107,13 +123,24 @@ export function MessageBubble({ message, onRetry, onReportCompliance }: MessageB
                 <AlertCircle size={14} className="shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
                   <p className="font-medium">生成失败</p>
-                  <p className="opacity-80">{error}</p>
+                  <p className="opacity-80">{getFriendlyErrorMessage(error)}</p>
                 </div>
               </div>
             )}
 
-            {/* L1 替换提示 */}
-            {(hasL1Blocked || (replacedTerms && replacedTerms.length > 0)) && (
+            {/* L1 阻断提示 */}
+            {hasL1Blocked && (
+              <div className="flex items-start gap-2 mb-2 p-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-xs">
+                <ShieldAlert size={14} className="shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium">内容风险提示（诊断 / 处方 / 治疗）</p>
+                  <p className="opacity-80">以上内容涉及诊断性表述，仅为信息参考，不能替代专业医疗诊断。如有健康疑虑，请咨询持有合法资质的专业医生。</p>
+                </div>
+              </div>
+            )}
+
+            {/* Inline 替换提示 */}
+            {replacedTerms && replacedTerms.length > 0 && !hasL1Blocked && (
               <div className="flex items-start gap-2 mb-2 p-2 rounded-lg bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-xs">
                 <Info size={14} className="shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
@@ -146,6 +173,17 @@ export function MessageBubble({ message, onRetry, onReportCompliance }: MessageB
             {/* 流式光标 */}
             {isStreaming && content.length > 0 && (
               <span className="inline-block w-1.5 h-4 ml-0.5 bg-current opacity-50 animate-pulse" />
+            )}
+
+            {/* 截断提示 */}
+            {truncated && !isStreaming && (
+              <div className="flex items-start gap-2 mt-2 p-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-xs">
+                <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium">回复已截断（超出长度限制）</p>
+                  <p className="opacity-80">模型输出已达到最大长度限制，部分内容未生成完整。您可以发送「继续」来获取剩余内容。</p>
+                </div>
+              </div>
             )}
 
             {/* L3 提示条 */}
@@ -191,6 +229,17 @@ export function MessageBubble({ message, onRetry, onReportCompliance }: MessageB
                     </>
                   )}
                 </span>
+              </div>
+            )}
+
+            {/* 置信度条 */}
+            {showConfidenceBar && !isStreaming && !error && message.confidence && (
+              <div className="mt-2">
+                <ConfidenceBar
+                  result={message.confidence}
+                  mode={confidenceBarMode}
+                  onModeChange={setConfidenceBarMode}
+                />
               </div>
             )}
 

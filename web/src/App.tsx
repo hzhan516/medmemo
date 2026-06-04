@@ -4,6 +4,7 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { ChatPage } from '@/pages/ChatPage'
 import { AboutPage } from '@/pages/AboutPage'
+import { MemoryPage } from '@/pages/MemoryPage'
 import { DisclaimerModal } from '@/components/DisclaimerModal'
 import { UpdateModal } from '@/components/UpdateModal'
 import { UpdateBanner } from '@/components/UpdateBanner'
@@ -33,11 +34,12 @@ import { useChatStore } from '@/stores/chatStore'
 function App() {
   useTheme()
 
-  const { getDisclaimerStatus, acceptDisclaimer, declineDisclaimer, listProviders, createProvider, getConversations, getConversationMessages } = useWails()
+  const { getDisclaimerStatus, acceptDisclaimer, declineDisclaimer, listProviders, createProvider, getConversations, getDeletedConversations, getConversationMessages } = useWails()
 
   const setProviders = useProviderStore((s) => s.setProviders)
   const initialized = useProviderStore((s) => s.initialized)
   const setConversations = useChatStore((s) => s.setConversations)
+  const setDeletedConversations = useChatStore((s) => s.setDeletedConversations)
   const selectConversation = useChatStore((s) => s.selectConversation)
   const setMessages = useChatStore((s) => s.setMessages)
   const [disclaimerRequired, setDisclaimerRequired] = useState<boolean | null>(null)
@@ -138,7 +140,13 @@ function App() {
     let cancelled = false
     ;(async () => {
       try {
-        const backendConversations = await getConversations()
+        const [backendConversations, backendDeleted] = await Promise.all([
+          getConversations(),
+          getDeletedConversations().catch((err) => {
+            logger.error('Failed to load deleted conversations:', err)
+            return [] as Awaited<ReturnType<typeof getDeletedConversations>>
+          }),
+        ])
         if (cancelled) return
         const mapped = backendConversations.map((conv) => ({
           id: conv.id,
@@ -147,6 +155,16 @@ function App() {
           unread: 0,
         }))
         setConversations(mapped)
+
+        const mappedDeleted = backendDeleted.map((conv) => ({
+          id: conv.id,
+          title: conv.title,
+          updatedAt: Number(conv.updated_at),
+          deletedAt: conv.deleted_at ? Number(conv.deleted_at) : undefined,
+          unread: 0,
+        }))
+        setDeletedConversations(mappedDeleted)
+
         // 自动选中最近更新的对话并加载消息
         if (mapped.length > 0) {
           const latest = mapped[0]
@@ -159,6 +177,25 @@ function App() {
               role: msg.role as 'user' | 'assistant' | 'system',
               content: msg.content,
               timestamp: Number(msg.timestamp),
+              promptTokens: msg.prompt_tokens,
+              completionTokens: msg.completion_tokens,
+              totalTokens: msg.total_tokens,
+              confidence: msg.confidence
+                ? {
+                    overallScore: (msg.confidence as Record<string, unknown>).overall_score as number,
+                    level: (msg.confidence as Record<string, unknown>).level as 'A' | 'B' | 'C' | 'D' | 'E',
+                    breakdown: {
+                      knowledge_source: ((msg.confidence as Record<string, unknown>).breakdown as Record<string, number>)?.knowledge_source ?? 0,
+                      reasoning: ((msg.confidence as Record<string, unknown>).breakdown as Record<string, number>)?.reasoning ?? 0,
+                      context: ((msg.confidence as Record<string, unknown>).breakdown as Record<string, number>)?.context ?? 0,
+                      history: ((msg.confidence as Record<string, unknown>).breakdown as Record<string, number>)?.history ?? 0,
+                      uncertainty: ((msg.confidence as Record<string, unknown>).breakdown as Record<string, number>)?.uncertainty ?? 0,
+                    },
+                    explanation: (msg.confidence as Record<string, unknown>).explanation as string,
+                    suggestion: (msg.confidence as Record<string, unknown>).suggestion as string,
+                    missingInfo: ((msg.confidence as Record<string, unknown>).missing_info as string[]) ?? [],
+                  }
+                : undefined,
             }))
             setMessages(mappedMessages)
           } catch (msgErr) {
@@ -172,7 +209,7 @@ function App() {
     return () => {
       cancelled = true
     }
-  }, [getConversations, getConversationMessages, setConversations, selectConversation, setMessages])
+  }, [getConversations, getDeletedConversations, getConversationMessages, setConversations, setDeletedConversations, selectConversation, setMessages])
 
   // 应用启动时检测免责声明状态
   useEffect(() => {
@@ -244,6 +281,7 @@ function App() {
           <Routes>
             <Route element={<AppLayout />}>
               <Route path="/chat" element={<ChatPage />} />
+              <Route path="/memories" element={<MemoryPage />} />
               <Route
                 path="/settings"
                 element={

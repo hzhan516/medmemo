@@ -193,6 +193,7 @@ export function ProviderImportExport({ open, onClose }: ProviderImportExportProp
       temperature: typeof p.temperature === 'number' ? p.temperature : 0.7,
       timeoutMs: typeof p.timeoutMs === 'number' ? p.timeoutMs : 30000,
       maxRetries: typeof p.maxRetries === 'number' ? p.maxRetries : 3,
+      maxTokens: typeof p.maxTokens === 'number' ? p.maxTokens : 4096,
       group: (p.group as string) || '默认',
       enabled: typeof p.enabled === 'boolean' ? p.enabled : true,
       sortOrder: typeof p.sortOrder === 'number' ? p.sortOrder : 0,

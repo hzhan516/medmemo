@@ -1,9 +1,15 @@
 package main
 
 import (
+	"context"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/hzhan516/medmemo/internal/application"
+	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/pkg/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -72,6 +78,70 @@ func TestCheckEmergency_Empty(t *testing.T) {
 	assert.Equal(t, "none", result.Level)
 }
 
+func TestStreamTimeout_UsesProviderTimeout(t *testing.T) {
+	store := newMockProviderStore()
+	require.NoError(t, store.Create(t.Context(), &models.ProviderConfig{
+		ID:        "gemini",
+		TimeoutMs: 300000,
+	}))
+	app := &WailsApp{ctx: t.Context(), providerStore: store}
+
+	assert.Equal(t, 5*time.Minute, app.streamTimeout("gemini"))
+}
+
+func TestStreamTimeout_EnforcesMinimum(t *testing.T) {
+	store := newMockProviderStore()
+	require.NoError(t, store.Create(t.Context(), &models.ProviderConfig{
+		ID:        "gemini",
+		TimeoutMs: 30000,
+	}))
+	app := &WailsApp{ctx: t.Context(), providerStore: store}
+
+	assert.Equal(t, 120*time.Second, app.streamTimeout("gemini"))
+}
+
+func TestStreamTimeout_DefaultsWhenProviderMissing(t *testing.T) {
+	app := &WailsApp{ctx: t.Context(), providerStore: newMockProviderStore()}
+
+	assert.Equal(t, 5*time.Minute, app.streamTimeout("missing"))
+}
+
+func TestGetEmbeddingStatus_ModelPresentEngineUnavailable(t *testing.T) {
+	app, _ := newEmbeddingStatusTestApp(t, false, "embedding warmup failed", true)
+
+	status, err := app.GetEmbeddingStatus()
+	require.NoError(t, err)
+	assert.False(t, status.Available)
+	assert.True(t, status.ModelPresent)
+	assert.False(t, status.EngineAvailable)
+	assert.True(t, status.RuntimeLibPresent)
+	assert.Equal(t, "embedding warmup failed", status.FailureReason)
+}
+
+func TestGetEmbeddingStatus_RuntimeLibMissing(t *testing.T) {
+	app, runtimePath := newEmbeddingStatusTestApp(t, false, "session init failed", false)
+
+	status, err := app.GetEmbeddingStatus()
+	require.NoError(t, err)
+	assert.False(t, status.Available)
+	assert.True(t, status.ModelPresent)
+	assert.False(t, status.RuntimeLibPresent)
+	assert.Equal(t, runtimePath, status.RuntimeLibPath)
+	assert.Contains(t, status.FailureReason, "ONNX Runtime library not found")
+}
+
+func TestGetEmbeddingStatus_EngineAvailable(t *testing.T) {
+	app, _ := newEmbeddingStatusTestApp(t, true, "", true)
+
+	status, err := app.GetEmbeddingStatus()
+	require.NoError(t, err)
+	assert.True(t, status.Available)
+	assert.True(t, status.ModelPresent)
+	assert.True(t, status.EngineAvailable)
+	assert.True(t, status.RuntimeLibPresent)
+	assert.Empty(t, status.FailureReason)
+}
+
 // TestCheckEmergency_Delegation 验证 wails_app.go 的 CheckEmergency 正确委托到 application 层。
 func TestCheckEmergency_Delegation(t *testing.T) {
 	app := &WailsApp{}
@@ -90,6 +160,65 @@ func TestCheckEmergency_Delegation(t *testing.T) {
 	result, err = app.CheckEmergency("普通感冒吃什么好")
 	require.NoError(t, err)
 	assert.Equal(t, "none", result.Level)
+}
+
+func newEmbeddingStatusTestApp(t *testing.T, available bool, failureReason string, runtimePresent bool) (*WailsApp, string) {
+	t.Helper()
+	tmpDir := t.TempDir()
+	modelDir := filepath.Join(tmpDir, "models", "all-MiniLM-L6-v2")
+	require.NoError(t, os.MkdirAll(modelDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(modelDir, "model.onnx"), []byte("test"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(modelDir, "tokenizer.json"), []byte("{}"), 0644))
+
+	runtimePath := filepath.Join(tmpDir, "libonnxruntime.dylib")
+	if runtimePresent {
+		require.NoError(t, os.WriteFile(runtimePath, []byte("test"), 0644))
+	}
+
+	app := &WailsApp{
+		ctx: context.Background(),
+		config: &entity.AppConfig{
+			DataDir: tmpDir,
+		},
+		embeddingSvc: &mockEmbeddingStatusService{
+			available:     available,
+			failureReason: failureReason,
+			runtimePath:   runtimePath,
+		},
+	}
+	return app, runtimePath
+}
+
+type mockEmbeddingStatusService struct {
+	available     bool
+	failureReason string
+	runtimePath   string
+}
+
+func (m *mockEmbeddingStatusService) Embed(ctx context.Context, texts []string) ([][]float32, error) {
+	if !m.available {
+		return nil, assert.AnError
+	}
+	return make([][]float32, len(texts)), nil
+}
+
+func (m *mockEmbeddingStatusService) EmbedSingle(ctx context.Context, text string) ([]float32, error) {
+	if !m.available {
+		return nil, assert.AnError
+	}
+	return []float32{1}, nil
+}
+
+func (m *mockEmbeddingStatusService) IsAvailable() bool {
+	return m.available
+}
+
+func (m *mockEmbeddingStatusService) FailureReason() string {
+	return m.failureReason
+}
+
+func (m *mockEmbeddingStatusService) RuntimeLibPath() string {
+	return m.runtimePath
 }
 
 // TestEvaluateEmergency_Integration 直接测试 application 层紧急检测引擎。
@@ -122,4 +251,61 @@ func TestEvaluateEmergency_Integration(t *testing.T) {
 		result := application.EvaluateEmergency(text)
 		assert.Equal(t, application.LevelB, result.Level, "文本: %s", text)
 	}
+}
+
+// mockMessageRepo 是一个轻量级的内存消息仓库 mock，用于单元测试。
+type mockMessageRepo struct {
+	saved []*entity.Message
+}
+
+func (m *mockMessageRepo) Save(_ context.Context, _ models.ConversationID, msg *entity.Message) error {
+	m.saved = append(m.saved, msg)
+	return nil
+}
+
+func (m *mockMessageRepo) ListByConversation(_ context.Context, _ models.ConversationID, _ string, _ int) ([]*entity.Message, string, error) {
+	return nil, "", nil
+}
+
+func (m *mockMessageRepo) SoftDelete(_ context.Context, _ string) error {
+	return nil
+}
+
+func (m *mockMessageRepo) Restore(_ context.Context, _ string) error {
+	return nil
+}
+
+// TestStreamTimeout_DefaultWhenProviderStoreNil 验证当 providerStore 为 nil 时，streamTimeout 返回默认的 5 分钟。
+func TestStreamTimeout_DefaultWhenProviderStoreNil(t *testing.T) {
+	app := &WailsApp{ctx: t.Context()}
+	assert.Equal(t, 5*time.Minute, app.streamTimeout("gemini"))
+}
+
+// TestStreamTimeout_DefaultWhenProviderIDEmpty 验证当 providerID 为空字符串时，streamTimeout 返回默认的 5 分钟。
+func TestStreamTimeout_DefaultWhenProviderIDEmpty(t *testing.T) {
+	app := &WailsApp{ctx: t.Context(), providerStore: newMockProviderStore()}
+	assert.Equal(t, 5*time.Minute, app.streamTimeout(""))
+}
+
+// TestSaveUserMessage_NilMsgRepo 验证当 msgRepo 为 nil 时，saveUserMessage 应安全返回而不 panic。
+func TestSaveUserMessage_NilMsgRepo(t *testing.T) {
+	app := &WailsApp{ctx: t.Context(), msgRepo: nil}
+	// 若发生 panic，测试框架会自动捕获并标记失败
+	app.saveUserMessage(t.Context(), "conv-1", models.Message{Role: models.RoleUser, Content: "hello"})
+}
+
+// TestSaveUserMessage_EmptyConvID 验证当 convID 为空时，saveUserMessage 应直接返回且不执行保存。
+func TestSaveUserMessage_EmptyConvID(t *testing.T) {
+	mock := &mockMessageRepo{}
+	app := &WailsApp{ctx: t.Context(), msgRepo: mock}
+	app.saveUserMessage(t.Context(), "", models.Message{Role: models.RoleUser, Content: "hello"})
+	assert.Empty(t, mock.saved)
+}
+
+// TestSaveUserMessage_NonUserRole 验证当消息角色不是 RoleUser 时，saveUserMessage 应直接返回且不保存。
+func TestSaveUserMessage_NonUserRole(t *testing.T) {
+	mock := &mockMessageRepo{}
+	app := &WailsApp{ctx: t.Context(), msgRepo: mock}
+	app.saveUserMessage(t.Context(), "conv-1", models.Message{Role: models.RoleAssistant, Content: "hello"})
+	assert.Empty(t, mock.saved)
 }

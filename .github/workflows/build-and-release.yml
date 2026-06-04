@@ -84,6 +84,12 @@ jobs:
         if: matrix.platform == 'darwin'
         run: brew install sqlcipher create-dmg
 
+      - name: Install dlfcn-win32 for ortgenai (Windows)
+        if: matrix.platform == 'windows'
+        shell: cmd
+        run: |
+          C:\msys64\usr\bin\pacman.exe -S --noconfirm mingw-w64-x86_64-dlfcn
+
       - name: Build and Package
         run: ./scripts/build/wails-build.sh ${{ matrix.platform }} ${{ needs.version.outputs.version }}
         shell: bash

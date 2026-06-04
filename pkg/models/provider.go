@@ -79,6 +79,7 @@ type ProviderConfig struct {
 	Temperature float64         `json:"temperature"`
 	TimeoutMs   int             `json:"timeoutMs"`
 	MaxRetries  int             `json:"maxRetries"`
+	MaxTokens   int             `json:"maxTokens"`
 	GroupName   string          `json:"group"`
 	Enabled     bool            `json:"enabled"`
 	SortOrder   int             `json:"sortOrder"`

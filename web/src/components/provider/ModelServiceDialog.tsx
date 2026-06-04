@@ -29,6 +29,7 @@ const serviceFormSchema = z.object({
   temperature: z.number().min(0).max(2),
   timeoutMs: z.number().min(1000).max(300000),
   maxRetries: z.number().min(0).max(10),
+  maxTokens: z.number().min(256).max(32768),
   group: z.string().min(1, '分组不能为空'),
   enabled: z.boolean(),
 })
@@ -62,6 +63,7 @@ const defaultValues: ServiceFormData = {
   temperature: 0.7,
   timeoutMs: 30000,
   maxRetries: 3,
+  maxTokens: 4096,
   group: '默认',
   enabled: true,
 }
@@ -147,6 +149,7 @@ export function ModelServiceDialog({
         temperature: provider.temperature,
         timeoutMs: provider.timeoutMs,
         maxRetries: provider.maxRetries,
+        maxTokens: provider.maxTokens ?? 4096,
         group: provider.group,
         enabled: provider.enabled,
       })
@@ -161,6 +164,7 @@ export function ModelServiceDialog({
         temperature: 0.7,
         timeoutMs: 30000,
         maxRetries: 3,
+        maxTokens: 4096,
         group: template.type === 'local' ? '本地' : '云端',
         enabled: true,
       })
@@ -532,8 +536,8 @@ export function ModelServiceDialog({
                 <div className="flex justify-between text-[10px] text-muted-foreground"><span>精确</span><span>平衡</span><span>创意</span></div>
               </div>
 
-              {/* 超时 + 重试 */}
-              <div className="grid grid-cols-2 gap-4">
+              {/* 超时 + 重试 + 最大 Token 数 */}
+              <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="ms-timeout">超时时间（毫秒）</Label>
                   <Input id="ms-timeout" type="number" {...register('timeoutMs', { valueAsNumber: true })} data-testid="ms-timeout-input" />
@@ -541,6 +545,10 @@ export function ModelServiceDialog({
                 <div className="space-y-1.5">
                   <Label htmlFor="ms-retries">重试次数</Label>
                   <Input id="ms-retries" type="number" {...register('maxRetries', { valueAsNumber: true })} data-testid="ms-retries-input" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="ms-max-tokens">最大输出 Token</Label>
+                  <Input id="ms-max-tokens" type="number" {...register('maxTokens', { valueAsNumber: true })} data-testid="ms-max-tokens-input" />
                 </div>
               </div>
 

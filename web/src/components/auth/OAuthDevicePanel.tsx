@@ -365,6 +365,7 @@ function buildProviderConfig(providerType: string, providerID: string, providerN
     temperature: 0.7,
     timeoutMs: 30000,
     maxRetries: 3,
+        maxTokens: 4096,
     group: 'OAuth',
     enabled: true,
     sortOrder: 0,

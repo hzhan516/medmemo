@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import { MessageSquare, Settings, Info } from 'lucide-react'
+import { MessageSquare, Settings, Info, Brain } from 'lucide-react'
 import { useWails } from '@/hooks/useWails'
 
 const navItems = [
   { to: '/chat', label: '对话', icon: MessageSquare },
+  { to: '/memories', label: '记忆', icon: Brain },
   { to: '/settings', label: '设置', icon: Settings },
   { to: '/about', label: '关于', icon: Info },
 ]

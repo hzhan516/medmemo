@@ -1,31 +1,44 @@
 .PHONY: all dev build test lint wire clean install-tools
 
-# 版本号（默认从 Git 标签读取，无标签时显示 dev）
-VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+# 版本号从 wails.json 读取（单一来源）
+VERSION ?= $(shell cat wails.json | grep '"productVersion"' | sed 's/.*"productVersion": *"\(.*\)".*/\1/')
 LDFLAGS := -ldflags "-s -w -X main.version=$(VERSION)"
+
+# 平台检测（用于本地构建）
+UNAME_S := $(shell uname -s)
+BUILD_TAGS := ORT
+ifeq ($(UNAME_S),Linux)
+	BUILD_TAGS := webkit2_41,ORT
+endif
 
 # 默认目标
 all: build
 
 # 开发模式（热重载）
 # Fedora 43+ 使用 webkit2gtk-4.1，需传递 -tags webkit2_41
+# ORT tag 启用 ONNX Runtime 后端（Embedding + NER）
 dev:
 	cd web && npm install
-	wails dev -tags webkit2_41
+	wails dev -tags "$(BUILD_TAGS)"
 
 # 生产构建（当前平台）
 # 先手动构建前端，再调用 wails build（Wails v2.12 在 frontend.dir != frontend 时可能跳过前端构建）
 build:
-	cd web && npm install && npm run build
-	wails build -clean -tags webkit2_41 $(LDFLAGS)
+	./scripts/build/build-frontend.sh
+	CGO_LDFLAGS="$(CGO_LDFLAGS_LINUX)" wails build -s -clean -tags "$(BUILD_TAGS)" $(LDFLAGS)
 
-# 运行测试
+# CGO 库路径（用于测试，go test 时 ${SRCDIR} 解析为临时目录，需显式指定）
+CGO_LDFLAGS_LINUX := -L$(shell pwd)/resources/lib/linux
+CGO_LDFLAGS_DARWIN := -L$(shell pwd)/resources/lib/darwin
+CGO_LDFLAGS_WINDOWS := -L$(shell pwd)/resources/lib/windows -LC:/msys64/mingw64/lib -ldl
+
+# 运行测试（含 ORT 后端）
 test:
-	go test -race -coverprofile=coverage.out ./...
+	CGO_LDFLAGS="$(CGO_LDFLAGS_LINUX)" go test -tags "$(BUILD_TAGS)" -race -coverprofile=coverage.out ./...
 
 # 运行集成测试
 test-integration:
-	go test -race -tags=integration ./...
+	CGO_LDFLAGS="$(CGO_LDFLAGS_LINUX)" go test -race -tags=integration,ORT ./...
 
 # 运行 E2E 测试
 test-e2e:
@@ -65,22 +78,29 @@ clean:
 	rm -rf web/dist/
 	rm -f coverage.out coverage.html
 
+DARWIN_PLATFORM ?= darwin/arm64
+DARWIN_REQUIRE_UNIVERSAL = $(if $(filter darwin/universal,$(DARWIN_PLATFORM)),true,false)
+
 # 交叉编译（需对应平台环境）
 build-darwin:
-	cd web && npm install && npm run build
-	wails build -platform darwin/universal -clean $(LDFLAGS)
+	./scripts/build/build-frontend.sh
+	wails build -s -platform $(DARWIN_PLATFORM) -clean -tags ORT $(LDFLAGS)
+	./scripts/build/copy-runtime-resources.sh build/bin/MedMemo.app/Contents/Resources darwin $(DARWIN_REQUIRE_UNIVERSAL)
 
 build-windows:
-	cd web && npm install && npm run build
-	wails build -platform windows/amd64 -clean $(LDFLAGS)
+	./scripts/build/build-frontend.sh
+	# Windows 上若缺少 libtokenizers.a，ORT tag 会导致编译失败。
+	# 首次构建前请运行: .\scripts\build\download-tokenizers.ps1
+	CGO_LDFLAGS="$(CGO_LDFLAGS_WINDOWS)" wails build -s -platform windows/amd64 -clean -tags ORT $(LDFLAGS)
+	./scripts/build/copy-runtime-resources.sh build/bin windows
 
 build-linux:
-	cd web && npm install && npm run build
-	wails build -platform linux/amd64 -clean -tags webkit2_41 $(LDFLAGS)
+	./scripts/build/build-frontend.sh
+	CGO_LDFLAGS="$(CGO_LDFLAGS_LINUX)" wails build -s -platform linux/amd64 -clean -tags webkit2_41,ORT $(LDFLAGS)
 
 # 本地完整打包（当前平台，含版本注入与平台安装包）
 release-local:
-	./scripts/build/wails-build.sh $(shell go env GOOS) $(VERSION)
+	CGO_LDFLAGS="$(CGO_LDFLAGS_LINUX)" ./scripts/build/wails-build.sh $(shell go env GOOS) $(VERSION)
 
 # GoReleaser 本地快照验证（不发布，仅验证配置与归档）
 release-dry-run:

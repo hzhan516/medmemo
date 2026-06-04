@@ -88,6 +88,7 @@ export function ServiceAccountPanel({ status, onProviderCreated }: ServiceAccoun
       temperature: 0.7,
       timeoutMs: 30000,
       maxRetries: 3,
+        maxTokens: 4096,
       group: 'Google Cloud',
       enabled: true,
       sortOrder: 0,

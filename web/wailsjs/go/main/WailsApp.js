@@ -98,6 +98,26 @@ export function GetConversations() {
   return window['go']['main']['WailsApp']['GetConversations']();
 }
 
+export function GetDeletedConversations() {
+  return window['go']['main']['WailsApp']['GetDeletedConversations']();
+}
+
+export function SetDataRetentionDays(arg1) {
+  return window['go']['main']['WailsApp']['SetDataRetentionDays'](arg1);
+}
+
+export function GetEmbeddingStatus() {
+  return window['go']['main']['WailsApp']['GetEmbeddingStatus']();
+}
+
+export function GetEmbeddingModelDirPath() {
+  return window['go']['main']['WailsApp']['GetEmbeddingModelDirPath']();
+}
+
+export function OpenEmbeddingModelDir() {
+  return window['go']['main']['WailsApp']['OpenEmbeddingModelDir']();
+}
+
 export function GetDisclaimerStatus() {
   return window['go']['main']['WailsApp']['GetDisclaimerStatus']();
 }
@@ -128,6 +148,50 @@ export function GetVersion() {
 
 export function GetVersionNotes() {
   return window['go']['main']['WailsApp']['GetVersionNotes']();
+}
+
+export function GetMemories(arg1, arg2) {
+  return window['go']['main']['WailsApp']['GetMemories'](arg1, arg2);
+}
+
+export function GetMemoryByID(arg1) {
+  return window['go']['main']['WailsApp']['GetMemoryByID'](arg1);
+}
+
+export function DeleteMemory(arg1) {
+  return window['go']['main']['WailsApp']['DeleteMemory'](arg1);
+}
+
+export function SearchMemories(arg1) {
+  return window['go']['main']['WailsApp']['SearchMemories'](arg1);
+}
+
+export function GetPendingReviews(arg1, arg2) {
+  return window['go']['main']['WailsApp']['GetPendingReviews'](arg1, arg2);
+}
+
+export function ApproveFact(arg1) {
+  return window['go']['main']['WailsApp']['ApproveFact'](arg1);
+}
+
+export function RejectFact(arg1) {
+  return window['go']['main']['WailsApp']['RejectFact'](arg1);
+}
+
+export function GetMemoryStats() {
+  return window['go']['main']['WailsApp']['GetMemoryStats']();
+}
+
+export function GetMemoriesBySession(arg1) {
+  return window['go']['main']['WailsApp']['GetMemoriesBySession'](arg1);
+}
+
+export function SetMemoryInjectionEnabled(arg1) {
+  return window['go']['main']['WailsApp']['SetMemoryInjectionEnabled'](arg1);
+}
+
+export function SetSessionMemoryInjection(arg1, arg2) {
+  return window['go']['main']['WailsApp']['SetSessionMemoryInjection'](arg1, arg2);
 }
 
 export function HardDeleteConversation(arg1) {
