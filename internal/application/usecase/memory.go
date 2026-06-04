@@ -134,7 +134,11 @@ func (m *MemoryRetriever) RetrieveForContext(ctx context.Context, query, session
 	queryVector, err := m.embeddingSvc.EmbedSingle(embedCtx, query)
 	embedCancel()
 	if err == nil {
-		semanticMemories, _ = m.semanticSearch(ctx, queryVector, limit)
+		var searchErr error
+		semanticMemories, searchErr = m.semanticSearch(ctx, queryVector, limit)
+		if searchErr != nil {
+			fmt.Printf("[MemoryRetriever] semantic search failed, memory injection degraded: %v\n", searchErr)
+		}
 	} else {
 		fmt.Printf("[MemoryRetriever] embedding 生成失败，语义搜索降级: %v\n", err)
 	}

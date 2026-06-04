@@ -15,6 +15,9 @@
 /build/windows/
 /build/darwin/
 /build/linux/
+!/build/windows/
+!/build/windows/installer/
+!/build/windows/installer/project.nsi
 /frontend/dist/
 /frontend/wailsjs/
 

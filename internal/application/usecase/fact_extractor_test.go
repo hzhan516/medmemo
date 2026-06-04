@@ -55,6 +55,19 @@ func TestFactExtractor_ParseFacts_MultipleFacts(t *testing.T) {
 	assert.Equal(t, "服用", facts[1].Predicate)
 }
 
+func TestFactExtractor_ParseFacts_DeduplicatesSameBatchTriples(t *testing.T) {
+	extractor := NewFactExtractor(&mockLLMForFactExtraction{
+		response: `[{"subject":"用户","predicate":"患有","object":"头痛","confidence":0.9},{"subject":" 用户 ","predicate":"患有","object":"头痛","confidence":0.8}]`,
+	})
+
+	facts, err := extractor.ParseFacts("用户头疼")
+	require.NoError(t, err)
+	require.Len(t, facts, 1)
+	assert.Equal(t, "用户", facts[0].Subject)
+	assert.Equal(t, "头痛", facts[0].Object)
+	assert.Equal(t, 0.9, facts[0].Confidence)
+}
+
 func TestFactExtractor_ParseFacts_MissingFields(t *testing.T) {
 	// LLM 返回缺少字段的 JSON，应被过滤
 	extractor := NewFactExtractor(&mockLLMForFactExtraction{

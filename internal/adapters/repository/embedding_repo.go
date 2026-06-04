@@ -5,6 +5,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math"
+	"sort"
 	"time"
 
 	"github.com/google/wire"
@@ -15,12 +17,17 @@ import (
 
 // EmbeddingRepoSQLite 基于 SQLite 的嵌入向量仓库实现。
 type EmbeddingRepoSQLite struct {
-	db *sql.DB
+	db                 *sql.DB
+	vectorSQLAvailable bool
 }
 
 // NewEmbeddingRepoSQLite 构造函数。
 func NewEmbeddingRepoSQLite(connector database.DBConnector) *EmbeddingRepoSQLite {
-	return &EmbeddingRepoSQLite{db: connector.DB()}
+	db := connector.DB()
+	return &EmbeddingRepoSQLite{
+		db:                 db,
+		vectorSQLAvailable: detectVectorSQLAvailable(db),
+	}
 }
 
 // Save 保存嵌入向量。
@@ -30,6 +37,9 @@ func (r *EmbeddingRepoSQLite) Save(ctx context.Context, e *entity.SemanticEmbedd
 		VALUES (?, ?, ?, ?, ?)
 	`, e.EmbeddingID, e.FactID, e.VectorToBytes(), e.ModelVersion, e.CreatedAt.UnixMilli())
 	if err != nil {
+		if database.IsSQLiteUniqueConstraintOn(err, "semantic_embeddings.fact_id") {
+			return nil
+		}
 		return fmt.Errorf("failed to save embedding: %w", err)
 	}
 	return nil
@@ -75,6 +85,9 @@ func (r *EmbeddingRepoSQLite) DeleteByFactID(ctx context.Context, factID string)
 func (r *EmbeddingRepoSQLite) SearchSimilar(ctx context.Context, queryVector []float32, topK int) ([]*entity.ScoredEmbedding, error) {
 	if topK <= 0 {
 		return nil, nil
+	}
+	if !r.vectorSQLAvailable {
+		return r.searchSimilarInGo(ctx, queryVector, topK)
 	}
 
 	queryBlob, err := vector.EncodeEmbedding(queryVector)
@@ -122,6 +135,103 @@ func (r *EmbeddingRepoSQLite) SearchSimilar(ctx context.Context, queryVector []f
 	}
 
 	return results, nil
+}
+
+func detectVectorSQLAvailable(db *sql.DB) bool {
+	a := make([]float32, entity.EmbeddingDimension)
+	a[0] = 1
+	b := make([]float32, entity.EmbeddingDimension)
+	b[0] = 1
+
+	aBlob, err := vector.EncodeEmbedding(a)
+	if err != nil {
+		return false
+	}
+	bBlob, err := vector.EncodeEmbedding(b)
+	if err != nil {
+		return false
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	var similarity float64
+	if err := db.QueryRowContext(ctx, `SELECT vec_cosine(?, ?)`, aBlob, bBlob).Scan(&similarity); err != nil {
+		return false
+	}
+	return true
+}
+
+func (r *EmbeddingRepoSQLite) searchSimilarInGo(ctx context.Context, queryVector []float32, topK int) ([]*entity.ScoredEmbedding, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT embedding_id, fact_id, vector, model_version, created_at
+		FROM semantic_embeddings
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list embeddings for fallback search: %w", err)
+	}
+	defer rows.Close()
+
+	var results []*entity.ScoredEmbedding
+	for rows.Next() {
+		var e entity.SemanticEmbedding
+		var vectorBytes []byte
+		var created int64
+
+		if err := rows.Scan(&e.EmbeddingID, &e.FactID, &vectorBytes, &e.ModelVersion, &created); err != nil {
+			return nil, fmt.Errorf("failed to scan embedding row for fallback search: %w", err)
+		}
+
+		vec, err := entity.VectorFromBytes(vectorBytes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode embedding vector for fallback search: %w", err)
+		}
+		similarity, err := cosineSimilarity(queryVector, vec)
+		if err != nil {
+			return nil, fmt.Errorf("failed to calculate fallback cosine similarity: %w", err)
+		}
+
+		e.Vector = vec
+		e.CreatedAt = time.UnixMilli(created).UTC()
+		results = append(results, &entity.ScoredEmbedding{
+			SemanticEmbedding: &e,
+			Similarity:        similarity,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate embedding rows for fallback search: %w", err)
+	}
+
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Similarity > results[j].Similarity
+	})
+	if len(results) > topK {
+		results = results[:topK]
+	}
+	return results, nil
+}
+
+func cosineSimilarity(a, b []float32) (float64, error) {
+	if len(a) != len(b) {
+		return 0, fmt.Errorf("dimension mismatch %d vs %d", len(a), len(b))
+	}
+	if len(a) == 0 {
+		return 0, fmt.Errorf("empty vectors")
+	}
+
+	var dot, normA, normB float64
+	for i := range a {
+		av := float64(a[i])
+		bv := float64(b[i])
+		dot += av * bv
+		normA += av * av
+		normB += bv * bv
+	}
+	if normA == 0 || normB == 0 {
+		return 0, fmt.Errorf("zero-magnitude vector")
+	}
+	return dot / (math.Sqrt(normA) * math.Sqrt(normB)), nil
 }
 
 // EmbeddingRepoSet 供 Wire 使用的 ProviderSet。

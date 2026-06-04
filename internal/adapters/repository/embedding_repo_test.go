@@ -55,6 +55,59 @@ func TestEmbeddingRepo_SaveAndGet(t *testing.T) {
 	assert.Equal(t, vector, got.Vector)
 }
 
+func TestEmbeddingRepo_Save_DuplicateFactID_Idempotent(t *testing.T) {
+	repo, factRepo, cleanup := setupEmbeddingTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	f := entity.NewExtractedFact("用户", "患有", "头痛", 0.8, []string{"msg_001"})
+	f.FactID = "fact_emb_dup"
+	require.NoError(t, factRepo.Save(ctx, f))
+
+	vector1 := make([]float32, entity.EmbeddingDimension)
+	vector1[0] = 1
+	e1 := entity.NewSemanticEmbedding("fact_emb_dup", vector1, "all-MiniLM-L6-v2")
+	require.NoError(t, repo.Save(ctx, e1))
+
+	vector2 := make([]float32, entity.EmbeddingDimension)
+	vector2[1] = 1
+	e2 := entity.NewSemanticEmbedding("fact_emb_dup", vector2, "all-MiniLM-L6-v2")
+	require.NoError(t, repo.Save(ctx, e2))
+
+	got, err := repo.GetByFactID(ctx, "fact_emb_dup")
+	require.NoError(t, err)
+	assert.Equal(t, e1.EmbeddingID, got.EmbeddingID)
+	assert.Equal(t, vector1, got.Vector)
+}
+
+func TestEmbeddingRepo_Save_DuplicateEmbeddingIDDifferentFact_ReturnsError(t *testing.T) {
+	repo, factRepo, cleanup := setupEmbeddingTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	f1 := entity.NewExtractedFact("用户", "患有", "头痛", 0.8, []string{"msg_001"})
+	f1.FactID = "fact_emb_id_1"
+	require.NoError(t, factRepo.Save(ctx, f1))
+
+	f2 := entity.NewExtractedFact("用户", "患有", "腹痛", 0.8, []string{"msg_002"})
+	f2.FactID = "fact_emb_id_2"
+	require.NoError(t, factRepo.Save(ctx, f2))
+
+	vector1 := make([]float32, entity.EmbeddingDimension)
+	vector1[0] = 1
+	e1 := entity.NewSemanticEmbedding("fact_emb_id_1", vector1, "all-MiniLM-L6-v2")
+	require.NoError(t, repo.Save(ctx, e1))
+
+	vector2 := make([]float32, entity.EmbeddingDimension)
+	vector2[1] = 1
+	e2 := entity.NewSemanticEmbedding("fact_emb_id_2", vector2, "all-MiniLM-L6-v2")
+	e2.EmbeddingID = e1.EmbeddingID
+
+	err := repo.Save(ctx, e2)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to save embedding")
+}
+
 func TestEmbeddingRepo_GetByFactID_NotFound(t *testing.T) {
 	repo, _, cleanup := setupEmbeddingTestDB(t)
 	defer cleanup()

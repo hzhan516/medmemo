@@ -21,6 +21,18 @@ import {
   Brain, FolderOpen, Sparkles, AlertCircle, ExternalLink,
 } from 'lucide-react'
 
+interface EmbeddingStatus {
+  available: boolean
+  model_present: boolean
+  engine_available: boolean
+  runtime_lib_present: boolean
+  runtime_lib_path: string
+  failure_reason: string
+  model_path: string
+  model_name: string
+  download_url: string
+}
+
 /**
  * 设置页面：支持主题切换、模型选择、Provider 管理与合规提示条模式。
  * 使用 shadcn/ui 组件验证 light/dark 主题兼容性。
@@ -63,7 +75,7 @@ export function SettingsPage() {
   const hasProvider = useProviderStore((s) => s.hasProvider)
   const { saveAPIKey, createProvider, updateProvider: updateProviderApi, deleteProvider: deleteProviderApi, setUpdateSettings, getEmbeddingStatus, getEmbeddingModelDirPath, openEmbeddingModelDir, openDownloadURL } = useWails()
 
-  const [embeddingStatus, setEmbeddingStatus] = useState<{ available: boolean; model_path: string; model_name: string; download_url: string } | null>(null)
+  const [embeddingStatus, setEmbeddingStatus] = useState<EmbeddingStatus | null>(null)
   const [modelDirPath, setModelDirPath] = useState<string>('')
   const [toastMsg, setToastMsg] = useState<string | null>(null)
 
@@ -531,10 +543,25 @@ export function SettingsPage() {
                     <Brain size={16} className="text-amber-600 dark:text-amber-400" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-foreground">关键词匹配（基础模式）</div>
-                    <div className="text-xs text-muted-foreground mt-1">
-                      当前 AI 通过关键词字面匹配来召回你的历史记忆。例如你说"我体重多少"能找到"体重是110公斤"，但说"我多重"可能找不到。
+                    <div className="text-sm font-medium text-foreground">
+                      {embeddingStatus?.model_present ? '语义搜索引擎未就绪' : '关键词匹配（基础模式）'}
                     </div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      {embeddingStatus?.model_present
+                        ? '模型文件已存在，但 ONNX Runtime 或嵌入 pipeline 尚未完成初始化。当前先回退到关键词匹配。'
+                        : '当前 AI 通过关键词字面匹配来召回你的历史记忆。例如你说"我体重多少"能找到"体重是110公斤"，但说"我多重"可能找不到。'}
+                    </div>
+                    {embeddingStatus?.failure_reason && (
+                      <div className="mt-2 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+                        {embeddingStatus.failure_reason}
+                      </div>
+                    )}
+                    {embeddingStatus?.runtime_lib_path && (
+                      <div className="text-xs text-muted-foreground mt-2 break-all">
+                        Runtime：
+                        <span className="font-mono bg-muted px-1 rounded">{embeddingStatus.runtime_lib_path}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -544,9 +571,13 @@ export function SettingsPage() {
                       <Sparkles size={16} className="text-primary" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-foreground">可选升级：语义搜索（智能模式）</div>
+                      <div className="text-sm font-medium text-foreground">
+                        {embeddingStatus?.model_present ? '检查运行时资源' : '可选升级：语义搜索（智能模式）'}
+                      </div>
                       <div className="text-xs text-muted-foreground mt-1">
-                        安装 Embedding 模型后，AI 能理解"意思相近"。"多重"和"体重"也会被关联，召回更自然准确。
+                        {embeddingStatus?.model_present
+                          ? '确认 ONNX Runtime 动态库、CPU 架构和模型文件匹配后重启应用。'
+                          : '安装 Embedding 模型后，AI 能理解"意思相近"。"多重"和"体重"也会被关联，召回更自然准确。'}
                       </div>
                     </div>
                   </div>
@@ -588,25 +619,27 @@ export function SettingsPage() {
                     </div>
                   )}
 
-                  <div className="mt-3 p-3 rounded-md bg-muted/50 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <AlertCircle size={14} className="text-muted-foreground shrink-0" />
-                      <span className="text-xs font-medium text-foreground">如何升级到语义搜索</span>
+                  {!embeddingStatus?.model_present && (
+                    <div className="mt-3 p-3 rounded-md bg-muted/50 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <AlertCircle size={14} className="text-muted-foreground shrink-0" />
+                        <span className="text-xs font-medium text-foreground">如何升级到语义搜索</span>
+                      </div>
+                      <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+                        <li>
+                          点击上方"下载模型"按钮获取{' '}
+                          <span className="font-mono text-xs bg-muted px-1 rounded">all-MiniLM-L6-v2</span>{' '}
+                          ONNX 模型（约 50MB）
+                        </li>
+                        <li>
+                          将 <span className="font-mono text-xs bg-muted px-1 rounded">model.onnx</span> 和{' '}
+                          <span className="font-mono text-xs bg-muted px-1 rounded">tokenizer.json</span>{' '}
+                          放入模型目录
+                        </li>
+                        <li>重启应用即可生效（不安装也能继续用关键词匹配）</li>
+                      </ol>
                     </div>
-                    <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
-                      <li>
-                        点击上方"下载模型"按钮获取{' '}
-                        <span className="font-mono text-xs bg-muted px-1 rounded">all-MiniLM-L6-v2</span>{' '}
-                        ONNX 模型（约 50MB）
-                      </li>
-                      <li>
-                        将 <span className="font-mono text-xs bg-muted px-1 rounded">model.onnx</span> 和{' '}
-                        <span className="font-mono text-xs bg-muted px-1 rounded">tokenizer.json</span>{' '}
-                        放入模型目录
-                      </li>
-                      <li>重启应用即可生效（不安装也能继续用关键词匹配）</li>
-                    </ol>
-                  </div>
+                  )}
                 </div>
               </>
             )}

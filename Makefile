@@ -24,8 +24,8 @@ dev:
 # 生产构建（当前平台）
 # 先手动构建前端，再调用 wails build（Wails v2.12 在 frontend.dir != frontend 时可能跳过前端构建）
 build:
-	cd web && npm install && npm run build
-	CGO_LDFLAGS="$(CGO_LDFLAGS_LINUX)" wails build -clean -tags "$(BUILD_TAGS)" $(LDFLAGS)
+	./scripts/build/build-frontend.sh
+	CGO_LDFLAGS="$(CGO_LDFLAGS_LINUX)" wails build -s -clean -tags "$(BUILD_TAGS)" $(LDFLAGS)
 
 # CGO 库路径（用于测试，go test 时 ${SRCDIR} 解析为临时目录，需显式指定）
 CGO_LDFLAGS_LINUX := -L$(shell pwd)/resources/lib/linux
@@ -78,20 +78,25 @@ clean:
 	rm -rf web/dist/
 	rm -f coverage.out coverage.html
 
+DARWIN_PLATFORM ?= darwin/arm64
+DARWIN_REQUIRE_UNIVERSAL = $(if $(filter darwin/universal,$(DARWIN_PLATFORM)),true,false)
+
 # 交叉编译（需对应平台环境）
 build-darwin:
-	cd web && npm install && npm run build
-	wails build -platform darwin/universal -clean -tags ORT $(LDFLAGS)
+	./scripts/build/build-frontend.sh
+	wails build -s -platform $(DARWIN_PLATFORM) -clean -tags ORT $(LDFLAGS)
+	./scripts/build/copy-runtime-resources.sh build/bin/MedMemo.app/Contents/Resources darwin $(DARWIN_REQUIRE_UNIVERSAL)
 
 build-windows:
-	cd web && npm install && npm run build
+	./scripts/build/build-frontend.sh
 	# Windows 上若缺少 libtokenizers.a，ORT tag 会导致编译失败。
 	# 首次构建前请运行: .\scripts\build\download-tokenizers.ps1
-	CGO_LDFLAGS="$(CGO_LDFLAGS_WINDOWS)" wails build -platform windows/amd64 -clean -tags ORT $(LDFLAGS)
+	CGO_LDFLAGS="$(CGO_LDFLAGS_WINDOWS)" wails build -s -platform windows/amd64 -clean -tags ORT $(LDFLAGS)
+	./scripts/build/copy-runtime-resources.sh build/bin windows
 
 build-linux:
-	cd web && npm install && npm run build
-	CGO_LDFLAGS="$(CGO_LDFLAGS_LINUX)" wails build -platform linux/amd64 -clean -tags webkit2_41,ORT $(LDFLAGS)
+	./scripts/build/build-frontend.sh
+	CGO_LDFLAGS="$(CGO_LDFLAGS_LINUX)" wails build -s -platform linux/amd64 -clean -tags webkit2_41,ORT $(LDFLAGS)
 
 # 本地完整打包（当前平台，含版本注入与平台安装包）
 release-local:

@@ -31,6 +31,9 @@ func TestNewEngine_NoLibrary_ReturnsUnavailable(t *testing.T) {
 	require.NoError(t, err, "无动态库时不应返回错误")
 	assert.NotNil(t, engine)
 	assert.False(t, engine.IsAvailable(), "动态库缺失时引擎应标记为不可用")
+	assert.False(t, engine.HasEmbeddingPipeline(), "动态库缺失时 embedding 引擎应不可用")
+	assert.NotEmpty(t, engine.RuntimeLibPath())
+	assert.Contains(t, engine.EmbeddingFailureReason(), "ONNX Runtime library not found")
 
 	err = engine.Close()
 	assert.NoError(t, err)

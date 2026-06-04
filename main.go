@@ -22,6 +22,7 @@ import (
 	"github.com/hzhan516/medmemo/internal/infrastructure/database"
 	"github.com/hzhan516/medmemo/internal/infrastructure/onnx"
 	"github.com/hzhan516/medmemo/internal/infrastructure/secret"
+	"github.com/hzhan516/medmemo/pkg/resourcepath"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
@@ -115,23 +116,24 @@ type App struct {
 // 在返回前确保 embedding 模型已复制到用户数据目录，保证 onnx.NewEngine 能正确加载。
 func NewEngineConfig(cfg *entity.AppConfig) onnx.EngineConfig {
 	userPath := filepath.Join(cfg.DataDir, "models", "all-MiniLM-L6-v2")
-	prepareEmbeddingModels(userPath)
+	resourceDir := resourcepath.Dir()
+	prepareEmbeddingModels(userPath, resourceDir)
 
 	return onnx.EngineConfig{
-		ResourceDir:        "resources",
-		ModelPath:          cfg.ModelDir,
+		ResourceDir:        resourceDir,
+		ModelPath:          resourcepath.Resolve(cfg.ModelDir),
 		EmbeddingModelPath: userPath,
 	}
 }
 
 // prepareEmbeddingModels 首次启动时将打包的模型文件复制到用户数据目录。
 // 若用户目录已有模型，或找不到打包模型，则静默跳过。
-func prepareEmbeddingModels(userDir string) {
+func prepareEmbeddingModels(userDir string, resourceDir string) {
 	if _, err := os.Stat(filepath.Join(userDir, "model.onnx")); err == nil {
 		return
 	}
 
-	bundledDir := findBundledModelDir()
+	bundledDir := findBundledModelDir(resourceDir)
 	if bundledDir == "" {
 		return
 	}
@@ -152,16 +154,8 @@ func prepareEmbeddingModels(userDir string) {
 }
 
 // findBundledModelDir 查找应用包内打包的模型目录。
-func findBundledModelDir() string {
-	// 1. 相对于可执行文件（生产环境）
-	if exe, err := os.Executable(); err == nil {
-		dir := filepath.Join(filepath.Dir(exe), "resources", "models", "all-MiniLM-L6-v2")
-		if _, err := os.Stat(filepath.Join(dir, "model.onnx")); err == nil {
-			return dir
-		}
-	}
-	// 2. 相对于工作目录（开发模式 go run）
-	dir := filepath.Join("resources", "models", "all-MiniLM-L6-v2")
+func findBundledModelDir(resourceDir string) string {
+	dir := filepath.Join(resourceDir, "models", "all-MiniLM-L6-v2")
 	if _, err := os.Stat(filepath.Join(dir, "model.onnx")); err == nil {
 		return dir
 	}

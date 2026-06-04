@@ -14,6 +14,7 @@ import (
 	"github.com/hzhan516/medmemo/internal/domain/entity"
 	"github.com/hzhan516/medmemo/pkg/desensitizer"
 	"github.com/hzhan516/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/pkg/resourcepath"
 )
 
 // Deidentifier 脱敏流水线接口。
@@ -150,8 +151,12 @@ func (c *ChatOrchestrator) prepareMessages(ctx context.Context, req ChatRequest)
 		lastIdx := findLastUserMessage(messages)
 		if lastIdx >= 0 {
 			memStart := time.Now()
-			memories, _ := c.memoryRetriever.RetrieveForContext(ctx, messages[lastIdx].Content, string(req.ConversationID), 3)
-			fmt.Printf("[DIAG][Chat] memoryRetriever.RetrieveForContext took %v memories=%d\n", time.Since(memStart), len(memories))
+			memories, err := c.memoryRetriever.RetrieveForContext(ctx, messages[lastIdx].Content, string(req.ConversationID), 3)
+			if err != nil {
+				fmt.Printf("[DIAG][Chat] memoryRetriever.RetrieveForContext took %v err=%v\n", time.Since(memStart), err)
+			} else {
+				fmt.Printf("[DIAG][Chat] memoryRetriever.RetrieveForContext took %v memories=%d\n", time.Since(memStart), len(memories))
+			}
 			if len(memories) > 0 {
 				messages = injectMemories(messages, memories)
 			}
@@ -456,7 +461,7 @@ type RuleComplianceChecker struct {
 
 // NewRuleComplianceChecker 从默认规则库路径创建合规检查器。
 func NewRuleComplianceChecker() (*RuleComplianceChecker, error) {
-	ci, err := application.NewComplianceInterceptor("resources/rules/compliance_rules_v1.json")
+	ci, err := application.NewComplianceInterceptor(resourcepath.Path("rules", "compliance_rules_v1.json"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create compliance interceptor: %w", err)
 	}

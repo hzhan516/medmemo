@@ -32,6 +32,7 @@ import (
 	"github.com/hzhan516/medmemo/internal/infrastructure/config"
 	"github.com/hzhan516/medmemo/internal/infrastructure/secret"
 	"github.com/hzhan516/medmemo/pkg/models"
+	"github.com/hzhan516/medmemo/pkg/resourcepath"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -123,6 +124,12 @@ func NewWailsApp(
 // Startup 是 Wails 启动回调，在前端加载完成后调用。
 func (a *WailsApp) Startup(ctx context.Context) {
 	a.ctx = ctx
+
+	// 校验前端嵌入资源是否完整（编译时 embed，运行时读取）
+	if err := validateEmbeddedAssets(); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to load frontend assets: %v\n", err)
+		os.Exit(1)
+	}
 
 	// 初始化 token 刷新降级回调
 	if a.tokenRefreshSvc != nil {
@@ -2214,10 +2221,27 @@ type MemoryStats struct {
 
 // EmbeddingStatusResponse Embedding 模型状态响应。
 type EmbeddingStatusResponse struct {
-	Available   bool   `json:"available"`    // 模型是否已下载可用
-	ModelPath   string `json:"model_path"`   // 模型存放路径
-	ModelName   string `json:"model_name"`   // 模型名称
-	DownloadURL string `json:"download_url"` // 模型下载页面 URL
+	Available         bool   `json:"available"`           // 语义搜索是否真实可用
+	ModelPresent      bool   `json:"model_present"`       // 模型文件是否存在
+	EngineAvailable   bool   `json:"engine_available"`    // ONNX embedding 引擎是否可用
+	RuntimeLibPresent bool   `json:"runtime_lib_present"` // ONNX Runtime 动态库是否存在
+	RuntimeLibPath    string `json:"runtime_lib_path"`    // ONNX Runtime 动态库路径
+	FailureReason     string `json:"failure_reason"`      // 初始化失败原因
+	ModelPath         string `json:"model_path"`          // 模型存放路径
+	ModelName         string `json:"model_name"`          // 模型名称
+	DownloadURL       string `json:"download_url"`        // 模型下载页面 URL
+}
+
+type embeddingAvailabilityReporter interface {
+	IsAvailable() bool
+}
+
+type embeddingFailureReasonReporter interface {
+	FailureReason() string
+}
+
+type embeddingRuntimeLibPathReporter interface {
+	RuntimeLibPath() string
 }
 
 func factToMemoryItem(f *entity.ExtractedFact) MemoryItem {
@@ -2460,11 +2484,61 @@ func (a *WailsApp) embeddingModelDir() string {
 
 // GetEmbeddingStatus 获取本地 Embedding 模型状态。
 func (a *WailsApp) GetEmbeddingStatus() (*EmbeddingStatusResponse, error) {
+	if a.config == nil {
+		return nil, fmt.Errorf("app config not initialized")
+	}
 	modelPath := a.embeddingModelDir()
 	modelFile := filepath.Join(modelPath, "model.onnx")
+	tokenizerFile := filepath.Join(modelPath, "tokenizer.json")
 
-	_, err := os.Stat(modelFile)
-	available := err == nil
+	modelPresent := fileExists(modelFile)
+	tokenizerPresent := fileExists(tokenizerFile)
+
+	runtimeLibPath := ""
+	runtimeLibPresent := false
+	if reporter, ok := a.embeddingSvc.(embeddingRuntimeLibPathReporter); ok {
+		runtimeLibPath = reporter.RuntimeLibPath()
+	}
+	if runtimeLibPath == "" {
+		runtimeLibPath = defaultONNXRuntimeLibPath(resourcepath.Dir())
+	}
+	if runtimeLibPath != "" {
+		runtimeLibPresent = fileExists(runtimeLibPath)
+	}
+
+	engineAvailable := false
+	if reporter, ok := a.embeddingSvc.(embeddingAvailabilityReporter); ok {
+		engineAvailable = reporter.IsAvailable()
+	} else if a.embeddingSvc != nil {
+		baseCtx := a.ctx
+		if baseCtx == nil {
+			baseCtx = context.Background()
+		}
+		ctx, cancel := context.WithTimeout(baseCtx, 2*time.Second)
+		defer cancel()
+		if _, err := a.embeddingSvc.EmbedSingle(ctx, "status check"); err == nil {
+			engineAvailable = true
+		}
+	}
+
+	failureReason := ""
+	if reporter, ok := a.embeddingSvc.(embeddingFailureReasonReporter); ok {
+		failureReason = reporter.FailureReason()
+	}
+	switch {
+	case !modelPresent:
+		failureReason = "embedding model file is missing"
+	case !tokenizerPresent && !engineAvailable:
+		failureReason = fmt.Sprintf("embedding tokenizer file is missing: %s", tokenizerFile)
+	case !runtimeLibPresent:
+		if runtimeLibPath == "" {
+			failureReason = "ONNX Runtime library path could not be resolved"
+		} else {
+			failureReason = fmt.Sprintf("ONNX Runtime library not found: %s", runtimeLibPath)
+		}
+	case !engineAvailable && failureReason == "":
+		failureReason = "embedding engine not available"
+	}
 
 	downloadURL := a.config.EmbeddingModelDownloadURL
 	if downloadURL == "" {
@@ -2479,11 +2553,41 @@ func (a *WailsApp) GetEmbeddingStatus() (*EmbeddingStatusResponse, error) {
 	}
 
 	return &EmbeddingStatusResponse{
-		Available:   available,
-		ModelPath:   modelPath,
-		ModelName:   "all-MiniLM-L6-v2",
-		DownloadURL: downloadURL,
+		Available:         modelPresent && engineAvailable,
+		ModelPresent:      modelPresent,
+		EngineAvailable:   engineAvailable,
+		RuntimeLibPresent: runtimeLibPresent,
+		RuntimeLibPath:    runtimeLibPath,
+		FailureReason:     failureReason,
+		ModelPath:         modelPath,
+		ModelName:         "all-MiniLM-L6-v2",
+		DownloadURL:       downloadURL,
 	}, nil
+}
+
+func fileExists(path string) bool {
+	if path == "" {
+		return false
+	}
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
+}
+
+func defaultONNXRuntimeLibPath(resourceDir string) string {
+	switch goruntime.GOOS {
+	case "linux":
+		primary := filepath.Join(resourceDir, "lib", "linux", "libonnxruntime.so")
+		if fileExists(primary) {
+			return primary
+		}
+		return filepath.Join(resourceDir, "lib", "linux", "libonnxruntime.so.1")
+	case "darwin":
+		return filepath.Join(resourceDir, "lib", "darwin", "libonnxruntime.dylib")
+	case "windows":
+		return filepath.Join(resourceDir, "lib", "windows", "onnxruntime.dll")
+	default:
+		return ""
+	}
 }
 
 // GetEmbeddingModelDirPath 返回 Embedding 模型目录的绝对路径。
@@ -2628,4 +2732,17 @@ func confidenceResultToMap(r *entity.ConfidenceResult) map[string]interface{} {
 		m["breakdown"] = r.Breakdown
 	}
 	return m
+}
+
+// validateEmbeddedAssets 校验嵌入的前端资源是否完整可用。
+// 放在 Startup 中执行而非 main() 开头，避免 Wails binding 生成阶段触发误报。
+func validateEmbeddedAssets() error {
+	data, err := assets.ReadFile("web/dist/index.html")
+	if err != nil {
+		return fmt.Errorf("embedded web/dist/index.html missing: %w", err)
+	}
+	if strings.TrimSpace(string(data)) == "" {
+		return fmt.Errorf("embedded web/dist/index.html is empty")
+	}
+	return nil
 }

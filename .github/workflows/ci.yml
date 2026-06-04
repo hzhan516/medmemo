@@ -244,6 +244,10 @@ jobs:
           ./scripts/build/download-onnx.sh --platform=darwin
           ./scripts/build/download-tokenizers.sh --platform=darwin
 
+      - name: Build frontend
+        if: runner.os != 'Windows'
+        run: cd web && npm run build
+
       - name: Build (Linux)
         if: runner.os == 'Linux'
         run: wails build -clean -tags webkit2_41,ORT
@@ -283,6 +287,10 @@ jobs:
 
           dlltool -D ntdll.dll -d /tmp/ntdll.def -l resources/lib/windows/libntdll.a
           echo "Generated libntdll.a with $(wc -l < /tmp/ntdll_exports.txt) exports"
+
+      - name: Build frontend
+        if: runner.os == 'Windows'
+        run: cd web && npm run build
 
       - name: Build (Windows)
         if: runner.os == 'Windows'

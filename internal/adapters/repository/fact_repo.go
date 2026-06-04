@@ -45,6 +45,9 @@ func (r *FactRepoSQLite) Save(ctx context.Context, f *entity.ExtractedFact) erro
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, f.FactID, f.Subject, f.Predicate, f.Object, f.Confidence, sourceIDs, f.Status, boolToInt(f.IsSensitive), scoredAt, reviewedAt, f.CreatedAt.UnixMilli())
 	if err != nil {
+		if database.IsSQLitePrimaryOrUniqueConstraintOn(err, "extracted_facts.fact_id") {
+			return nil
+		}
 		return fmt.Errorf("failed to save fact: %w", err)
 	}
 	return nil
