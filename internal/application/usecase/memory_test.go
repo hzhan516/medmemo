@@ -8,6 +8,7 @@ import (
 
 	"github.com/hzhan516/medmemo/internal/domain/entity"
 	"github.com/hzhan516/medmemo/internal/domain/repository"
+	"github.com/hzhan516/medmemo/pkg/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -275,6 +276,37 @@ func TestMemoryRetriever_EmbedFailure(t *testing.T) {
 	memories, err := retriever.RetrieveForContext(context.Background(), "query", "session_001", 3)
 	require.NoError(t, err)
 	assert.Empty(t, memories)
+}
+
+func TestMemoryRetriever_WeightRecallThroughSemanticSearch(t *testing.T) {
+	now := time.Now().UTC()
+	facts := map[string]*entity.ExtractedFact{
+		"fact_weight": {
+			FactID: "fact_weight", Subject: "用户", Predicate: "体重是", Object: "110公斤",
+			Confidence: 0.95, Status: entity.FactStatusApproved, CreatedAt: now,
+		},
+	}
+	embeddings := []*entity.ScoredEmbedding{
+		{SemanticEmbedding: &entity.SemanticEmbedding{FactID: "fact_weight"}, Similarity: 0.92},
+	}
+	retriever := NewMemoryRetriever(
+		&stubEmbeddingService{},
+		&stubEmbeddingRepository{results: embeddings},
+		&stubFactRepository{facts: facts},
+		NewDecayScorer(),
+	)
+
+	memories, err := retriever.RetrieveForContext(context.Background(), "我现在多重", "session_weight", 3)
+	require.NoError(t, err)
+	require.Len(t, memories, 1)
+	assert.Equal(t, "用户 体重是 110公斤", memories[0].Content)
+
+	messages := injectMemories([]models.Message{
+		{Role: models.RoleUser, Content: "我现在多重"},
+	}, memories)
+	require.Len(t, messages, 2)
+	assert.Equal(t, models.RoleSystem, messages[0].Role)
+	assert.Contains(t, messages[0].Content, "用户 体重是 110公斤")
 }
 
 func TestMemoryRetriever_NoResults(t *testing.T) {
