@@ -90,8 +90,8 @@ github.com/janpfeifer/must v0.2.0 h1:yWy1CE5gtk1i2ICBvqAcMMXrCMqil9CJPkc7x81fRdQ
 github.com/janpfeifer/must v0.2.0/go.mod h1:S6c5Yg/YSMR43cJw4zhIq7HFMci90a7kPY9XA4c8UIs=
 github.com/jchv/go-winloader v0.0.0-20250406163304-c1995be93bd1 h1:njuLRcjAuMKr7kI3D85AXWkw6/+v9PwtV6M6o11sWHQ=
 github.com/jchv/go-winloader v0.0.0-20250406163304-c1995be93bd1/go.mod h1:alcuEEnZsY1WQsagKhZDsoPCRoOijYqhZvPwLG0kzVs=
-github.com/knights-analytics/hugot v0.7.3 h1:39UqU52s4nAmNIE4JG5ViASCvd8dhue7XGtt5RhK3T4=
-github.com/knights-analytics/hugot v0.7.3/go.mod h1:86tRz/GzyoNFHuUUzgiYnALQNZU8Vzd5F0pApYizwrs=
+github.com/knights-analytics/hugot v0.7.4 h1:aRdRCuV/72Wy+OXdrNSixFCVVuWUlsi6ep/zGeyxbkA=
+github.com/knights-analytics/hugot v0.7.4/go.mod h1:oWluQ5YbJ9/av9T7D3SLZFthgQ44JG3syVN+YezOwII=
 github.com/knights-analytics/ortgenai v0.3.1 h1:0Awe43Zu+giDxzlpoNvx9ekbez/zxc8XMzKU++sOUB8=
 github.com/knights-analytics/ortgenai v0.3.1/go.mod h1:lSbQsRP5wY5NS+4W5CUGhdxjTzERQkR7WprAFxrBSt4=
 github.com/kr/pretty v0.3.1 h1:flRD4NNwYAUpkphVc1HcthR4KEIFJ65n8Mw5qdRn3LE=
