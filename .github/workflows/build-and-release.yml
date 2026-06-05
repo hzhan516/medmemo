@@ -18,7 +18,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       prerelease: ${{ steps.version.outputs.prerelease }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Generate version
         id: version
@@ -54,17 +54,17 @@ jobs:
             platform: darwin
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: 'go.mod'
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'npm'
           cache-dependency-path: web/package-lock.json
 
@@ -119,19 +119,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download Linux artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: medmemo-linux-${{ needs.version.outputs.version }}
           path: artifacts/linux/
 
       - name: Download Windows artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: medmemo-windows-${{ needs.version.outputs.version }}
           path: artifacts/windows/
 
       - name: Download macOS artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: medmemo-darwin-${{ needs.version.outputs.version }}
           path: artifacts/darwin/
@@ -170,7 +170,7 @@ jobs:
       # 先以 draft 创建 release 并上传资产，避免 immutable release 仓库
       # 在 prerelease 状态下拒绝后续资产上传的问题。
       - name: Create Draft Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: MedMemo ${{ needs.version.outputs.version }}
           tag_name: ${{ needs.version.outputs.version }}
