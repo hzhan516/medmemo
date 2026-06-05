@@ -114,11 +114,21 @@ jobs:
         if: matrix.platform == 'linux'
         run: |
           sudo apt-get update && sudo apt-get install -y xvfb
-          xvfb-run -a timeout 25s env \
-            HOME="$RUNNER_TEMP/medmemo-home" \
-            MEDMEMO_DATA_DIR="$RUNNER_TEMP/medmemo-data" \
-            ./build/bin/MedMemo || true
-          echo "Smoke test completed"
+          export HOME="$RUNNER_TEMP/medmemo-home"
+          export MEDMEMO_DATA_DIR="$RUNNER_TEMP/medmemo-data"
+          mkdir -p "$HOME" "$MEDMEMO_DATA_DIR"
+
+          # 后台启动二进制，检查进程存活至少 5 秒
+          xvfb-run -a timeout 20s ./build/bin/MedMemo &
+          PID=$!
+          sleep 5
+          if ! kill -0 $PID 2>/dev/null; then
+            echo "ERROR: MedMemo binary crashed or exited early"
+            exit 1
+          fi
+          kill $PID 2>/dev/null || true
+          wait $PID 2>/dev/null || true
+          echo "Smoke test passed: binary stays alive for 5s"
         shell: bash
 
       - name: Upload build artifacts
