@@ -69,7 +69,7 @@ jobs:
           cache-dependency-path: web/package-lock.json
 
       - name: Install Wails CLI
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
 
       - name: Install frontend dependencies
         run: cd web && npm ci
@@ -104,6 +104,21 @@ jobs:
             exit 1
           fi
           echo "Binary size OK: $SIZE bytes"
+        shell: bash
+
+      - name: Verify release artifact
+        run: ./scripts/build/verify-release-artifact.sh ${{ matrix.platform }}
+        shell: bash
+
+      - name: Linux runtime smoke test
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update && sudo apt-get install -y xvfb
+          xvfb-run -a timeout 25s env \
+            HOME="$RUNNER_TEMP/medmemo-home" \
+            MEDMEMO_DATA_DIR="$RUNNER_TEMP/medmemo-data" \
+            ./build/bin/MedMemo || true
+          echo "Smoke test completed"
         shell: bash
 
       - name: Upload build artifacts
