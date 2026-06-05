@@ -84,9 +84,15 @@ func NewSQLCipherConnector(dataDir string, store secret.Store) (*SQLCipherConnec
 		return nil, fmt.Errorf("database key verification failed: %w", err)
 	}
 
-	// 连接池配置
-	db.SetMaxOpenConns(10)
-	db.SetMaxIdleConns(5)
+	// 连接池配置：桌面端并发场景（流式对话 + 异步事实提取 + UI 查询）需要更大池子
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(10)
+
+	// 设置 busy_timeout：锁冲突时自动重试最多 5 秒，避免立即返回 SQLITE_BUSY
+	if _, err := db.Exec("PRAGMA busy_timeout = 5000"); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("failed to set busy timeout: %w", err)
+	}
 
 	// 启用外键约束
 	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
@@ -348,6 +354,84 @@ func migrateSQLiteSchema(ctx context.Context, db *sql.DB) error {
 			sql: `
 			ALTER TABLE providers ADD COLUMN auth_method TEXT DEFAULT 'api_key';
 			ALTER TABLE providers ADD COLUMN auth_params TEXT DEFAULT '{}';
+			`,
+		},
+		{
+			version: 7,
+			sql: `
+			CREATE TABLE IF NOT EXISTS raw_dialogues (
+				message_id TEXT PRIMARY KEY,
+				session_id TEXT NOT NULL,
+				role TEXT NOT NULL CHECK(role IN ('user','assistant','system')),
+				content TEXT NOT NULL,
+				model_name TEXT,
+				timestamp INTEGER NOT NULL,
+				extraction_status TEXT DEFAULT 'unprocessed' CHECK(extraction_status IN ('unprocessed','processing','processed','failed')),
+				created_at INTEGER NOT NULL
+			);
+			CREATE INDEX IF NOT EXISTS idx_raw_session_time ON raw_dialogues(session_id, timestamp);
+			CREATE INDEX IF NOT EXISTS idx_raw_extraction_status ON raw_dialogues(extraction_status);
+
+			CREATE TABLE IF NOT EXISTS extracted_facts (
+				fact_id TEXT PRIMARY KEY,
+				subject TEXT NOT NULL,
+				predicate TEXT NOT NULL,
+				object TEXT NOT NULL,
+				confidence REAL NOT NULL CHECK(confidence >= 0 AND confidence <= 1),
+				source_msg_ids TEXT NOT NULL,
+				status TEXT DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected')),
+				scored_at INTEGER,
+				reviewed_at INTEGER,
+				created_at INTEGER NOT NULL
+			);
+			CREATE INDEX IF NOT EXISTS idx_fact_confidence ON extracted_facts(confidence);
+			CREATE INDEX IF NOT EXISTS idx_fact_status ON extracted_facts(status);
+
+			CREATE TABLE IF NOT EXISTS semantic_embeddings (
+				embedding_id TEXT PRIMARY KEY,
+				fact_id TEXT NOT NULL UNIQUE,
+				vector BLOB NOT NULL,
+				model_version TEXT NOT NULL DEFAULT 'all-MiniLM-L6-v2',
+				created_at INTEGER NOT NULL,
+				FOREIGN KEY (fact_id) REFERENCES extracted_facts(fact_id) ON DELETE CASCADE
+			);
+			CREATE INDEX IF NOT EXISTS idx_embedding_fact ON semantic_embeddings(fact_id);
+			`,
+		},
+		{
+			version: 8,
+			sql: `
+			-- v1.1 DoD A1: 为 extracted_facts 添加敏感信息标记列
+			ALTER TABLE extracted_facts ADD COLUMN is_sensitive INTEGER DEFAULT 0;
+			`,
+		},
+		{
+			version: 9,
+			sql: `
+			-- v1.1 DoD A3: 审计日志表
+			CREATE TABLE IF NOT EXISTS audit_logs (
+				id TEXT PRIMARY KEY,
+				action TEXT NOT NULL CHECK(action IN ('CREATE','APPROVE','REJECT','DELETE')),
+				target_type TEXT NOT NULL DEFAULT 'fact',
+				target_id TEXT NOT NULL,
+				old_value TEXT,
+				new_value TEXT,
+				actor TEXT NOT NULL DEFAULT 'user',
+				timestamp INTEGER NOT NULL
+			);
+			CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_logs(target_type, target_id);
+			CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_logs(timestamp);
+			`,
+		},
+		{
+			version: 10,
+			sql: `
+			-- v1.1 回答置信度机制: 扩展 messages 表存储 token 拆分与置信度
+			ALTER TABLE messages ADD COLUMN prompt_tokens INTEGER DEFAULT 0;
+			ALTER TABLE messages ADD COLUMN completion_tokens INTEGER DEFAULT 0;
+			ALTER TABLE messages ADD COLUMN confidence_score REAL;
+			ALTER TABLE messages ADD COLUMN confidence_level TEXT;
+			ALTER TABLE messages ADD COLUMN confidence_json TEXT;
 			`,
 		},
 	}

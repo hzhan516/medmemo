@@ -2,6 +2,7 @@ package secret
 
 import (
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,7 +13,49 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type stubKeyring struct {
+	item      keyring.Item
+	getErr    error
+	setErr    error
+	removeErr error
+}
+
+func (s *stubKeyring) Get(_ string) (keyring.Item, error) {
+	if s.getErr != nil {
+		return keyring.Item{}, s.getErr
+	}
+	return s.item, nil
+}
+
+func (s *stubKeyring) GetMetadata(_ string) (keyring.Metadata, error) {
+	return keyring.Metadata{}, keyring.ErrMetadataNotSupported
+}
+
+func (s *stubKeyring) Set(item keyring.Item) error {
+	if s.setErr != nil {
+		return s.setErr
+	}
+	s.item = item
+	return nil
+}
+
+func (s *stubKeyring) Remove(_ string) error {
+	return s.removeErr
+}
+
+func (s *stubKeyring) Keys() ([]string, error) {
+	return nil, nil
+}
+
+func useTempHome(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	return dir
+}
+
 func TestFileStore_SetGetDelete(t *testing.T) {
+	useTempHome(t)
 	fs, err := NewFileStore()
 	require.NoError(t, err)
 
@@ -34,6 +77,7 @@ func TestFileStore_SetGetDelete(t *testing.T) {
 }
 
 func TestFileStore_Get_NotFound(t *testing.T) {
+	useTempHome(t)
 	fs, err := NewFileStore()
 	require.NoError(t, err)
 
@@ -43,6 +87,7 @@ func TestFileStore_Get_NotFound(t *testing.T) {
 }
 
 func TestFileStore_Delete_Idempotent(t *testing.T) {
+	useTempHome(t)
 	fs, err := NewFileStore()
 	require.NoError(t, err)
 
@@ -51,6 +96,7 @@ func TestFileStore_Delete_Idempotent(t *testing.T) {
 }
 
 func TestFileStore_MultipleKeys(t *testing.T) {
+	useTempHome(t)
 	fs, err := NewFileStore()
 	require.NoError(t, err)
 
@@ -103,6 +149,7 @@ func TestKeyringStore_FileBackend(t *testing.T) {
 
 func TestKeyringStore_FallbackToFileStore(t *testing.T) {
 	// 直接构造 fallback 实例，避免 CI 中 D-Bus 超时等待
+	useTempHome(t)
 	fs, err := NewFileStore()
 	require.NoError(t, err)
 	store := &KeyringStore{fallback: fs}
@@ -122,6 +169,53 @@ func TestKeyringStore_FallbackToFileStore(t *testing.T) {
 
 	_, err = store.Get(key)
 	require.Error(t, err)
+}
+
+func TestKeyringStore_SetFallsBackOnRuntimeKeyringError(t *testing.T) {
+	useTempHome(t)
+	store := &KeyringStore{
+		ring: &stubKeyring{setErr: errors.New("User interaction is not allowed. (-25308)")},
+	}
+
+	value := []byte("database-key")
+	require.NoError(t, store.Set("db_key", value))
+
+	got, err := store.Get("db_key")
+	require.NoError(t, err)
+	assert.Equal(t, value, got)
+}
+
+func TestKeyringStore_GetReadsExistingFileFallbackWhenKeyringMisses(t *testing.T) {
+	useTempHome(t)
+	fs, err := NewFileStore()
+	require.NoError(t, err)
+	value := []byte("fallback-database-key")
+	require.NoError(t, fs.Set("db_key", value))
+
+	store := &KeyringStore{
+		ring: &stubKeyring{getErr: keyring.ErrKeyNotFound},
+	}
+
+	got, err := store.Get("db_key")
+	require.NoError(t, err)
+	assert.Equal(t, value, got)
+	assert.NotNil(t, store.currentFallback())
+}
+
+func TestKeyringStore_GetFallsBackOnRuntimeKeyringError(t *testing.T) {
+	useTempHome(t)
+	fs, err := NewFileStore()
+	require.NoError(t, err)
+	value := []byte("fallback-secret")
+	require.NoError(t, fs.Set("api_key", value))
+
+	store := &KeyringStore{
+		ring: &stubKeyring{getErr: errors.New("User interaction is not allowed. (-25308)")},
+	}
+
+	got, err := store.Get("api_key")
+	require.NoError(t, err)
+	assert.Equal(t, value, got)
 }
 
 func TestNewFileStore_HomeDirFailure(t *testing.T) {
@@ -214,6 +308,7 @@ func TestFileStore_Get_OldKeyMigrationFail(t *testing.T) {
 }
 
 func TestFileStore_Get_BothKeysFail(t *testing.T) {
+	useTempHome(t)
 	fs, err := NewFileStore()
 	require.NoError(t, err)
 	err = fs.Set("corrupt-key", []byte("value"))

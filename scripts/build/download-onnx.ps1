@@ -95,6 +95,14 @@ function Download-Windows {
         Copy-Item -Path "$TmpExtract\lib\onnxruntime_providers_shared.dll" -Destination $OutDir -Force
     }
 
+    # 复制头文件（CGO 编译 hugot C wrapper 可能需要）
+    $IncludeDir = Join-Path $ProjectRoot "resources\include\onnxruntime"
+    if (Test-Path "$TmpExtract\include") {
+        New-Item -ItemType Directory -Force -Path $IncludeDir | Out-Null
+        Copy-Item -Path "$TmpExtract\include\*" -Destination $IncludeDir -Recurse -Force
+        Write-Host "[windows] Headers copied to -> $IncludeDir"
+    }
+
     Remove-Item -Path $TmpArchive -Force -ErrorAction SilentlyContinue
     Remove-Item -Path $TmpExtract -Recurse -Force -ErrorAction SilentlyContinue
     Write-Host "[windows] Done → $OutDir"

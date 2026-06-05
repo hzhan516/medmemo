@@ -5,6 +5,14 @@ import { useSettingsStore } from '@/stores/settingsStore'
 import { useProviderStore } from '@/stores/providerStore'
 import { useWails } from './useWails'
 import { EventsOn } from '@wails/runtime/runtime'
+import type { ConfidenceResult, ConfidenceLevel } from '@/components/confidence/types'
+
+// 合法置信度等级集合，用于数据校验
+const validConfidenceLevels: Set<ConfidenceLevel> = new Set(['A', 'B', 'C', 'D', 'E'])
+
+function normalizeConfidenceLevel(level: unknown): ConfidenceLevel {
+  return level && validConfidenceLevels.has(level as ConfidenceLevel) ? (level as ConfidenceLevel) : 'E'
+}
 
 /**
  * 会话管理 Hook，封装消息发送、流式输出与状态更新。
@@ -23,6 +31,8 @@ export function useConversation() {
     setLastMessageWarningsForConversation,
     setLastMessageReplacedTermsForConversation,
     setLastMessageTokenUsageForConversation,
+    setLastMessageConfidenceForConversation,
+    setLastMessageTruncatedForConversation,
     replaceLastMessageForConversation,
     setStreamingForConversation,
     addConversation,
@@ -110,14 +120,57 @@ export function useConversation() {
     const removeReplace = EventsOn('chat:stream:replace', (payload: { conversation_id: string; content: string }) => {
       replaceLastMessageForConversation(payload.conversation_id, payload.content)
     })
+    const removeConfidence = EventsOn('chat:stream:confidence', (payload: {
+      conversation_id?: string
+      confidence?: Record<string, unknown>
+      prompt_tokens?: number
+      completion_tokens?: number
+      total_tokens?: number
+      truncated?: boolean
+    }) => {
+      const convId = payload.conversation_id
+      if (!convId) return
+      // 更新 token 用量（作为 done chunk 的兜底）
+      if (payload.prompt_tokens !== undefined && payload.completion_tokens !== undefined) {
+        setLastMessageTokenUsageForConversation(
+          convId,
+          payload.prompt_tokens,
+          payload.completion_tokens,
+          payload.total_tokens ?? (payload.prompt_tokens + payload.completion_tokens),
+        )
+      }
+      // 更新置信度
+      if (payload.confidence) {
+        const raw = payload.confidence
+        const confidence: ConfidenceResult = {
+          overallScore: (raw.overall_score as number) ?? 0,
+          level: normalizeConfidenceLevel(raw.level),
+          breakdown: {
+            knowledge_source: ((raw.breakdown as Record<string, number>)?.knowledge_source) ?? 0,
+            reasoning: ((raw.breakdown as Record<string, number>)?.reasoning) ?? 0,
+            context: ((raw.breakdown as Record<string, number>)?.context) ?? 0,
+            history: ((raw.breakdown as Record<string, number>)?.history) ?? 0,
+            uncertainty: ((raw.breakdown as Record<string, number>)?.uncertainty) ?? 0,
+          },
+          explanation: (raw.explanation as string) ?? '',
+          suggestion: (raw.suggestion as string) ?? '',
+          missingInfo: (raw.missing_info as string[]) ?? [],
+        }
+        setLastMessageConfidenceForConversation(convId, confidence)
+      }
+      if (payload.truncated) {
+        setLastMessageTruncatedForConversation(convId, true)
+      }
+    })
 
     return () => {
       removeStreamChunk()
       removeCompliance()
       removeTitle()
       removeReplace()
+      removeConfidence()
     }
-  }, [appendToLastMessageForConversation, setLastMessageErrorForConversation, setLastMessageWarningsForConversation, setLastMessageReplacedTermsForConversation, setLastMessageTokenUsageForConversation, replaceLastMessageForConversation, setStreamingForConversation, updateConversation])
+  }, [appendToLastMessageForConversation, setLastMessageErrorForConversation, setLastMessageWarningsForConversation, setLastMessageReplacedTermsForConversation, setLastMessageTokenUsageForConversation, setLastMessageConfidenceForConversation, setLastMessageTruncatedForConversation, replaceLastMessageForConversation, setStreamingForConversation, updateConversation])
 
   const sendMessage = useCallback(
     async (content: string) => {
@@ -327,6 +380,43 @@ export function useConversation() {
           role: msg.role as 'user' | 'assistant' | 'system',
           content: msg.content,
           timestamp: Number(msg.timestamp),
+          promptTokens: msg.prompt_tokens,
+          completionTokens: msg.completion_tokens,
+          totalTokens: msg.total_tokens,
+          confidence: msg.confidence
+            ? (() => {
+                const raw = msg.confidence as Record<string, unknown>
+                const bd = (raw.breakdown as Record<string, number>) || {}
+                let overallScore = (raw.overall_score as number) ?? 0
+                // 防御性修复：若 overallScore 为 0 但 breakdown 有非零值，使用加权平均值回退
+                if (overallScore === 0) {
+                  const hasNonZeroBreakdown = Object.values(bd).some((v) => (v ?? 0) > 0)
+                  if (hasNonZeroBreakdown) {
+                    overallScore =
+                      (bd.knowledge_source ?? 0) * 0.30 +
+                      (bd.reasoning ?? 0) * 0.25 +
+                      (bd.context ?? 0) * 0.20 +
+                      (bd.history ?? 0) * 0.15 +
+                      (bd.uncertainty ?? 0) * 0.10
+                    console.warn('[DIAG][Confidence] overallScore was 0, recalculated from breakdown:', overallScore, bd)
+                  }
+                }
+                return {
+                  overallScore,
+                  level: normalizeConfidenceLevel(raw.level),
+                  breakdown: {
+                    knowledge_source: bd.knowledge_source ?? 0,
+                    reasoning: bd.reasoning ?? 0,
+                    context: bd.context ?? 0,
+                    history: bd.history ?? 0,
+                    uncertainty: bd.uncertainty ?? 0,
+                  },
+                  explanation: (raw.explanation as string) ?? '',
+                  suggestion: (raw.suggestion as string) ?? '',
+                  missingInfo: (raw.missing_info as string[]) ?? [],
+                } as ConfidenceResult
+              })()
+            : undefined,
         }))
         setMessages(mappedMessages)
       } catch (e) {

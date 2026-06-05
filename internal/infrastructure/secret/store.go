@@ -7,10 +7,12 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/99designs/keyring"
 	"github.com/google/wire"
@@ -25,6 +27,7 @@ type Store interface {
 
 // KeyringStore 平台原生密钥环实现，不可用时自动降级到 FileStore。
 type KeyringStore struct {
+	mu       sync.RWMutex
 	ring     keyring.Keyring
 	fallback *FileStore
 }
@@ -53,33 +56,135 @@ func NewKeyringStore() (*KeyringStore, error) {
 
 // Set 存储密钥。
 func (s *KeyringStore) Set(key string, value []byte) error {
-	if s.fallback != nil {
-		return s.fallback.Set(key, value)
+	if fs := s.currentFallback(); fs != nil {
+		return fs.Set(key, value)
 	}
-	return s.ring.Set(keyring.Item{
+	if s.ring == nil {
+		fs, err := s.ensureFallback()
+		if err != nil {
+			return fmt.Errorf("fallback file store unavailable for key %s: %w", key, err)
+		}
+		return fs.Set(key, value)
+	}
+	err := s.ring.Set(keyring.Item{
 		Key:  key,
 		Data: value,
 	})
+	if err == nil {
+		return nil
+	}
+
+	fs, fallbackErr := s.ensureFallback()
+	if fallbackErr != nil {
+		return fmt.Errorf("keyring set failed for key %s and fallback unavailable: %w", key, errors.Join(err, fallbackErr))
+	}
+	if fallbackErr := fs.Set(key, value); fallbackErr != nil {
+		return fmt.Errorf("keyring set failed for key %s and fallback set failed: %w", key, errors.Join(err, fallbackErr))
+	}
+	return nil
 }
 
 // Get 读取密钥。
 func (s *KeyringStore) Get(key string) ([]byte, error) {
-	if s.fallback != nil {
-		return s.fallback.Get(key)
+	if fs := s.currentFallback(); fs != nil {
+		value, err := fs.Get(key)
+		if err == nil || s.ring == nil {
+			return value, err
+		}
 	}
+
+	if s.ring == nil {
+		fs, err := s.ensureFallback()
+		if err != nil {
+			return nil, fmt.Errorf("fallback file store unavailable for key %s: %w", key, err)
+		}
+		return fs.Get(key)
+	}
+
 	item, err := s.ring.Get(key)
 	if err != nil {
-		return nil, fmt.Errorf("keyring get failed for key %s: %w", key, err)
+		if errors.Is(err, keyring.ErrKeyNotFound) {
+			value, fs, fallbackErr := readFileFallback(key)
+			if fallbackErr == nil {
+				s.setFallback(fs)
+				return value, nil
+			}
+			return nil, fmt.Errorf("secret not found for key %s: %w", key, err)
+		}
+
+		fs, fallbackErr := s.ensureFallback()
+		if fallbackErr != nil {
+			return nil, fmt.Errorf("keyring get failed for key %s and fallback unavailable: %w", key, errors.Join(err, fallbackErr))
+		}
+		value, fallbackErr := fs.Get(key)
+		if fallbackErr != nil {
+			return nil, fmt.Errorf("keyring get failed for key %s and fallback get failed: %w", key, errors.Join(err, fallbackErr))
+		}
+		return value, nil
 	}
 	return item.Data, nil
 }
 
 // Delete 删除密钥。
 func (s *KeyringStore) Delete(key string) error {
-	if s.fallback != nil {
-		return s.fallback.Delete(key)
+	var keyringErr error
+	if s.ring != nil {
+		keyringErr = s.ring.Remove(key)
 	}
-	return s.ring.Remove(key)
+
+	if fs := s.currentFallback(); fs != nil {
+		if err := fs.Delete(key); err != nil {
+			if keyringErr != nil && !errors.Is(keyringErr, keyring.ErrKeyNotFound) {
+				return fmt.Errorf("keyring delete failed for key %s and fallback delete failed: %w", key, errors.Join(keyringErr, err))
+			}
+			return err
+		}
+	}
+
+	if keyringErr != nil && !errors.Is(keyringErr, keyring.ErrKeyNotFound) {
+		return fmt.Errorf("keyring delete failed for key %s: %w", key, keyringErr)
+	}
+	return nil
+}
+
+func (s *KeyringStore) currentFallback() *FileStore {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.fallback
+}
+
+func (s *KeyringStore) setFallback(fs *FileStore) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.fallback == nil {
+		s.fallback = fs
+	}
+}
+
+func (s *KeyringStore) ensureFallback() (*FileStore, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.fallback != nil {
+		return s.fallback, nil
+	}
+	fs, err := NewFileStore()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create fallback file store: %w", err)
+	}
+	s.fallback = fs
+	return fs, nil
+}
+
+func readFileFallback(key string) ([]byte, *FileStore, error) {
+	fs, err := NewFileStore()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create fallback file store: %w", err)
+	}
+	value, err := fs.Get(key)
+	if err != nil {
+		return nil, nil, err
+	}
+	return value, fs, nil
 }
 
 // FileStore 文件系统加密存储（AES-GCM）。

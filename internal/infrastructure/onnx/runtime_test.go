@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/knights-analytics/hugot/pipelines"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -30,6 +31,9 @@ func TestNewEngine_NoLibrary_ReturnsUnavailable(t *testing.T) {
 	require.NoError(t, err, "无动态库时不应返回错误")
 	assert.NotNil(t, engine)
 	assert.False(t, engine.IsAvailable(), "动态库缺失时引擎应标记为不可用")
+	assert.False(t, engine.HasEmbeddingPipeline(), "动态库缺失时 embedding 引擎应不可用")
+	assert.NotEmpty(t, engine.RuntimeLibPath())
+	assert.Contains(t, engine.EmbeddingFailureReason(), "ONNX Runtime library not found")
 
 	err = engine.Close()
 	assert.NoError(t, err)
@@ -221,4 +225,87 @@ func TestEngine_Close_NilSession(t *testing.T) {
 	engine, err := NewEngine(EngineConfig{ResourceDir: "resources", ModelPath: "resources/models/nonexistent"})
 	require.NoError(t, err)
 	assert.NoError(t, engine.Close())
+}
+
+// TestIsNERAvailable 验证 IsNERAvailable 与 IsAvailable 在 NER 状态变化时的返回值。
+func TestIsNERAvailable(t *testing.T) {
+	t.Run("pipeline非nil时IsNERAvailable返回true", func(t *testing.T) {
+		engine, err := NewEngine(EngineConfig{ResourceDir: "resources", ModelPath: "resources/models/nonexistent"})
+		require.NoError(t, err)
+		defer engine.Close()
+
+		engine.pipeline = &pipelines.TokenClassificationPipeline{}
+		engine.nerAvailable = true
+		assert.True(t, engine.IsNERAvailable())
+	})
+
+	t.Run("仅NER可用时IsAvailable为true且IsEmbeddingAvailable为false", func(t *testing.T) {
+		engine, err := NewEngine(EngineConfig{ResourceDir: "resources", ModelPath: "resources/models/nonexistent"})
+		require.NoError(t, err)
+		defer engine.Close()
+
+		engine.nerAvailable = true
+		engine.pipeline = &pipelines.TokenClassificationPipeline{}
+		engine.embeddingAvailable = false
+		engine.embeddingPipeline = nil
+		assert.True(t, engine.IsAvailable())
+		assert.True(t, engine.IsNERAvailable())
+		assert.False(t, engine.IsEmbeddingAvailable())
+	})
+
+	t.Run("NER与Embedding均不可用时IsAvailable返回false", func(t *testing.T) {
+		engine, err := NewEngine(EngineConfig{ResourceDir: "resources", ModelPath: "resources/models/nonexistent"})
+		require.NoError(t, err)
+		defer engine.Close()
+
+		engine.nerAvailable = false
+		engine.embeddingAvailable = false
+		engine.pipeline = nil
+		engine.embeddingPipeline = nil
+		assert.False(t, engine.IsAvailable())
+		assert.False(t, engine.IsNERAvailable())
+		assert.False(t, engine.IsEmbeddingAvailable())
+	})
+}
+
+// TestIsEmbeddingAvailable 验证 IsEmbeddingAvailable 与 IsAvailable 在 Embedding 状态变化时的返回值。
+func TestIsEmbeddingAvailable(t *testing.T) {
+	t.Run("embeddingPipeline非nil且embeddingAvailable为true时返回true", func(t *testing.T) {
+		engine, err := NewEngine(EngineConfig{ResourceDir: "resources", ModelPath: "resources/models/nonexistent"})
+		require.NoError(t, err)
+		defer engine.Close()
+
+		engine.embeddingPipeline = &pipelines.FeatureExtractionPipeline{}
+		engine.embeddingAvailable = true
+		assert.True(t, engine.IsEmbeddingAvailable())
+	})
+
+	t.Run("仅Embedding可用时IsAvailable为true且IsNERAvailable为false", func(t *testing.T) {
+		engine, err := NewEngine(EngineConfig{ResourceDir: "resources", ModelPath: "resources/models/nonexistent"})
+		require.NoError(t, err)
+		defer engine.Close()
+
+		engine.embeddingAvailable = true
+		engine.embeddingPipeline = &pipelines.FeatureExtractionPipeline{}
+		engine.nerAvailable = false
+		engine.pipeline = nil
+		assert.True(t, engine.IsAvailable())
+		assert.True(t, engine.IsEmbeddingAvailable())
+		assert.False(t, engine.IsNERAvailable())
+	})
+}
+
+// TestEngine_Embed_WhenUnavailable 验证 embeddingAvailable=false 时 Embed 返回 not available 错误。
+func TestEngine_Embed_WhenUnavailable(t *testing.T) {
+	engine, err := NewEngine(EngineConfig{ResourceDir: "resources", ModelPath: "resources/models/nonexistent"})
+	require.NoError(t, err)
+	defer engine.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	embeddings, err := engine.Embed(ctx, []string{"测试文本"})
+	assert.Error(t, err)
+	assert.Nil(t, embeddings)
+	assert.Contains(t, err.Error(), "not available")
 }

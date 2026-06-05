@@ -9,15 +9,20 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/hzhan516/medmemo/internal/adapters/ai"
 	"github.com/hzhan516/medmemo/internal/application/pipeline"
 	"github.com/hzhan516/medmemo/internal/application/port"
 	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/internal/infrastructure/config"
 	"github.com/hzhan516/medmemo/internal/infrastructure/database"
 	"github.com/hzhan516/medmemo/internal/infrastructure/onnx"
+	"github.com/hzhan516/medmemo/internal/infrastructure/secret"
+	"github.com/hzhan516/medmemo/pkg/resourcepath"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
@@ -108,11 +113,68 @@ type App struct {
 }
 
 // NewEngineConfig 从 AppConfig 构造 ONNX Engine 配置，供 Wire 注入使用。
+// 在返回前确保 embedding 模型已复制到用户数据目录，保证 onnx.NewEngine 能正确加载。
 func NewEngineConfig(cfg *entity.AppConfig) onnx.EngineConfig {
+	userPath := filepath.Join(cfg.DataDir, "models", "all-MiniLM-L6-v2")
+	resourceDir := resourcepath.Dir()
+	prepareEmbeddingModels(userPath, resourceDir)
+
 	return onnx.EngineConfig{
-		ResourceDir: "resources",
-		ModelPath:   cfg.ModelDir,
+		ResourceDir:        resourceDir,
+		ModelPath:          resourcepath.Resolve(cfg.ModelDir),
+		EmbeddingModelPath: userPath,
 	}
+}
+
+// prepareEmbeddingModels 首次启动时将打包的模型文件复制到用户数据目录。
+// 若用户目录已有模型，或找不到打包模型，则静默跳过。
+func prepareEmbeddingModels(userDir string, resourceDir string) {
+	if _, err := os.Stat(filepath.Join(userDir, "model.onnx")); err == nil {
+		return
+	}
+
+	bundledDir := findBundledModelDir(resourceDir)
+	if bundledDir == "" {
+		return
+	}
+
+	_ = os.MkdirAll(userDir, 0755)
+	for _, name := range []string{"model.onnx", "tokenizer.json"} {
+		src := filepath.Join(bundledDir, name)
+		dst := filepath.Join(userDir, name)
+		if _, err := os.Stat(src); err != nil {
+			continue
+		}
+		data, err := os.ReadFile(src)
+		if err != nil {
+			continue
+		}
+		_ = os.WriteFile(dst, data, 0644)
+	}
+}
+
+// findBundledModelDir 查找应用包内打包的模型目录。
+func findBundledModelDir(resourceDir string) string {
+	dir := filepath.Join(resourceDir, "models", "all-MiniLM-L6-v2")
+	if _, err := os.Stat(filepath.Join(dir, "model.onnx")); err == nil {
+		return dir
+	}
+	return ""
+}
+
+// NewDefaultLoader 创建使用默认搜索路径的配置加载器。
+func NewDefaultLoader() *config.Loader {
+	return config.NewLoader("")
+}
+
+// NewSQLCipherConnectorFromConfig 从 AppConfig 获取数据目录创建数据库连接。
+func NewSQLCipherConnectorFromConfig(cfg *entity.AppConfig, store secret.Store) (*database.SQLCipherConnector, error) {
+	return database.NewSQLCipherConnector(cfg.DataDir, store)
+}
+
+// NewEmbeddingServiceAdapterWithVersion 创建带固定模型版本的嵌入服务适配器。
+func NewEmbeddingServiceAdapterWithVersion(engine ai.EmbeddingEngine) *ai.EmbeddingServiceAdapter {
+	return ai.NewEmbeddingServiceAdapter(engine, "all-MiniLM-L6-v2")
 }
 
 // NewApp 构造函数，供 Wire 调用。

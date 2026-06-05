@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { ConfidenceResult } from '@/components/confidence/types'
 
 export interface ChatMessage {
   id: string
@@ -14,6 +15,8 @@ export interface ChatMessage {
   promptTokens?: number // 该轮次输入 token 数
   completionTokens?: number // 该轮次输出 token 数
   totalTokens?: number // 该轮次总 token 数
+  truncated?: boolean // 输出是否被截断（finish_reason == "length"）
+  confidence?: ConfidenceResult // 回答置信度结果
   conversationId?: string // 所属会话 ID，用于在 currentConversationId 为 null 时仍能正确归档到 messagesMap
 }
 
@@ -72,6 +75,9 @@ interface ChatState {
   setLastMessageReplacedTermsForConversation: (convId: string, terms: string[]) => void
   setLastMessageTokenUsage: (promptTokens: number, completionTokens: number, totalTokens: number) => void
   setLastMessageTokenUsageForConversation: (convId: string, promptTokens: number, completionTokens: number, totalTokens: number) => void
+  setLastMessageConfidence: (confidence: ConfidenceResult) => void
+  setLastMessageConfidenceForConversation: (convId: string, confidence: ConfidenceResult) => void
+  setLastMessageTruncatedForConversation: (convId: string, truncated: boolean) => void
   replaceLastMessageForConversation: (convId: string, content: string) => void
   setMessages: (messages: ChatMessage[]) => void
 
@@ -389,6 +395,47 @@ export const useChatStore = create<ChatState>((set) => ({
         promptTokens,
         completionTokens,
         totalTokens,
+      }))
+      if (state.currentConversationId === convId) {
+        return { messages: newMap[convId] || [], messagesMap: newMap }
+      }
+      return { messagesMap: newMap }
+    }),
+
+  setLastMessageConfidence: (confidence) =>
+    set((state) => {
+      const convId = state.currentConversationId
+      const msgs = [...state.messages]
+      if (msgs.length === 0) return state
+      const lastIdx = msgs.length - 1
+      const last = msgs[lastIdx]
+      if (last.role !== 'assistant') return state
+      msgs[lastIdx] = { ...last, confidence }
+      const mapKey = last.conversationId || convId
+      if (!mapKey) return { messages: msgs }
+      return {
+        messages: msgs,
+        messagesMap: { ...state.messagesMap, [mapKey]: msgs },
+      }
+    }),
+
+  setLastMessageConfidenceForConversation: (convId, confidence) =>
+    set((state) => {
+      const newMap = updateLastAssistantInMap(state.messagesMap, convId, (last) => ({
+        ...last,
+        confidence,
+      }))
+      if (state.currentConversationId === convId) {
+        return { messages: newMap[convId] || [], messagesMap: newMap }
+      }
+      return { messagesMap: newMap }
+    }),
+
+  setLastMessageTruncatedForConversation: (convId, truncated) =>
+    set((state) => {
+      const newMap = updateLastAssistantInMap(state.messagesMap, convId, (last) => ({
+        ...last,
+        truncated,
       }))
       if (state.currentConversationId === convId) {
         return { messages: newMap[convId] || [], messagesMap: newMap }

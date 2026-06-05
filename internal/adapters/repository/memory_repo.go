@@ -62,7 +62,6 @@ func (r *MemoryRepoSQLite) GetByID(ctx context.Context, id models.MemoryID) (*en
 }
 
 // Search 关键词搜索记忆（简单 LIKE 匹配）。
-// TODO(作者): 向量语义检索待 DuckDB vss 扩展引入后实现 [Issue#015]。
 func (r *MemoryRepoSQLite) Search(ctx context.Context, query string, limit int) ([]*entity.HealthMemory, error) {
 	pattern := "%" + query + "%"
 	rows, err := r.db.QueryContext(ctx, `
@@ -80,8 +79,9 @@ func (r *MemoryRepoSQLite) Search(ctx context.Context, query string, limit int) 
 
 // SemanticSearch 语义向量检索。
 // 当前 SQLite 降级实现不支持向量索引，直接返回错误。
+// 注：项目已迁移至 sqlite-vec 方案，SemanticSearch 在此降级实现中保留为占位。
 func (r *MemoryRepoSQLite) SemanticSearch(ctx context.Context, embedding []float32, topK int) ([]*entity.HealthMemory, error) {
-	return nil, fmt.Errorf("semantic search requires DuckDB vss extension, current SQLite backend does not support vector index: %w", entity.ErrNotFound)
+	return nil, fmt.Errorf("semantic search not available in SQLite fallback, use sqlite-vec via EmbeddingRepository instead: %w", entity.ErrNotFound)
 }
 
 // ListByTier 按记忆层级查询。

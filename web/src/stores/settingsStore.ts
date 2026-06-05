@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import type { ConfidenceBarMode } from '@/components/confidence/types'
+import { SetDataRetentionDays } from '@wails/go/main/WailsApp'
 
 type Theme = 'light' | 'dark' | 'system'
 type ComplianceBarMode = 'always' | 'first' | 'off'
@@ -11,6 +13,8 @@ interface SettingsState {
   theme: Theme
   selectedModel: string
   complianceBarMode: ComplianceBarMode
+  showConfidenceBar: boolean
+  confidenceBarMode: ConfidenceBarMode
   autoCheckUpdate: boolean
   updateChannel: UpdateChannel
   desensitizationLevel: DesensitizationLevel
@@ -24,6 +28,8 @@ interface SettingsState {
   setTheme: (theme: Theme) => void
   setSelectedModel: (model: string) => void
   setComplianceBarMode: (mode: ComplianceBarMode) => void
+  setShowConfidenceBar: (show: boolean) => void
+  setConfidenceBarMode: (mode: ConfidenceBarMode) => void
   setAutoCheckUpdate: (enabled: boolean) => void
   setUpdateChannel: (channel: UpdateChannel) => void
   setDesensitizationLevel: (level: DesensitizationLevel) => void
@@ -41,6 +47,8 @@ export const useSettingsStore = create<SettingsState>()(
       theme: 'system',
       selectedModel: 'kimi-lite',
       complianceBarMode: 'always',
+      showConfidenceBar: true,
+      confidenceBarMode: 'compact',
       autoCheckUpdate: true,
       updateChannel: 'beta',
       desensitizationLevel: 'standard',
@@ -54,10 +62,18 @@ export const useSettingsStore = create<SettingsState>()(
       setTheme: (theme) => set({ theme }),
       setSelectedModel: (model) => set({ selectedModel: model }),
       setComplianceBarMode: (mode) => set({ complianceBarMode: mode }),
+      setShowConfidenceBar: (show) => set({ showConfidenceBar: show }),
+      setConfidenceBarMode: (mode) => set({ confidenceBarMode: mode }),
       setAutoCheckUpdate: (enabled) => set({ autoCheckUpdate: enabled }),
       setUpdateChannel: (channel) => set({ updateChannel: channel }),
       setDesensitizationLevel: (level) => set({ desensitizationLevel: level }),
-      setDataRetentionDays: (days) => set({ dataRetentionDays: days }),
+      setDataRetentionDays: (days) => {
+        set({ dataRetentionDays: days })
+        // 同步到后端配置文件，确保清理逻辑使用同一数值
+        SetDataRetentionDays(days).catch((err) => {
+          console.error('[settings] 同步数据留存期限到后端失败:', err)
+        })
+      },
       setActiveProviderId: (id) => set({ activeProviderId: id }),
       setActiveModelId: (id) => set({ activeModelId: id }),
       setProviderHealthStatus: (id, status) =>
@@ -73,6 +89,8 @@ export const useSettingsStore = create<SettingsState>()(
         theme: state.theme,
         selectedModel: state.selectedModel,
         complianceBarMode: state.complianceBarMode,
+        showConfidenceBar: state.showConfidenceBar,
+        confidenceBarMode: state.confidenceBarMode,
         autoCheckUpdate: state.autoCheckUpdate,
         updateChannel: state.updateChannel,
         desensitizationLevel: state.desensitizationLevel,
@@ -83,6 +101,16 @@ export const useSettingsStore = create<SettingsState>()(
         lastSeenVersionNotes: state.lastSeenVersionNotes,
         // providerHealthStatus 不持久化（运行时状态）
       }),
+      merge: (persistedState, currentState) => {
+        const persisted = persistedState as Partial<SettingsState>
+        return {
+          ...currentState,
+          ...persisted,
+          // 新字段兜底：旧 localStorage 中缺少时恢复默认值
+          confidenceBarMode: persisted.confidenceBarMode ?? currentState.confidenceBarMode,
+          showConfidenceBar: persisted.showConfidenceBar ?? currentState.showConfidenceBar,
+        }
+      },
     }
   )
 )

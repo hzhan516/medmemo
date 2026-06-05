@@ -71,18 +71,20 @@ describe('E2E: 合规流程', () => {
     })
   })
 
-  it('输入高风险内容 → 验证 L1 阻断级拦截 → 替换为标准提示语', async () => {
+  it('输入高风险内容 → 验证 L1 阻断级拦截 → 保留原文并追加合规提示', async () => {
     setMockHandlers({
       SendMessageStream: async (req: { conversation_id: string }) => {
         const convId = req.conversation_id
-        // 模拟后端返回 L1 阻断级内容后，通过 compliance event 推送
+        // 延迟确保前端 EventsOn listener 在 React effect 周期后已稳定注册
+        await new Promise((r) => setTimeout(r, 50))
+        // 模拟后端：流式推送原始 AI 回复，结束后通过 compliance event 追加 L1 提示
         EventsEmit('chat:stream_chunk', { type: 'start', payload: '', metadata: { conversation_id: convId } })
-        EventsEmit('chat:stream_chunk', { type: 'content', payload: '我无法提供医疗诊断或治疗建议。', metadata: { conversation_id: convId } })
+        EventsEmit('chat:stream_chunk', { type: 'content', payload: '你现在属于肥胖范畴，需要注意饮食控制。', metadata: { conversation_id: convId } })
         EventsEmit('chat:stream_chunk', { type: 'done', payload: '', metadata: { conversation_id: convId } })
         // 流式结束后推送合规事件
         EventsEmit('chat:stream:compliance', {
           conversation_id: convId,
-          level: 'L1_BLOCK',
+          level: 'L1_BLOCKED',
           warning: '',
           notice: '',
           replacedTerms: ['DIAGNOSIS_TERM'],
@@ -98,13 +100,21 @@ describe('E2E: 合规流程', () => {
     await user.type(textarea, '你确诊我得了什么病')
     await user.keyboard('{Enter}')
 
-    // 验证 L1 阻断提示
+    // 验证原始 AI 回复仍然显示（未被替换）
     await waitFor(() => {
-      expect(screen.getByText('内容已调整为合规表述')).toBeInTheDocument()
+      const state = useChatStore.getState()
+      const assistantMsgs = state.messages.filter((m) => m.role === 'assistant')
+      expect(assistantMsgs.length).toBeGreaterThan(0)
+      expect(assistantMsgs[assistantMsgs.length - 1].content).toContain('肥胖范畴')
     })
 
-    // 验证替换后的内容
-    expect(screen.getByText('我无法提供医疗诊断或治疗建议。')).toBeInTheDocument()
+    // 验证 L1 阻断提示出现在 DOM 中
+    await waitFor(() => {
+      expect(screen.getByText('内容风险提示（诊断 / 处方 / 治疗）')).toBeInTheDocument()
+    })
+
+    // 验证 L1 提示正文
+    expect(screen.getByText(/不能替代专业医疗诊断/)).toBeInTheDocument()
   })
 
   it('输入 L2 警告级内容 → 验证橙色高亮警告框 + 免责声明追加', async () => {

@@ -9,13 +9,18 @@ import (
 	"path/filepath"
 
 	"github.com/google/wire"
+	"github.com/viant/sqlite-vec/engine"
 	_ "modernc.org/sqlite"
 )
 
-// DuckDBConnector DuckDB 嵌入式数据库连接管理器。
+func init() {
+	// 必须在 sql.Open 之前注册，确保所有 SQLite 连接都能使用 vec_cosine / vec_l2
+	_ = engine.RegisterVectorFunctions(nil)
+}
+
+// DuckDBConnector DuckDB 嵌入式数据库连接管理器（已冻结，项目已降级至 SQLite）。
 type DuckDBConnector struct {
 	path string
-	// TODO(作者): 接入 DuckDB Go 驱动 [Issue#020]
 }
 
 // NewDuckDBConnector 创建 DuckDB 连接。
@@ -53,13 +58,26 @@ func NewSQLiteConnector(dataDir string) (*SQLiteConnector, error) {
 		return nil, fmt.Errorf("failed to open sqlite database: %w", err)
 	}
 
-	db.SetMaxOpenConns(10)
-	db.SetMaxIdleConns(5)
+	// 连接池配置：桌面端并发场景需要更大池子
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(10)
+
+	// 设置 busy_timeout：锁冲突时自动重试最多 5 秒
+	if _, err := db.Exec("PRAGMA busy_timeout = 5000"); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("failed to set busy timeout: %w", err)
+	}
 
 	// 启用外键约束
 	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
 		_ = db.Close() // 外键启用失败后的清理关闭，关闭错误非关键（上方已返回主错误）
 		return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
+	}
+
+	// WAL 模式提升并发读写性能
+	if _, err := db.Exec("PRAGMA journal_mode = WAL"); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("failed to set WAL journal mode: %w", err)
 	}
 
 	return &SQLiteConnector{db: db, path: dbPath}, nil

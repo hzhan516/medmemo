@@ -47,6 +47,14 @@ export function useWails() {
     return await WailsApp.GetConversations()
   }, [])
 
+  const getDeletedConversations = useCallback(async (): Promise<ConversationSummary[]> => {
+    return await WailsApp.GetDeletedConversations()
+  }, [])
+
+  const setDataRetentionDays = useCallback(async (days: number): Promise<void> => {
+    return await WailsApp.SetDataRetentionDays(days)
+  }, [])
+
   const getConversationMessages = useCallback(async (convID: string): Promise<MessageResponse[]> => {
     return await WailsApp.GetConversationMessages(convID)
   }, [])
@@ -168,11 +176,69 @@ export function useWails() {
     return await WailsApp.HardDeleteConversation(convID)
   }, [])
 
+  const getMemories = useCallback(async (limit: number, offset: number): Promise<main.MemoryItem[]> => {
+    return await WailsApp.GetMemories(limit, offset)
+  }, [])
+
+  const getMemoryByID = useCallback(async (factID: string): Promise<main.MemoryItem> => {
+    return await WailsApp.GetMemoryByID(factID)
+  }, [])
+
+  const deleteMemory = useCallback(async (factID: string): Promise<void> => {
+    return await WailsApp.DeleteMemory(factID)
+  }, [])
+
+  const searchMemories = useCallback(async (query: string): Promise<main.MemoryItem[]> => {
+    return await WailsApp.SearchMemories(query)
+  }, [])
+
+  const getPendingReviews = useCallback(async (limit: number, offset: number): Promise<main.MemoryItem[]> => {
+    return await WailsApp.GetPendingReviews(limit, offset)
+  }, [])
+
+  const approveFact = useCallback(async (factID: string): Promise<void> => {
+    return await WailsApp.ApproveFact(factID)
+  }, [])
+
+  const rejectFact = useCallback(async (factID: string): Promise<void> => {
+    return await WailsApp.RejectFact(factID)
+  }, [])
+
+  const getMemoryStats = useCallback(async (): Promise<main.MemoryStats> => {
+    return await WailsApp.GetMemoryStats()
+  }, [])
+
+  const getMemoriesBySession = useCallback(async (sessionID: string): Promise<main.MemoryItem[]> => {
+    return await WailsApp.GetMemoriesBySession(sessionID)
+  }, [])
+
+  const setMemoryInjectionEnabled = useCallback(async (enabled: boolean): Promise<void> => {
+    return await WailsApp.SetMemoryInjectionEnabled(enabled)
+  }, [])
+
+  const setSessionMemoryInjection = useCallback(async (sessionID: string, enabled: boolean): Promise<void> => {
+    return await WailsApp.SetSessionMemoryInjection(sessionID, enabled)
+  }, [])
+
+  const getEmbeddingStatus = useCallback(async (): Promise<main.EmbeddingStatusResponse> => {
+    return await WailsApp.GetEmbeddingStatus()
+  }, [])
+
+  const getEmbeddingModelDirPath = useCallback(async (): Promise<string> => {
+    return await WailsApp.GetEmbeddingModelDirPath()
+  }, [])
+
+  const openEmbeddingModelDir = useCallback(async (): Promise<void> => {
+    return await WailsApp.OpenEmbeddingModelDir()
+  }, [])
+
   return {
     sendMessage,
     sendMessageStream,
     stopGeneration,
     getConversations,
+    getDeletedConversations,
+    setDataRetentionDays,
     getConversationMessages,
     createConversation,
     getModels,
@@ -203,5 +269,19 @@ export function useWails() {
     deleteConversation,
     restoreConversation,
     hardDeleteConversation,
+    getMemories,
+    getMemoryByID,
+    deleteMemory,
+    searchMemories,
+    getPendingReviews,
+    approveFact,
+    rejectFact,
+    getMemoryStats,
+    getMemoriesBySession,
+    setMemoryInjectionEnabled,
+    setSessionMemoryInjection,
+    getEmbeddingStatus,
+    getEmbeddingModelDirPath,
+    openEmbeddingModelDir,
   }
 }

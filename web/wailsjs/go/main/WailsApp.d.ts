@@ -54,7 +54,14 @@ export function GetConversationMessages(arg1:string):Promise<Array<main.MessageR
 
 export function GetConversations():Promise<Array<main.ConversationSummary>>;
 
+export function GetDeletedConversations():Promise<Array<main.ConversationSummary>>;
+
+export function SetDataRetentionDays(arg1:number):Promise<void>;
+
 export function GetDisclaimerStatus():Promise<main.DisclaimerStatus>;
+export function GetEmbeddingStatus():Promise<main.EmbeddingStatusResponse>;
+export function GetEmbeddingModelDirPath():Promise<string>;
+export function OpenEmbeddingModelDir():Promise<void>;
 
 export function GetModels():Promise<Array<main.ModelInfo>>;
 
@@ -69,6 +76,28 @@ export function GetUpdateSettings():Promise<main.UpdateSettingsResponse>;
 export function GetVersion():Promise<string>;
 
 export function GetVersionNotes():Promise<Array<entity.VersionNote>>;
+
+export function GetMemories(arg1:number,arg2:number):Promise<Array<main.MemoryItem>>;
+
+export function GetMemoryByID(arg1:string):Promise<main.MemoryItem>;
+
+export function DeleteMemory(arg1:string):Promise<void>;
+
+export function SearchMemories(arg1:string):Promise<Array<main.MemoryItem>>;
+
+export function GetPendingReviews(arg1:number,arg2:number):Promise<Array<main.MemoryItem>>;
+
+export function ApproveFact(arg1:string):Promise<void>;
+
+export function RejectFact(arg1:string):Promise<void>;
+
+export function GetMemoryStats():Promise<main.MemoryStats>;
+
+export function GetMemoriesBySession(arg1:string):Promise<Array<main.MemoryItem>>;
+
+export function SetMemoryInjectionEnabled(arg1:boolean):Promise<void>;
+
+export function SetSessionMemoryInjection(arg1:string,arg2:boolean):Promise<void>;
 
 export function HardDeleteConversation(arg1:string):Promise<void>;
 

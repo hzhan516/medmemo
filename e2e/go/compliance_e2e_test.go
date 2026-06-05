@@ -73,7 +73,7 @@ func TestE2E_Compliance_L1Block(t *testing.T) {
 
 	convRepo := repository.NewConversationRepoSQLite(conn)
 	checker := &mockComplianceChecker{interceptor: comp}
-	chatOrch := usecase.NewChatOrchestrator(&mockLLMClientFactory{client: &mockLLMClient{chatReply: "你患有糖尿病，需要治疗。"}}, newMockProviderStore(), &mockMemoryRepository{}, &mockSensitiveDetector{}, checker, nil, &mockMemoryQuerier{})
+	chatOrch := usecase.NewChatOrchestrator(&mockLLMClientFactory{client: &mockLLMClient{chatReply: "你患有糖尿病，需要治疗。"}}, newMockProviderStore(), &mockMemoryRepository{}, &mockSensitiveDetector{}, checker, nil, &mockMemoryQuerier{}, nil)
 
 	ctx := context.Background()
 	conv := entity.NewConversation(models.ProviderKimi)
@@ -87,8 +87,8 @@ func TestE2E_Compliance_L1Block(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Execute 内部已完成合规检测，L1 内容会被替换为 BLOCKED_TEXT
-	assert.Contains(t, resp.Reply, "BLOCKED_TEXT")
+	// L1 阻断保留原始 AI 回复，仅在 Warnings 中标记 L1_BLOCKED
+	assert.Contains(t, resp.Reply, "你患有糖尿病，需要治疗。")
 	assert.Contains(t, resp.Warnings, "L1_BLOCKED")
 }
 
@@ -146,7 +146,7 @@ func TestE2E_Compliance_PipelineEndToEnd(t *testing.T) {
 
 	// 使用含 L1 触发词的回复
 	mockLLM := &mockLLMClient{chatReply: "你患有高血压病，建议服用药物。"}
-	chatOrch := usecase.NewChatOrchestrator(&mockLLMClientFactory{client: mockLLM}, newMockProviderStore(), &mockMemoryRepository{}, &mockSensitiveDetector{}, checker, nil, &mockMemoryQuerier{})
+	chatOrch := usecase.NewChatOrchestrator(&mockLLMClientFactory{client: mockLLM}, newMockProviderStore(), &mockMemoryRepository{}, &mockSensitiveDetector{}, checker, nil, &mockMemoryQuerier{}, nil)
 
 	ctx := context.Background()
 	conv := entity.NewConversation(models.ProviderKimi)
@@ -167,8 +167,8 @@ func TestE2E_Compliance_PipelineEndToEnd(t *testing.T) {
 	aiMsg := &entity.Message{ID: fmt.Sprintf("msg_%d", time.Now().UnixNano()), Role: models.RoleAssistant, Content: resp.Reply, Timestamp: time.Now()}
 	require.NoError(t, msgRepo.Save(ctx, conv.ID, aiMsg))
 
-	// Execute 内部已完成合规检测，L1 内容被替换为 BLOCKED_TEXT
-	assert.Contains(t, resp.Reply, "BLOCKED_TEXT")
+	// L1 阻断保留原始 AI 回复，仅在 Warnings 中标记 L1_BLOCKED
+	assert.Contains(t, resp.Reply, "你患有高血压病，建议服用药物。")
 	assert.Contains(t, resp.Warnings, "L1_BLOCKED")
 
 	// 验证消息已持久化到数据库（按时间降序）
@@ -176,7 +176,7 @@ func TestE2E_Compliance_PipelineEndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, msgs, 2)
 	assert.Equal(t, models.RoleAssistant, msgs[0].Role)
-	assert.Contains(t, msgs[0].Content, "BLOCKED_TEXT")
+	assert.Contains(t, msgs[0].Content, "你患有高血压病，建议服用药物。")
 	assert.Equal(t, models.RoleUser, msgs[1].Role)
 	assert.Equal(t, "我头晕", msgs[1].Content)
 }
