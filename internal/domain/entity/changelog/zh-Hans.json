@@ -177,5 +177,20 @@
       "前端构建修复（prismjs chunk 顺序、TypeScript 6.0、Vite 8 兼容）",
       "Wire 注入歧义字符串修复（Wails 绑定恢复）"
     ]
+  },
+  {
+    "version": "v1.1.1",
+    "title": "记忆管理质量硬版本",
+    "features": [
+      "确定性事实质量门禁 FactQualityGate（零外部依赖，规则覆盖询问意图/AI能力限制/工具建议/无数值属性）",
+      "FactRepoSQLite.Delete 显式事务删除 embedding + fact，避免 stale 向量污染召回",
+      "Embedding 生命周期收紧：pending 不生成 embedding，rejected 清理已有 embedding",
+      "用户事实优先：ExtractFactsFromReply 与 Extract 仅处理 RoleUser 消息，排除 AI 回复",
+      "事实抽取 Prompt 收紧约束与正反例（\"我现在体重多少？\"→[] / \"我体重110公斤\"→[...]）",
+      "MemoryPage 乐观删除 + 详情弹窗清理，提升删除刷新体验"
+    ],
+    "fixes": [
+      "修复 tx.Rollback() 返回值未检查导致的 golangci-lint errcheck 失败"
+    ]
   }
 ]

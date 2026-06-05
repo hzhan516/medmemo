@@ -102,12 +102,18 @@ export function MemoryPage() {
 
   const handleDelete = async (factID: string) => {
     if (!confirm('确定要删除这条记忆吗？此操作不可恢复。')) return
+    // 乐观移除：立即更新本地状态，避免 UI 看起来没刷新
+    setItems(prev => prev.filter(item => item.fact_id !== factID))
+    setDetail(prev => prev?.fact_id === factID ? null : prev)
     try {
       await deleteMemory(factID)
       await loadItems()
       await loadStats()
     } catch (err) {
       console.error('Failed to delete:', err)
+      // 删除失败时回滚：重新拉取后端权威数据恢复列表
+      await loadItems()
+      await loadStats()
     }
   }
 
@@ -291,7 +297,7 @@ export function MemoryPage() {
                   </Button>
                 </>
               )}
-              <Button size="sm" variant="destructive" onClick={() => { handleDelete(detail.fact_id); setDetail(null) }}>
+              <Button size="sm" variant="destructive" onClick={async () => { await handleDelete(detail.fact_id) }}>
                 <Trash2 size={14} className="mr-1" /> 删除
               </Button>
             </div>

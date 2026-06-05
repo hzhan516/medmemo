@@ -490,3 +490,28 @@ func TestChatOrchestrator_resolveLLMClient_contextDeadline(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, client)
 }
+
+// TestChatOrchestrator_ExtractFactsFromReply_UsesUserContentOnly 验证事实提取仅使用用户内容。
+func TestChatOrchestrator_ExtractFactsFromReply_UsesUserContentOnly(t *testing.T) {
+	mock := &mockLLMForFactExtraction{
+		response: `[{"subject":"用户","predicate":"体重是","object":"110公斤","confidence":0.95}]`,
+	}
+	extractor := NewFactExtractor(mock)
+	facts, err := extractor.ParseFacts("我体重110公斤")
+	require.NoError(t, err)
+	require.Len(t, facts, 1)
+	assert.Equal(t, "110公斤", facts[0].Object)
+
+	// 模拟 ChatOrchestrator 调用：传入 userContent + aiReply，
+	// 但底层 extractor.ParseFacts 应只接收 userContent
+	mock2 := &mockLLMClient{chatReply: `[{"subject":"AI","predicate":"无法告知","object":"体重","confidence":0.8}]`}
+	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
+	factory := &mockLLMClientFactory{client: mock2}
+	store := &mockProviderStore{}
+	orch := NewChatOrchestrator(factory, store, nil, nil, comp, nil, nil, NewConfidenceAggregator())
+
+	facts, err = orch.ExtractFactsFromReply(context.Background(), "我体重110公斤", "AI无法知道你的体重", "test-provider")
+	require.NoError(t, err)
+	// AI 回复内容不应被抽成事实，质量门禁也会过滤 AI subject
+	assert.Empty(t, facts, "不应从 AI 回复中提取事实")
+}
