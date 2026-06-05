@@ -411,15 +411,8 @@ func (c *ChatOrchestrator) ExtractFactsFromReply(ctx context.Context, userConten
 	c.factExtractLastCall = time.Now()
 	c.factExtractMu.Unlock()
 
-	// 拼接完整对话内容作为提取源；用户消息和 AI 回复都可能包含事实
-	combined := userContent
-	if aiReply != "" {
-		if combined != "" {
-			combined += "\n"
-		}
-		combined += aiReply
-	}
-	if combined == "" {
+	// 只从用户消息中提取事实，避免把 AI 回复中的建议、能力限制等抽成记忆。
+	if userContent == "" {
 		return nil, nil
 	}
 	client, err := c.resolveLLMClient(ctx, providerID)
@@ -428,7 +421,11 @@ func (c *ChatOrchestrator) ExtractFactsFromReply(ctx context.Context, userConten
 	}
 	adapter := &llmClientAdapter{client: client}
 	extractor := NewFactExtractor(adapter)
-	return extractor.ParseFacts(combined)
+	facts, err := extractor.ParseFacts(userContent)
+	if err != nil {
+		return nil, err
+	}
+	return ApplyFactQualityGate(facts), nil
 }
 
 // CheckCompliance 对文本执行合规检测。

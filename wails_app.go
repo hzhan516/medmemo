@@ -619,21 +619,10 @@ func (a *WailsApp) extractFactsAsync(userContent, aiReply, providerID string) {
 			fmt.Printf("[extractFactsAsync] 保存事实失败 %s: %v\n", f.FactID, err)
 			continue
 		}
-		// 生成并保存 embedding，语义搜索依赖此数据
-		if a.embeddingSvc != nil && a.embeddingRepo != nil {
-			embedText := fmt.Sprintf("%s %s %s", f.Subject, f.Predicate, f.Object)
-			vector, embedErr := a.embeddingSvc.EmbedSingle(ctx, embedText)
-			if embedErr == nil {
-				emb := entity.NewSemanticEmbedding(f.FactID, vector, "all-MiniLM-L6-v2")
-				if saveErr := a.embeddingRepo.Save(ctx, emb); saveErr != nil {
-					fmt.Printf("[extractFactsAsync] 保存 embedding 失败 %s: %v\n", f.FactID, saveErr)
-				}
-			} else {
-				fmt.Printf("[extractFactsAsync] 生成 embedding 失败 %s: %v\n", f.FactID, embedErr)
-			}
-		}
+		// pending fact 不生成 embedding，embedding 只在审批通过后生成，
+		// 避免未审核或后续被拒绝的事实污染向量召回空间。
 	}
-	fmt.Printf("[extractFactsAsync] 提取并保存 %d 条事实\n", len(facts))
+	fmt.Printf("[extractFactsAsync] 提取并保存 %d 条待审核事实\n", len(facts))
 }
 
 // backfillEmbeddings 补全已有事实中缺失的 embedding。
@@ -2465,6 +2454,13 @@ func (a *WailsApp) RejectFact(factID string) error {
 
 	if err := a.factRepo.UpdateStatus(ctx, factID, entity.FactStatusRejected); err != nil {
 		return fmt.Errorf("failed to reject fact: %w", err)
+	}
+
+	// 拒绝时清理可能已存在的 embedding，避免历史版本或异常写入留下的 stale 向量
+	if a.embeddingRepo != nil {
+		if delErr := a.embeddingRepo.DeleteByFactID(ctx, factID); delErr != nil {
+			fmt.Printf("[RejectFact] 清理 embedding 失败 %s: %v\n", factID, delErr)
+		}
 	}
 
 	// 记录审计日志（失败不影响主流程）
