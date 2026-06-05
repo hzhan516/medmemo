@@ -128,8 +128,8 @@ func TestFactExtractor_Extract(t *testing.T) {
 	assert.Equal(t, "用户", facts[0].Subject)
 	assert.Equal(t, "患有", facts[0].Predicate)
 	assert.Equal(t, "头痛", facts[0].Object)
-	// source_msg_ids 应被正确关联
-	require.Len(t, facts[0].SourceMsgIDs, 2)
+	// source_msg_ids 只关联用户消息（RoleUser），排除 AI 回复
+	require.Len(t, facts[0].SourceMsgIDs, 1)
 }
 
 func TestFactExtractor_Extract_RateLimited(t *testing.T) {

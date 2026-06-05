@@ -65,7 +65,9 @@ func (f *FactExtractor) Extract(ctx context.Context, dialogues []*entity.RawDial
 
 	var contents []string
 	for _, d := range dialogues {
-		contents = append(contents, d.Content)
+		if d.Role == entity.RoleUser {
+			contents = append(contents, d.Content)
+		}
 	}
 	combined := strings.Join(contents, "\n")
 
@@ -80,10 +82,15 @@ func (f *FactExtractor) Extract(ctx context.Context, dialogues []*entity.RawDial
 		return nil, err
 	}
 
-	// 关联 source_msg_ids
-	msgIDs := make([]string, len(dialogues))
-	for i, d := range dialogues {
-		msgIDs[i] = d.MessageID
+	// 应用确定性质量门禁，过滤 LLM 可能产生的噪音事实
+	facts = ApplyFactQualityGate(facts)
+
+	// 关联 source_msg_ids：只保留用户消息的 message_id
+	var msgIDs []string
+	for _, d := range dialogues {
+		if d.Role == entity.RoleUser {
+			msgIDs = append(msgIDs, d.MessageID)
+		}
 	}
 	for _, fact := range facts {
 		fact.SourceMsgIDs = msgIDs
@@ -172,18 +179,32 @@ func factTripleKey(subject, predicate, object string) string {
 }
 
 func buildFactExtractionPrompt(text string) string {
-	return fmt.Sprintf(`从以下对话中提取结构化事实，以 JSON 数组格式返回。
+	return fmt.Sprintf(`从以下用户陈述中提取结构化事实，以 JSON 数组格式返回。
 每个事实包含 subject(主体)、predicate(谓词)、object(客体)、confidence(置信度 0-1)。
 如果无法提取事实，返回空数组 []。
 
-对话内容：
+用户陈述：
 %s
 
-要求：
-1. subject 通常是"用户"或对话中提到的具体人物
-2. predicate 是动作或状态，如"患有"、"服用"、"检查"
-3. object 是具体的疾病、药品、症状等
-4. confidence 基于信息明确程度打分
+约束（必须遵守）：
+1. 只提取用户明确陈述的稳定事实，不提取问题、请求、意图。
+2. 不提取 AI 回复内容、AI 能力限制、建议或提醒。
+3. 个人属性（体重/身高/年龄/BMI/血压/血糖等）必须有具体数值，不能只提取属性名称。
+4. subject 通常是"用户"或对话中提到的具体人物。
+5. predicate 是动作或状态，如"患有"、"服用"、"检查"、"体重是"。
+6. object 是具体的疾病、药品、症状、数值等。
+7. confidence 基于信息明确程度打分。
+
+正例：
+- "我体重110公斤" => [{"subject":"用户","predicate":"体重是","object":"110公斤","confidence":0.95}]
+- "我有偏头痛" => [{"subject":"用户","predicate":"患有","object":"偏头痛","confidence":0.9}]
+
+反例（必须返回 []）：
+- "我现在体重多少？" => []
+- "AI无法知道你的体重，需要体重秤" => []
+- "你需要使用血压计测量" => []
+- "用户 询问 体重" => []
+- "用户 体重" => [] （缺少具体值）
 
 输出格式示例：
 [{"subject":"用户","predicate":"患有","object":"偏头痛","confidence":0.9}]`, text)

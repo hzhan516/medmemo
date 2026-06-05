@@ -308,3 +308,45 @@ func TestFactRepo_ListByStatus_Empty(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, results, "空表查询应返回空切片")
 }
+
+func TestFactRepo_Delete_DeletesEmbedding(t *testing.T) {
+	tmpDir := t.TempDir()
+	connector, err := database.NewSQLiteConnector(tmpDir)
+	require.NoError(t, err)
+	defer connector.Close()
+
+	ctx := context.Background()
+	err = connector.Migrate(ctx)
+	require.NoError(t, err)
+
+	factRepo := NewFactRepoSQLite(connector)
+	embRepo := NewEmbeddingRepoSQLite(connector)
+
+	// 插入事实与 embedding
+	f := entity.NewExtractedFact("用户", "患有", "头痛", 0.8, []string{"msg_001"})
+	f.FactID = "fact_del_emb"
+	require.NoError(t, factRepo.Save(ctx, f))
+
+	vector := make([]float32, entity.EmbeddingDimension)
+	for i := range vector {
+		vector[i] = float32(i) * 0.001
+	}
+	emb := entity.NewSemanticEmbedding("fact_del_emb", vector, "all-MiniLM-L6-v2")
+	require.NoError(t, embRepo.Save(ctx, emb))
+
+	// 确认 embedding 存在
+	_, err = embRepo.GetByFactID(ctx, "fact_del_emb")
+	require.NoError(t, err)
+
+	// 删除事实
+	err = factRepo.Delete(ctx, "fact_del_emb")
+	require.NoError(t, err)
+
+	// 事实应已删除
+	_, err = factRepo.GetByID(ctx, "fact_del_emb")
+	assert.ErrorIs(t, err, entity.ErrFactNotFound)
+
+	// embedding 也应同步删除
+	_, err = embRepo.GetByFactID(ctx, "fact_del_emb")
+	assert.ErrorIs(t, err, entity.ErrEmbeddingNotFound)
+}

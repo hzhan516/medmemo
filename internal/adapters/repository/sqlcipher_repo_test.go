@@ -85,3 +85,38 @@ func TestRepositorySave_SQLCipherIdempotentCompatibility(t *testing.T) {
 	assert.Equal(t, e1.EmbeddingID, gotEmbedding.EmbeddingID)
 	assert.Equal(t, vector1, gotEmbedding.Vector)
 }
+
+func TestEmbeddingRepo_SearchSimilar_SQLCipherFallback(t *testing.T) {
+	factRepo, embeddingRepo, cleanup := setupSQLCipherRepositoryTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	assert.False(t, embeddingRepo.vectorSQLAvailable)
+
+	weightFact := entity.NewExtractedFact("用户", "体重是", "110公斤", 0.95, []string{"msg_weight"})
+	weightFact.FactID = "fact_weight"
+	weightFact.Status = entity.FactStatusApproved
+	require.NoError(t, factRepo.Save(ctx, weightFact))
+
+	bloodPressureFact := entity.NewExtractedFact("用户", "患有", "高血压", 0.9, []string{"msg_bp"})
+	bloodPressureFact.FactID = "fact_bp"
+	bloodPressureFact.Status = entity.FactStatusApproved
+	require.NoError(t, factRepo.Save(ctx, bloodPressureFact))
+
+	weightVector := make([]float32, entity.EmbeddingDimension)
+	weightVector[0] = 1
+	require.NoError(t, embeddingRepo.Save(ctx, entity.NewSemanticEmbedding(weightFact.FactID, weightVector, "all-MiniLM-L6-v2")))
+
+	bloodPressureVector := make([]float32, entity.EmbeddingDimension)
+	bloodPressureVector[1] = 1
+	require.NoError(t, embeddingRepo.Save(ctx, entity.NewSemanticEmbedding(bloodPressureFact.FactID, bloodPressureVector, "all-MiniLM-L6-v2")))
+
+	queryVector := make([]float32, entity.EmbeddingDimension)
+	queryVector[0] = 1
+
+	results, err := embeddingRepo.SearchSimilar(ctx, queryVector, 1)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, weightFact.FactID, results[0].FactID)
+	assert.InDelta(t, 1.0, results[0].Similarity, 0.001)
+}
