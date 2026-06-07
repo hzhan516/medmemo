@@ -106,6 +106,26 @@ func (s *wailsStubFactRepo) FindBySubject(ctx context.Context, subject string) (
 func (s *wailsStubFactRepo) FindBySession(ctx context.Context, sessionID string) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
+func (s *wailsStubFactRepo) FindLatestApprovedByPredicates(ctx context.Context, subject string, predicates []string) (*entity.ExtractedFact, error) {
+	var latest *entity.ExtractedFact
+	for _, f := range s.facts {
+		if f.Subject != subject || f.Status != entity.FactStatusApproved {
+			continue
+		}
+		for _, p := range predicates {
+			if f.Predicate == p {
+				if latest == nil || f.CreatedAt.After(latest.CreatedAt) {
+					latest = f
+				}
+				break
+			}
+		}
+	}
+	if latest == nil {
+		return nil, entity.ErrFactNotFound
+	}
+	return latest, nil
+}
 
 var _ repository.FactRepository = (*wailsStubFactRepo)(nil)
 

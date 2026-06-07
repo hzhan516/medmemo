@@ -210,6 +210,9 @@ func (m *mockFactRepo) FindBySubject(ctx context.Context, subject string) ([]*en
 func (m *mockFactRepo) FindBySession(ctx context.Context, sessionID string) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
+func (m *mockFactRepo) FindLatestApprovedByPredicates(ctx context.Context, subject string, predicates []string) (*entity.ExtractedFact, error) {
+	return nil, entity.ErrFactNotFound
+}
 
 func TestFactExtractor_ParseFacts_rateLimitExceeded(t *testing.T) {
 	// 直接构造 FactExtractor，设置较低的速率限制以便快速触发限流
