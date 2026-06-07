@@ -19,7 +19,7 @@ const (
 type IntentConfidence int
 
 const (
-	ConfidenceHigh IntentConfidence = iota + 1 // 可本地短路
+	ConfidenceHigh   IntentConfidence = iota + 1 // 可本地短路
 	ConfidenceMedium                             // 仅用于 query expansion，不直接本地回答
 	ConfidenceLow                                // 不走短路，避免误判为医疗建议
 )

@@ -134,20 +134,6 @@
     ]
   },
   {
-    "version": "v1.1.2",
-    "title": "同义问法召回已审批事实（本地 Intent 短路）",
-    "features": [
-      "本地 Intent/Alias 映射（体重/身高/年龄/过敏/用药 5 类个人事实）",
-      "QueryExpansionService 查询规范化（去标点/全半角转换/合并空白）",
-      "IntentResolver 三级置信度分级（High 本地短路 / Medium 检索扩展 / Low 阻断）",
-      "高置信个人事实查询本地短路回答（Execute/StreamExecute 入口前置，零云端调用）",
-      "LocalAnswerService 固定模板回答（只复述已记录事实，不输出医疗建议）",
-      "FactRepository.FindLatestApprovedByPredicates（多 predicate IN 查询，仅返回 approved）",
-      "误触发防护：阻断后缀（怎么办/该吃/怎么治）+ 模糊 query（缺少主语代词）不触发短路"
-    ],
-    "fixes": []
-  },
-  {
     "version": "v1.1.0",
     "title": "分层长期记忆池 + 回答置信度机制",
     "features": [
@@ -191,5 +177,19 @@
       "前端构建修复（prismjs chunk 顺序、TypeScript 6.0、Vite 8 兼容）",
       "Wire 注入歧义字符串修复（Wails 绑定恢复）"
     ]
+  },
+  {
+    "version": "v1.1.2",
+    "title": "同义问法召回已审批事实（本地 Intent 短路）",
+    "features": [
+      "本地 Intent/Alias 映射（体重/身高/年龄/过敏/用药 5 类个人事实）",
+      "QueryExpansionService 查询规范化（去标点/全半角转换/合并空白）",
+      "IntentResolver 三级置信度分级（High 本地短路 / Medium 检索扩展 / Low 阻断）",
+      "高置信个人事实查询本地短路回答（Execute/StreamExecute 入口前置，零云端调用）",
+      "LocalAnswerService 固定模板回答（只复述已记录事实，不输出医疗建议）",
+      "FactRepository.FindLatestApprovedByPredicates（多 predicate IN 查询，仅返回 approved）",
+      "误触发防护：阻断后缀（怎么办/该吃/怎么治）+ 模糊 query（缺少主语代词）不触发短路"
+    ],
+    "fixes": []
   }
 ]

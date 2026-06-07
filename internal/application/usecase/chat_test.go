@@ -127,9 +127,9 @@ var _ MemoryQuerier = (*mockMemoryQuerier)(nil)
 
 // mockFactRepository 实现 repository.FactRepository 接口的手动 Mock。
 type mockFactRepository struct {
-	facts map[string]*entity.ExtractedFact
+	facts       map[string]*entity.ExtractedFact
 	byPredicate map[string][]*entity.ExtractedFact
-	err   error
+	err         error
 }
 
 func (m *mockFactRepository) Save(ctx context.Context, f *entity.ExtractedFact) error { return nil }
