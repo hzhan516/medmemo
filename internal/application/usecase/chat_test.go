@@ -693,7 +693,7 @@ func TestChatOrchestrator_ExtractFactsFromReply_UsesUserContentOnly(t *testing.T
 	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
 	factory := &mockLLMClientFactory{client: mock2}
 	store := &mockProviderStore{}
-	orch := NewChatOrchestrator(factory, store, nil, nil, comp, nil, nil, NewConfidenceAggregator(), &mockFactRepository{}, NewIntentResolver(NewQueryExpansionService()), NewLocalAnswerService())
+	orch := NewChatOrchestrator(factory, store, nil, nil, comp, nil, nil, NewConfidenceAggregator())
 
 	facts, err = orch.ExtractFactsFromReply(context.Background(), "我体重110公斤", "AI无法知道你的体重", "test-provider")
 	require.NoError(t, err)
