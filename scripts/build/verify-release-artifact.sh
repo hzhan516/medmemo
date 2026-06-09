@@ -5,18 +5,22 @@ PLATFORM="${1:-linux}"
 
 verify_binary() {
     local bin="$1"
+
     if [ ! -f "$bin" ]; then
         echo "ERROR: binary not found: $bin"
         exit 1
     fi
+
     if ! strings "$bin" | grep 'web/dist/index.html' >/dev/null 2>&1; then
         echo "ERROR: web/dist/index.html not embedded in $bin"
         exit 1
     fi
+
     if ! strings "$bin" | grep 'web/dist/assets/index-' >/dev/null 2>&1; then
         echo "ERROR: web/dist/assets/index-* not embedded in $bin"
         exit 1
     fi
+
     echo "OK: $bin contains embedded frontend assets"
 }
 

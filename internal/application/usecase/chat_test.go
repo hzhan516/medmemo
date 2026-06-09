@@ -11,6 +11,7 @@ import (
 	"github.com/hzhan516/medmemo/internal/application"
 	"github.com/hzhan516/medmemo/internal/application/port"
 	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/internal/domain/repository"
 	"github.com/hzhan516/medmemo/pkg/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -124,18 +125,72 @@ func (m *mockMemoryQuerier) RetrieveForContext(ctx context.Context, query, sessi
 
 var _ MemoryQuerier = (*mockMemoryQuerier)(nil)
 
+// mockFactRepository 实现 repository.FactRepository 接口的手动 Mock。
+type mockFactRepository struct {
+	facts       map[string]*entity.ExtractedFact
+	byPredicate map[string][]*entity.ExtractedFact
+	err         error
+}
+
+func (m *mockFactRepository) Save(ctx context.Context, f *entity.ExtractedFact) error { return nil }
+func (m *mockFactRepository) GetByID(ctx context.Context, factID string) (*entity.ExtractedFact, error) {
+	f, ok := m.facts[factID]
+	if !ok {
+		return nil, entity.ErrFactNotFound
+	}
+	return f, nil
+}
+func (m *mockFactRepository) ListByStatus(ctx context.Context, status entity.FactStatus, offset, limit int) ([]*entity.ExtractedFact, error) {
+	return nil, nil
+}
+func (m *mockFactRepository) ListPending(ctx context.Context, offset, limit int) ([]*entity.ExtractedFact, error) {
+	return nil, nil
+}
+func (m *mockFactRepository) UpdateStatus(ctx context.Context, factID string, status entity.FactStatus) error {
+	return nil
+}
+func (m *mockFactRepository) Delete(ctx context.Context, factID string) error { return nil }
+func (m *mockFactRepository) GetStats(ctx context.Context) (total, approved, rejected, pending int64, err error) {
+	return 0, 0, 0, 0, nil
+}
+func (m *mockFactRepository) ListAllSubjects(ctx context.Context) ([]string, error) {
+	return nil, nil
+}
+func (m *mockFactRepository) FindBySubject(ctx context.Context, subject string) ([]*entity.ExtractedFact, error) {
+	return nil, nil
+}
+func (m *mockFactRepository) FindBySession(ctx context.Context, sessionID string) ([]*entity.ExtractedFact, error) {
+	return nil, nil
+}
+func (m *mockFactRepository) FindLatestApprovedByPredicates(ctx context.Context, subject string, predicates []string) (*entity.ExtractedFact, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	for _, p := range predicates {
+		if facts, ok := m.byPredicate[p]; ok && len(facts) > 0 {
+			return facts[0], nil
+		}
+	}
+	return nil, entity.ErrFactNotFound
+}
+
+var _ repository.FactRepository = (*mockFactRepository)(nil)
+
 // newTestOrchestrator 创建带有全量 Mock 依赖的 ChatOrchestrator。
-func newTestOrchestrator(mock *mockLLMClient, comp *RuleComplianceChecker, deid Deidentifier, retriever MemoryQuerier) *ChatOrchestrator {
+func newTestOrchestrator(mock port.LLMClient, comp *RuleComplianceChecker, deid Deidentifier, retriever MemoryQuerier, factRepo repository.FactRepository) *ChatOrchestrator {
 	factory := &mockLLMClientFactory{client: mock}
 	store := &mockProviderStore{}
-	return NewChatOrchestrator(factory, store, nil, nil, comp, deid, retriever, NewConfidenceAggregator())
+	if factRepo == nil {
+		factRepo = &mockFactRepository{}
+	}
+	return NewChatOrchestrator(factory, store, nil, nil, comp, deid, retriever, NewConfidenceAggregator(), factRepo, NewIntentResolver(NewQueryExpansionService()), NewLocalAnswerService())
 }
 
 // TestChatOrchestrator_Execute_Success 验证非流式对话正常返回。
 func TestChatOrchestrator_Execute_Success(t *testing.T) {
 	mock := &mockLLMClient{chatReply: "你好，有什么可以帮你的？"}
 	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
-	orch := newTestOrchestrator(mock, comp, nil, nil)
+	orch := newTestOrchestrator(mock, comp, nil, nil, nil)
 
 	req := ChatRequest{
 		ConversationID: "conv-1",
@@ -153,7 +208,7 @@ func TestChatOrchestrator_Execute_Success(t *testing.T) {
 func TestChatOrchestrator_Execute_Error(t *testing.T) {
 	mock := &mockLLMClient{chatErr: fmt.Errorf("network timeout")}
 	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
-	orch := newTestOrchestrator(mock, comp, nil, nil)
+	orch := newTestOrchestrator(mock, comp, nil, nil, nil)
 
 	req := ChatRequest{
 		Messages:   []models.Message{{Role: models.RoleUser, Content: "test"}},
@@ -177,7 +232,7 @@ func TestChatOrchestrator_Execute_WithDeidentify(t *testing.T) {
 			Placeholder:  map[string]string{"{{EMAIL_abc12345}}": "test@example.com"},
 		},
 	}
-	orch := newTestOrchestrator(mock, comp, deid, nil)
+	orch := newTestOrchestrator(mock, comp, deid, nil, nil)
 
 	req := ChatRequest{
 		Messages:   []models.Message{{Role: models.RoleUser, Content: "联系我 test@example.com"}},
@@ -198,7 +253,7 @@ func TestChatOrchestrator_Execute_DeidentifyFallback(t *testing.T) {
 	mock := &mockLLMClient{chatReply: "明白"}
 	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
 	deid := &mockDeidentifier{err: fmt.Errorf("pipeline unavailable")}
-	orch := newTestOrchestrator(mock, comp, deid, nil)
+	orch := newTestOrchestrator(mock, comp, deid, nil, nil)
 
 	req := ChatRequest{
 		Messages:   []models.Message{{Role: models.RoleUser, Content: "原始内容"}},
@@ -223,7 +278,7 @@ func TestChatOrchestrator_Execute_WithMemory(t *testing.T) {
 			{Content: "用户此前提到有高血压病史"},
 		},
 	}
-	orch := newTestOrchestrator(mock, comp, nil, retriever)
+	orch := newTestOrchestrator(mock, comp, nil, retriever, nil)
 
 	req := ChatRequest{
 		Messages:   []models.Message{{Role: models.RoleUser, Content: "最近头晕"}},
@@ -252,7 +307,7 @@ func TestChatOrchestrator_Execute_Restore(t *testing.T) {
 			Placeholder:  map[string]string{"{{EMAIL_abc12345}}": "test@example.com"},
 		},
 	}
-	orch := newTestOrchestrator(mock, comp, deid, nil)
+	orch := newTestOrchestrator(mock, comp, deid, nil, nil)
 
 	req := ChatRequest{
 		Messages:   []models.Message{{Role: models.RoleUser, Content: "联系我 test@example.com"}},
@@ -277,7 +332,7 @@ func TestChatOrchestrator_Execute_LocalModelSkipDeid(t *testing.T) {
 			Placeholder:  map[string]string{"{{EMAIL_abc12345}}": "test@example.com"},
 		},
 	}
-	orch := newTestOrchestrator(mock, comp, deid, nil)
+	orch := newTestOrchestrator(mock, comp, deid, nil, nil)
 
 	req := ChatRequest{
 		Messages:   []models.Message{{Role: models.RoleUser, Content: "联系我 test@example.com"}},
@@ -293,11 +348,141 @@ func TestChatOrchestrator_Execute_LocalModelSkipDeid(t *testing.T) {
 	assert.Equal(t, "联系我 test@example.com", mock.lastMessages[0].Content)
 }
 
+// TestChatOrchestrator_Execute_LocalAnswer_Weight 验证高置信体重查询本地短路回答。
+func TestChatOrchestrator_Execute_LocalAnswer_Weight(t *testing.T) {
+	mock := &mockLLMClient{chatReply: "不应该调用我"}
+	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
+	factRepo := &mockFactRepository{
+		byPredicate: map[string][]*entity.ExtractedFact{
+			"体重是": {
+				{FactID: "f1", Subject: "用户", Predicate: "体重是", Object: "110公斤", Status: entity.FactStatusApproved, Confidence: 0.95},
+			},
+		},
+	}
+	orch := newTestOrchestrator(mock, comp, nil, nil, factRepo)
+
+	req := ChatRequest{
+		Messages:   []models.Message{{Role: models.RoleUser, Content: "我现在多重"}},
+		Model:      models.ProviderKimi,
+		ProviderID: "test-provider",
+	}
+
+	resp, err := orch.Execute(context.Background(), req)
+	require.NoError(t, err)
+	assert.Equal(t, "记录中显示，你当前体重为 110公斤。", resp.Reply)
+	// LLM 不应被调用
+	assert.Empty(t, mock.lastMessages)
+}
+
+// countingMockLLMClient 是一个统计调用次数的 mock LLM 客户端。
+type countingMockLLMClient struct {
+	mockLLMClient
+	chatCount int
+}
+
+func (m *countingMockLLMClient) Chat(ctx context.Context, messages []models.Message) (string, error) {
+	m.chatCount++
+	m.lastMessages = messages
+	return m.chatReply, m.chatErr
+}
+
+// TestChatOrchestrator_Execute_LocalAnswer_NoCloudCall 验证命中本地事实时云端调用次数为 0。
+func TestChatOrchestrator_Execute_LocalAnswer_NoCloudCall(t *testing.T) {
+	mock := &countingMockLLMClient{mockLLMClient: mockLLMClient{chatReply: "不应该调用我"}}
+	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
+	factRepo := &mockFactRepository{
+		byPredicate: map[string][]*entity.ExtractedFact{
+			"体重是": {
+				{FactID: "f1", Subject: "用户", Predicate: "体重是", Object: "110公斤", Status: entity.FactStatusApproved, Confidence: 0.95},
+			},
+		},
+	}
+	orch := newTestOrchestrator(mock, comp, nil, nil, factRepo)
+
+	req := ChatRequest{
+		Messages:   []models.Message{{Role: models.RoleUser, Content: "我多少斤"}},
+		Model:      models.ProviderKimi,
+		ProviderID: "test-provider",
+	}
+
+	_, err := orch.Execute(context.Background(), req)
+	require.NoError(t, err)
+	assert.Equal(t, 0, mock.chatCount, "命中 approved fact 时不应调用云端 LLM")
+}
+
+// TestChatOrchestrator_Execute_LocalAnswer_NotFound 验证无 approved fact 时降级到 LLM。
+func TestChatOrchestrator_Execute_LocalAnswer_NotFound(t *testing.T) {
+	mock := &mockLLMClient{chatReply: "未找到记录"}
+	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
+	orch := newTestOrchestrator(mock, comp, nil, nil, &mockFactRepository{})
+
+	req := ChatRequest{
+		Messages:   []models.Message{{Role: models.RoleUser, Content: "我现在多重"}},
+		Model:      models.ProviderKimi,
+		ProviderID: "test-provider",
+	}
+
+	resp, err := orch.Execute(context.Background(), req)
+	require.NoError(t, err)
+	assert.Equal(t, "未找到记录", resp.Reply)
+	// 降级到 LLM，应被调用
+	require.NotEmpty(t, mock.lastMessages)
+}
+
+// TestChatOrchestrator_Execute_LocalAnswer_DBError 验证数据库错误时降级到 LLM 且不 panic。
+func TestChatOrchestrator_Execute_LocalAnswer_DBError(t *testing.T) {
+	mock := &mockLLMClient{chatReply: "服务正常"}
+	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
+	factRepo := &mockFactRepository{err: fmt.Errorf("db connection lost")}
+	orch := newTestOrchestrator(mock, comp, nil, nil, factRepo)
+
+	req := ChatRequest{
+		Messages:   []models.Message{{Role: models.RoleUser, Content: "我现在多重"}},
+		Model:      models.ProviderKimi,
+		ProviderID: "test-provider",
+	}
+
+	resp, err := orch.Execute(context.Background(), req)
+	require.NoError(t, err)
+	assert.Equal(t, "服务正常", resp.Reply)
+}
+
+// TestChatOrchestrator_StreamExecute_LocalAnswer 验证流式场景下本地短路直接返回完整内容。
+func TestChatOrchestrator_StreamExecute_LocalAnswer(t *testing.T) {
+	mock := &mockLLMClient{streamChunks: []string{"不", "应", "调", "用"}}
+	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
+	factRepo := &mockFactRepository{
+		byPredicate: map[string][]*entity.ExtractedFact{
+			"体重是": {
+				{FactID: "f1", Subject: "用户", Predicate: "体重是", Object: "110公斤", Status: entity.FactStatusApproved, Confidence: 0.95},
+			},
+		},
+	}
+	orch := newTestOrchestrator(mock, comp, nil, nil, factRepo)
+
+	req := ChatRequest{
+		Messages:   []models.Message{{Role: models.RoleUser, Content: "我现在多重"}},
+		Model:      models.ProviderKimi,
+		ProviderID: "test-provider",
+	}
+
+	var chunks []string
+	_, _, final, err := orch.StreamExecute(context.Background(), req, func(chunk string) {
+		chunks = append(chunks, chunk)
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "记录中显示，你当前体重为 110公斤。", final)
+	require.Len(t, chunks, 1)
+	assert.Equal(t, "记录中显示，你当前体重为 110公斤。", chunks[0])
+	// StreamChat 不应被调用
+	assert.Empty(t, mock.streamCallbacks)
+}
+
 // TestChatOrchestrator_StreamExecute_Success 验证流式对话内容经合规检测后统一推送。
 func TestChatOrchestrator_StreamExecute_Success(t *testing.T) {
 	mock := &mockLLMClient{streamChunks: []string{"你", "好", "！"}}
 	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
-	orch := newTestOrchestrator(mock, comp, nil, nil)
+	orch := newTestOrchestrator(mock, comp, nil, nil, nil)
 
 	req := ChatRequest{
 		Messages:   []models.Message{{Role: models.RoleUser, Content: "打招呼"}},
@@ -319,7 +504,7 @@ func TestChatOrchestrator_StreamExecute_Success(t *testing.T) {
 func TestChatOrchestrator_StreamExecute_Error(t *testing.T) {
 	mock := &mockLLMClient{streamErr: fmt.Errorf("connection reset")}
 	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
-	orch := newTestOrchestrator(mock, comp, nil, nil)
+	orch := newTestOrchestrator(mock, comp, nil, nil, nil)
 
 	req := ChatRequest{
 		Messages:   []models.Message{{Role: models.RoleUser, Content: "test"}},
@@ -343,7 +528,7 @@ func TestChatOrchestrator_StreamExecute_WithDeidentify(t *testing.T) {
 			Placeholder:  map[string]string{"{{EMAIL_abc12345}}": "test@example.com"},
 		},
 	}
-	orch := newTestOrchestrator(mock, comp, deid, nil)
+	orch := newTestOrchestrator(mock, comp, deid, nil, nil)
 
 	req := ChatRequest{
 		Messages:   []models.Message{{Role: models.RoleUser, Content: "邮箱 test@example.com"}},
@@ -447,7 +632,7 @@ func TestChatOrchestrator_calculateConfidence_nilAggregator(t *testing.T) {
 	factory := &mockLLMClientFactory{client: mock}
 	store := &mockProviderStore{}
 	// 显式将 confidenceAggregator 传为 nil
-	orch := NewChatOrchestrator(factory, store, nil, nil, comp, nil, nil, nil)
+	orch := NewChatOrchestrator(factory, store, nil, nil, comp, nil, nil, nil, &mockFactRepository{}, NewIntentResolver(NewQueryExpansionService()), NewLocalAnswerService())
 
 	result := orch.calculateConfidence("测试回复", nil)
 
@@ -465,7 +650,7 @@ func TestChatOrchestrator_resolveLLMClient_cancelledContext(t *testing.T) {
 	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
 	factory := &mockLLMClientFactory{client: mock}
 	store := &mockProviderStoreCtxErr{}
-	orch := NewChatOrchestrator(factory, store, nil, nil, comp, nil, nil, NewConfidenceAggregator())
+	orch := NewChatOrchestrator(factory, store, nil, nil, comp, nil, nil, NewConfidenceAggregator(), &mockFactRepository{}, NewIntentResolver(NewQueryExpansionService()), NewLocalAnswerService())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // 立即取消
@@ -481,7 +666,7 @@ func TestChatOrchestrator_resolveLLMClient_contextDeadline(t *testing.T) {
 	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
 	factory := &mockLLMClientFactory{client: mock}
 	store := &mockProviderStore{}
-	orch := NewChatOrchestrator(factory, store, nil, nil, comp, nil, nil, NewConfidenceAggregator())
+	orch := NewChatOrchestrator(factory, store, nil, nil, comp, nil, nil, NewConfidenceAggregator(), &mockFactRepository{}, NewIntentResolver(NewQueryExpansionService()), NewLocalAnswerService())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -508,7 +693,7 @@ func TestChatOrchestrator_ExtractFactsFromReply_UsesUserContentOnly(t *testing.T
 	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
 	factory := &mockLLMClientFactory{client: mock2}
 	store := &mockProviderStore{}
-	orch := NewChatOrchestrator(factory, store, nil, nil, comp, nil, nil, NewConfidenceAggregator())
+	orch := NewChatOrchestrator(factory, store, nil, nil, comp, nil, nil, NewConfidenceAggregator(), &mockFactRepository{}, NewIntentResolver(NewQueryExpansionService()), NewLocalAnswerService())
 
 	facts, err = orch.ExtractFactsFromReply(context.Background(), "我体重110公斤", "AI无法知道你的体重", "test-provider")
 	require.NoError(t, err)

@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/wire"
@@ -51,6 +52,32 @@ func (r *FactRepoSQLite) Save(ctx context.Context, f *entity.ExtractedFact) erro
 		return fmt.Errorf("failed to save fact: %w", err)
 	}
 	return nil
+}
+
+// FindLatestApprovedByPredicates 按 subject 和多个 predicate 查找最新已审批事实。
+func (r *FactRepoSQLite) FindLatestApprovedByPredicates(ctx context.Context, subject string, predicates []string) (*entity.ExtractedFact, error) {
+	if len(predicates) == 0 {
+		return nil, entity.ErrFactNotFound
+	}
+
+	placeholders := make([]string, len(predicates))
+	args := make([]any, 0, len(predicates)+1)
+	args = append(args, subject)
+	for i, p := range predicates {
+		placeholders[i] = "?"
+		args = append(args, p)
+	}
+
+	query := fmt.Sprintf(`
+		SELECT fact_id, subject, predicate, object, confidence, source_msg_ids, status, is_sensitive, scored_at, reviewed_at, created_at
+		FROM extracted_facts
+		WHERE status = 'approved' AND subject = ? AND predicate IN (%s)
+		ORDER BY created_at DESC
+		LIMIT 1
+	`, strings.Join(placeholders, ","))
+
+	row := r.db.QueryRowContext(ctx, query, args...)
+	return scanFact(row)
 }
 
 // GetByID 按 ID 查询事实。
