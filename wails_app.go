@@ -247,7 +247,11 @@ func (a *WailsApp) checkUpdateAsync() {
 	}
 
 	info, err := a.updaterSvc.CheckUpdate(a.ctx, version)
-	if err != nil || info == nil {
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to check update: %v\n", err)
+		return
+	}
+	if info == nil {
 		return
 	}
 
