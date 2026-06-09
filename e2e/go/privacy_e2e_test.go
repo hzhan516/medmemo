@@ -51,7 +51,7 @@ func TestE2E_Privacy_DeidentifyPipeline(t *testing.T) {
 			},
 		},
 	}
-	chatOrch := usecase.NewChatOrchestrator(&mockLLMClientFactory{client: mockLLM}, newMockProviderStore(), &mockMemoryRepository{}, &mockSensitiveDetector{}, checker, deid, &mockMemoryQuerier{}, nil)
+	chatOrch := usecase.NewChatOrchestrator(&mockLLMClientFactory{client: mockLLM}, newMockProviderStore(), &mockMemoryRepository{}, &mockSensitiveDetector{}, checker, deid, &mockMemoryQuerier{}, usecase.NewConfidenceAggregator(), &mockFactRepository{}, usecase.NewIntentResolver(usecase.NewQueryExpansionService()), usecase.NewLocalAnswerService())
 
 	ctx := context.Background()
 	conv := entity.NewConversation(models.ProviderKimi)
@@ -88,7 +88,7 @@ func TestE2E_Privacy_DatabaseEncryption(t *testing.T) {
 	convRepo := repository.NewConversationRepoSQLite(conn)
 	msgRepo := repository.NewMessageRepoSQLite(conn)
 	checker := &mockComplianceChecker{interceptor: comp}
-	chatOrch := usecase.NewChatOrchestrator(&mockLLMClientFactory{client: &mockLLMClient{chatReply: "回复"}}, newMockProviderStore(), &mockMemoryRepository{}, &mockSensitiveDetector{}, checker, nil, &mockMemoryQuerier{}, nil)
+	chatOrch := usecase.NewChatOrchestrator(&mockLLMClientFactory{client: &mockLLMClient{chatReply: "回复"}}, newMockProviderStore(), &mockMemoryRepository{}, &mockSensitiveDetector{}, checker, nil, &mockMemoryQuerier{}, usecase.NewConfidenceAggregator(), &mockFactRepository{}, usecase.NewIntentResolver(usecase.NewQueryExpansionService()), usecase.NewLocalAnswerService())
 
 	ctx := context.Background()
 	conv := entity.NewConversation(models.ProviderKimi)
@@ -152,7 +152,7 @@ func TestE2E_Privacy_DesensitizeFallback(t *testing.T) {
 
 	mockLLM := &mockLLMClient{chatReply: "收到"}
 	deid := &mockDeidentifier{err: assert.AnError}
-	chatOrch := usecase.NewChatOrchestrator(&mockLLMClientFactory{client: mockLLM}, newMockProviderStore(), &mockMemoryRepository{}, &mockSensitiveDetector{}, checker, deid, &mockMemoryQuerier{}, nil)
+	chatOrch := usecase.NewChatOrchestrator(&mockLLMClientFactory{client: mockLLM}, newMockProviderStore(), &mockMemoryRepository{}, &mockSensitiveDetector{}, checker, deid, &mockMemoryQuerier{}, usecase.NewConfidenceAggregator(), &mockFactRepository{}, usecase.NewIntentResolver(usecase.NewQueryExpansionService()), usecase.NewLocalAnswerService())
 
 	ctx := context.Background()
 	conv := entity.NewConversation(models.ProviderKimi)

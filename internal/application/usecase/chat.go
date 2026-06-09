@@ -3,6 +3,7 @@ package usecase
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -12,6 +13,7 @@ import (
 	"github.com/hzhan516/medmemo/internal/application"
 	"github.com/hzhan516/medmemo/internal/application/port"
 	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/internal/domain/repository"
 	"github.com/hzhan516/medmemo/pkg/desensitizer"
 	"github.com/hzhan516/medmemo/pkg/models"
 	"github.com/hzhan516/medmemo/pkg/resourcepath"
@@ -32,6 +34,9 @@ type ChatOrchestrator struct {
 	deidPipeline         Deidentifier
 	memoryRetriever      MemoryQuerier
 	confidenceAggregator *ConfidenceAggregator
+	factRepo             repository.FactRepository // 新增：用于本地 approved fact 直查
+	intentResolver       *IntentResolver           // 新增：意图解析
+	localAnswer          *LocalAnswerService       // 新增：本地模板回答
 	// 全局事实提取限流器，跨调用共享速率限制
 	factExtractMu       sync.Mutex
 	factExtractLastCall time.Time
@@ -48,6 +53,9 @@ func NewChatOrchestrator(
 	deid Deidentifier,
 	retriever MemoryQuerier,
 	confAgg *ConfidenceAggregator,
+	factRepo repository.FactRepository,
+	intentResolver *IntentResolver,
+	localAnswer *LocalAnswerService,
 ) *ChatOrchestrator {
 	return &ChatOrchestrator{
 		llmFactory:           llmFactory,
@@ -58,6 +66,9 @@ func NewChatOrchestrator(
 		deidPipeline:         deid,
 		memoryRetriever:      retriever,
 		confidenceAggregator: confAgg,
+		factRepo:             factRepo,
+		intentResolver:       intentResolver,
+		localAnswer:          localAnswer,
 		factExtractMinGap:    15 * time.Second, // 最小 15 秒间隔，避免与主对话竞争
 	}
 }
@@ -166,8 +177,41 @@ func (c *ChatOrchestrator) prepareMessages(ctx context.Context, req ChatRequest)
 	return messages, deidResult
 }
 
+// tryLocalAnswer 尝试对高置信个人事实查询进行本地短路回答。
+// 命中 approved fact 时返回 (answer, true, nil)；未命中时返回 ("", false, nil)；
+// 数据库异常时返回错误（调用方应降级到 LLM 链路）。
+func (c *ChatOrchestrator) tryLocalAnswer(ctx context.Context, query string) (string, bool, error) {
+	result := c.intentResolver.Resolve(query)
+	if result == nil || result.Confidence != ConfidenceHigh {
+		return "", false, nil
+	}
+	// MVP 阶段 subject 固定为"用户"，后续可扩展为当前家庭成员
+	fact, err := c.factRepo.FindLatestApprovedByPredicates(ctx, "用户", result.Predicates)
+	if err != nil {
+		if errors.Is(err, entity.ErrFactNotFound) {
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("本地事实查询失败: %w", err)
+	}
+	return c.localAnswer.Format(result.Intent, fact), true, nil
+}
+
 // Execute 执行单次对话用例（非流式）。
 func (c *ChatOrchestrator) Execute(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
+	// 前置本地短路：高置信个人事实查询直接返回，不走 LLM
+	lastIdx := findLastUserMessage(req.Messages)
+	if lastIdx >= 0 {
+		answer, ok, err := c.tryLocalAnswer(ctx, req.Messages[lastIdx].Content)
+		if err != nil {
+			fmt.Printf("[ChatOrchestrator] tryLocalAnswer error, fallback to LLM: %v\n", err)
+		} else if ok {
+			return &ChatResponse{
+				Reply:            answer,
+				ConfidenceResult: c.confidenceAggregator.CalculateWithRawScore(1.0, []string{"本地已审批事实"}),
+			}, nil
+		}
+	}
+
 	messages, deidResult := c.prepareMessages(ctx, req)
 
 	// 根据 ProviderID 动态创建 LLMClient
@@ -234,6 +278,18 @@ func (c *ChatOrchestrator) Execute(ctx context.Context, req ChatRequest) (*ChatR
 // chat:stream:compliance 事件追加标签。流式正常结束时返回 TokenUsage、置信度与最终内容。
 func (c *ChatOrchestrator) StreamExecute(ctx context.Context, req ChatRequest, onChunk func(string)) (*models.TokenUsage, *entity.ConfidenceResult, string, error) {
 	streamExecStart := time.Now()
+
+	// 前置本地短路：高置信个人事实查询直接返回，不走 LLM Stream
+	lastIdx := findLastUserMessage(req.Messages)
+	if lastIdx >= 0 {
+		answer, ok, err := c.tryLocalAnswer(ctx, req.Messages[lastIdx].Content)
+		if err != nil {
+			fmt.Printf("[ChatOrchestrator] tryLocalAnswer error, fallback to LLM: %v\n", err)
+		} else if ok {
+			onChunk(answer)
+			return nil, c.confidenceAggregator.CalculateWithRawScore(1.0, []string{"本地已审批事实"}), answer, nil
+		}
+	}
 
 	// 预处理使用独立 context，避免 ONNX 推理消耗 stream budget
 	// L1 规则引擎 <1ms，L2 NER 正常 <100ms，30s 足够覆盖异常场景
@@ -499,4 +555,7 @@ var ApplicationSet = wire.NewSet(
 	NewRuleComplianceChecker,
 	NewTitleGenerator,
 	NewConfidenceAggregator,
+	NewQueryExpansionService,
+	NewIntentResolver,
+	NewLocalAnswerService,
 )
