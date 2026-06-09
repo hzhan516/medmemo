@@ -302,14 +302,18 @@ type captureEmbeddingRepository struct {
 	existing map[string]*entity.SemanticEmbedding
 }
 
-func (s *captureEmbeddingRepository) Save(ctx context.Context, e *entity.SemanticEmbedding) error { return nil }
+func (s *captureEmbeddingRepository) Save(ctx context.Context, e *entity.SemanticEmbedding) error {
+	return nil
+}
 func (s *captureEmbeddingRepository) GetByFactID(ctx context.Context, factID string) (*entity.SemanticEmbedding, error) {
 	if e, ok := s.existing[factID]; ok {
 		return e, nil
 	}
 	return nil, entity.ErrFactNotFound
 }
-func (s *captureEmbeddingRepository) DeleteByFactID(ctx context.Context, factID string) error { return nil }
+func (s *captureEmbeddingRepository) DeleteByFactID(ctx context.Context, factID string) error {
+	return nil
+}
 func (s *captureEmbeddingRepository) SearchSimilar(ctx context.Context, queryVector []float32, topK int) ([]*entity.ScoredEmbedding, error) {
 	return nil, nil
 }
@@ -379,7 +383,7 @@ func TestWailsApp_BackfillEmbeddings_SkipsExistingEmbedding(t *testing.T) {
 
 	embSvc := &captureEmbeddingService{}
 	app := &WailsApp{
-		factRepo: &wailsStubFactRepo{facts: facts},
+		factRepo:     &wailsStubFactRepo{facts: facts},
 		embeddingSvc: embSvc,
 		embeddingRepo: &captureEmbeddingRepository{
 			existing: map[string]*entity.SemanticEmbedding{
