@@ -69,11 +69,11 @@ func TestAllVersionNotesAscending(t *testing.T) {
 
 		hasUpdate := false
 		for j := 0; j < 3; j++ {
-			if curr[j] > prev[j] {
+			if curr.core[j] > prev.core[j] {
 				hasUpdate = true
 				break
 			}
-			if curr[j] < prev[j] {
+			if curr.core[j] < prev.core[j] {
 				break
 			}
 		}

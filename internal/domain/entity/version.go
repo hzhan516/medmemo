@@ -31,8 +31,8 @@ type UpdateInfo struct {
 }
 
 // HasUpdate 语义化版本比较：remote 是否比 current 更新。
-// 支持 "v" 前缀，比较 Major.Minor.Patch 三段式版本号。
-// 当核心版本号相同时，若完整版本字符串不同（如不同 build 号），也视为有更新。
+// 支持 "v" 前缀、四段版本号（如 1.1.2.54）、build 后缀（如 1.1.2-build.54）。
+// 当核心版本号相同时，优先比较 build 号；无法比较时若完整字符串不同则视为有更新。
 func HasUpdate(current, remote string) (bool, error) {
 	cv, err := parseSemver(current)
 	if err != nil {
@@ -44,65 +44,127 @@ func HasUpdate(current, remote string) (bool, error) {
 	}
 
 	for i := 0; i < 3; i++ {
-		if rv[i] > cv[i] {
+		if rv.core[i] > cv.core[i] {
 			return true, nil
 		}
-		if rv[i] < cv[i] {
+		if rv.core[i] < cv.core[i] {
 			return false, nil
 		}
 	}
 
-	// 核心版本号相同，比较完整字符串（去掉 v 前缀）
-	// 不同 build 号或预发布标签视为有更新
+	// 核心版本号相同，优先比较 build 号
+	if rv.build != -1 && cv.build != -1 {
+		if rv.build > cv.build {
+			return true, nil
+		}
+		if rv.build < cv.build {
+			return false, nil
+		}
+		// build 号相同视为同版本（忽略 format 差异，如 1.1.2.54 与 1.1.2-build.54）
+		return false, nil
+	}
+
+	// 至少一边无 build 号，回退到完整字符串比较
 	currentClean := strings.TrimPrefix(current, "v")
 	remoteClean := strings.TrimPrefix(remote, "v")
-	if currentClean == remoteClean {
-		return false, nil // 完全相同，无需更新
-	}
-	return true, nil
+	return currentClean != remoteClean, nil
 }
 
-// semver 内部表示三段式版本号 [Major, Minor, Patch]。
-type semver [3]int
+// semver 内部表示，含核心三段式版本号与可选的 build 号。
+type semver struct {
+	core  [3]int // major, minor, patch
+	build int    // build/revision 序号，-1 表示无 build 号
+}
 
-// parseSemver 解析语义化版本字符串，支持 "v" 前缀、两段式/一段式、预发布标签。
-// 预发布标签（如 -alpha、-beta）仅用于稳定版判断，不参与版本号数值比较。
+// parseSemver 解析语义化版本字符串，支持以下格式：
+//   - "v" 前缀
+//   - 1~3 段核心版本（缺失段补 0）
+//   - 四段版本号：第 4 段作为 build 号（如 1.1.2.54）
+//   - build 后缀：-build.N（如 1.1.2-build.54）
+//   - 预发布标签：-alpha、-Pre-release-build.N 等（build 号仍可提取）
 func parseSemver(v string) (semver, error) {
 	v = strings.TrimPrefix(v, "v")
-	// 去掉预发布标签和构建元数据，仅保留核心版本号
-	if idx := strings.IndexAny(v, "-+"); idx != -1 {
-		v = v[:idx]
-	}
-	parts := strings.Split(v, ".")
-	if len(parts) > 3 {
-		return semver{}, fmt.Errorf("invalid semver format: expected 1~3 segments, got %q", v)
-	}
+
 	var s semver
+	s.build = -1
+
+	// 分离主版本号与后缀
+	raw := v
+	if idx := strings.Index(raw, "+"); idx != -1 {
+		// 构建元数据（+build）不参与版本比较，直接截断
+		raw = raw[:idx]
+	}
+
+	if idx := strings.Index(raw, "-"); idx != -1 {
+		preStr := raw[idx+1:]
+		raw = raw[:idx]
+
+		if strings.HasPrefix(preStr, "build.") {
+			// 标准 build 后缀，如 1.1.2-build.54
+			if n, err := strconv.Atoi(preStr[len("build."):]); err == nil {
+				s.build = n
+			}
+		} else {
+			// 其他预发布标签，尝试提取其中可能包含的 build 号
+			// 如 Pre-release-build.53
+			if buildIdx := strings.LastIndex(preStr, "build."); buildIdx != -1 {
+				if n, err := strconv.Atoi(preStr[buildIdx+len("build."):]); err == nil {
+					s.build = n
+				}
+			}
+		}
+	}
+
+	parts := strings.Split(raw, ".")
+	if len(parts) > 4 {
+		return semver{}, fmt.Errorf("invalid semver format: too many segments, got %q", v)
+	}
+
 	for i, p := range parts {
 		n, err := strconv.Atoi(p)
 		if err != nil {
 			return semver{}, fmt.Errorf("invalid version component %q: %w", p, err)
 		}
-		s[i] = n
+		if i < 3 {
+			s.core[i] = n
+		} else {
+			// 第 4 段作为 build 号，覆盖后缀中可能提取的 build 号
+			s.build = n
+		}
 	}
-	// 缺失段补 0
+
 	return s, nil
 }
 
 // IsStableVersion 判断版本是否为稳定版。
-// 三段式纯数字版本（如 v1.0.1）为稳定版；两段式（如 v1.0）、一段式（如 v1）
-// 或含预发布标签（-alpha、-beta、-rc、-SNAPSHOT）均为测试版。
+// 以下格式视为稳定版：
+//   - 三段或四段纯数字版本（如 v1.0.1、1.1.2.54）
+//   - 带 -build.N 后缀的版本（如 1.1.2-build.54）
+// 以下格式视为非稳定版：
+//   - 含非 build 预发布标签（如 -alpha、-Pre-release-build.53）
+//   - 1~2 段版本号
+//   - 含构建元数据（如 +build123）
 func IsStableVersion(v string) bool {
 	v = strings.TrimPrefix(v, "v")
-	// 含预发布标签或构建元数据 → 非稳定
-	if strings.ContainsAny(v, "-+") {
+
+	raw := v
+	if idx := strings.Index(raw, "+"); idx != -1 {
 		return false
 	}
-	parts := strings.Split(v, ".")
-	if len(parts) != 3 {
+
+	if idx := strings.Index(raw, "-"); idx != -1 {
+		preStr := raw[idx+1:]
+		if !strings.HasPrefix(preStr, "build.") {
+			return false
+		}
+		raw = raw[:idx]
+	}
+
+	parts := strings.Split(raw, ".")
+	if len(parts) < 3 || len(parts) > 4 {
 		return false
 	}
-	// 确保每段都是纯数字
+
 	for _, p := range parts {
 		if _, err := strconv.Atoi(p); err != nil {
 			return false

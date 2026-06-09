@@ -172,3 +172,39 @@ func TestFetchLatest_EmptyList(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no suitable release found")
 }
+
+func TestFindTargetAsset_LinuxArchSpecific(t *testing.T) {
+	assets := []githubAsset{
+		{Name: "MedMemo-x86_64.AppImage", BrowserDownloadURL: "https://example.com/arch", Size: 100},
+	}
+	got := findTargetAsset(assets, "linux", "amd64")
+	require.NotNil(t, got)
+	assert.Equal(t, "MedMemo-x86_64.AppImage", got.Name)
+}
+
+func TestFindTargetAsset_LinuxFallbackGeneric(t *testing.T) {
+	assets := []githubAsset{
+		{Name: "MedMemo.AppImage", BrowserDownloadURL: "https://example.com/generic", Size: 100},
+	}
+	got := findTargetAsset(assets, "linux", "amd64")
+	require.NotNil(t, got)
+	assert.Equal(t, "MedMemo.AppImage", got.Name)
+}
+
+func TestFindTargetAsset_LinuxPrefersArchOverGeneric(t *testing.T) {
+	assets := []githubAsset{
+		{Name: "MedMemo.AppImage", BrowserDownloadURL: "https://example.com/generic", Size: 100},
+		{Name: "MedMemo-x86_64.AppImage", BrowserDownloadURL: "https://example.com/arch", Size: 100},
+	}
+	got := findTargetAsset(assets, "linux", "amd64")
+	require.NotNil(t, got)
+	assert.Equal(t, "MedMemo-x86_64.AppImage", got.Name)
+}
+
+func TestFindTargetAsset_LinuxNoMatch(t *testing.T) {
+	assets := []githubAsset{
+		{Name: "wrong-platform.zip", BrowserDownloadURL: "https://example.com/wrong", Size: 100},
+	}
+	got := findTargetAsset(assets, "linux", "amd64")
+	assert.Nil(t, got)
+}
