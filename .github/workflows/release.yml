@@ -42,7 +42,7 @@ jobs:
           cache-dependency-path: web/package-lock.json
 
       - name: Install Wails CLI
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
 
       - name: Install frontend dependencies
         run: cd web && npm ci
@@ -78,6 +78,31 @@ jobs:
             exit 1
           fi
           echo "Binary size OK: $SIZE bytes"
+        shell: bash
+
+      - name: Verify release artifact
+        run: ./scripts/build/verify-release-artifact.sh ${{ matrix.platform }}
+        shell: bash
+
+      - name: Linux runtime smoke test
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update && sudo apt-get install -y xvfb
+          export HOME="$RUNNER_TEMP/medmemo-home"
+          export MEDMEMO_DATA_DIR="$RUNNER_TEMP/medmemo-data"
+          mkdir -p "$HOME" "$MEDMEMO_DATA_DIR"
+
+          # 后台启动二进制，检查进程存活至少 5 秒
+          xvfb-run -a timeout 20s ./build/bin/MedMemo &
+          PID=$!
+          sleep 5
+          if ! kill -0 $PID 2>/dev/null; then
+            echo "ERROR: MedMemo binary crashed or exited early"
+            exit 1
+          fi
+          kill $PID 2>/dev/null || true
+          wait $PID 2>/dev/null || true
+          echo "Smoke test passed: binary stays alive for 5s"
         shell: bash
 
       - name: Run GoReleaser

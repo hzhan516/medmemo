@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/wire"
@@ -51,6 +52,32 @@ func (r *FactRepoSQLite) Save(ctx context.Context, f *entity.ExtractedFact) erro
 		return fmt.Errorf("failed to save fact: %w", err)
 	}
 	return nil
+}
+
+// FindLatestApprovedByPredicates 按 subject 和多个 predicate 查找最新已审批事实。
+func (r *FactRepoSQLite) FindLatestApprovedByPredicates(ctx context.Context, subject string, predicates []string) (*entity.ExtractedFact, error) {
+	if len(predicates) == 0 {
+		return nil, entity.ErrFactNotFound
+	}
+
+	placeholders := make([]string, len(predicates))
+	args := make([]any, 0, len(predicates)+1)
+	args = append(args, subject)
+	for i, p := range predicates {
+		placeholders[i] = "?"
+		args = append(args, p)
+	}
+
+	query := fmt.Sprintf(`
+		SELECT fact_id, subject, predicate, object, confidence, source_msg_ids, status, is_sensitive, scored_at, reviewed_at, created_at
+		FROM extracted_facts
+		WHERE status = 'approved' AND subject = ? AND predicate IN (%s)
+		ORDER BY created_at DESC
+		LIMIT 1
+	`, strings.Join(placeholders, ","))
+
+	row := r.db.QueryRowContext(ctx, query, args...)
+	return scanFact(row)
 }
 
 // GetByID 按 ID 查询事实。
@@ -99,11 +126,28 @@ func (r *FactRepoSQLite) UpdateStatus(ctx context.Context, factID string, status
 	return nil
 }
 
-// Delete 删除事实（级联删除关联嵌入，由外键约束处理）。
-func (r *FactRepoSQLite) Delete(ctx context.Context, factID string) error {
-	_, err := r.db.ExecContext(ctx, `DELETE FROM extracted_facts WHERE fact_id = ?`, factID)
+// Delete 删除事实及关联嵌入向量。
+// 使用事务显式删除 semantic_embeddings 和 extracted_facts，不依赖外键级联作为唯一保障，
+// 避免连接池场景或外键未启用时留下 stale embedding 影响召回。
+func (r *FactRepoSQLite) Delete(ctx context.Context, factID string) (err error) {
+	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
+		return fmt.Errorf("failed to begin delete transaction: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	if _, err = tx.ExecContext(ctx, `DELETE FROM semantic_embeddings WHERE fact_id = ?`, factID); err != nil {
+		return fmt.Errorf("failed to delete embedding: %w", err)
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM extracted_facts WHERE fact_id = ?`, factID); err != nil {
 		return fmt.Errorf("failed to delete fact: %w", err)
+	}
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit delete transaction: %w", err)
 	}
 	return nil
 }

@@ -128,8 +128,8 @@ func TestFactExtractor_Extract(t *testing.T) {
 	assert.Equal(t, "用户", facts[0].Subject)
 	assert.Equal(t, "患有", facts[0].Predicate)
 	assert.Equal(t, "头痛", facts[0].Object)
-	// source_msg_ids 应被正确关联
-	require.Len(t, facts[0].SourceMsgIDs, 2)
+	// source_msg_ids 只关联用户消息（RoleUser），排除 AI 回复
+	require.Len(t, facts[0].SourceMsgIDs, 1)
 }
 
 func TestFactExtractor_Extract_RateLimited(t *testing.T) {
@@ -209,6 +209,9 @@ func (m *mockFactRepo) FindBySubject(ctx context.Context, subject string) ([]*en
 }
 func (m *mockFactRepo) FindBySession(ctx context.Context, sessionID string) ([]*entity.ExtractedFact, error) {
 	return nil, nil
+}
+func (m *mockFactRepo) FindLatestApprovedByPredicates(ctx context.Context, subject string, predicates []string) (*entity.ExtractedFact, error) {
+	return nil, entity.ErrFactNotFound
 }
 
 func TestFactExtractor_ParseFacts_rateLimitExceeded(t *testing.T) {
