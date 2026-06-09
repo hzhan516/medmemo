@@ -351,3 +351,81 @@ func TestFactRepo_Delete_DeletesEmbedding(t *testing.T) {
 	_, err = embRepo.GetByFactID(ctx, "fact_del_emb")
 	assert.ErrorIs(t, err, entity.ErrEmbeddingNotFound)
 }
+
+// TestFactRepo_FindLatestApprovedByPredicates 验证按 predicate 列表查询最新已审批事实。
+func TestFactRepo_FindLatestApprovedByPredicates(t *testing.T) {
+	tmpDir := t.TempDir()
+	connector, err := database.NewSQLiteConnector(tmpDir)
+	require.NoError(t, err)
+	defer connector.Close()
+
+	ctx := context.Background()
+	err = connector.Migrate(ctx)
+	require.NoError(t, err)
+
+	factRepo := NewFactRepoSQLite(connector)
+
+	// 插入三条事实：两条 approved，一条 pending
+	// 注意：为确保 ORDER BY created_at DESC 的稳定性，手动调整时间戳
+	f1 := entity.NewExtractedFact("用户", "体重是", "110公斤", 0.95, []string{"msg_001"})
+	f1.FactID = "fact_weight_1"
+	f1.Status = entity.FactStatusApproved
+	f1.CreatedAt = time.Now().UTC().Add(2 * time.Second)
+	require.NoError(t, factRepo.Save(ctx, f1))
+
+	f2 := entity.NewExtractedFact("用户", "体重是", "105公斤", 0.90, []string{"msg_002"})
+	f2.FactID = "fact_weight_2"
+	f2.Status = entity.FactStatusApproved
+	f2.CreatedAt = time.Now().UTC().Add(1 * time.Second)
+	require.NoError(t, factRepo.Save(ctx, f2))
+
+	f3 := entity.NewExtractedFact("用户", "体重是", "100公斤", 0.85, []string{"msg_003"})
+	f3.FactID = "fact_weight_3"
+	f3.Status = entity.FactStatusPending
+	f3.CreatedAt = time.Now().UTC()
+	require.NoError(t, factRepo.Save(ctx, f3))
+
+	// 查询 approved 的最新体重事实
+	fact, err := factRepo.FindLatestApprovedByPredicates(ctx, "用户", []string{"体重是"})
+	require.NoError(t, err)
+	assert.Equal(t, "110公斤", fact.Object)
+
+	// 查询空 predicate 列表应返回 NotFound
+	_, err = factRepo.FindLatestApprovedByPredicates(ctx, "用户", []string{})
+	assert.ErrorIs(t, err, entity.ErrFactNotFound)
+
+	// 查询不存在的 predicate
+	_, err = factRepo.FindLatestApprovedByPredicates(ctx, "用户", []string{"身高是"})
+	assert.ErrorIs(t, err, entity.ErrFactNotFound)
+}
+
+// TestFactRepo_FindLatestApprovedByPredicates_MultiPredicate 验证多 predicate 查询。
+func TestFactRepo_FindLatestApprovedByPredicates_MultiPredicate(t *testing.T) {
+	tmpDir := t.TempDir()
+	connector, err := database.NewSQLiteConnector(tmpDir)
+	require.NoError(t, err)
+	defer connector.Close()
+
+	ctx := context.Background()
+	err = connector.Migrate(ctx)
+	require.NoError(t, err)
+
+	factRepo := NewFactRepoSQLite(connector)
+
+	// 插入不同 predicate 的事实
+	f1 := entity.NewExtractedFact("用户", "服用", "阿司匹林", 0.90, []string{"msg_001"})
+	f1.FactID = "fact_med_1"
+	f1.Status = entity.FactStatusApproved
+	require.NoError(t, factRepo.Save(ctx, f1))
+
+	f2 := entity.NewExtractedFact("用户", "正在服用", "维生素C", 0.85, []string{"msg_002"})
+	f2.FactID = "fact_med_2"
+	f2.Status = entity.FactStatusApproved
+	require.NoError(t, factRepo.Save(ctx, f2))
+
+	// 多 predicate 查询应返回其中最新的一条（按 created_at DESC）
+	fact, err := factRepo.FindLatestApprovedByPredicates(ctx, "用户", []string{"服用", "正在服用"})
+	require.NoError(t, err)
+	assert.NotNil(t, fact)
+	assert.True(t, fact.Predicate == "服用" || fact.Predicate == "正在服用")
+}
