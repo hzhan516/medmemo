@@ -137,9 +137,11 @@ func parseSemver(v string) (semver, error) {
 }
 
 // IsStableVersion 判断版本是否为稳定版。
+//
 // 以下格式视为稳定版：
 //   - 三段或四段纯数字版本（如 v1.0.1、1.1.2.54）
 //   - 带 -build.N 后缀的版本（如 1.1.2-build.54）
+//
 // 以下格式视为非稳定版：
 //   - 含非 build 预发布标签（如 -alpha、-Pre-release-build.53）
 //   - 1~2 段版本号
