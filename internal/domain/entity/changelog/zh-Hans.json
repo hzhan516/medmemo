@@ -192,6 +192,8 @@
     "fixes": [
       "修复 tx.Rollback() 返回值未检查导致的 golangci-lint errcheck 失败"
     ]
+  },
+  {
     "version": "v1.1.2",
     "title": "同义问法召回已审批事实（本地 Intent 短路）",
     "features": [
