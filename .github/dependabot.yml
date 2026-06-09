@@ -13,6 +13,17 @@ updates:
     commit-message:
       prefix: "chore(deps)"
       include: "scope"
+    ignore:
+      # High replacement cost: ONNX Runtime binding ecosystem
+      - dependency-name: "github.com/knights-analytics/hugot"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "github.com/daulet/tokenizers"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "github.com/yalue/onnxruntime_go"
+        update-types: ["version-update:semver-major"]
+      # High replacement cost: Desktop application framework
+      - dependency-name: "github.com/wailsapp/wails/v2"
+        update-types: ["version-update:semver-major"]
 
   # npm (frontend)
   - package-ecosystem: "npm"
@@ -35,6 +46,54 @@ updates:
     commit-message:
       prefix: "chore(deps)"
       include: "scope"
+    ignore:
+      # React ecosystem: locked to major 18
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
+      # Build toolchain
+      - dependency-name: "vite"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@vitejs/plugin-react"
+        update-types: ["version-update:semver-major"]
+      # TypeScript ecosystem: locked to 5.x
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@typescript-eslint/eslint-plugin"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@typescript-eslint/parser"
+        update-types: ["version-update:semver-major"]
+      # Styling and UI
+      - dependency-name: "tailwindcss"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "tailwindcss-animate"
+        update-types: ["version-update:semver-major"]
+      # Lint tools
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint-plugin-react-refresh"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      # State management
+      - dependency-name: "zustand"
+        update-types: ["version-update:semver-major"]
+      # Routing
+      - dependency-name: "react-router-dom"
+        update-types: ["version-update:semver-major"]
+      # Markdown rendering
+      - dependency-name: "react-markdown"
+        update-types: ["version-update:semver-major"]
+      # Testing framework
+      - dependency-name: "vitest"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@vitest/coverage-v8"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@vitest/ui"
+        update-types: ["version-update:semver-major"]
 
   # GitHub Actions
   - package-ecosystem: "github-actions"

@@ -2,7 +2,7 @@ name: Build and Release
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, 'release/**']
 
 env:
   GOPROXY: https://proxy.golang.org,https://goproxy.cn,direct
@@ -28,7 +28,7 @@ jobs:
           BRANCH=${{ github.ref_name }}
 
           if [ "$BRANCH" = "main" ]; then
-            VERSION="${BASE_VERSION}-build.${RUN_NUMBER}"
+            VERSION="${BASE_VERSION}.${RUN_NUMBER}"
             PRERELEASE="false"
           else
             VERSION="${BASE_VERSION}-Pre-release-build.${RUN_NUMBER}"
@@ -69,7 +69,7 @@ jobs:
           cache-dependency-path: web/package-lock.json
 
       - name: Install Wails CLI
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
 
       - name: Install frontend dependencies
         run: cd web && npm ci
@@ -104,6 +104,31 @@ jobs:
             exit 1
           fi
           echo "Binary size OK: $SIZE bytes"
+        shell: bash
+
+      - name: Verify release artifact
+        run: ./scripts/build/verify-release-artifact.sh ${{ matrix.platform }}
+        shell: bash
+
+      - name: Linux runtime smoke test
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update && sudo apt-get install -y xvfb
+          export HOME="$RUNNER_TEMP/medmemo-home"
+          export MEDMEMO_DATA_DIR="$RUNNER_TEMP/medmemo-data"
+          mkdir -p "$HOME" "$MEDMEMO_DATA_DIR"
+
+          # 后台启动二进制，检查进程存活至少 5 秒
+          xvfb-run -a timeout 20s ./build/bin/MedMemo &
+          PID=$!
+          sleep 5
+          if ! kill -0 $PID 2>/dev/null; then
+            echo "ERROR: MedMemo binary crashed or exited early"
+            exit 1
+          fi
+          kill $PID 2>/dev/null || true
+          wait $PID 2>/dev/null || true
+          echo "Smoke test passed: binary stays alive for 5s"
         shell: bash
 
       - name: Upload build artifacts
@@ -183,6 +208,46 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish Release
-        run: gh release edit "${{ needs.version.outputs.version }}" --draft=false --repo "${{ github.repository }}"
+        run: |
+          TAG="${{ needs.version.outputs.version }}"
+          REPO="${{ github.repository }}"
+          MAX_RETRIES=5
+          DELAY=10
+
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "Attempt $i/$MAX_RETRIES: Publishing release $TAG..."
+
+            # 幂等检查：若已被发布则直接成功
+            # stderr 保留到日志用于排查，通过 set +e 捕获退出码避免吞掉认证失败等真实错误
+            set +e
+            DRAFT_JSON=$(gh release view "$TAG" --repo "$REPO" --json isDraft 2>/tmp/gh_view_err)
+            VIEW_EXIT=$?
+            set -e
+
+            if [ $VIEW_EXIT -eq 0 ]; then
+              DRAFT_STATUS=$(echo "$DRAFT_JSON" | jq -r '.isDraft')
+              if [ "$DRAFT_STATUS" = "false" ]; then
+                echo "Release $TAG is already published."
+                exit 0
+              fi
+            else
+              echo "gh release view exited with code $VIEW_EXIT, stderr:"
+              cat /tmp/gh_view_err
+            fi
+
+            if gh release edit "$TAG" --draft=false --repo "$REPO"; then
+              echo "Release published successfully."
+              exit 0
+            fi
+
+            if [ $i -lt $MAX_RETRIES ]; then
+              echo "Waiting ${DELAY}s before retry..."
+              sleep $DELAY
+              DELAY=$((DELAY * 2))
+            fi
+          done
+
+          echo "Failed to publish release after $MAX_RETRIES attempts."
+          exit 1
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
