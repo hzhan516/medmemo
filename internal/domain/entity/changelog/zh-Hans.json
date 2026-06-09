@@ -206,5 +206,16 @@
       "误触发防护：阻断后缀（怎么办/该吃/怎么治）+ 模糊 query（缺少主语代词）不触发短路"
     ],
     "fixes": []
+  },
+  {
+    "version": "v1.1.3",
+    "title": "体重类同义问法语义召回增强",
+    "features": [
+      "新增 BuildFactRetrievalText：为体重类 approved fact 追加 12 个同义词扩展（多重/几斤/多少斤/斤/公斤/千克/kg/体重/体重值/重量/我现在多重/我多少斤）",
+      "ApproveFact 生成 embedding 时改用 enhanced retrieval text，提升同义问法向量召回率",
+      "backfillEmbeddings 对缺失 embedding 的 approved fact 补向量时使用 enhanced text，已有 embedding 跳过",
+      "detectEntityMentions 使用 retrieval text 做关键词匹配召回，返回 LLM 的 Content 仍是原始事实文本，避免污染上下文"
+    ],
+    "fixes": []
   }
 ]

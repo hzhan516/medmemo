@@ -528,3 +528,43 @@ func TestMemoryRetriever_recordSessionAccess(t *testing.T) {
 	require.True(t, ok, "应记录会话访问时间")
 	assert.WithinDuration(t, time.Now().UTC(), accessTime, 2*time.Second)
 }
+
+func TestMemoryRetriever_detectEntityMentions_QueryHowManyJinMatchesWeightFact(t *testing.T) {
+	now := time.Now().UTC()
+	facts := []*entity.ExtractedFact{
+		{
+			FactID: "fact_weight", Subject: "用户", Predicate: "体重是", Object: "110公斤",
+			Confidence: 0.9, Status: entity.FactStatusApproved, CreatedAt: now,
+		},
+	}
+
+	retriever := NewMemoryRetriever(
+		&stubEmbeddingService{},
+		&stubEmbeddingRepository{},
+		&stubFactRepositoryWithWeightFacts{facts: facts},
+		NewDecayScorer(),
+	)
+
+	matched, ok := retriever.detectEntityMentions(context.Background(), "我多少斤")
+	require.True(t, ok, "同义问法应能召回体重事实")
+	require.Len(t, matched, 1)
+	// 返回给 LLM 上下文的必须是原始事实文本，不能是 retrieval text
+	assert.Equal(t, "用户 体重是 110公斤", matched[0].Content)
+}
+
+// stubFactRepositoryWithWeightFacts 用于体重同义词召回测试
+
+type stubFactRepositoryWithWeightFacts struct {
+	stubFactRepository
+	facts []*entity.ExtractedFact
+}
+
+func (s *stubFactRepositoryWithWeightFacts) ListByStatus(ctx context.Context, status entity.FactStatus, offset, limit int) ([]*entity.ExtractedFact, error) {
+	var result []*entity.ExtractedFact
+	for _, f := range s.facts {
+		if f.Status == status {
+			result = append(result, f)
+		}
+	}
+	return result, nil
+}
