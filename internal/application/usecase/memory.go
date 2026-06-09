@@ -165,7 +165,9 @@ func (m *MemoryRetriever) detectEntityMentions(ctx context.Context, query string
 
 	for _, f := range facts {
 		content := fmt.Sprintf("%s %s %s", f.Subject, f.Predicate, f.Object)
-		contentLower := strings.ToLower(content)
+		// 用 enhanced retrieval text 做匹配，提高同义问法召回率
+		retrievalText := BuildFactRetrievalText(f)
+		matchLower := strings.ToLower(retrievalText)
 
 		// 原逻辑：query 包含 subject
 		if f.Subject != "" && strings.Contains(queryLower, strings.ToLower(f.Subject)) {
@@ -182,7 +184,7 @@ func (m *MemoryRetriever) detectEntityMentions(ctx context.Context, query string
 		}
 
 		// 新增：query 中包含事实内容里的非停用词
-		if m.hasKeywordMatch(queryLower, contentLower) {
+		if m.hasKeywordMatch(queryLower, matchLower) {
 			if !seen[f.FactID] {
 				seen[f.FactID] = true
 				matched = append(matched, &entity.HealthMemory{

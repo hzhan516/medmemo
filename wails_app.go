@@ -645,7 +645,7 @@ func (a *WailsApp) backfillEmbeddings() {
 		if _, err := a.embeddingRepo.GetByFactID(ctx, f.FactID); err == nil {
 			continue // 已存在 embedding，跳过
 		}
-		embedText := fmt.Sprintf("%s %s %s", f.Subject, f.Predicate, f.Object)
+		embedText := usecase.BuildFactRetrievalText(f)
 		vector, embedErr := a.embeddingSvc.EmbedSingle(ctx, embedText)
 		if embedErr != nil {
 			fmt.Printf("[backfillEmbeddings] 生成 embedding 失败 %s: %v\n", f.FactID, embedErr)
@@ -2419,7 +2419,7 @@ func (a *WailsApp) ApproveFact(factID string) error {
 	if a.embeddingSvc != nil && a.embeddingRepo != nil {
 		fact, err := a.factRepo.GetByID(ctx, factID)
 		if err == nil && fact != nil {
-			content := fmt.Sprintf("%s %s %s", fact.Subject, fact.Predicate, fact.Object)
+			content := usecase.BuildFactRetrievalText(fact)
 			vector, embErr := a.embeddingSvc.EmbedSingle(ctx, content)
 			if embErr == nil {
 				embedding := entity.NewSemanticEmbedding(factID, vector, "all-MiniLM-L6-v2")
