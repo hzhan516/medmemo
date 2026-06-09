@@ -279,3 +279,121 @@ func TestWailsApp_ApproveFact_NotFound(t *testing.T) {
 	err := app.ApproveFact("nonexistent")
 	assert.Error(t, err)
 }
+
+// ========== Capture stubs for embedding verification ==========
+
+type captureEmbeddingService struct {
+	lastText string
+}
+
+func (s *captureEmbeddingService) Embed(ctx context.Context, texts []string) ([][]float32, error) {
+	if len(texts) > 0 {
+		s.lastText = texts[0]
+	}
+	return [][]float32{make([]float32, entity.EmbeddingDimension)}, nil
+}
+
+func (s *captureEmbeddingService) EmbedSingle(ctx context.Context, text string) ([]float32, error) {
+	s.lastText = text
+	return make([]float32, entity.EmbeddingDimension), nil
+}
+
+type captureEmbeddingRepository struct {
+	existing map[string]*entity.SemanticEmbedding
+}
+
+func (s *captureEmbeddingRepository) Save(ctx context.Context, e *entity.SemanticEmbedding) error {
+	return nil
+}
+func (s *captureEmbeddingRepository) GetByFactID(ctx context.Context, factID string) (*entity.SemanticEmbedding, error) {
+	if e, ok := s.existing[factID]; ok {
+		return e, nil
+	}
+	return nil, entity.ErrFactNotFound
+}
+func (s *captureEmbeddingRepository) DeleteByFactID(ctx context.Context, factID string) error {
+	return nil
+}
+func (s *captureEmbeddingRepository) SearchSimilar(ctx context.Context, queryVector []float32, topK int) ([]*entity.ScoredEmbedding, error) {
+	return nil, nil
+}
+
+var _ repository.EmbeddingRepository = (*captureEmbeddingRepository)(nil)
+
+// ========== Embedding input capture tests ==========
+
+func TestWailsApp_ApproveFact_EmbedsEnhancedRetrievalText(t *testing.T) {
+	now := time.Now().UTC()
+	facts := map[string]*entity.ExtractedFact{
+		"fact_weight": {
+			FactID: "fact_weight", Subject: "用户", Predicate: "体重是", Object: "110公斤",
+			Confidence: 0.9, Status: entity.FactStatusPending, CreatedAt: now,
+		},
+	}
+
+	embSvc := &captureEmbeddingService{}
+	app := &WailsApp{
+		factRepo:       &wailsStubFactRepo{facts: facts},
+		embeddingSvc:   embSvc,
+		embeddingRepo:  &captureEmbeddingRepository{},
+		disclaimerRepo: &stubDisclaimerRepository{acceptance: &entity.DisclaimerAcceptance{Version: "1.0"}},
+		auditLogRepo:   &stubAuditLogRepository{},
+	}
+	app.ctx = context.Background()
+
+	err := app.ApproveFact("fact_weight")
+	require.NoError(t, err)
+	assert.Contains(t, embSvc.lastText, "相关问法")
+	assert.Contains(t, embSvc.lastText, "多少斤")
+	assert.Contains(t, embSvc.lastText, "多重")
+}
+
+func TestWailsApp_BackfillEmbeddings_UsesEnhancedRetrievalTextForMissing(t *testing.T) {
+	now := time.Now().UTC()
+	facts := map[string]*entity.ExtractedFact{
+		"fact_weight": {
+			FactID: "fact_weight", Subject: "用户", Predicate: "体重是", Object: "110公斤",
+			Confidence: 0.9, Status: entity.FactStatusApproved, CreatedAt: now,
+		},
+	}
+
+	embSvc := &captureEmbeddingService{}
+	app := &WailsApp{
+		factRepo:       &wailsStubFactRepo{facts: facts},
+		embeddingSvc:   embSvc,
+		embeddingRepo:  &captureEmbeddingRepository{}, // 无现有 embedding
+		disclaimerRepo: &stubDisclaimerRepository{acceptance: &entity.DisclaimerAcceptance{Version: "1.0"}},
+	}
+	app.ctx = context.Background()
+
+	app.backfillEmbeddings()
+	assert.Contains(t, embSvc.lastText, "相关问法")
+	assert.Contains(t, embSvc.lastText, "多少斤")
+	assert.Contains(t, embSvc.lastText, "多重")
+}
+
+func TestWailsApp_BackfillEmbeddings_SkipsExistingEmbedding(t *testing.T) {
+	now := time.Now().UTC()
+	facts := map[string]*entity.ExtractedFact{
+		"fact_weight": {
+			FactID: "fact_weight", Subject: "用户", Predicate: "体重是", Object: "110公斤",
+			Confidence: 0.9, Status: entity.FactStatusApproved, CreatedAt: now,
+		},
+	}
+
+	embSvc := &captureEmbeddingService{}
+	app := &WailsApp{
+		factRepo:     &wailsStubFactRepo{facts: facts},
+		embeddingSvc: embSvc,
+		embeddingRepo: &captureEmbeddingRepository{
+			existing: map[string]*entity.SemanticEmbedding{
+				"fact_weight": {FactID: "fact_weight"},
+			},
+		},
+		disclaimerRepo: &stubDisclaimerRepository{acceptance: &entity.DisclaimerAcceptance{Version: "1.0"}},
+	}
+	app.ctx = context.Background()
+
+	app.backfillEmbeddings()
+	assert.Empty(t, embSvc.lastText, "已有 embedding 的 fact 不应触发重新生成")
+}
