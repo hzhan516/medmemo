@@ -29,8 +29,8 @@ const (
 
 // Loader 配置加载器，负责从文件/环境变量/默认值加载配置。
 type Loader struct {
-	configPath      string
-	defaultChannel  string
+	configPath     string
+	defaultChannel string
 }
 
 // NewLoader 构造函数。

@@ -257,16 +257,16 @@ func (a *WailsApp) checkUpdateAsync() {
 
 	// 通过 Wails Events 推送更新通知到前端
 	payload := map[string]any{
-		"version":           info.Version,
-		"display_version":   info.DisplayVersion,
-		"name":              info.Name,
-		"body":              info.Body,
-		"published_at":      info.PublishedAt.Format(time.RFC3339),
-		"mandatory":         info.Mandatory,
-		"channel":           string(info.Channel),
-		"prerelease":        info.Prerelease,
-		"prerelease_label":  info.PreReleaseLabel,
-		"build_number":      info.BuildNumber,
+		"version":          info.Version,
+		"display_version":  info.DisplayVersion,
+		"name":             info.Name,
+		"body":             info.Body,
+		"published_at":     info.PublishedAt.Format(time.RFC3339),
+		"mandatory":        info.Mandatory,
+		"channel":          string(info.Channel),
+		"prerelease":       info.Prerelease,
+		"prerelease_label": info.PreReleaseLabel,
+		"build_number":     info.BuildNumber,
 	}
 	runtime.EventsEmit(a.ctx, "update:available", payload)
 }
