@@ -247,18 +247,26 @@ func (a *WailsApp) checkUpdateAsync() {
 	}
 
 	info, err := a.updaterSvc.CheckUpdate(a.ctx, version)
-	if err != nil || info == nil {
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to check update: %v\n", err)
+		return
+	}
+	if info == nil {
 		return
 	}
 
 	// 通过 Wails Events 推送更新通知到前端
 	payload := map[string]any{
-		"version":      info.Version,
-		"name":         info.Name,
-		"body":         info.Body,
-		"published_at": info.PublishedAt.Format(time.RFC3339),
-		"mandatory":    info.Mandatory,
-		"channel":      string(info.Channel),
+		"version":          info.Version,
+		"display_version":  info.DisplayVersion,
+		"name":             info.Name,
+		"body":             info.Body,
+		"published_at":     info.PublishedAt.Format(time.RFC3339),
+		"mandatory":        info.Mandatory,
+		"channel":          string(info.Channel),
+		"prerelease":       info.Prerelease,
+		"prerelease_label": info.PreReleaseLabel,
+		"build_number":     info.BuildNumber,
 	}
 	runtime.EventsEmit(a.ctx, "update:available", payload)
 }
@@ -1052,12 +1060,16 @@ func (a *WailsApp) ReportComplianceFeedback(ruleID string, originalText string) 
 
 // UpdateInfoResponse 前端更新信息响应。
 type UpdateInfoResponse struct {
-	Version     string `json:"version"`
-	Name        string `json:"name"`
-	Body        string `json:"body"`
-	PublishedAt string `json:"published_at"`
-	Mandatory   bool   `json:"mandatory"`
-	Channel     string `json:"channel"`
+	Version         string `json:"version"`
+	DisplayVersion  string `json:"display_version"`
+	Name            string `json:"name"`
+	Body            string `json:"body"`
+	PublishedAt     string `json:"published_at"`
+	Mandatory       bool   `json:"mandatory"`
+	Channel         string `json:"channel"`
+	Prerelease      bool   `json:"prerelease"`
+	PreReleaseLabel string `json:"prerelease_label"`
+	BuildNumber     string `json:"build_number"`
 }
 
 // CheckUpdate 检测是否存在可用更新，供前端主动调用。
@@ -1075,12 +1087,16 @@ func (a *WailsApp) CheckUpdate() (*UpdateInfoResponse, error) {
 	}
 
 	return &UpdateInfoResponse{
-		Version:     info.Version,
-		Name:        info.Name,
-		Body:        info.Body,
-		PublishedAt: info.PublishedAt.Format(time.RFC3339),
-		Mandatory:   info.Mandatory,
-		Channel:     string(info.Channel),
+		Version:         info.Version,
+		DisplayVersion:  info.DisplayVersion,
+		Name:            info.Name,
+		Body:            info.Body,
+		PublishedAt:     info.PublishedAt.Format(time.RFC3339),
+		Mandatory:       info.Mandatory,
+		Channel:         string(info.Channel),
+		Prerelease:      info.Prerelease,
+		PreReleaseLabel: info.PreReleaseLabel,
+		BuildNumber:     info.BuildNumber,
 	}, nil
 }
 
@@ -1316,9 +1332,31 @@ func (a *WailsApp) testGeminiAPIKey(ctx context.Context, apiKey string) (*TestAP
 	}, nil
 }
 
-// GetVersion 返回当前应用版本号（构建时通过 -ldflags 注入）。
+// VersionInfoResponse 返回当前应用的完整版本元数据。
+type VersionInfoResponse struct {
+	Version         string `json:"version"`          // 可比较版本，如 "v1.1.3" 或 "v1.1.3-Pre-release-build.57"
+	DisplayVersion  string `json:"display_version"`  // UI 展示版本，与 Version 相同
+	BuildNumber     string `json:"build_number"`     // 构建号，正式版为空
+	Channel         string `json:"channel"`          // 更新通道，stable 或 beta
+	PreReleaseLabel string `json:"prerelease_label"` // 预发布标签，正式版为空
+	PreRelease      bool   `json:"prerelease"`       // 是否为预发布版本
+}
+
+// GetVersion 返回当前应用版本号（向后兼容，返回 DisplayVersion）。
 func (a *WailsApp) GetVersion() string {
 	return version
+}
+
+// GetVersionInfo 返回当前应用的完整版本元数据。
+func (a *WailsApp) GetVersionInfo() *VersionInfoResponse {
+	return &VersionInfoResponse{
+		Version:         version,
+		DisplayVersion:  version,
+		BuildNumber:     buildNumber,
+		Channel:         updateChannel,
+		PreReleaseLabel: prereleaseLabel,
+		PreRelease:      prereleaseLabel != "",
+	}
 }
 
 // CollectSystemInfo 收集当前运行环境信息，供前端展示。

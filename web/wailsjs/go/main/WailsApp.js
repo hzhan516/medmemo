@@ -10,16 +10,16 @@ export function ApplyUpdate(arg1) {
   return window['go']['main']['WailsApp']['ApplyUpdate'](arg1);
 }
 
+export function ApproveFact(arg1) {
+  return window['go']['main']['WailsApp']['ApproveFact'](arg1);
+}
+
 export function BuildCLIProvider(arg1, arg2) {
   return window['go']['main']['WailsApp']['BuildCLIProvider'](arg1, arg2);
 }
 
 export function CancelOAuthDeviceFlow(arg1) {
   return window['go']['main']['WailsApp']['CancelOAuthDeviceFlow'](arg1);
-}
-
-export function CollectSystemInfo() {
-  return window['go']['main']['WailsApp']['CollectSystemInfo']();
 }
 
 export function CheckEmergency(arg1) {
@@ -32,6 +32,10 @@ export function CheckProviderHealth(arg1) {
 
 export function CheckUpdate() {
   return window['go']['main']['WailsApp']['CheckUpdate']();
+}
+
+export function CollectSystemInfo() {
+  return window['go']['main']['WailsApp']['CollectSystemInfo']();
 }
 
 export function CreateConversation() {
@@ -52,6 +56,10 @@ export function DeclineDisclaimer() {
 
 export function DeleteConversation(arg1) {
   return window['go']['main']['WailsApp']['DeleteConversation'](arg1);
+}
+
+export function DeleteMemory(arg1) {
+  return window['go']['main']['WailsApp']['DeleteMemory'](arg1);
 }
 
 export function DeleteProvider(arg1) {
@@ -102,24 +110,32 @@ export function GetDeletedConversations() {
   return window['go']['main']['WailsApp']['GetDeletedConversations']();
 }
 
-export function SetDataRetentionDays(arg1) {
-  return window['go']['main']['WailsApp']['SetDataRetentionDays'](arg1);
-}
-
-export function GetEmbeddingStatus() {
-  return window['go']['main']['WailsApp']['GetEmbeddingStatus']();
+export function GetDisclaimerStatus() {
+  return window['go']['main']['WailsApp']['GetDisclaimerStatus']();
 }
 
 export function GetEmbeddingModelDirPath() {
   return window['go']['main']['WailsApp']['GetEmbeddingModelDirPath']();
 }
 
-export function OpenEmbeddingModelDir() {
-  return window['go']['main']['WailsApp']['OpenEmbeddingModelDir']();
+export function GetEmbeddingStatus() {
+  return window['go']['main']['WailsApp']['GetEmbeddingStatus']();
 }
 
-export function GetDisclaimerStatus() {
-  return window['go']['main']['WailsApp']['GetDisclaimerStatus']();
+export function GetMemories(arg1, arg2) {
+  return window['go']['main']['WailsApp']['GetMemories'](arg1, arg2);
+}
+
+export function GetMemoriesBySession(arg1) {
+  return window['go']['main']['WailsApp']['GetMemoriesBySession'](arg1);
+}
+
+export function GetMemoryByID(arg1) {
+  return window['go']['main']['WailsApp']['GetMemoryByID'](arg1);
+}
+
+export function GetMemoryStats() {
+  return window['go']['main']['WailsApp']['GetMemoryStats']();
 }
 
 export function GetModels() {
@@ -134,6 +150,10 @@ export function GetOAuthDeviceFlowStatus(arg1) {
   return window['go']['main']['WailsApp']['GetOAuthDeviceFlowStatus'](arg1);
 }
 
+export function GetPendingReviews(arg1, arg2) {
+  return window['go']['main']['WailsApp']['GetPendingReviews'](arg1, arg2);
+}
+
 export function GetProviderHealthStatus(arg1) {
   return window['go']['main']['WailsApp']['GetProviderHealthStatus'](arg1);
 }
@@ -146,52 +166,12 @@ export function GetVersion() {
   return window['go']['main']['WailsApp']['GetVersion']();
 }
 
+export function GetVersionInfo() {
+  return window['go']['main']['WailsApp']['GetVersionInfo']();
+}
+
 export function GetVersionNotes() {
   return window['go']['main']['WailsApp']['GetVersionNotes']();
-}
-
-export function GetMemories(arg1, arg2) {
-  return window['go']['main']['WailsApp']['GetMemories'](arg1, arg2);
-}
-
-export function GetMemoryByID(arg1) {
-  return window['go']['main']['WailsApp']['GetMemoryByID'](arg1);
-}
-
-export function DeleteMemory(arg1) {
-  return window['go']['main']['WailsApp']['DeleteMemory'](arg1);
-}
-
-export function SearchMemories(arg1) {
-  return window['go']['main']['WailsApp']['SearchMemories'](arg1);
-}
-
-export function GetPendingReviews(arg1, arg2) {
-  return window['go']['main']['WailsApp']['GetPendingReviews'](arg1, arg2);
-}
-
-export function ApproveFact(arg1) {
-  return window['go']['main']['WailsApp']['ApproveFact'](arg1);
-}
-
-export function RejectFact(arg1) {
-  return window['go']['main']['WailsApp']['RejectFact'](arg1);
-}
-
-export function GetMemoryStats() {
-  return window['go']['main']['WailsApp']['GetMemoryStats']();
-}
-
-export function GetMemoriesBySession(arg1) {
-  return window['go']['main']['WailsApp']['GetMemoriesBySession'](arg1);
-}
-
-export function SetMemoryInjectionEnabled(arg1) {
-  return window['go']['main']['WailsApp']['SetMemoryInjectionEnabled'](arg1);
-}
-
-export function SetSessionMemoryInjection(arg1, arg2) {
-  return window['go']['main']['WailsApp']['SetSessionMemoryInjection'](arg1, arg2);
 }
 
 export function HardDeleteConversation(arg1) {
@@ -210,6 +190,10 @@ export function OpenDownloadURL(arg1) {
   return window['go']['main']['WailsApp']['OpenDownloadURL'](arg1);
 }
 
+export function OpenEmbeddingModelDir() {
+  return window['go']['main']['WailsApp']['OpenEmbeddingModelDir']();
+}
+
 export function OpenGitHubIssue(arg1, arg2) {
   return window['go']['main']['WailsApp']['OpenGitHubIssue'](arg1, arg2);
 }
@@ -226,6 +210,10 @@ export function RefreshToken(arg1) {
   return window['go']['main']['WailsApp']['RefreshToken'](arg1);
 }
 
+export function RejectFact(arg1) {
+  return window['go']['main']['WailsApp']['RejectFact'](arg1);
+}
+
 export function ReportComplianceFeedback(arg1, arg2) {
   return window['go']['main']['WailsApp']['ReportComplianceFeedback'](arg1, arg2);
 }
@@ -238,12 +226,28 @@ export function SaveAPIKey(arg1, arg2) {
   return window['go']['main']['WailsApp']['SaveAPIKey'](arg1, arg2);
 }
 
+export function SearchMemories(arg1) {
+  return window['go']['main']['WailsApp']['SearchMemories'](arg1);
+}
+
 export function SendMessage(arg1) {
   return window['go']['main']['WailsApp']['SendMessage'](arg1);
 }
 
 export function SendMessageStream(arg1) {
   return window['go']['main']['WailsApp']['SendMessageStream'](arg1);
+}
+
+export function SetDataRetentionDays(arg1) {
+  return window['go']['main']['WailsApp']['SetDataRetentionDays'](arg1);
+}
+
+export function SetMemoryInjectionEnabled(arg1) {
+  return window['go']['main']['WailsApp']['SetMemoryInjectionEnabled'](arg1);
+}
+
+export function SetSessionMemoryInjection(arg1, arg2) {
+  return window['go']['main']['WailsApp']['SetSessionMemoryInjection'](arg1, arg2);
 }
 
 export function SetUpdateSettings(arg1) {

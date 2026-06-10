@@ -66,7 +66,14 @@ export function UpdateModal({
                 新版本可用
               </span>
             )}
-            <h2 className="text-lg font-semibold">MedMemo {info.version}</h2>
+            <h2 className="text-lg font-semibold">
+              MedMemo {info.display_version || info.version}
+              {info.prerelease && (
+                <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                  测试版
+                </span>
+              )}
+            </h2>
           </div>
           <button
             onClick={onDismiss}

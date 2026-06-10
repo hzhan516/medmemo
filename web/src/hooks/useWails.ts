@@ -18,7 +18,7 @@ type SystemInfo = feedback.SystemInfo
 type AuthDetectResult = main.AuthDetectResult
 type MessageResponse = main.MessageResponse
 
-import { SaveAPIKey, HasAPIKey, GetVersion, DetectAuthMethods } from '@wails/go/main/WailsApp'
+import { SaveAPIKey, HasAPIKey, GetVersion, GetVersionInfo, DetectAuthMethods } from '@wails/go/main/WailsApp'
 
 /**
  * Wails 后端绑定方法封装 Hook。
@@ -129,6 +129,10 @@ export function useWails() {
 
   const getVersion = useCallback(async (): Promise<string> => {
     return await GetVersion()
+  }, [])
+
+  const getVersionInfo = useCallback(async (): Promise<main.VersionInfoResponse> => {
+    return await GetVersionInfo()
   }, [])
 
   const detectAuthMethods = useCallback(async (): Promise<AuthDetectResult> => {
@@ -258,6 +262,7 @@ export function useWails() {
     saveAPIKey,
     hasAPIKey,
     getVersion,
+    getVersionInfo,
     detectAuthMethods,
     getVersionNotes,
     collectSystemInfo,

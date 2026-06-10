@@ -98,14 +98,16 @@ func (g *GitHubUpdater) FetchLatest(ctx context.Context, channel entity.UpdateCh
 		}
 
 		info := &entity.UpdateInfo{
-			Version:     release.TagName,
-			Name:        release.Name,
-			Body:        release.Body,
-			PublishedAt: release.PublishedAt,
-			DownloadURL: asset.BrowserDownloadURL,
-			Checksum:    checksum,
-			Mandatory:   g.isMandatory(release),
-			Channel:     channel,
+			Version:        release.TagName,
+			DisplayVersion: release.Name,
+			Name:           release.Name,
+			Body:           release.Body,
+			PublishedAt:    release.PublishedAt,
+			DownloadURL:    asset.BrowserDownloadURL,
+			Checksum:       checksum,
+			Mandatory:      g.isMandatory(release),
+			Channel:        channel,
+			Prerelease:     release.Prerelease,
 		}
 
 		return info, nil
@@ -202,6 +204,11 @@ func findTargetAsset(assets []githubAsset, goos, goarch string) *githubAsset {
 		}
 	}
 	// Windows 回退：未匹配到 setup/installer 时取任意 exe
+	if goos == "linux" {
+		if fallback := findLinuxFallback(assets); fallback != nil {
+			return fallback
+		}
+	}
 	if goos == "windows" {
 		return findWindowsFallback(assets)
 	}
@@ -221,6 +228,16 @@ func matchesPlatform(name, goos, goarch string) bool {
 			(strings.Contains(name, "setup") || strings.Contains(name, "installer"))
 	}
 	return false
+}
+
+// findLinuxFallback 在未匹配到带架构的 AppImage 时回退到任意 .AppImage。
+func findLinuxFallback(assets []githubAsset) *githubAsset {
+	for i := range assets {
+		if strings.HasSuffix(strings.ToLower(assets[i].Name), ".appimage") {
+			return &assets[i]
+		}
+	}
+	return nil
 }
 
 // findWindowsFallback 在未匹配到 setup 安装程序时回退到任意 exe。
