@@ -23,7 +23,6 @@ func TestHasUpdate(t *testing.T) {
 		{"invalid current", "abc", "v0.2.0", false, true},
 		{"invalid remote", "v0.1.0", "abc", false, true},
 		{"invalid format", "v1.a.0", "v1.b.0", false, true},
-		{"too many segments", "v1.0.0.0", "v1.0.0.1", false, true},
 		{"two segment current", "v1.0", "v1.0.1", true, false},
 		{"two segment remote", "v1.0.0", "v1.1", true, false},
 		{"one segment current", "v1", "v1.0.1", true, false},
@@ -34,6 +33,15 @@ func TestHasUpdate(t *testing.T) {
 		{"same version same build", "0.1.0-build.10", "0.1.0-build.10", false, false},
 		{"stable to pre-release same core", "0.1.0", "0.1.0-Pre-release-build.5", true, false},
 		{"pre-release to stable same core", "0.1.0-Pre-release-build.5", "0.1.0", true, false},
+		// 四段版本号与 build 后缀兼容场景
+		{"4-segment prerelease to 4-segment newer", "1.1.2-Pre-release-build.53", "1.1.2.54", true, false},
+		{"4-segment same", "1.1.2.54", "1.1.2.54", false, false},
+		{"4-segment newer build", "1.1.2.54", "1.1.2.55", true, false},
+		{"4-segment avoid downgrade", "1.1.2.55", "1.1.2.54", false, false},
+		{"v prefix to 4-segment", "v1.1.2", "1.1.2.54", true, false},
+		{"build suffix incremental", "1.1.2-build.53", "1.1.2-build.54", true, false},
+		{"build suffix same as 4-segment", "1.1.2-build.54", "1.1.2.54", false, false},
+		{"stable to build suffix", "1.1.2", "1.1.2-build.1", true, false},
 	}
 
 	for _, tt := range tests {
@@ -114,6 +122,12 @@ func TestIsStableVersion(t *testing.T) {
 		{"dev version", "dev", false},
 		{"empty string", "", false},
 		{"mixed alphanumeric", "1.2.3a", false},
+		// 四段版本号与 build 后缀场景
+		{"4-segment stable", "1.1.2.54", true},
+		{"4-segment with v", "v1.1.2.54", true},
+		{"build suffix stable", "1.1.2-build.54", true},
+		{"build suffix with v", "v1.1.2-build.54", true},
+		{"pre-release with build", "1.1.2-Pre-release-build.53", false},
 	}
 
 	for _, tt := range tests {
@@ -131,8 +145,8 @@ func TestDefaultUpdateSettings(t *testing.T) {
 	if !s.CheckEnabled {
 		t.Error("expected CheckEnabled to be true")
 	}
-	if s.Channel != ChannelBeta {
-		t.Errorf("expected default channel to be beta, got %s", s.Channel)
+	if s.Channel != ChannelStable {
+		t.Errorf("expected default channel to be stable, got %s", s.Channel)
 	}
 	if s.SkipVersion != "" {
 		t.Error("expected SkipVersion to be empty")
