@@ -15,8 +15,14 @@ jobs:
     name: Generate Version
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.version.outputs.version }}
+      base_version: ${{ steps.version.outputs.base_version }}
+      current_version: ${{ steps.version.outputs.current_version }}
+      display_version: ${{ steps.version.outputs.display_version }}
+      release_tag: ${{ steps.version.outputs.release_tag }}
+      build_number: ${{ steps.version.outputs.build_number }}
+      channel: ${{ steps.version.outputs.channel }}
       prerelease: ${{ steps.version.outputs.prerelease }}
+      prerelease_label: ${{ steps.version.outputs.prerelease_label }}
     steps:
       - uses: actions/checkout@v6
 
@@ -28,16 +34,46 @@ jobs:
           BRANCH=${{ github.ref_name }}
 
           if [ "$BRANCH" = "main" ]; then
-            VERSION="${BASE_VERSION}.${RUN_NUMBER}"
+            CURRENT_VERSION="v${BASE_VERSION}"
+            DISPLAY_VERSION="v${BASE_VERSION}"
+            RELEASE_TAG="v${BASE_VERSION}"
+            BUILD_NUMBER=""
+            CHANNEL="stable"
             PRERELEASE="false"
+            PRERELEASE_LABEL=""
           else
-            VERSION="${BASE_VERSION}-Pre-release-build.${RUN_NUMBER}"
+            CURRENT_VERSION="v${BASE_VERSION}-Pre-release-build.${RUN_NUMBER}"
+            DISPLAY_VERSION="v${BASE_VERSION}-Pre-release-build.${RUN_NUMBER}"
+            RELEASE_TAG="v${BASE_VERSION}-Pre-release-build.${RUN_NUMBER}"
+            BUILD_NUMBER="${RUN_NUMBER}"
+            CHANNEL="beta"
             PRERELEASE="true"
+            PRERELEASE_LABEL="Pre-release"
           fi
 
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "base_version=$BASE_VERSION" >> $GITHUB_OUTPUT
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "display_version=$DISPLAY_VERSION" >> $GITHUB_OUTPUT
+          echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
+          echo "build_number=$BUILD_NUMBER" >> $GITHUB_OUTPUT
+          echo "channel=$CHANNEL" >> $GITHUB_OUTPUT
           echo "prerelease=$PRERELEASE" >> $GITHUB_OUTPUT
-          echo "Generated version: $VERSION (prerelease=$PRERELEASE)"
+          echo "prerelease_label=$PRERELEASE_LABEL" >> $GITHUB_OUTPUT
+          echo "Generated: base=$BASE_VERSION current=$CURRENT_VERSION tag=$RELEASE_TAG channel=$CHANNEL prerelease=$PRERELEASE"
+
+      - name: Check duplicate release tag (main only)
+        if: github.ref_name == 'main'
+        run: |
+          TAG="${{ steps.version.outputs.release_tag }}"
+          REPO="${{ github.repository }}"
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            echo "ERROR: Release tag $TAG already exists."
+            echo "Bump wails.json info.productVersion before pushing to main."
+            exit 1
+          fi
+          echo "Release tag $TAG is available."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build:
     name: Build ${{ matrix.platform }}
@@ -91,7 +127,13 @@ jobs:
           C:\msys64\usr\bin\pacman.exe -S --noconfirm mingw-w64-x86_64-dlfcn
 
       - name: Build and Package
-        run: ./scripts/build/wails-build.sh ${{ matrix.platform }} ${{ needs.version.outputs.version }}
+        run: |
+          ./scripts/build/wails-build.sh \
+            "${{ matrix.platform }}" \
+            "${{ needs.version.outputs.current_version }}" \
+            "${{ needs.version.outputs.build_number }}" \
+            "${{ needs.version.outputs.channel }}" \
+            "${{ needs.version.outputs.prerelease_label }}"
         shell: bash
 
       - name: Check binary size (Linux)
@@ -134,7 +176,7 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: medmemo-${{ matrix.platform }}-${{ needs.version.outputs.version }}
+          name: medmemo-${{ matrix.platform }}-${{ needs.version.outputs.release_tag }}
           path: build/bin/*
           retention-days: 1
 
@@ -146,19 +188,19 @@ jobs:
       - name: Download Linux artifacts
         uses: actions/download-artifact@v8
         with:
-          name: medmemo-linux-${{ needs.version.outputs.version }}
+          name: medmemo-linux-${{ needs.version.outputs.release_tag }}
           path: artifacts/linux/
 
       - name: Download Windows artifacts
         uses: actions/download-artifact@v8
         with:
-          name: medmemo-windows-${{ needs.version.outputs.version }}
+          name: medmemo-windows-${{ needs.version.outputs.release_tag }}
           path: artifacts/windows/
 
       - name: Download macOS artifacts
         uses: actions/download-artifact@v8
         with:
-          name: medmemo-darwin-${{ needs.version.outputs.version }}
+          name: medmemo-darwin-${{ needs.version.outputs.release_tag }}
           path: artifacts/darwin/
 
       - name: Prepare release assets
@@ -197,8 +239,8 @@ jobs:
       - name: Create Draft Release
         uses: softprops/action-gh-release@v3
         with:
-          name: MedMemo ${{ needs.version.outputs.version }}
-          tag_name: ${{ needs.version.outputs.version }}
+          name: MedMemo ${{ needs.version.outputs.display_version }}
+          tag_name: ${{ needs.version.outputs.release_tag }}
           prerelease: ${{ needs.version.outputs.prerelease == 'true' }}
           draft: true
           files: release-assets/*
@@ -209,7 +251,7 @@ jobs:
 
       - name: Publish Release
         run: |
-          TAG="${{ needs.version.outputs.version }}"
+          TAG="${{ needs.version.outputs.release_tag }}"
           REPO="${{ github.repository }}"
           MAX_RETRIES=5
           DELAY=10

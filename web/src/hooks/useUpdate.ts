@@ -4,11 +4,15 @@ import { useWails } from './useWails'
 
 export interface UpdateInfo {
   version: string
+  display_version: string
   name: string
   body: string
   published_at: string
   mandatory: boolean
   channel: string
+  prerelease: boolean
+  prerelease_label: string
+  build_number: string
 }
 
 export interface DownloadProgress {

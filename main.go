@@ -35,7 +35,17 @@ var assets embed.FS
 var wailsConfig embed.FS
 
 // version 由构建时通过 -ldflags -X main.version={{.Version}} 注入。
+// 值为 current_version：正式版如 "v1.1.3"，测试版如 "v1.1.3-Pre-release-build.57"。
 var version = "dev"
+
+// buildNumber 由构建时注入，如 "57"。正式版为空字符串。
+var buildNumber = ""
+
+// updateChannel 由构建时注入，如 "stable" 或 "beta"。
+var updateChannel = "beta"
+
+// prereleaseLabel 由构建时注入，如 "Pre-release"。正式版为空字符串。
+var prereleaseLabel = ""
 
 func init() {
 	if version != "dev" {
@@ -55,7 +65,7 @@ func init() {
 	}
 	v := strings.TrimSpace(cfg.Info.ProductVersion)
 	if v != "" {
-		version = "v" + v
+		version = "v" + v + "-dev"
 	}
 }
 
@@ -163,8 +173,10 @@ func findBundledModelDir(resourceDir string) string {
 }
 
 // NewDefaultLoader 创建使用默认搜索路径的配置加载器。
+// 将构建时注入的 updateChannel 作为默认更新通道传给 loader，
+// 避免 loader 直接依赖 main 包变量（Clean Architecture）。
 func NewDefaultLoader() *config.Loader {
-	return config.NewLoader("")
+	return config.NewLoaderWithDefaultChannel("", updateChannel)
 }
 
 // NewSQLCipherConnectorFromConfig 从 AppConfig 获取数据目录创建数据库连接。

@@ -187,7 +187,7 @@ func TestLoader_Load_MissingFields_UseDefaults(t *testing.T) {
 	assert.Equal(t, defaultEnableAnalytics, cfg.EnableAnalytics)
 	assert.Equal(t, defaultProviderType, cfg.ProviderType)
 	assert.Equal(t, defaultModelDir, cfg.ModelDir)
-	assert.Equal(t, entity.ChannelBeta, cfg.UpdateChannel)
+	assert.Equal(t, entity.ChannelStable, cfg.UpdateChannel)
 	assert.Equal(t, entity.DesensitizationStandard, cfg.DesensitizationLevel)
 	assert.Equal(t, defaultDataRetentionDays, cfg.DataRetentionDays)
 }
@@ -210,7 +210,7 @@ func TestLoader_loadDefaults(t *testing.T) {
 	assert.Equal(t, defaultModelDir, raw.ModelDir)
 	require.NotNil(t, raw.UpdateCheckEnabled)
 	assert.True(t, *raw.UpdateCheckEnabled)
-	assert.Equal(t, string(entity.ChannelBeta), raw.UpdateChannel)
+	assert.Equal(t, string(entity.ChannelStable), raw.UpdateChannel)
 	assert.Equal(t, defaultDesensitizationLevel, raw.DesensitizationLevel)
 	require.NotNil(t, raw.DataRetentionDays)
 	assert.Equal(t, defaultDataRetentionDays, *raw.DataRetentionDays)
