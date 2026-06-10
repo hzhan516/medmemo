@@ -20,18 +20,18 @@ const (
 // UpdateInfo 描述一次可更新的版本信息。
 // 由 GitHub Releases API 响应映射而来，经领域校验后传递给前端。
 type UpdateInfo struct {
-	Version         string        `json:"version"`           // GitHub tag，如 "v1.1.3-Pre-release-build.57"
-	DisplayVersion  string        `json:"display_version"`   // UI 展示版本，如 "v1.1.3-Pre-release-build.57"
-	Name            string        `json:"name"`              // 发布标题
-	Body            string        `json:"body"`              // 发布说明（Markdown 格式）
-	PublishedAt     time.Time     `json:"published_at"`      // 发布时间
-	DownloadURL     string        `json:"download_url"`      // 对应平台产物的下载地址
-	Checksum        string        `json:"checksum"`          // SHA256 校验值
-	Mandatory       bool          `json:"mandatory"`         // 是否为强制更新（安全补丁）
-	Channel         UpdateChannel `json:"channel"`           // 用户选择的检查通道
-	Prerelease      bool          `json:"prerelease"`        // 该 release 本身是否为 prerelease
-	BuildNumber     string        `json:"build_number"`      // 构建号
-	PreReleaseLabel string        `json:"prerelease_label"`  // 预发布标签，如 "Pre-release"
+	Version         string        `json:"version"`          // GitHub tag，如 "v1.1.3-Pre-release-build.57"
+	DisplayVersion  string        `json:"display_version"`  // UI 展示版本，如 "v1.1.3-Pre-release-build.57"
+	Name            string        `json:"name"`             // 发布标题
+	Body            string        `json:"body"`             // 发布说明（Markdown 格式）
+	PublishedAt     time.Time     `json:"published_at"`     // 发布时间
+	DownloadURL     string        `json:"download_url"`     // 对应平台产物的下载地址
+	Checksum        string        `json:"checksum"`         // SHA256 校验值
+	Mandatory       bool          `json:"mandatory"`        // 是否为强制更新（安全补丁）
+	Channel         UpdateChannel `json:"channel"`          // 用户选择的检查通道
+	Prerelease      bool          `json:"prerelease"`       // 该 release 本身是否为 prerelease
+	BuildNumber     string        `json:"build_number"`     // 构建号
+	PreReleaseLabel string        `json:"prerelease_label"` // 预发布标签，如 "Pre-release"
 }
 
 // HasUpdate 语义化版本比较：remote 是否比 current 更新。
