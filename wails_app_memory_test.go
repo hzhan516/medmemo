@@ -409,7 +409,6 @@ func TestWailsApp_RunMigration_UsesEnhancedRetrievalTextForMissing(t *testing.T)
 		embSvc,
 		state,
 	)
-	
 
 	app := &WailsApp{
 		factRepo:       &wailsStubFactRepo{facts: facts},
