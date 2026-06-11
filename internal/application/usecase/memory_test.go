@@ -37,6 +37,9 @@ func (s *stubEmbeddingService) EmbedSingle(ctx context.Context, text string) ([]
 	return make([]float32, entity.EmbeddingDimension), nil
 }
 
+func (s *stubEmbeddingService) ModelVersion() string { return "test-version" }
+func (s *stubEmbeddingService) IsAvailable() bool    { return true }
+
 type stubEmbeddingRepository struct {
 	results []*entity.ScoredEmbedding
 	err     error
@@ -56,6 +59,18 @@ func (s *stubEmbeddingRepository) SearchSimilar(ctx context.Context, queryVector
 		return nil, s.err
 	}
 	return s.results, nil
+}
+
+func (s *stubEmbeddingRepository) SearchSimilarFiltered(ctx context.Context, queryVector []float32, topK int, modelVersion string) ([]*entity.ScoredEmbedding, error) {
+	return s.SearchSimilar(ctx, queryVector, topK)
+}
+
+func (s *stubEmbeddingRepository) CountByVersionNot(ctx context.Context, version string) (int64, error) {
+	return 0, nil
+}
+
+func (s *stubEmbeddingRepository) UpdateEmbedding(ctx context.Context, e *entity.SemanticEmbedding) error {
+	return nil
 }
 
 type stubFactRepository struct {
@@ -94,6 +109,14 @@ func (s *stubFactRepository) FindBySession(ctx context.Context, sessionID string
 }
 func (s *stubFactRepository) FindLatestApprovedByPredicates(ctx context.Context, subject string, predicates []string) (*entity.ExtractedFact, error) {
 	return nil, entity.ErrFactNotFound
+}
+
+func (s *stubFactRepository) CountApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string) (int64, error) {
+	return 0, nil
+}
+
+func (s *stubFactRepository) ListApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string, lastCreatedAt time.Time, lastFactID string, limit int) ([]*entity.ExtractedFact, error) {
+	return nil, nil
 }
 
 // stubFactRepositoryWithSubjects 支持实体提及检测的 stub
