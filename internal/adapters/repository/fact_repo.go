@@ -253,6 +253,55 @@ func (r *FactRepoSQLite) FindBySession(ctx context.Context, sessionID string) ([
 	return result, nil
 }
 
+// CountApprovedFactsNeedingEmbedding 统计需要（重新）生成 embedding 的已审批事实数。
+func (r *FactRepoSQLite) CountApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string) (int64, error) {
+	var count int64
+	if err := r.db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM extracted_facts f
+		LEFT JOIN semantic_embeddings e ON f.fact_id = e.fact_id
+		WHERE f.status = 'approved'
+		  AND (e.fact_id IS NULL OR e.model_version <> ?)
+	`, targetVersion).Scan(&count); err != nil {
+		return 0, fmt.Errorf("failed to count approved facts needing embedding: %w", err)
+	}
+	return count, nil
+}
+
+// ListApprovedFactsNeedingEmbedding 使用稳定 cursor 分页列出需要重新生成 embedding 的已审批事实。
+// 按 created_at ASC, fact_id ASC 排序，支持边处理边更新而不丢失候选。
+func (r *FactRepoSQLite) ListApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string, lastCreatedAt time.Time, lastFactID string, limit int) ([]*entity.ExtractedFact, error) {
+	if limit <= 0 {
+		limit = 500
+	}
+
+	args := []any{targetVersion}
+	cursorSQL := ""
+	if lastFactID != "" {
+		cursorSQL = " AND (f.created_at > ? OR (f.created_at = ? AND f.fact_id > ?))"
+		args = append(args, lastCreatedAt.UnixMilli(), lastCreatedAt.UnixMilli(), lastFactID)
+	}
+	args = append(args, limit)
+
+	rows, err := r.db.QueryContext(ctx, fmt.Sprintf(`
+		SELECT f.fact_id, f.subject, f.predicate, f.object, f.confidence,
+		       f.source_msg_ids, f.status, f.is_sensitive, f.scored_at, f.reviewed_at, f.created_at
+		FROM extracted_facts f
+		LEFT JOIN semantic_embeddings e ON f.fact_id = e.fact_id
+		WHERE f.status = 'approved'
+		  AND (e.fact_id IS NULL OR e.model_version <> ?)
+		%s
+		ORDER BY f.created_at ASC, f.fact_id ASC
+		LIMIT ?
+	`, cursorSQL), args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list approved facts needing embedding: %w", err)
+	}
+	defer rows.Close()
+
+	return scanFacts(rows)
+}
+
 // GetStats 获取审核统计。
 func (r *FactRepoSQLite) GetStats(ctx context.Context) (total, approved, rejected, pending int64, err error) {
 	err = r.db.QueryRowContext(ctx, `SELECT count(*) FROM extracted_facts`).Scan(&total)
