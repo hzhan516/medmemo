@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hzhan516/medmemo/internal/application/usecase"
 	"github.com/hzhan516/medmemo/internal/domain/entity"
 	"github.com/hzhan516/medmemo/internal/domain/repository"
 	"github.com/stretchr/testify/assert"
@@ -105,6 +106,37 @@ func (s *wailsStubFactRepo) FindBySubject(ctx context.Context, subject string) (
 }
 func (s *wailsStubFactRepo) FindBySession(ctx context.Context, sessionID string) ([]*entity.ExtractedFact, error) {
 	return nil, nil
+}
+func (s *wailsStubFactRepo) CountApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string) (int64, error) {
+	var count int64
+	for _, f := range s.facts {
+		if f.Status == entity.FactStatusApproved {
+			count++
+		}
+	}
+	return count, nil
+}
+func (s *wailsStubFactRepo) ListApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string, lastCreatedAt time.Time, lastFactID string, limit int) ([]*entity.ExtractedFact, error) {
+	var result []*entity.ExtractedFact
+	var started bool
+	if lastFactID == "" {
+		started = true
+	}
+	for _, f := range s.facts {
+		if !started {
+			if f.FactID == lastFactID {
+				started = true
+			}
+			continue
+		}
+		if f.Status == entity.FactStatusApproved {
+			result = append(result, f)
+			if len(result) >= limit {
+				break
+			}
+		}
+	}
+	return result, nil
 }
 func (s *wailsStubFactRepo) FindLatestApprovedByPredicates(ctx context.Context, subject string, predicates []string) (*entity.ExtractedFact, error) {
 	var latest *entity.ExtractedFact
@@ -297,6 +329,8 @@ func (s *captureEmbeddingService) EmbedSingle(ctx context.Context, text string) 
 	s.lastText = text
 	return make([]float32, entity.EmbeddingDimension), nil
 }
+func (s *captureEmbeddingService) ModelVersion() string { return "test-version" }
+func (s *captureEmbeddingService) IsAvailable() bool    { return true }
 
 type captureEmbeddingRepository struct {
 	existing map[string]*entity.SemanticEmbedding
@@ -316,6 +350,15 @@ func (s *captureEmbeddingRepository) DeleteByFactID(ctx context.Context, factID 
 }
 func (s *captureEmbeddingRepository) SearchSimilar(ctx context.Context, queryVector []float32, topK int) ([]*entity.ScoredEmbedding, error) {
 	return nil, nil
+}
+func (s *captureEmbeddingRepository) SearchSimilarFiltered(ctx context.Context, queryVector []float32, topK int, modelVersion string) ([]*entity.ScoredEmbedding, error) {
+	return nil, nil
+}
+func (s *captureEmbeddingRepository) CountByVersionNot(ctx context.Context, version string) (int64, error) {
+	return 0, nil
+}
+func (s *captureEmbeddingRepository) UpdateEmbedding(ctx context.Context, e *entity.SemanticEmbedding) error {
+	return nil
 }
 
 var _ repository.EmbeddingRepository = (*captureEmbeddingRepository)(nil)
@@ -348,7 +391,7 @@ func TestWailsApp_ApproveFact_EmbedsEnhancedRetrievalText(t *testing.T) {
 	assert.Contains(t, embSvc.lastText, "多重")
 }
 
-func TestWailsApp_BackfillEmbeddings_UsesEnhancedRetrievalTextForMissing(t *testing.T) {
+func TestWailsApp_RunMigration_UsesEnhancedRetrievalTextForMissing(t *testing.T) {
 	now := time.Now().UTC()
 	facts := map[string]*entity.ExtractedFact{
 		"fact_weight": {
@@ -358,42 +401,34 @@ func TestWailsApp_BackfillEmbeddings_UsesEnhancedRetrievalTextForMissing(t *test
 	}
 
 	embSvc := &captureEmbeddingService{}
+	embedRepo := &captureEmbeddingRepository{}
+	state := usecase.NewMigrationState()
+	migrator := usecase.NewEmbeddingMigrator(
+		&wailsStubFactRepo{facts: facts},
+		embedRepo,
+		embSvc,
+		state,
+	)
+	
+
 	app := &WailsApp{
 		factRepo:       &wailsStubFactRepo{facts: facts},
 		embeddingSvc:   embSvc,
-		embeddingRepo:  &captureEmbeddingRepository{}, // 无现有 embedding
+		embeddingRepo:  embedRepo,
+		migrator:       migrator,
+		migrationState: state,
+		onnxReady:      make(chan struct{}),
 		disclaimerRepo: &stubDisclaimerRepository{acceptance: &entity.DisclaimerAcceptance{Version: "1.0"}},
 	}
 	app.ctx = context.Background()
+	close(app.onnxReady)
 
-	app.backfillEmbeddings()
+	app.runEmbeddingMigration()
 	assert.Contains(t, embSvc.lastText, "相关问法")
 	assert.Contains(t, embSvc.lastText, "多少斤")
 	assert.Contains(t, embSvc.lastText, "多重")
+	assert.True(t, state.IsComplete())
 }
 
-func TestWailsApp_BackfillEmbeddings_SkipsExistingEmbedding(t *testing.T) {
-	now := time.Now().UTC()
-	facts := map[string]*entity.ExtractedFact{
-		"fact_weight": {
-			FactID: "fact_weight", Subject: "用户", Predicate: "体重是", Object: "110公斤",
-			Confidence: 0.9, Status: entity.FactStatusApproved, CreatedAt: now,
-		},
-	}
-
-	embSvc := &captureEmbeddingService{}
-	app := &WailsApp{
-		factRepo:     &wailsStubFactRepo{facts: facts},
-		embeddingSvc: embSvc,
-		embeddingRepo: &captureEmbeddingRepository{
-			existing: map[string]*entity.SemanticEmbedding{
-				"fact_weight": {FactID: "fact_weight"},
-			},
-		},
-		disclaimerRepo: &stubDisclaimerRepository{acceptance: &entity.DisclaimerAcceptance{Version: "1.0"}},
-	}
-	app.ctx = context.Background()
-
-	app.backfillEmbeddings()
-	assert.Empty(t, embSvc.lastText, "已有 embedding 的 fact 不应触发重新生成")
-}
+// TestWailsApp_RunMigration_SkipsExistingEmbedding 已在 embedding_migration_test.go 中覆盖。
+// WailsApp 层仅验证事件发射与 ONNX ready 协调，无需重复测试 migrator 内部跳过逻辑。

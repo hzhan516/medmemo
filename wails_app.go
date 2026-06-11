@@ -646,6 +646,14 @@ func (a *WailsApp) extractFactsAsync(userContent, aiReply, providerID string) {
 	fmt.Printf("[extractFactsAsync] 提取并保存 %d 条待审核事实\n", len(facts))
 }
 
+// safeEventsEmit 安全地发射 Wails 事件，在测试环境（标准 context.Background）下静默跳过。
+func (a *WailsApp) safeEventsEmit(eventName string, data ...any) {
+	if a.ctx == nil || a.ctx == context.Background() || a.ctx == context.TODO() {
+		return
+	}
+	runtime.EventsEmit(a.ctx, eventName, data...)
+}
+
 // runEmbeddingMigration 在 ONNX warmup 后执行 embedding 版本迁移。
 func (a *WailsApp) runEmbeddingMigration() {
 	a.waitForONNXReady()
@@ -666,18 +674,18 @@ func (a *WailsApp) runEmbeddingMigration() {
 		return
 	}
 
-	runtime.EventsEmit(a.ctx, "embedding:migration:start", map[string]any{
+	a.safeEventsEmit("embedding:migration:start", map[string]any{
 		"total": total,
 	})
 
 	processed, failed, err := a.migrator.RunMigration(ctx, func(p, t int) {
-		runtime.EventsEmit(a.ctx, "embedding:migration:progress", map[string]any{
+		a.safeEventsEmit("embedding:migration:progress", map[string]any{
 			"processed": p,
 			"total":     t,
 		})
 	})
 
-	runtime.EventsEmit(a.ctx, "embedding:migration:done", map[string]any{
+	a.safeEventsEmit("embedding:migration:done", map[string]any{
 		"processed": processed,
 		"failed":    failed,
 	})
