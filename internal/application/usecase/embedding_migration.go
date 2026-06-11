@@ -27,6 +27,11 @@ func (s *MigrationState) IsComplete() bool {
 	return s.complete.Load()
 }
 
+// SetComplete 将迁移状态置为完成。
+func (s *MigrationState) SetComplete(v bool) {
+	s.complete.Store(v)
+}
+
 // EmbeddingMigrator 负责在版本升级后重建过期/缺失的 embedding。
 type EmbeddingMigrator struct {
 	factRepo      repository.FactRepository

@@ -74,6 +74,12 @@ type WailsApp struct {
 	// 语义嵌入服务与仓库（向量索引）
 	embeddingSvc  port.EmbeddingService
 	embeddingRepo repository.EmbeddingRepository
+
+	// v1.1.4: embedding 版本迁移器与状态追踪
+	migrator       *usecase.EmbeddingMigrator
+	migrationState *usecase.MigrationState
+	onnxReady      chan struct{}
+	onnxOnce       sync.Once
 }
 
 // NewWailsApp 构造函数，供 Wire 调用。
@@ -96,6 +102,8 @@ func NewWailsApp(
 	dialogueRepo repository.RawDialogueRepository,
 	embeddingSvc port.EmbeddingService,
 	embeddingRepo repository.EmbeddingRepository,
+	migrator *usecase.EmbeddingMigrator,
+	migrationState *usecase.MigrationState,
 ) *WailsApp {
 	return &WailsApp{
 		chatOrchestrator: chat,
@@ -116,6 +124,9 @@ func NewWailsApp(
 		dialogueRepo:     dialogueRepo,
 		embeddingSvc:     embeddingSvc,
 		embeddingRepo:    embeddingRepo,
+		migrator:         migrator,
+		migrationState:   migrationState,
+		onnxReady:        make(chan struct{}),
 		callbackServers:  make(map[string]*auth.LocalCallbackServer),
 		activeStreams:    make(map[string]context.CancelFunc),
 	}
@@ -171,8 +182,8 @@ func (a *WailsApp) Startup(ctx context.Context) {
 	// ONNX 预热：启动后异步执行一次 dummy 推理，将 warmup 成本从首次对话转移到启动阶段
 	go a.warmupONNX()
 
-	// 补全历史事实的 embedding 缺失（TASK-060 修复）
-	go a.backfillEmbeddings()
+	// v1.1.4: 历史 embedding 迁移（版本升级后首次启动触发）
+	go a.runEmbeddingMigration()
 
 	// 初始化 Device Flow 事件回调
 	if a.deviceFlowSvc != nil {
@@ -589,6 +600,8 @@ func (a *WailsApp) saveMessages(ctx context.Context, convID string, messages []m
 // 使用应用生命周期 context，不设置短 timeout，让 warmup 自然完成。
 // 失败仅记录日志，不影响应用启动。
 func (a *WailsApp) warmupONNX() {
+	defer a.onnxOnce.Do(func() { close(a.onnxReady) })
+
 	// 延迟 2 秒，确保 ONNX engine 已完全初始化
 	time.Sleep(2 * time.Second)
 
@@ -601,6 +614,10 @@ func (a *WailsApp) warmupONNX() {
 			fmt.Printf("[ONNX Warmup] embedding 预热完成，耗时 %v\n", time.Since(start))
 		}
 	}
+}
+
+func (a *WailsApp) waitForONNXReady() {
+	<-a.onnxReady
 }
 
 // extractFactsAsync 异步从完整对话（用户消息 + AI 回复）中提取事实并保存到 factRepo。
@@ -629,42 +646,49 @@ func (a *WailsApp) extractFactsAsync(userContent, aiReply, providerID string) {
 	fmt.Printf("[extractFactsAsync] 提取并保存 %d 条待审核事实\n", len(facts))
 }
 
-// backfillEmbeddings 补全已有事实中缺失的 embedding。
-// 在应用启动时异步执行一次，修复历史事实的 embedding 缺失问题。
-func (a *WailsApp) backfillEmbeddings() {
-	if a.factRepo == nil || a.embeddingSvc == nil || a.embeddingRepo == nil {
+// runEmbeddingMigration 在 ONNX warmup 后执行 embedding 版本迁移。
+func (a *WailsApp) runEmbeddingMigration() {
+	a.waitForONNXReady()
+
+	if a.migrator == nil || !a.embeddingSvc.IsAvailable() {
+		if a.migrationState != nil {
+			a.migrationState.SetComplete(true)
+		}
 		return
 	}
-	ctx, cancel := context.WithTimeout(a.ctx, 5*time.Minute)
+
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Minute)
 	defer cancel()
 
-	facts, err := a.factRepo.ListByStatus(ctx, entity.FactStatusApproved, 0, 10000)
-	if err != nil {
-		fmt.Printf("[backfillEmbeddings] 读取事实列表失败: %v\n", err)
+	needs, total, err := a.migrator.NeedsMigration(ctx)
+	if err != nil || !needs {
+		a.migrationState.SetComplete(true)
 		return
 	}
 
-	var backfilled int
-	for _, f := range facts {
-		if _, err := a.embeddingRepo.GetByFactID(ctx, f.FactID); err == nil {
-			continue // 已存在 embedding，跳过
-		}
-		embedText := usecase.BuildFactRetrievalText(f)
-		vector, embedErr := a.embeddingSvc.EmbedSingle(ctx, embedText)
-		if embedErr != nil {
-			fmt.Printf("[backfillEmbeddings] 生成 embedding 失败 %s: %v\n", f.FactID, embedErr)
-			continue
-		}
-		emb := entity.NewSemanticEmbedding(f.FactID, vector, models.CurrentEmbeddingVersion)
-		if saveErr := a.embeddingRepo.Save(ctx, emb); saveErr != nil {
-			fmt.Printf("[backfillEmbeddings] 保存 embedding 失败 %s: %v\n", f.FactID, saveErr)
-			continue
-		}
-		backfilled++
+	runtime.EventsEmit(a.ctx, "embedding:migration:start", map[string]any{
+		"total": total,
+	})
+
+	processed, failed, err := a.migrator.RunMigration(ctx, func(p, t int) {
+		runtime.EventsEmit(a.ctx, "embedding:migration:progress", map[string]any{
+			"processed": p,
+			"total":     t,
+		})
+	})
+
+	runtime.EventsEmit(a.ctx, "embedding:migration:done", map[string]any{
+		"processed": processed,
+		"failed":    failed,
+	})
+
+	if err != nil {
+		fmt.Printf("[EmbeddingMigration] 迁移异常: %v\n", err)
 	}
-	if backfilled > 0 {
-		fmt.Printf("[backfillEmbeddings] 补全 %d 条事实的 embedding\n", backfilled)
+	if failed > 0 {
+		fmt.Printf("[EmbeddingMigration] %d 条 fact 迁移失败（已记录日志）\n", failed)
 	}
+	fmt.Printf("[EmbeddingMigration] 迁移完成：处理 %d 条，失败 %d 条\n", processed, failed)
 }
 
 // StopGeneration 中断所有正在进行的流式生成。

@@ -28,6 +28,7 @@ type MemoryRetriever struct {
 	embeddingRepo      repository.EmbeddingRepository
 	factRepo           repository.FactRepository
 	decayScorer        *DecayScorer
+	migrationState     *MigrationState
 	minConfidence      float64
 	tokenBudget        int
 	enabled            bool
@@ -41,12 +42,14 @@ func NewMemoryRetriever(
 	embeddingRepo repository.EmbeddingRepository,
 	factRepo repository.FactRepository,
 	decayScorer *DecayScorer,
+	migrationState *MigrationState,
 ) *MemoryRetriever {
 	return &MemoryRetriever{
 		embeddingSvc:       embeddingSvc,
 		embeddingRepo:      embeddingRepo,
 		factRepo:           factRepo,
 		decayScorer:        decayScorer,
+		migrationState:     migrationState,
 		minConfidence:      0.6,
 		tokenBudget:        500,
 		enabled:            true,
@@ -285,7 +288,14 @@ func (m *MemoryRetriever) semanticSearch(ctx context.Context, queryVector []floa
 	if searchLimit < 10 {
 		searchLimit = 10
 	}
-	scoredEmbeddings, err := m.embeddingRepo.SearchSimilar(ctx, queryVector, searchLimit)
+	var scoredEmbeddings []*entity.ScoredEmbedding
+	var err error
+	if m.migrationState != nil && m.migrationState.IsComplete() {
+		scoredEmbeddings, err = m.embeddingRepo.SearchSimilarFiltered(
+			ctx, queryVector, searchLimit, m.embeddingSvc.ModelVersion())
+	} else {
+		scoredEmbeddings, err = m.embeddingRepo.SearchSimilar(ctx, queryVector, searchLimit)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to search similar embeddings: %w", err)
 	}

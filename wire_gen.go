@@ -69,7 +69,8 @@ func InitializeApp() (*App, func(), error) {
 	embeddingRepoSQLite := repository.NewEmbeddingRepoSQLite(sqlCipherConnector)
 	factRepoSQLite := repository.NewFactRepoSQLite(sqlCipherConnector)
 	decayScorer := usecase.NewDecayScorer()
-	memoryRetriever := usecase.NewMemoryRetriever(embeddingServiceAdapter, embeddingRepoSQLite, factRepoSQLite, decayScorer)
+	migrationState := usecase.NewMigrationState()
+	memoryRetriever := usecase.NewMemoryRetriever(embeddingServiceAdapter, embeddingRepoSQLite, factRepoSQLite, decayScorer, migrationState)
 	confidenceAggregator := usecase.NewConfidenceAggregator()
 	queryExpansionService := usecase.NewQueryExpansionService()
 	intentResolver := usecase.NewIntentResolver(queryExpansionService)
@@ -89,7 +90,8 @@ func InitializeApp() (*App, func(), error) {
 	oAuthDeviceFlowService := auth.NewOAuthDeviceFlowServiceBare(providerRepoSQLite)
 	auditLogRepoSQLite := repository.NewAuditLogRepoSQLite(sqlCipherConnector)
 	dialogueRepoSQLite := repository.NewDialogueRepoSQLite(sqlCipherConnector)
-	wailsApp := NewWailsApp(chatOrchestrator, memoryRetriever, appConfig, conversationRepoSQLite, messageRepoSQLite, disclaimerRepoSQLite, providerRepoSQLite, healthEngine, titleGenerator, service, keyringStore, tokenRefreshService, oAuthDeviceFlowService, factRepoSQLite, auditLogRepoSQLite, dialogueRepoSQLite, embeddingServiceAdapter, embeddingRepoSQLite)
+	embeddingMigrator := usecase.NewEmbeddingMigrator(factRepoSQLite, embeddingRepoSQLite, embeddingServiceAdapter, migrationState)
+	wailsApp := NewWailsApp(chatOrchestrator, memoryRetriever, appConfig, conversationRepoSQLite, messageRepoSQLite, disclaimerRepoSQLite, providerRepoSQLite, healthEngine, titleGenerator, service, keyringStore, tokenRefreshService, oAuthDeviceFlowService, factRepoSQLite, auditLogRepoSQLite, dialogueRepoSQLite, embeddingServiceAdapter, embeddingRepoSQLite, embeddingMigrator, migrationState)
 	app, cleanup, err := NewApp(wailsApp, sqlCipherConnector, deidentifyPipeline, healthEngine)
 	if err != nil {
 		return nil, nil, err
