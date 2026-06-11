@@ -655,7 +655,7 @@ func (a *WailsApp) backfillEmbeddings() {
 			fmt.Printf("[backfillEmbeddings] 生成 embedding 失败 %s: %v\n", f.FactID, embedErr)
 			continue
 		}
-		emb := entity.NewSemanticEmbedding(f.FactID, vector, "all-MiniLM-L6-v2")
+		emb := entity.NewSemanticEmbedding(f.FactID, vector, models.CurrentEmbeddingVersion)
 		if saveErr := a.embeddingRepo.Save(ctx, emb); saveErr != nil {
 			fmt.Printf("[backfillEmbeddings] 保存 embedding 失败 %s: %v\n", f.FactID, saveErr)
 			continue
@@ -2426,7 +2426,7 @@ func (a *WailsApp) ApproveFact(factID string) error {
 			content := usecase.BuildFactRetrievalText(fact)
 			vector, embErr := a.embeddingSvc.EmbedSingle(ctx, content)
 			if embErr == nil {
-				embedding := entity.NewSemanticEmbedding(factID, vector, "all-MiniLM-L6-v2")
+				embedding := entity.NewSemanticEmbedding(factID, vector, models.CurrentEmbeddingVersion)
 				if saveErr := a.embeddingRepo.Save(ctx, embedding); saveErr != nil {
 					fmt.Printf("[ApproveFact] 保存嵌入向量失败 %s: %v\n", factID, saveErr)
 				}
@@ -2479,7 +2479,7 @@ func (a *WailsApp) RejectFact(factID string) error {
 // 始终使用用户数据目录 ~/.medmemo/data/models/all-MiniLM-L6-v2，
 // 确保在 AppImage（只读 FS）、macOS .app bundle 及 Windows 安装目录中均可正常读写。
 func (a *WailsApp) embeddingModelDir() string {
-	return filepath.Join(a.config.DataDir, "models", "all-MiniLM-L6-v2")
+	return filepath.Join(a.config.DataDir, "models", models.EmbeddingModelName)
 }
 
 // GetEmbeddingStatus 获取本地 Embedding 模型状态。
@@ -2560,7 +2560,7 @@ func (a *WailsApp) GetEmbeddingStatus() (*EmbeddingStatusResponse, error) {
 		RuntimeLibPath:    runtimeLibPath,
 		FailureReason:     failureReason,
 		ModelPath:         modelPath,
-		ModelName:         "all-MiniLM-L6-v2",
+		ModelName:         models.EmbeddingModelName,
 		DownloadURL:       downloadURL,
 	}, nil
 }

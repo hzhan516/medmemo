@@ -22,6 +22,7 @@ import (
 	"github.com/hzhan516/medmemo/internal/infrastructure/database"
 	"github.com/hzhan516/medmemo/internal/infrastructure/onnx"
 	"github.com/hzhan516/medmemo/internal/infrastructure/secret"
+	"github.com/hzhan516/medmemo/pkg/models"
 	"github.com/hzhan516/medmemo/pkg/resourcepath"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -115,7 +116,7 @@ type App struct {
 // NewEngineConfig 从 AppConfig 构造 ONNX Engine 配置，供 Wire 注入使用。
 // 在返回前确保 embedding 模型已复制到用户数据目录，保证 onnx.NewEngine 能正确加载。
 func NewEngineConfig(cfg *entity.AppConfig) onnx.EngineConfig {
-	userPath := filepath.Join(cfg.DataDir, "models", "all-MiniLM-L6-v2")
+	userPath := filepath.Join(cfg.DataDir, "models", models.EmbeddingModelName)
 	resourceDir := resourcepath.Dir()
 	prepareEmbeddingModels(userPath, resourceDir)
 
@@ -155,7 +156,7 @@ func prepareEmbeddingModels(userDir string, resourceDir string) {
 
 // findBundledModelDir 查找应用包内打包的模型目录。
 func findBundledModelDir(resourceDir string) string {
-	dir := filepath.Join(resourceDir, "models", "all-MiniLM-L6-v2")
+	dir := filepath.Join(resourceDir, "models", models.EmbeddingModelName)
 	if _, err := os.Stat(filepath.Join(dir, "model.onnx")); err == nil {
 		return dir
 	}
@@ -174,7 +175,7 @@ func NewSQLCipherConnectorFromConfig(cfg *entity.AppConfig, store secret.Store) 
 
 // NewEmbeddingServiceAdapterWithVersion 创建带固定模型版本的嵌入服务适配器。
 func NewEmbeddingServiceAdapterWithVersion(engine ai.EmbeddingEngine) *ai.EmbeddingServiceAdapter {
-	return ai.NewEmbeddingServiceAdapter(engine, "all-MiniLM-L6-v2")
+	return ai.NewEmbeddingServiceAdapter(engine, models.CurrentEmbeddingVersion)
 }
 
 // NewApp 构造函数，供 Wire 调用。
