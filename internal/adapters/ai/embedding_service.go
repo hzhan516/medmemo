@@ -49,6 +49,12 @@ func NewEmbeddingServiceAdapter(engine EmbeddingEngine, modelVersion string) *Em
 	}
 }
 
+// missEntry 封装缓存 miss 项的原始文本与版本化缓存 key。
+type missEntry struct {
+	text     string // 原始文本，用于 ONNX 推理
+	cacheKey string // modelVersion + "\x00" + text，用于缓存读写
+}
+
 // Embed 批量生成文本嵌入。
 func (s *EmbeddingServiceAdapter) Embed(ctx context.Context, texts []string) ([][]float32, error) {
 	if s.engine == nil || !s.engine.HasEmbeddingPipeline() {
@@ -59,27 +65,33 @@ func (s *EmbeddingServiceAdapter) Embed(ctx context.Context, texts []string) ([]
 		return [][]float32{}, nil
 	}
 
-	// 去重并检查缓存
-	textToIndex := make(map[string][]int) // text -> original indices
-	var missTexts []string
+	// 阶段一：查缓存，收集 miss
+	cacheKeyToIndices := make(map[string][]int) // cacheKey -> original indices
+	var missList []missEntry                    // 有序 miss 列表
 	result := make([][]float32, len(texts))
 
 	for i, text := range texts {
-		if cached, ok := s.cache.Get(text); ok {
+		cacheKey := s.modelVersion + "\x00" + text
+		if cached, ok := s.cache.Get(cacheKey); ok {
 			result[i] = cached
 			continue
 		}
-		textToIndex[text] = append(textToIndex[text], i)
-		if len(textToIndex[text]) == 1 {
-			missTexts = append(missTexts, text)
+		cacheKeyToIndices[cacheKey] = append(cacheKeyToIndices[cacheKey], i)
+		if len(cacheKeyToIndices[cacheKey]) == 1 {
+			missList = append(missList, missEntry{text: text, cacheKey: cacheKey})
 		}
 	}
 
-	if len(missTexts) == 0 {
+	if len(missList) == 0 {
 		return result, nil
 	}
 
-	// 分批推理
+	// 阶段二：批量推理（仅传原始文本给 ONNX）
+	var missTexts []string
+	for _, entry := range missList {
+		missTexts = append(missTexts, entry.text)
+	}
+
 	var allEmbeddings [][]float32
 	for start := 0; start < len(missTexts); start += s.batchSize {
 		end := start + s.batchSize
@@ -95,14 +107,14 @@ func (s *EmbeddingServiceAdapter) Embed(ctx context.Context, texts []string) ([]
 		allEmbeddings = append(allEmbeddings, embeddings...)
 	}
 
-	// 回填结果并写入缓存
-	for i, text := range missTexts {
+	// 阶段三：回填结果（用 cacheKey 写缓存，用 indices 写 result）
+	for i, entry := range missList {
 		vec := allEmbeddings[i]
 		if s.normalization {
 			vec = normalizeL2(vec)
 		}
-		s.cache.Set(text, vec)
-		for _, idx := range textToIndex[text] {
+		s.cache.Set(entry.cacheKey, vec)
+		for _, idx := range cacheKeyToIndices[entry.cacheKey] {
 			result[idx] = vec
 		}
 	}

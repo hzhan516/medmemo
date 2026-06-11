@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, lazy, Suspense } from 'react'
+import { EventsOn } from '@wails/runtime/runtime'
 import { logger } from '@/lib/logger'
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
@@ -66,6 +67,30 @@ function App() {
     dismissUpdate,
     openDownloadPage,
   } = useUpdate()
+
+  // v1.1.4: embedding 迁移状态监听
+  const [migrationStatus, setMigrationStatus] = useState<{
+    active: boolean
+    processed: number
+    total: number
+  } | null>(null)
+
+  useEffect(() => {
+    const unsubStart = EventsOn('embedding:migration:start', (data: { total: number }) => {
+      setMigrationStatus({ active: true, processed: 0, total: data.total })
+    })
+    const unsubProgress = EventsOn('embedding:migration:progress', (data: { processed: number; total: number }) => {
+      setMigrationStatus({ active: true, processed: data.processed, total: data.total })
+    })
+    const unsubDone = EventsOn('embedding:migration:done', () => {
+      setMigrationStatus(null)
+    })
+    return () => {
+      unsubStart()
+      unsubProgress()
+      unsubDone()
+    }
+  }, [])
 
   // 应用启动时加载 Provider 列表（从后端 SQLite）
   useEffect(() => {
@@ -275,6 +300,36 @@ function App() {
   return (
     <>
       <UpdateBanner info={updateInfo} onShowDetails={() => {}} onDismiss={dismissUpdate} />
+
+      {/* v1.1.4: embedding 迁移进度 UI */}
+      {migrationStatus?.active && (migrationStatus.total <= 100 || (migrationStatus.total > 100 && migrationStatus.processed < 100)) && (
+        <div className="fixed inset-0 z-[9999] bg-background/95 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-10 h-10 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+            <span className="text-sm text-muted-foreground">
+              正在更新记忆索引 ({migrationStatus.processed}/{migrationStatus.total})…
+            </span>
+            <span className="text-xs text-muted-foreground/60">
+              仅在版本更新后首次启动时执行
+            </span>
+          </div>
+        </div>
+      )}
+
+      {migrationStatus?.active && migrationStatus.total > 100 && migrationStatus.processed >= 100 && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-muted/90 backdrop-blur px-4 py-2 flex items-center gap-3 text-sm">
+          <div className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+          <span className="text-muted-foreground">
+            正在后台更新记忆索引 ({migrationStatus.processed}/{migrationStatus.total})…
+          </span>
+          <div className="flex-1 h-1.5 bg-muted-foreground/20 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-primary rounded-full transition-all duration-300"
+              style={{ width: `${(migrationStatus.processed / migrationStatus.total) * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       <ErrorBoundary onError={(error, _errorInfo) => openFeedback(`${error.name}: ${error.message}\n${_errorInfo.componentStack ?? ''}`)}>
         <HashRouter>

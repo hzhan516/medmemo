@@ -279,6 +279,8 @@ func (m *e2eMockEmbeddingService) EmbedSingle(ctx context.Context, text string) 
 	v[0] = 1.0
 	return v, nil
 }
+func (m *e2eMockEmbeddingService) ModelVersion() string { return "e2e-version" }
+func (m *e2eMockEmbeddingService) IsAvailable() bool    { return true }
 
 // TestE2E_Memory_FullPipeline 验证完整数据流：对话→提取→评分→保存→嵌入→索引→召回→注入。
 func TestE2E_Memory_FullPipeline(t *testing.T) {
@@ -318,7 +320,7 @@ func TestE2E_Memory_FullPipeline(t *testing.T) {
 
 	// 5. MemoryRetriever 召回
 	mockSvc := &e2eMockEmbeddingService{}
-	retriever := usecase.NewMemoryRetriever(mockSvc, embedRepo, factRepo, usecase.NewDecayScorer())
+	retriever := usecase.NewMemoryRetriever(mockSvc, embedRepo, factRepo, usecase.NewDecayScorer(), nil)
 
 	memories, err := retriever.RetrieveForContext(ctx, "我的血压情况", "sess_full", 3)
 	require.NoError(t, err)
