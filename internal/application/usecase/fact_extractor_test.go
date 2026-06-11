@@ -214,6 +214,14 @@ func (m *mockFactRepo) FindLatestApprovedByPredicates(ctx context.Context, subje
 	return nil, entity.ErrFactNotFound
 }
 
+func (m *mockFactRepo) CountApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string) (int64, error) {
+	return 0, nil
+}
+
+func (m *mockFactRepo) ListApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string, lastCreatedAt time.Time, lastFactID string, limit int) ([]*entity.ExtractedFact, error) {
+	return nil, nil
+}
+
 func TestFactExtractor_ParseFacts_rateLimitExceeded(t *testing.T) {
 	// 直接构造 FactExtractor，设置较低的速率限制以便快速触发限流
 	extractor := &FactExtractor{
