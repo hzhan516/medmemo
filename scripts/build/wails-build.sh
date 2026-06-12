@@ -1,13 +1,10 @@
 #!/bin/bash
 # 跨平台 Wails 构建脚本，供 GoReleaser 或 CI 调用。
-# 用法: ./scripts/build/wails-build.sh <os> <current_version> [build_number] [channel] [prerelease_label]
+# 用法: ./scripts/build/wails-build.sh <os> <version>
 set -euo pipefail
 
 OS="${1:-linux}"
-CURRENT_VERSION="${2:-dev}"
-BUILD_NUMBER="${3:-}"
-CHANNEL="${4:-beta}"
-PRERELEASE_LABEL="${5:-}"
+VERSION="${2:-dev}"
 
 ./scripts/build/build-frontend.sh
 
@@ -19,13 +16,7 @@ case "$OS" in
     ./scripts/build/download-onnx.sh --platform=linux
     ./scripts/build/download-tokenizers.sh --platform=linux
     export CGO_LDFLAGS="-L$(pwd)/resources/lib/linux"
-    wails build -s -clean \
-      -ldflags "-s -w \
-        -X main.version=${CURRENT_VERSION} \
-        -X main.buildNumber=${BUILD_NUMBER} \
-        -X main.updateChannel=${CHANNEL} \
-        -X main.prereleaseLabel=${PRERELEASE_LABEL}" \
-      -tags "webkit2_41,ORT"
+    wails build -s -clean -ldflags "-s -w -X main.version=${VERSION}" -tags "webkit2_41,ORT"
     echo "[TASK-027] Building AppImage..."
     ./build/package/build-appimage.sh
     ;;
@@ -56,13 +47,7 @@ case "$OS" in
 
     dlltool -D ntdll.dll -d /tmp/ntdll.def -l resources/lib/windows/libntdll.a
     echo "[TASK-027] Generated libntdll.a with $(wc -l < /tmp/ntdll_exports.txt) exports"
-    wails build -s -clean \
-      -ldflags "-s -w \
-        -X main.version=${CURRENT_VERSION} \
-        -X main.buildNumber=${BUILD_NUMBER} \
-        -X main.updateChannel=${CHANNEL} \
-        -X main.prereleaseLabel=${PRERELEASE_LABEL}" \
-      -tags "ORT" -nsis
+    wails build -s -clean -ldflags "-s -w -X main.version=${VERSION}" -tags "ORT" -nsis
     ./scripts/build/copy-runtime-resources.sh "build/bin" "windows"
     ;;
   darwin)
@@ -76,13 +61,7 @@ case "$OS" in
     if [ "$DARWIN_PLATFORM" = "darwin/universal" ]; then
       REQUIRE_UNIVERSAL="true"
     fi
-    wails build -s -clean \
-      -ldflags "-s -w \
-        -X main.version=${CURRENT_VERSION} \
-        -X main.buildNumber=${BUILD_NUMBER} \
-        -X main.updateChannel=${CHANNEL} \
-        -X main.prereleaseLabel=${PRERELEASE_LABEL}" \
-      -tags "ORT" -platform "$DARWIN_PLATFORM"
+    wails build -s -clean -ldflags "-s -w -X main.version=${VERSION}" -tags "ORT" -platform "$DARWIN_PLATFORM"
     ./scripts/build/copy-runtime-resources.sh "build/bin/MedMemo.app/Contents/Resources" "darwin" "$REQUIRE_UNIVERSAL"
     echo "[TASK-027] Building dmg..."
     ./build/package/build-dmg.sh

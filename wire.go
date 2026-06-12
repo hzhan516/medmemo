@@ -32,6 +32,8 @@ func InitializeApp() (*App, func(), error) {
 		usecase.ApplicationSet,
 		usecase.NewMemoryRetriever,
 		usecase.NewDecayScorer,
+		usecase.NewEmbeddingMigrator,
+		usecase.NewMigrationState,
 		wire.Bind(new(port.MemoryRepository), new(*repository.MemoryRepoSQLite)),
 		wire.Bind(new(domainRepo.FactRepository), new(*repository.FactRepoSQLite)),
 		wire.Bind(new(domainRepo.EmbeddingRepository), new(*repository.EmbeddingRepoSQLite)),
