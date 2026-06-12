@@ -187,53 +187,104 @@ func (m *MemoryRetriever) RetrieveForContext(ctx context.Context, query, session
 	return m.applyTokenBudget(merged, limit), nil
 }
 
-// detectEntityMentions 检测 query 中是否包含已记忆实体的关键词。
-// 原逻辑只匹配 subject，现扩展为匹配完整事实内容（subject + predicate + object）中的关键词。
-// 命中时返回相关记忆，未命中时返回 nil 和 false。
-func (m *MemoryRetriever) detectEntityMentions(ctx context.Context, query string) ([]*entity.HealthMemory, bool) {
+// recallByKeyword 关键词召回路径：匹配 query 与 approved fact 的 retrieval text。
+// 返回 RetrievalCandidate 列表和路径状态，供多路合并使用。
+func (m *MemoryRetriever) recallByKeyword(ctx context.Context, req *RetrievalRequest) ([]RetrievalCandidate, PathStatus) {
 	facts, err := m.factRepo.ListByStatus(ctx, entity.FactStatusApproved, 0, 1000)
 	if err != nil || len(facts) == 0 {
-		return nil, false
+		status := PathStatus{Path: PathKeyword, Status: "skipped"}
+		if err != nil {
+			status.Status = "failure"
+			status.Reason = fmt.Sprintf("list approved facts failed: %v", err)
+		} else {
+			status.Reason = "no approved facts"
+		}
+		return nil, status
 	}
 
-	queryLower := strings.ToLower(query)
-	var matched []*entity.HealthMemory
+	queryLower := strings.ToLower(req.Normalized)
+	if queryLower == "" {
+		queryLower = strings.ToLower(req.RawQuery)
+	}
+
+	var candidates []RetrievalCandidate
 	seen := make(map[string]bool)
 
 	for _, f := range facts {
 		content := fmt.Sprintf("%s %s %s", f.Subject, f.Predicate, f.Object)
-		// 用 enhanced retrieval text 做匹配，提高同义问法召回率
 		retrievalText := BuildFactRetrievalText(f)
 		matchLower := strings.ToLower(retrievalText)
 
-		// 原逻辑：query 包含 subject
+		var matched bool
+		var score float64
+		var reason string
+
 		if f.Subject != "" && strings.Contains(queryLower, strings.ToLower(f.Subject)) {
-			if !seen[f.FactID] {
-				seen[f.FactID] = true
-				matched = append(matched, &entity.HealthMemory{
-					ID:         models.MemoryID(f.FactID),
-					Content:    content,
-					Confidence: f.Confidence,
-					CreatedAt:  f.CreatedAt,
-				})
-			}
-			continue
+			matched = true
+			score = 1.0
+			reason = fmt.Sprintf("subject match: %s", f.Subject)
+		} else if m.hasKeywordMatch(queryLower, matchLower) {
+			matched = true
+			score = 0.5
+			reason = fmt.Sprintf("keyword match: %s", retrievalText)
 		}
 
-		// 新增：query 中包含事实内容里的非停用词
-		if m.hasKeywordMatch(queryLower, matchLower) {
-			if !seen[f.FactID] {
-				seen[f.FactID] = true
-				matched = append(matched, &entity.HealthMemory{
-					ID:         models.MemoryID(f.FactID),
-					Content:    content,
-					Confidence: f.Confidence,
-					CreatedAt:  f.CreatedAt,
-				})
-			}
+		if matched && !seen[f.FactID] {
+			seen[f.FactID] = true
+			candidates = append(candidates, RetrievalCandidate{
+				FactID:       f.FactID,
+				Content:      content,
+				Snippet:      truncateSnippet(content, 50),
+				CreatedAt:    f.CreatedAt,
+				Confidence:   f.Confidence,
+				MatchedPaths: []RetrievalPath{PathKeyword},
+				KeywordScore: score,
+				RecencyScore: m.decayScorer.ScoreFromCreatedAt(1.0, f.CreatedAt, time.Now().UTC()),
+				Reasons:      []string{reason},
+			})
 		}
 	}
-	return matched, len(matched) > 0
+
+	status := PathStatus{Path: PathKeyword, Status: "success"}
+	if len(candidates) == 0 {
+		status.Status = "success"
+		status.Reason = "no keyword matches"
+	}
+	return candidates, status
+}
+
+// truncateSnippet 截断文本为指定长度的诊断用 snippet。
+func truncateSnippet(s string, maxLen int) string {
+	if s == "" {
+		return ""
+	}
+	runes := []rune(s)
+	if len(runes) <= maxLen {
+		return s
+	}
+	return string(runes[:maxLen]) + "..."
+}
+
+// detectEntityMentions 检测 query 中是否包含已记忆实体的关键词。
+// 原逻辑只匹配 subject，现扩展为匹配完整事实内容（subject + predicate + object）中的关键词。
+// 命中时返回相关记忆，未命中时返回 nil 和 false。
+// 兼容旧版调用方，内部委托 recallByKeyword。
+func (m *MemoryRetriever) detectEntityMentions(ctx context.Context, query string) ([]*entity.HealthMemory, bool) {
+	req := m.prepareRetrievalRequest(query, "", 10)
+	candidates, _ := m.recallByKeyword(ctx, req)
+	if len(candidates) == 0 {
+		return nil, false
+	}
+	var memories []*entity.HealthMemory
+	for _, c := range candidates {
+		memories = append(memories, &entity.HealthMemory{
+			ID:         models.MemoryID(c.FactID),
+			Content:    c.Content,
+			Confidence: c.Confidence,
+			CreatedAt:  c.CreatedAt,
+		})
+	}
+	return memories, true
 }
 
 // 常见中文停用词，用于关键词匹配时过滤。
