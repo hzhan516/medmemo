@@ -172,7 +172,18 @@ func (m *MemoryRetriever) retrieveWithDiagnostics(ctx context.Context, query, se
 	_ = m.checkSessionGap(sessionID)
 	m.recordSessionAccess(sessionID)
 
-	// 4. 四路并行召回
+	// 4. 四路并行召回（每个 goroutine 只写独占局部变量，消除 data race）
+	var (
+		intentCandidates  []RetrievalCandidate
+		intentStatus      PathStatus
+		keywordCandidates []RetrievalCandidate
+		keywordStatus     PathStatus
+		vectorCandidates  []RetrievalCandidate
+		vectorStatus      PathStatus
+		recentCandidates  []RetrievalCandidate
+		recentStatus      PathStatus
+	)
+
 	var wg sync.WaitGroup
 
 	// intent recall
@@ -182,21 +193,19 @@ func (m *MemoryRetriever) retrieveWithDiagnostics(ctx context.Context, query, se
 		start := time.Now()
 		candidates, ps := m.recallByIntent(ctx, req)
 		ps.Latency = time.Since(start)
-		diag.IntentCandidates = candidates
-		diag.PathStatuses = append(diag.PathStatuses, ps)
+		intentCandidates = candidates
+		intentStatus = ps
 	}()
 
-	// keyword recall
+	// keyword recall（使用 recallByKeyword 返回的 PathStatus，不手写简化 status）
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		start := time.Now()
-		diag.KeywordCandidates, _ = m.recallByKeyword(ctx, req)
-		ps := PathStatus{Path: PathKeyword, Status: "success", Latency: time.Since(start)}
-		if len(diag.KeywordCandidates) == 0 {
-			ps.Reason = "no keyword matches"
-		}
-		diag.PathStatuses = append(diag.PathStatuses, ps)
+		candidates, ps := m.recallByKeyword(ctx, req)
+		ps.Latency = time.Since(start)
+		keywordCandidates = candidates
+		keywordStatus = ps
 	}()
 
 	// vector recall
@@ -206,8 +215,8 @@ func (m *MemoryRetriever) retrieveWithDiagnostics(ctx context.Context, query, se
 		start := time.Now()
 		candidates, ps := m.recallByVector(ctx, req)
 		ps.Latency = time.Since(start)
-		diag.VectorCandidates = candidates
-		diag.PathStatuses = append(diag.PathStatuses, ps)
+		vectorCandidates = candidates
+		vectorStatus = ps
 	}()
 
 	// recent same-intent recall
@@ -217,11 +226,18 @@ func (m *MemoryRetriever) retrieveWithDiagnostics(ctx context.Context, query, se
 		start := time.Now()
 		candidates, ps := m.recallRecentSameIntent(ctx, req)
 		ps.Latency = time.Since(start)
-		diag.RecentCandidates = candidates
-		diag.PathStatuses = append(diag.PathStatuses, ps)
+		recentCandidates = candidates
+		recentStatus = ps
 	}()
 
 	wg.Wait()
+
+	// wg.Wait() 后由主 goroutine 统一写入 diag，保证固定顺序和数量
+	diag.IntentCandidates = intentCandidates
+	diag.KeywordCandidates = keywordCandidates
+	diag.VectorCandidates = vectorCandidates
+	diag.RecentCandidates = recentCandidates
+	diag.PathStatuses = []PathStatus{intentStatus, keywordStatus, vectorStatus, recentStatus}
 
 	// 5. 合并去重
 	diag.MergedCandidates = mergeCandidates(
@@ -234,8 +250,8 @@ func (m *MemoryRetriever) retrieveWithDiagnostics(ctx context.Context, query, se
 	// 6. 重排
 	diag.MergedCandidates = rerank(diag.MergedCandidates, req)
 
-	// 7. Token 预算截断
-	diag.SelectedMemories, diag.RejectedCandidates = applyTokenBudgetToCandidates(diag.MergedCandidates, limit)
+	// 7. Token 预算截断（使用配置化的 tokenBudget 而非硬编码）
+	diag.SelectedMemories, diag.RejectedCandidates = applyTokenBudgetToCandidates(diag.MergedCandidates, limit, m.tokenBudget)
 	diag.TotalApprovedFacts = len(diag.MergedCandidates)
 	diag.TotalRejected = len(diag.RejectedCandidates)
 
@@ -603,10 +619,9 @@ func containsPath(paths []RetrievalPath, target RetrievalPath) bool {
 
 // applyTokenBudgetToCandidates 对 RetrievalCandidate 列表应用 Token 预算截断。
 // 返回选中的和被拒绝的候选。
-func applyTokenBudgetToCandidates(candidates []RetrievalCandidate, limit int) ([]RetrievalCandidate, []RetrievalCandidate) {
+func applyTokenBudgetToCandidates(candidates []RetrievalCandidate, limit int, tokenBudget int) ([]RetrievalCandidate, []RetrievalCandidate) {
 	var selected, rejected []RetrievalCandidate
 	var tokenCount int
-	tokenBudget := 500
 	for _, c := range candidates {
 		memTokens := len([]rune(c.Content))
 		if len(selected) > 0 && tokenCount+memTokens > tokenBudget {
@@ -843,24 +858,6 @@ func (m *MemoryRetriever) mergeMemories(mentionMemories, semanticMemories []*ent
 	}
 
 	return merged
-}
-
-// applyTokenBudget 应用 Token 预算截断。
-func (m *MemoryRetriever) applyTokenBudget(memories []*entity.HealthMemory, limit int) []*entity.HealthMemory {
-	var results []*entity.HealthMemory
-	var tokenCount int
-	for _, mem := range memories {
-		memTokens := len([]rune(mem.Content))
-		if len(results) > 0 && tokenCount+memTokens > m.tokenBudget {
-			break
-		}
-		results = append(results, mem)
-		tokenCount += memTokens
-		if len(results) >= limit {
-			break
-		}
-	}
-	return results
 }
 
 // ArchiveConversation 将对话归档为长期记忆（L2/L3）。
