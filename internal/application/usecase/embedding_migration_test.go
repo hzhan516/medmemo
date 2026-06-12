@@ -143,6 +143,9 @@ func (r *migratorFactRepo) FindBySubject(ctx context.Context, subject string) ([
 func (r *migratorFactRepo) FindBySession(ctx context.Context, sessionID string) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
+func (r *migratorFactRepo) FindApprovedByPredicates(ctx context.Context, subject string, predicates []string, limit int) ([]*entity.ExtractedFact, error) {
+	return nil, nil
+}
 func (r *migratorFactRepo) FindLatestApprovedByPredicates(ctx context.Context, subject string, predicates []string) (*entity.ExtractedFact, error) {
 	return nil, entity.ErrFactNotFound
 }

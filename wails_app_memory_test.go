@@ -138,6 +138,9 @@ func (s *wailsStubFactRepo) ListApprovedFactsNeedingEmbedding(ctx context.Contex
 	}
 	return result, nil
 }
+func (s *wailsStubFactRepo) FindApprovedByPredicates(ctx context.Context, subject string, predicates []string, limit int) ([]*entity.ExtractedFact, error) {
+	return nil, nil
+}
 func (s *wailsStubFactRepo) FindLatestApprovedByPredicates(ctx context.Context, subject string, predicates []string) (*entity.ExtractedFact, error) {
 	var latest *entity.ExtractedFact
 	for _, f := range s.facts {

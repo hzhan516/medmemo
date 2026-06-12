@@ -187,6 +187,58 @@ func (m *MemoryRetriever) RetrieveForContext(ctx context.Context, query, session
 	return m.applyTokenBudget(merged, limit), nil
 }
 
+// recallByIntent 意图召回路径：通过 IntentResolver 的 predicates 查询 approved facts。
+// 返回同意图候选列表，参与后续普通排序。
+// 与 recallRecentSameIntent 区分：此为多候选列表，后者只取最新 1 条 boost。
+func (m *MemoryRetriever) recallByIntent(ctx context.Context, req *RetrievalRequest) ([]RetrievalCandidate, PathStatus) {
+	if req.Intent == nil || len(req.Intent.Predicates) == 0 {
+		return nil, PathStatus{Path: PathIntent, Status: "skipped", Reason: "no intent detected or no predicates"}
+	}
+
+	facts, err := m.factRepo.FindApprovedByPredicates(ctx, req.Subject, req.Intent.Predicates, req.Limit)
+	if err != nil {
+		return nil, PathStatus{Path: PathIntent, Status: "failure", Reason: fmt.Sprintf("query failed: %v", err)}
+	}
+
+	now := time.Now().UTC()
+	var candidates []RetrievalCandidate
+	for _, f := range facts {
+		content := fmt.Sprintf("%s %s %s", f.Subject, f.Predicate, f.Object)
+		candidates = append(candidates, RetrievalCandidate{
+			FactID:       f.FactID,
+			Content:      content,
+			Snippet:      truncateSnippet(content, 50),
+			CreatedAt:    f.CreatedAt,
+			Confidence:   f.Confidence,
+			MatchedPaths: []RetrievalPath{PathIntent},
+			IntentLevel:  intentConfidenceToLevel(req.Intent.Confidence),
+			RecencyScore: m.decayScorer.ScoreFromCreatedAt(1.0, f.CreatedAt, now),
+			Reasons:      []string{fmt.Sprintf("intent: %s, predicate: %s", req.Intent.Intent, f.Predicate)},
+		})
+	}
+
+	status := PathStatus{Path: PathIntent, Status: "success"}
+	if len(candidates) == 0 {
+		status.Reason = "no approved facts matching intent"
+	}
+	return candidates, status
+}
+
+// intentConfidenceToLevel 将 IntentConfidence 枚举映射为数值级别。
+// High→3, Medium→2, Low→1, 无→0。
+func intentConfidenceToLevel(c IntentConfidence) int {
+	switch c {
+	case ConfidenceHigh:
+		return 3
+	case ConfidenceMedium:
+		return 2
+	case ConfidenceLow:
+		return 1
+	default:
+		return 0
+	}
+}
+
 // recallByKeyword 关键词召回路径：匹配 query 与 approved fact 的 retrieval text。
 // 返回 RetrievalCandidate 列表和路径状态，供多路合并使用。
 func (m *MemoryRetriever) recallByKeyword(ctx context.Context, req *RetrievalRequest) ([]RetrievalCandidate, PathStatus) {

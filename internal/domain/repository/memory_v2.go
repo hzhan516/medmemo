@@ -49,6 +49,9 @@ type FactRepository interface {
 	FindBySubject(ctx context.Context, subject string) ([]*entity.ExtractedFact, error)
 	// FindBySession 按原始对话会话 ID 查找关联的已审批事实。
 	FindBySession(ctx context.Context, sessionID string) ([]*entity.ExtractedFact, error)
+	// FindApprovedByPredicates 按 subject 和多个 predicate 查找已审批事实列表。
+	// 返回按 created_at DESC 排序的结果，受 limit 限制。
+	FindApprovedByPredicates(ctx context.Context, subject string, predicates []string, limit int) ([]*entity.ExtractedFact, error)
 	// FindLatestApprovedByPredicates 按 subject 和多个 predicate 查找最新已审批事实。
 	// 返回按 created_at DESC 排序后的第一条；无记录时返回 entity.ErrFactNotFound。
 	FindLatestApprovedByPredicates(ctx context.Context, subject string, predicates []string) (*entity.ExtractedFact, error)
