@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/hzhan516/medmemo/internal/domain/entity"
 )
@@ -51,6 +52,13 @@ type FactRepository interface {
 	// FindLatestApprovedByPredicates 按 subject 和多个 predicate 查找最新已审批事实。
 	// 返回按 created_at DESC 排序后的第一条；无记录时返回 entity.ErrFactNotFound。
 	FindLatestApprovedByPredicates(ctx context.Context, subject string, predicates []string) (*entity.ExtractedFact, error)
+	// CountApprovedFactsNeedingEmbedding 统计需要（重新）生成 embedding 的已审批事实数。
+	// 条件：status='approved' AND (无 embedding 记录 OR embedding.model_version != targetVersion)。
+	CountApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string) (int64, error)
+	// ListApprovedFactsNeedingEmbedding 使用基于 created_at 的稳定 cursor 分页，
+	// 避免边更新边扫描导致候选集偏移。调用方传入 lastCreatedAt 与 lastFactID，
+	// 返回下一页（按 created_at ASC, fact_id ASC）。
+	ListApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string, lastCreatedAt time.Time, lastFactID string, limit int) ([]*entity.ExtractedFact, error)
 }
 
 // EmbeddingRepository 定义语义嵌入层的持久化接口。
@@ -64,4 +72,11 @@ type EmbeddingRepository interface {
 	// SearchSimilar 执行向量相似度搜索，返回与查询向量最相似的 topK 个嵌入。
 	// 结果按余弦相似度降序排列（越靠前越相似），包含相似度分数。
 	SearchSimilar(ctx context.Context, queryVector []float32, topK int) ([]*entity.ScoredEmbedding, error)
+	// SearchSimilarFiltered 带 model_version 过滤的向量搜索。
+	// 当 modelVersion 为空时行为与 SearchSimilar 一致（搜索所有版本）。
+	SearchSimilarFiltered(ctx context.Context, queryVector []float32, topK int, modelVersion string) ([]*entity.ScoredEmbedding, error)
+	// CountByVersionNot 统计非指定版本的 embedding 数量。
+	CountByVersionNot(ctx context.Context, version string) (int64, error)
+	// UpdateEmbedding 原子更新已有 embedding 的向量、版本和时间戳（保留原 embedding_id）。
+	UpdateEmbedding(ctx context.Context, e *entity.SemanticEmbedding) error
 }

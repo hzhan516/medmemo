@@ -7,6 +7,7 @@ import (
 
 	"github.com/hzhan516/medmemo/internal/domain/entity"
 	"github.com/hzhan516/medmemo/internal/infrastructure/database"
+	"github.com/hzhan516/medmemo/pkg/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -42,7 +43,7 @@ func TestEmbeddingRepo_SaveAndGet(t *testing.T) {
 	for i := range vector {
 		vector[i] = float32(i) * 0.001
 	}
-	e := entity.NewSemanticEmbedding("fact_e1", vector, "all-MiniLM-L6-v2")
+	e := entity.NewSemanticEmbedding("fact_e1", vector, models.CurrentEmbeddingVersion)
 	err := repo.Save(ctx, e)
 	require.NoError(t, err)
 
@@ -51,7 +52,7 @@ func TestEmbeddingRepo_SaveAndGet(t *testing.T) {
 	assert.Equal(t, e.EmbeddingID, got.EmbeddingID)
 	assert.Equal(t, "fact_e1", got.FactID)
 	assert.Equal(t, entity.EmbeddingDimension, len(got.Vector))
-	assert.Equal(t, "all-MiniLM-L6-v2", got.ModelVersion)
+	assert.Equal(t, models.CurrentEmbeddingVersion, got.ModelVersion)
 	assert.Equal(t, vector, got.Vector)
 }
 
@@ -66,12 +67,12 @@ func TestEmbeddingRepo_Save_DuplicateFactID_Idempotent(t *testing.T) {
 
 	vector1 := make([]float32, entity.EmbeddingDimension)
 	vector1[0] = 1
-	e1 := entity.NewSemanticEmbedding("fact_emb_dup", vector1, "all-MiniLM-L6-v2")
+	e1 := entity.NewSemanticEmbedding("fact_emb_dup", vector1, models.CurrentEmbeddingVersion)
 	require.NoError(t, repo.Save(ctx, e1))
 
 	vector2 := make([]float32, entity.EmbeddingDimension)
 	vector2[1] = 1
-	e2 := entity.NewSemanticEmbedding("fact_emb_dup", vector2, "all-MiniLM-L6-v2")
+	e2 := entity.NewSemanticEmbedding("fact_emb_dup", vector2, models.CurrentEmbeddingVersion)
 	require.NoError(t, repo.Save(ctx, e2))
 
 	got, err := repo.GetByFactID(ctx, "fact_emb_dup")
@@ -95,12 +96,12 @@ func TestEmbeddingRepo_Save_DuplicateEmbeddingIDDifferentFact_ReturnsError(t *te
 
 	vector1 := make([]float32, entity.EmbeddingDimension)
 	vector1[0] = 1
-	e1 := entity.NewSemanticEmbedding("fact_emb_id_1", vector1, "all-MiniLM-L6-v2")
+	e1 := entity.NewSemanticEmbedding("fact_emb_id_1", vector1, models.CurrentEmbeddingVersion)
 	require.NoError(t, repo.Save(ctx, e1))
 
 	vector2 := make([]float32, entity.EmbeddingDimension)
 	vector2[1] = 1
-	e2 := entity.NewSemanticEmbedding("fact_emb_id_2", vector2, "all-MiniLM-L6-v2")
+	e2 := entity.NewSemanticEmbedding("fact_emb_id_2", vector2, models.CurrentEmbeddingVersion)
 	e2.EmbeddingID = e1.EmbeddingID
 
 	err := repo.Save(ctx, e2)
@@ -127,7 +128,7 @@ func TestEmbeddingRepo_DeleteByFactID(t *testing.T) {
 	require.NoError(t, factRepo.Save(ctx, f))
 
 	vector := make([]float32, entity.EmbeddingDimension)
-	e := entity.NewSemanticEmbedding("fact_e2", vector, "all-MiniLM-L6-v2")
+	e := entity.NewSemanticEmbedding("fact_e2", vector, models.CurrentEmbeddingVersion)
 	require.NoError(t, repo.Save(ctx, e))
 
 	err := repo.DeleteByFactID(ctx, "fact_e2")
@@ -147,7 +148,7 @@ func TestEmbeddingRepo_ForeignKeyCascade(t *testing.T) {
 	require.NoError(t, factRepo.Save(ctx, f))
 
 	vector := make([]float32, entity.EmbeddingDimension)
-	e := entity.NewSemanticEmbedding("fact_e3", vector, "all-MiniLM-L6-v2")
+	e := entity.NewSemanticEmbedding("fact_e3", vector, models.CurrentEmbeddingVersion)
 	require.NoError(t, repo.Save(ctx, e))
 
 	// 删除事实，外键级联删除嵌入
@@ -194,7 +195,7 @@ func TestEmbeddingRepo_SearchSimilar(t *testing.T) {
 
 	vectors := [][]float32{v1, v2, v3, v4}
 	for i, v := range vectors {
-		e := entity.NewSemanticEmbedding(facts[i].FactID, v, "all-MiniLM-L6-v2")
+		e := entity.NewSemanticEmbedding(facts[i].FactID, v, models.CurrentEmbeddingVersion)
 		require.NoError(t, repo.Save(ctx, e))
 	}
 
@@ -236,4 +237,99 @@ func TestEmbeddingRepo_SearchSimilar_EmptyResult(t *testing.T) {
 	results, err := repo.SearchSimilar(ctx, query, 5)
 	require.NoError(t, err)
 	assert.Empty(t, results)
+}
+
+func TestEmbeddingRepo_SearchSimilarFiltered(t *testing.T) {
+	repo, factRepo, cleanup := setupEmbeddingTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	facts := []*entity.ExtractedFact{
+		entity.NewExtractedFact("用户", "患有", "A", 0.8, []string{"m1"}),
+		entity.NewExtractedFact("用户", "患有", "B", 0.8, []string{"m2"}),
+	}
+	for i, f := range facts {
+		f.FactID = fmt.Sprintf("fact_filt_%d", i)
+		require.NoError(t, factRepo.Save(ctx, f))
+	}
+
+	// fact_0: 当前版本
+	v0 := make([]float32, entity.EmbeddingDimension)
+	v0[0] = 1.0
+	e0 := entity.NewSemanticEmbedding(facts[0].FactID, v0, models.CurrentEmbeddingVersion)
+	require.NoError(t, repo.Save(ctx, e0))
+
+	// fact_1: 旧版本
+	v1 := make([]float32, entity.EmbeddingDimension)
+	v1[0] = 1.0
+	e1 := entity.NewSemanticEmbedding(facts[1].FactID, v1, "old-version")
+	require.NoError(t, repo.Save(ctx, e1))
+
+	query := make([]float32, entity.EmbeddingDimension)
+	query[0] = 1.0
+
+	// 过滤当前版本应只返回 fact_0
+	results, err := repo.SearchSimilarFiltered(ctx, query, 10, models.CurrentEmbeddingVersion)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, facts[0].FactID, results[0].FactID)
+
+	// 空版本应返回全部
+	results, err = repo.SearchSimilarFiltered(ctx, query, 10, "")
+	require.NoError(t, err)
+	require.Len(t, results, 2)
+}
+
+func TestEmbeddingRepo_CountByVersionNot(t *testing.T) {
+	repo, factRepo, cleanup := setupEmbeddingTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	facts := []*entity.ExtractedFact{
+		entity.NewExtractedFact("用户", "患有", "A", 0.8, []string{"m1"}),
+		entity.NewExtractedFact("用户", "患有", "B", 0.8, []string{"m2"}),
+		entity.NewExtractedFact("用户", "患有", "C", 0.8, []string{"m3"}),
+	}
+	for i, f := range facts {
+		f.FactID = fmt.Sprintf("fact_cv_%d", i)
+		require.NoError(t, factRepo.Save(ctx, f))
+	}
+
+	vector := make([]float32, entity.EmbeddingDimension)
+	require.NoError(t, repo.Save(ctx, entity.NewSemanticEmbedding(facts[0].FactID, vector, models.CurrentEmbeddingVersion)))
+	require.NoError(t, repo.Save(ctx, entity.NewSemanticEmbedding(facts[1].FactID, vector, "old-version")))
+	require.NoError(t, repo.Save(ctx, entity.NewSemanticEmbedding(facts[2].FactID, vector, "other-old")))
+
+	count, err := repo.CountByVersionNot(ctx, models.CurrentEmbeddingVersion)
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), count)
+}
+
+func TestEmbeddingRepo_UpdateEmbedding(t *testing.T) {
+	repo, factRepo, cleanup := setupEmbeddingTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	f := entity.NewExtractedFact("用户", "患有", "头痛", 0.8, []string{"msg_u1"})
+	f.FactID = "fact_upd"
+	require.NoError(t, factRepo.Save(ctx, f))
+
+	v1 := make([]float32, entity.EmbeddingDimension)
+	v1[0] = 1.0
+	e1 := entity.NewSemanticEmbedding(f.FactID, v1, "old-version")
+	require.NoError(t, repo.Save(ctx, e1))
+
+	v2 := make([]float32, entity.EmbeddingDimension)
+	v2[1] = 1.0
+	e2 := entity.NewSemanticEmbedding(f.FactID, v2, models.CurrentEmbeddingVersion)
+	// 保留原 embedding_id 以验证 UpdateEmbedding 不生成新 ID
+	e2.EmbeddingID = e1.EmbeddingID
+
+	require.NoError(t, repo.UpdateEmbedding(ctx, e2))
+
+	got, err := repo.GetByFactID(ctx, f.FactID)
+	require.NoError(t, err)
+	assert.Equal(t, e1.EmbeddingID, got.EmbeddingID)
+	assert.Equal(t, models.CurrentEmbeddingVersion, got.ModelVersion)
+	assert.Equal(t, v2, got.Vector)
 }

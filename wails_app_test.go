@@ -209,6 +209,7 @@ func (m *mockEmbeddingStatusService) EmbedSingle(ctx context.Context, text strin
 	return []float32{1}, nil
 }
 
+func (m *mockEmbeddingStatusService) ModelVersion() string { return "test-model" }
 func (m *mockEmbeddingStatusService) IsAvailable() bool {
 	return m.available
 }

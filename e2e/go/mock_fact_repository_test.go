@@ -4,6 +4,7 @@ package e2e
 
 import (
 	"context"
+	"time"
 
 	"github.com/hzhan516/medmemo/internal/domain/entity"
 	"github.com/hzhan516/medmemo/internal/domain/repository"
@@ -37,6 +38,12 @@ func (m *mockFactRepository) FindBySession(ctx context.Context, sessionID string
 }
 func (m *mockFactRepository) FindLatestApprovedByPredicates(ctx context.Context, subject string, predicates []string) (*entity.ExtractedFact, error) {
 	return nil, entity.ErrFactNotFound
+}
+func (m *mockFactRepository) CountApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string) (int64, error) {
+	return 0, nil
+}
+func (m *mockFactRepository) ListApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string, lastCreatedAt time.Time, lastFactID string, limit int) ([]*entity.ExtractedFact, error) {
+	return nil, nil
 }
 
 var _ repository.FactRepository = (*mockFactRepository)(nil)

@@ -74,6 +74,12 @@ type WailsApp struct {
 	// 语义嵌入服务与仓库（向量索引）
 	embeddingSvc  port.EmbeddingService
 	embeddingRepo repository.EmbeddingRepository
+
+	// v1.1.4: embedding 版本迁移器与状态追踪
+	migrator       *usecase.EmbeddingMigrator
+	migrationState *usecase.MigrationState
+	onnxReady      chan struct{}
+	onnxOnce       sync.Once
 }
 
 // NewWailsApp 构造函数，供 Wire 调用。
@@ -96,6 +102,8 @@ func NewWailsApp(
 	dialogueRepo repository.RawDialogueRepository,
 	embeddingSvc port.EmbeddingService,
 	embeddingRepo repository.EmbeddingRepository,
+	migrator *usecase.EmbeddingMigrator,
+	migrationState *usecase.MigrationState,
 ) *WailsApp {
 	return &WailsApp{
 		chatOrchestrator: chat,
@@ -116,6 +124,9 @@ func NewWailsApp(
 		dialogueRepo:     dialogueRepo,
 		embeddingSvc:     embeddingSvc,
 		embeddingRepo:    embeddingRepo,
+		migrator:         migrator,
+		migrationState:   migrationState,
+		onnxReady:        make(chan struct{}),
 		callbackServers:  make(map[string]*auth.LocalCallbackServer),
 		activeStreams:    make(map[string]context.CancelFunc),
 	}
@@ -171,8 +182,8 @@ func (a *WailsApp) Startup(ctx context.Context) {
 	// ONNX 预热：启动后异步执行一次 dummy 推理，将 warmup 成本从首次对话转移到启动阶段
 	go a.warmupONNX()
 
-	// 补全历史事实的 embedding 缺失（TASK-060 修复）
-	go a.backfillEmbeddings()
+	// v1.1.4: 历史 embedding 迁移（版本升级后首次启动触发）
+	go a.runEmbeddingMigration()
 
 	// 初始化 Device Flow 事件回调
 	if a.deviceFlowSvc != nil {
@@ -257,16 +268,12 @@ func (a *WailsApp) checkUpdateAsync() {
 
 	// 通过 Wails Events 推送更新通知到前端
 	payload := map[string]any{
-		"version":          info.Version,
-		"display_version":  info.DisplayVersion,
-		"name":             info.Name,
-		"body":             info.Body,
-		"published_at":     info.PublishedAt.Format(time.RFC3339),
-		"mandatory":        info.Mandatory,
-		"channel":          string(info.Channel),
-		"prerelease":       info.Prerelease,
-		"prerelease_label": info.PreReleaseLabel,
-		"build_number":     info.BuildNumber,
+		"version":      info.Version,
+		"name":         info.Name,
+		"body":         info.Body,
+		"published_at": info.PublishedAt.Format(time.RFC3339),
+		"mandatory":    info.Mandatory,
+		"channel":      string(info.Channel),
 	}
 	runtime.EventsEmit(a.ctx, "update:available", payload)
 }
@@ -593,6 +600,8 @@ func (a *WailsApp) saveMessages(ctx context.Context, convID string, messages []m
 // 使用应用生命周期 context，不设置短 timeout，让 warmup 自然完成。
 // 失败仅记录日志，不影响应用启动。
 func (a *WailsApp) warmupONNX() {
+	defer a.onnxOnce.Do(func() { close(a.onnxReady) })
+
 	// 延迟 2 秒，确保 ONNX engine 已完全初始化
 	time.Sleep(2 * time.Second)
 
@@ -605,6 +614,10 @@ func (a *WailsApp) warmupONNX() {
 			fmt.Printf("[ONNX Warmup] embedding 预热完成，耗时 %v\n", time.Since(start))
 		}
 	}
+}
+
+func (a *WailsApp) waitForONNXReady() {
+	<-a.onnxReady
 }
 
 // extractFactsAsync 异步从完整对话（用户消息 + AI 回复）中提取事实并保存到 factRepo。
@@ -633,42 +646,57 @@ func (a *WailsApp) extractFactsAsync(userContent, aiReply, providerID string) {
 	fmt.Printf("[extractFactsAsync] 提取并保存 %d 条待审核事实\n", len(facts))
 }
 
-// backfillEmbeddings 补全已有事实中缺失的 embedding。
-// 在应用启动时异步执行一次，修复历史事实的 embedding 缺失问题。
-func (a *WailsApp) backfillEmbeddings() {
-	if a.factRepo == nil || a.embeddingSvc == nil || a.embeddingRepo == nil {
+// safeEventsEmit 安全地发射 Wails 事件，在测试环境（标准 context.Background）下静默跳过。
+func (a *WailsApp) safeEventsEmit(eventName string, data ...any) {
+	if a.ctx == nil || a.ctx == context.Background() || a.ctx == context.TODO() {
 		return
 	}
-	ctx, cancel := context.WithTimeout(a.ctx, 5*time.Minute)
+	runtime.EventsEmit(a.ctx, eventName, data...)
+}
+
+// runEmbeddingMigration 在 ONNX warmup 后执行 embedding 版本迁移。
+func (a *WailsApp) runEmbeddingMigration() {
+	a.waitForONNXReady()
+
+	if a.migrator == nil || !a.embeddingSvc.IsAvailable() {
+		if a.migrationState != nil {
+			a.migrationState.SetComplete(true)
+		}
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Minute)
 	defer cancel()
 
-	facts, err := a.factRepo.ListByStatus(ctx, entity.FactStatusApproved, 0, 10000)
-	if err != nil {
-		fmt.Printf("[backfillEmbeddings] 读取事实列表失败: %v\n", err)
+	needs, total, err := a.migrator.NeedsMigration(ctx)
+	if err != nil || !needs {
+		a.migrationState.SetComplete(true)
 		return
 	}
 
-	var backfilled int
-	for _, f := range facts {
-		if _, err := a.embeddingRepo.GetByFactID(ctx, f.FactID); err == nil {
-			continue // 已存在 embedding，跳过
-		}
-		embedText := usecase.BuildFactRetrievalText(f)
-		vector, embedErr := a.embeddingSvc.EmbedSingle(ctx, embedText)
-		if embedErr != nil {
-			fmt.Printf("[backfillEmbeddings] 生成 embedding 失败 %s: %v\n", f.FactID, embedErr)
-			continue
-		}
-		emb := entity.NewSemanticEmbedding(f.FactID, vector, "all-MiniLM-L6-v2")
-		if saveErr := a.embeddingRepo.Save(ctx, emb); saveErr != nil {
-			fmt.Printf("[backfillEmbeddings] 保存 embedding 失败 %s: %v\n", f.FactID, saveErr)
-			continue
-		}
-		backfilled++
+	a.safeEventsEmit("embedding:migration:start", map[string]any{
+		"total": total,
+	})
+
+	processed, failed, err := a.migrator.RunMigration(ctx, func(p, t int) {
+		a.safeEventsEmit("embedding:migration:progress", map[string]any{
+			"processed": p,
+			"total":     t,
+		})
+	})
+
+	a.safeEventsEmit("embedding:migration:done", map[string]any{
+		"processed": processed,
+		"failed":    failed,
+	})
+
+	if err != nil {
+		fmt.Printf("[EmbeddingMigration] 迁移异常: %v\n", err)
 	}
-	if backfilled > 0 {
-		fmt.Printf("[backfillEmbeddings] 补全 %d 条事实的 embedding\n", backfilled)
+	if failed > 0 {
+		fmt.Printf("[EmbeddingMigration] %d 条 fact 迁移失败（已记录日志）\n", failed)
 	}
+	fmt.Printf("[EmbeddingMigration] 迁移完成：处理 %d 条，失败 %d 条\n", processed, failed)
 }
 
 // StopGeneration 中断所有正在进行的流式生成。
@@ -1060,16 +1088,12 @@ func (a *WailsApp) ReportComplianceFeedback(ruleID string, originalText string) 
 
 // UpdateInfoResponse 前端更新信息响应。
 type UpdateInfoResponse struct {
-	Version         string `json:"version"`
-	DisplayVersion  string `json:"display_version"`
-	Name            string `json:"name"`
-	Body            string `json:"body"`
-	PublishedAt     string `json:"published_at"`
-	Mandatory       bool   `json:"mandatory"`
-	Channel         string `json:"channel"`
-	Prerelease      bool   `json:"prerelease"`
-	PreReleaseLabel string `json:"prerelease_label"`
-	BuildNumber     string `json:"build_number"`
+	Version     string `json:"version"`
+	Name        string `json:"name"`
+	Body        string `json:"body"`
+	PublishedAt string `json:"published_at"`
+	Mandatory   bool   `json:"mandatory"`
+	Channel     string `json:"channel"`
 }
 
 // CheckUpdate 检测是否存在可用更新，供前端主动调用。
@@ -1087,16 +1111,12 @@ func (a *WailsApp) CheckUpdate() (*UpdateInfoResponse, error) {
 	}
 
 	return &UpdateInfoResponse{
-		Version:         info.Version,
-		DisplayVersion:  info.DisplayVersion,
-		Name:            info.Name,
-		Body:            info.Body,
-		PublishedAt:     info.PublishedAt.Format(time.RFC3339),
-		Mandatory:       info.Mandatory,
-		Channel:         string(info.Channel),
-		Prerelease:      info.Prerelease,
-		PreReleaseLabel: info.PreReleaseLabel,
-		BuildNumber:     info.BuildNumber,
+		Version:     info.Version,
+		Name:        info.Name,
+		Body:        info.Body,
+		PublishedAt: info.PublishedAt.Format(time.RFC3339),
+		Mandatory:   info.Mandatory,
+		Channel:     string(info.Channel),
 	}, nil
 }
 
@@ -1332,31 +1352,9 @@ func (a *WailsApp) testGeminiAPIKey(ctx context.Context, apiKey string) (*TestAP
 	}, nil
 }
 
-// VersionInfoResponse 返回当前应用的完整版本元数据。
-type VersionInfoResponse struct {
-	Version         string `json:"version"`          // 可比较版本，如 "v1.1.3" 或 "v1.1.3-Pre-release-build.57"
-	DisplayVersion  string `json:"display_version"`  // UI 展示版本，与 Version 相同
-	BuildNumber     string `json:"build_number"`     // 构建号，正式版为空
-	Channel         string `json:"channel"`          // 更新通道，stable 或 beta
-	PreReleaseLabel string `json:"prerelease_label"` // 预发布标签，正式版为空
-	PreRelease      bool   `json:"prerelease"`       // 是否为预发布版本
-}
-
-// GetVersion 返回当前应用版本号（向后兼容，返回 DisplayVersion）。
+// GetVersion 返回当前应用版本号（构建时通过 -ldflags 注入）。
 func (a *WailsApp) GetVersion() string {
 	return version
-}
-
-// GetVersionInfo 返回当前应用的完整版本元数据。
-func (a *WailsApp) GetVersionInfo() *VersionInfoResponse {
-	return &VersionInfoResponse{
-		Version:         version,
-		DisplayVersion:  version,
-		BuildNumber:     buildNumber,
-		Channel:         updateChannel,
-		PreReleaseLabel: prereleaseLabel,
-		PreRelease:      prereleaseLabel != "",
-	}
 }
 
 // CollectSystemInfo 收集当前运行环境信息，供前端展示。
@@ -2460,7 +2458,7 @@ func (a *WailsApp) ApproveFact(factID string) error {
 			content := usecase.BuildFactRetrievalText(fact)
 			vector, embErr := a.embeddingSvc.EmbedSingle(ctx, content)
 			if embErr == nil {
-				embedding := entity.NewSemanticEmbedding(factID, vector, "all-MiniLM-L6-v2")
+				embedding := entity.NewSemanticEmbedding(factID, vector, models.CurrentEmbeddingVersion)
 				if saveErr := a.embeddingRepo.Save(ctx, embedding); saveErr != nil {
 					fmt.Printf("[ApproveFact] 保存嵌入向量失败 %s: %v\n", factID, saveErr)
 				}
@@ -2513,7 +2511,7 @@ func (a *WailsApp) RejectFact(factID string) error {
 // 始终使用用户数据目录 ~/.medmemo/data/models/all-MiniLM-L6-v2，
 // 确保在 AppImage（只读 FS）、macOS .app bundle 及 Windows 安装目录中均可正常读写。
 func (a *WailsApp) embeddingModelDir() string {
-	return filepath.Join(a.config.DataDir, "models", "all-MiniLM-L6-v2")
+	return filepath.Join(a.config.DataDir, "models", models.EmbeddingModelName)
 }
 
 // GetEmbeddingStatus 获取本地 Embedding 模型状态。
@@ -2594,7 +2592,7 @@ func (a *WailsApp) GetEmbeddingStatus() (*EmbeddingStatusResponse, error) {
 		RuntimeLibPath:    runtimeLibPath,
 		FailureReason:     failureReason,
 		ModelPath:         modelPath,
-		ModelName:         "all-MiniLM-L6-v2",
+		ModelName:         models.EmbeddingModelName,
 		DownloadURL:       downloadURL,
 	}, nil
 }

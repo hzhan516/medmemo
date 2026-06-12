@@ -9,4 +9,8 @@ type EmbeddingService interface {
 	Embed(ctx context.Context, texts []string) ([][]float32, error)
 	// EmbedSingle 单条文本嵌入生成，是 Embed 的便捷包装。
 	EmbedSingle(ctx context.Context, text string) ([]float32, error)
+	// ModelVersion 返回当前使用的复合版本标识。
+	ModelVersion() string
+	// IsAvailable 返回 ONNX 嵌入推理是否可用。
+	IsAvailable() bool
 }
