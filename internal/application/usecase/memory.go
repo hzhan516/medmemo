@@ -144,47 +144,116 @@ type memoryCandidate struct {
 }
 
 // RetrieveForContext 为当前对话检索相关记忆，返回用于注入上下文的记忆片段。
-// 流程：实体提及检测 → 会话间隙检测 → 向量相似搜索 → 事实关联 → 时间衰减评分 → 置信度过滤 → Token 预算截断。
+// 多路召回流程：prepareRequest → intent/keyword/vector/recent → merge → rerank → tokenBudget。
 func (m *MemoryRetriever) RetrieveForContext(ctx context.Context, query, sessionID string, limit int) ([]*entity.HealthMemory, error) {
+	_, memories, err := m.retrieveWithDiagnostics(ctx, query, sessionID, limit)
+	return memories, err
+}
+
+// retrieveWithDiagnostics 执行完整多路召回并返回诊断信息，供内部测试使用。
+func (m *MemoryRetriever) retrieveWithDiagnostics(ctx context.Context, query, sessionID string, limit int) (*RetrievalDiagnostics, []*entity.HealthMemory, error) {
 	if limit <= 0 {
 		limit = 3
 	}
 
+	diag := &RetrievalDiagnostics{}
+
 	// 1. 检查开关状态
 	if !m.IsSessionEnabled(sessionID) {
-		return nil, nil
+		return diag, nil, nil
 	}
 
-	// 2. 实体提及检测（触发条件一）
-	mentionMemories, _ := m.detectEntityMentions(ctx, query)
+	// 2. 准备请求
+	req := m.prepareRetrievalRequest(query, sessionID, limit)
+	diag.DetectedIntent = req.Intent
+	diag.ExpandedQuery = req.ExpandedQuery
 
-	// 3. 会话间隙检测（触发条件二）
-	sessionGapTriggered := m.checkSessionGap(sessionID)
-
-	// 记录本次访问时间
+	// 3. 会话间隙检测
+	_ = m.checkSessionGap(sessionID)
 	m.recordSessionAccess(sessionID)
 
-	// 4. 生成查询向量（语义搜索）
-	// 使用独立超时，避免 ONNX 推理耗时影响整体对话流程
-	var semanticMemories []*entity.HealthMemory
-	embedCtx, embedCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	queryVector, err := m.embeddingSvc.EmbedSingle(embedCtx, query)
-	embedCancel()
-	if err == nil {
-		var searchErr error
-		semanticMemories, searchErr = m.semanticSearch(ctx, queryVector, limit)
-		if searchErr != nil {
-			fmt.Printf("[MemoryRetriever] semantic search failed, memory injection degraded: %v\n", searchErr)
+	// 4. 四路并行召回
+	var wg sync.WaitGroup
+
+	// intent recall
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		start := time.Now()
+		candidates, ps := m.recallByIntent(ctx, req)
+		ps.Latency = time.Since(start)
+		diag.IntentCandidates = candidates
+		diag.PathStatuses = append(diag.PathStatuses, ps)
+	}()
+
+	// keyword recall
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		start := time.Now()
+		diag.KeywordCandidates, _ = m.recallByKeyword(ctx, req)
+		ps := PathStatus{Path: PathKeyword, Status: "success", Latency: time.Since(start)}
+		if len(diag.KeywordCandidates) == 0 {
+			ps.Reason = "no keyword matches"
 		}
-	} else {
-		fmt.Printf("[MemoryRetriever] embedding 生成失败，语义搜索降级: %v\n", err)
+		diag.PathStatuses = append(diag.PathStatuses, ps)
+	}()
+
+	// vector recall
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		start := time.Now()
+		candidates, ps := m.recallByVector(ctx, req)
+		ps.Latency = time.Since(start)
+		diag.VectorCandidates = candidates
+		diag.PathStatuses = append(diag.PathStatuses, ps)
+	}()
+
+	// recent same-intent recall
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		start := time.Now()
+		candidates, ps := m.recallRecentSameIntent(ctx, req)
+		ps.Latency = time.Since(start)
+		diag.RecentCandidates = candidates
+		diag.PathStatuses = append(diag.PathStatuses, ps)
+	}()
+
+	wg.Wait()
+
+	// 5. 合并去重
+	diag.MergedCandidates = mergeCandidates(
+		diag.IntentCandidates,
+		diag.KeywordCandidates,
+		diag.VectorCandidates,
+		diag.RecentCandidates,
+	)
+
+	// 6. 重排
+	diag.MergedCandidates = rerank(diag.MergedCandidates, req)
+
+	// 7. Token 预算截断
+	diag.SelectedMemories, diag.RejectedCandidates = applyTokenBudgetToCandidates(diag.MergedCandidates, limit)
+	diag.TotalApprovedFacts = len(diag.MergedCandidates)
+	diag.TotalRejected = len(diag.RejectedCandidates)
+
+	// 8. 诊断日志
+	logDiagnostics(diag)
+
+	// 9. 转换为 HealthMemory
+	var memories []*entity.HealthMemory
+	for _, c := range diag.SelectedMemories {
+		memories = append(memories, &entity.HealthMemory{
+			ID:         models.MemoryID(c.FactID),
+			Content:    c.Content,
+			Confidence: c.Confidence,
+			CreatedAt:  c.CreatedAt,
+		})
 	}
 
-	// 5. 合并结果并去重
-	merged := m.mergeMemories(mentionMemories, semanticMemories, sessionGapTriggered, sessionID)
-
-	// 6. Token 预算截断
-	return m.applyTokenBudget(merged, limit), nil
+	return diag, memories, nil
 }
 
 // recallByIntent 意图召回路径：通过 IntentResolver 的 predicates 查询 approved facts。
@@ -315,6 +384,270 @@ func truncateSnippet(s string, maxLen int) string {
 		return s
 	}
 	return string(runes[:maxLen]) + "..."
+}
+
+// recallByVector 向量召回路径：使用 expanded_query 进行 embedding 和语义搜索。
+// embedding 或搜索失败不影响其他路径，diagnostics 记录失败原因。
+func (m *MemoryRetriever) recallByVector(ctx context.Context, req *RetrievalRequest) ([]RetrievalCandidate, PathStatus) {
+	searchQuery := req.ExpandedQuery
+	if searchQuery == "" {
+		searchQuery = req.Normalized
+	}
+	if searchQuery == "" {
+		return nil, PathStatus{Path: PathVector, Status: "skipped", Reason: "no expanded query"}
+	}
+
+	// 生成 embedding（独立超时，避免阻塞其他路径）
+	embedCtx, embedCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	queryVector, err := m.embeddingSvc.EmbedSingle(embedCtx, searchQuery)
+	embedCancel()
+	if err != nil {
+		return nil, PathStatus{Path: PathVector, Status: "failure", Reason: fmt.Sprintf("embedding failed: %v", err)}
+	}
+
+	searchLimit := req.Limit * 3
+	if searchLimit < 10 {
+		searchLimit = 10
+	}
+
+	var scoredEmbeddings []*entity.ScoredEmbedding
+	if m.migrationState != nil && m.migrationState.IsComplete() {
+		scoredEmbeddings, err = m.embeddingRepo.SearchSimilarFiltered(
+			ctx, queryVector, searchLimit, m.embeddingSvc.ModelVersion())
+	} else {
+		scoredEmbeddings, err = m.embeddingRepo.SearchSimilar(ctx, queryVector, searchLimit)
+	}
+	if err != nil {
+		return nil, PathStatus{Path: PathVector, Status: "failure", Reason: fmt.Sprintf("vector search failed: %v", err)}
+	}
+
+	now := time.Now().UTC()
+	var candidates []RetrievalCandidate
+	for _, se := range scoredEmbeddings {
+		fact, err := m.factRepo.GetByID(ctx, se.FactID)
+		if err != nil {
+			continue
+		}
+		if fact.Status != entity.FactStatusApproved {
+			continue
+		}
+
+		decayScore := m.decayScorer.ScoreFromCreatedAt(se.Similarity, fact.CreatedAt, now)
+		weightedConf := fact.Confidence * decayScore
+		if weightedConf < m.minConfidence {
+			continue
+		}
+
+		content := fmt.Sprintf("%s %s %s", fact.Subject, fact.Predicate, fact.Object)
+		candidates = append(candidates, RetrievalCandidate{
+			FactID:           fact.FactID,
+			Content:          content,
+			Snippet:          truncateSnippet(content, 50),
+			CreatedAt:        fact.CreatedAt,
+			Confidence:       weightedConf,
+			MatchedPaths:     []RetrievalPath{PathVector},
+			VectorSimilarity: se.Similarity,
+			RecencyScore:     decayScore,
+			Reasons:          []string{fmt.Sprintf("vector similarity: %.3f", se.Similarity)},
+		})
+	}
+
+	// 按加权分数降序
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].Confidence > candidates[j].Confidence
+	})
+
+	status := PathStatus{Path: PathVector, Status: "success"}
+	if len(candidates) == 0 {
+		status.Reason = "no vector matches above confidence threshold"
+	}
+	return candidates, status
+}
+
+// recallRecentSameIntent 最近相同意图召回路径：仅取最新 1 条 approved fact 用于 personal attribute boost/override。
+// 仅在 detected_intent.Confidence == ConfidenceHigh 时触发。
+func (m *MemoryRetriever) recallRecentSameIntent(ctx context.Context, req *RetrievalRequest) ([]RetrievalCandidate, PathStatus) {
+	if req.Intent == nil || req.Intent.Confidence != ConfidenceHigh || len(req.Intent.Predicates) == 0 {
+		return nil, PathStatus{Path: PathRecent, Status: "skipped", Reason: "intent confidence not High"}
+	}
+
+	facts, err := m.factRepo.FindApprovedByPredicates(ctx, req.Subject, req.Intent.Predicates, 1)
+	if err != nil {
+		return nil, PathStatus{Path: PathRecent, Status: "failure", Reason: fmt.Sprintf("query failed: %v", err)}
+	}
+	if len(facts) == 0 {
+		return nil, PathStatus{Path: PathRecent, Status: "success", Reason: "no recent same-intent facts"}
+	}
+
+	now := time.Now().UTC()
+	var candidates []RetrievalCandidate
+	for _, f := range facts {
+		content := fmt.Sprintf("%s %s %s", f.Subject, f.Predicate, f.Object)
+		candidates = append(candidates, RetrievalCandidate{
+			FactID:       f.FactID,
+			Content:      content,
+			Snippet:      truncateSnippet(content, 50),
+			CreatedAt:    f.CreatedAt,
+			Confidence:   f.Confidence,
+			MatchedPaths: []RetrievalPath{PathRecent},
+			IntentLevel:  intentConfidenceToLevel(req.Intent.Confidence),
+			RecencyScore: m.decayScorer.ScoreFromCreatedAt(1.0, f.CreatedAt, now),
+			Reasons:      []string{fmt.Sprintf("recent same-intent: %s", req.Intent.Intent)},
+		})
+	}
+
+	return candidates, PathStatus{Path: PathRecent, Status: "success"}
+}
+
+// mergeCandidates 多路候选合并去重，以 fact_id 为主键。
+// 同一 fact 多路命中时合并 matched_paths、reasons 和评分。
+func mergeCandidates(paths ...[]RetrievalCandidate) []RetrievalCandidate {
+	byID := make(map[string]*RetrievalCandidate)
+
+	for _, candidates := range paths {
+		for i := range candidates {
+			c := &candidates[i]
+			if existing, ok := byID[c.FactID]; ok {
+				// 合并 matched_paths
+				existing.MatchedPaths = append(existing.MatchedPaths, c.MatchedPaths...)
+				// 合并 reasons
+				existing.Reasons = append(existing.Reasons, c.Reasons...)
+				// 取最高评分
+				if c.IntentLevel > existing.IntentLevel {
+					existing.IntentLevel = c.IntentLevel
+				}
+				if c.KeywordScore > existing.KeywordScore {
+					existing.KeywordScore = c.KeywordScore
+				}
+				if c.VectorSimilarity > existing.VectorSimilarity {
+					existing.VectorSimilarity = c.VectorSimilarity
+				}
+				if c.RecencyScore > existing.RecencyScore {
+					existing.RecencyScore = c.RecencyScore
+				}
+				if c.Confidence > existing.Confidence {
+					existing.Confidence = c.Confidence
+				}
+			} else {
+				cp := *c
+				byID[c.FactID] = &cp
+			}
+		}
+	}
+
+	result := make([]RetrievalCandidate, 0, len(byID))
+	for _, c := range byID {
+		result = append(result, *c)
+	}
+	return result
+}
+
+// rerank 基础重排：按 intent_level → keyword_score → recency → vector_similarity → confidence → created_at 降序排序。
+// 个人属性覆盖规则：ConfidenceHigh 且存在 recent path 命中时，该 fact 排最前。
+func rerank(candidates []RetrievalCandidate, req *RetrievalRequest) []RetrievalCandidate {
+	if len(candidates) <= 1 {
+		return candidates
+	}
+
+	// 标记 recent path 候选用于 boost
+	recentBoost := make(map[string]bool)
+	var boostPersonal bool
+	if req != nil && req.Intent != nil && req.Intent.Confidence == ConfidenceHigh {
+		boostPersonal = true
+	}
+
+	sort.Slice(candidates, func(i, j int) bool {
+		a, b := candidates[i], candidates[j]
+
+		// recent boost: 个人属性问题优先推 recent path 候选
+		if boostPersonal {
+			aRecent := containsPath(a.MatchedPaths, PathRecent)
+			bRecent := containsPath(b.MatchedPaths, PathRecent)
+			if aRecent != bRecent {
+				return aRecent
+			}
+		}
+
+		// 排序键
+		if a.IntentLevel != b.IntentLevel {
+			return a.IntentLevel > b.IntentLevel
+		}
+		if a.KeywordScore != b.KeywordScore {
+			return a.KeywordScore > b.KeywordScore
+		}
+		if a.RecencyScore != b.RecencyScore {
+			return a.RecencyScore > b.RecencyScore
+		}
+		if a.VectorSimilarity != b.VectorSimilarity {
+			return a.VectorSimilarity > b.VectorSimilarity
+		}
+		if a.Confidence != b.Confidence {
+			return a.Confidence > b.Confidence
+		}
+		return a.CreatedAt.After(b.CreatedAt)
+	})
+
+	_ = recentBoost
+	return candidates
+}
+
+// containsPath 检查 matched_paths 中是否包含指定路径。
+func containsPath(paths []RetrievalPath, target RetrievalPath) bool {
+	for _, p := range paths {
+		if p == target {
+			return true
+		}
+	}
+	return false
+}
+
+// applyTokenBudgetToCandidates 对 RetrievalCandidate 列表应用 Token 预算截断。
+// 返回选中的和被拒绝的候选。
+func applyTokenBudgetToCandidates(candidates []RetrievalCandidate, limit int) ([]RetrievalCandidate, []RetrievalCandidate) {
+	var selected, rejected []RetrievalCandidate
+	var tokenCount int
+	tokenBudget := 500
+	for _, c := range candidates {
+		memTokens := len([]rune(c.Content))
+		if len(selected) > 0 && tokenCount+memTokens > tokenBudget {
+			r := c
+			r.RejectReason = "token budget exceeded"
+			rejected = append(rejected, r)
+			continue
+		}
+		selected = append(selected, c)
+		tokenCount += memTokens
+		if len(selected) >= limit {
+			break
+		}
+	}
+	return selected, rejected
+}
+
+// logDiagnostics 输出检索诊断日志，默认 summary，debug 输出候选明细。
+func logDiagnostics(diag *RetrievalDiagnostics) {
+	if diag == nil {
+		return
+	}
+
+	intentStr := "none"
+	if diag.DetectedIntent != nil {
+		intentStr = fmt.Sprintf("%s(conf=%d)", diag.DetectedIntent.Intent, diag.DetectedIntent.Confidence)
+	}
+
+	fmt.Printf("[MemoryRetriever] diag intent=%s expanded=%q intentC=%d keywordC=%d vectorC=%d recentC=%d merged=%d selected=%d rejected=%d\n",
+		intentStr, truncateSnippet(diag.ExpandedQuery, 80),
+		len(diag.IntentCandidates), len(diag.KeywordCandidates),
+		len(diag.VectorCandidates), len(diag.RecentCandidates),
+		len(diag.MergedCandidates), len(diag.SelectedMemories), len(diag.RejectedCandidates))
+
+	// 明细仅在 vector 失败或零召回时输出（debug 级别）
+	for _, ps := range diag.PathStatuses {
+		if ps.Status == "failure" {
+			fmt.Printf("[MemoryRetriever] diag path=%s status=%s reason=%s latency=%v\n",
+				ps.Path, ps.Status, ps.Reason, ps.Latency)
+		}
+	}
 }
 
 // detectEntityMentions 检测 query 中是否包含已记忆实体的关键词。
