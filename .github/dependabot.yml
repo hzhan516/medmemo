@@ -8,6 +8,7 @@ updates:
       day: "monday"
       time: "09:00"
     open-pull-requests-limit: 5
+    target-branch: "develop"
     reviewers:
       - "hzhan516"
     commit-message:
@@ -34,13 +35,7 @@ updates:
       time: "09:00"
     open-pull-requests-limit: 5
     labels: []
-    ignore:
-      - dependency-name: "tailwindcss"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "eslint-plugin-react-refresh"
-        update-types: ["version-update:semver-major", "version-update:semver-minor"]
-      - dependency-name: "eslint"
-        update-types: ["version-update:semver-major"]
+    target-branch: "develop"
     reviewers:
       - "hzhan516"
     commit-message:

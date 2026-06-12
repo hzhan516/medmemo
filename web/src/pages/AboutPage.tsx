@@ -14,21 +14,21 @@ interface AboutPageProps {
 }
 
 export function AboutPage({ onOpenFeedback }: AboutPageProps) {
-  const { getVersion, getVersionNotes, openDownloadURL } = useWails()
+  const { getVersionInfo, getVersionNotes, openDownloadURL } = useWails()
   const [version, setVersion] = useState('')
   const [notes, setNotes] = useState<VersionNote[]>([])
   const [showModal, setShowModal] = useState(false)
 
   useEffect(() => {
     let cancelled = false
-    Promise.all([getVersion(), getVersionNotes()]).then(([v, n]) => {
+    Promise.all([getVersionInfo(), getVersionNotes()]).then(([info, n]) => {
       if (!cancelled) {
-        setVersion(v)
+        setVersion(info.display_version || info.version)
         setNotes(n)
       }
     })
     return () => { cancelled = true }
-  }, [getVersion, getVersionNotes])
+  }, [getVersionInfo, getVersionNotes])
 
   return (
     <div className="h-full flex flex-col bg-background animate-fadeIn">

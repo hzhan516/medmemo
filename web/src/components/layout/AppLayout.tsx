@@ -16,12 +16,16 @@ const navItems = [
  */
 export function AppLayout() {
   const location = useLocation()
-  const { getVersion } = useWails()
+  const { getVersionInfo } = useWails()
   const [version, setVersion] = useState('')
 
   useEffect(() => {
-    getVersion().then(setVersion).catch(() => setVersion(''))
-  }, [getVersion])
+    getVersionInfo()
+      .then((info) => {
+        setVersion(info.display_version || info.version)
+      })
+      .catch(() => setVersion(''))
+  }, [getVersionInfo])
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-background text-foreground flex">

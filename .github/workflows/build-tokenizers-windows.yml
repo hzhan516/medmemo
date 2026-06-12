@@ -69,7 +69,7 @@ jobs:
       # 当手动触发且带有 release 标志时，上传到 GitHub release
       - name: Upload to GitHub Release
         if: github.event_name == 'workflow_dispatch'
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: tokenizers-${{ env.TOKENIZERS_VERSION }}
           name: "Tokenizers Windows ${{ env.TOKENIZERS_VERSION }}"

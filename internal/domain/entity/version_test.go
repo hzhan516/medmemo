@@ -145,8 +145,8 @@ func TestDefaultUpdateSettings(t *testing.T) {
 	if !s.CheckEnabled {
 		t.Error("expected CheckEnabled to be true")
 	}
-	if s.Channel != ChannelBeta {
-		t.Errorf("expected default channel to be beta, got %s", s.Channel)
+	if s.Channel != ChannelStable {
+		t.Errorf("expected default channel to be stable, got %s", s.Channel)
 	}
 	if s.SkipVersion != "" {
 		t.Error("expected SkipVersion to be empty")

@@ -168,7 +168,7 @@ func TestServiceSettings(t *testing.T) {
 
 	// 默认设置
 	assert.True(t, svc.GetSettings().CheckEnabled)
-	assert.Equal(t, entity.ChannelBeta, svc.GetSettings().Channel)
+	assert.Equal(t, entity.ChannelStable, svc.GetSettings().Channel)
 
 	// 修改设置
 	newSettings := &entity.UpdateSettings{

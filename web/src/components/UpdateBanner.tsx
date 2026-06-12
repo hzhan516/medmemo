@@ -20,7 +20,10 @@ export function UpdateBanner({ info, onShowDetails, onDismiss }: UpdateBannerPro
       <div className="flex items-center gap-2 min-w-0">
         <Download size={14} className="shrink-0 text-primary" />
         <span className="truncate">
-          <span className="font-medium">MedMemo {info.version}</span> 已发布
+          <span className="font-medium">MedMemo {info.display_version || info.version}</span> 已发布
+          {info.prerelease && (
+            <span className="ml-1 text-amber-600 dark:text-amber-400">（测试版）</span>
+          )}
           {info.mandatory && (
             <span className="ml-1 text-red-600 dark:text-red-400">（安全补丁，建议立即更新）</span>
           )}
