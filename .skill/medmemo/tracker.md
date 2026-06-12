@@ -12,7 +12,7 @@
 
 ---
 
-### [2026-06-12 / v1.1.4] — M03 混合检索多路召回管线实现
+### [2026-06-12 / v1.1.5] — M03 混合检索多路召回管线实现
 
 **[Modified Areas]**
 - `internal/application/usecase/memory.go` — MemoryRetriever 重构为四路并行召回管线
@@ -37,7 +37,11 @@
 **[Checklist Status]**
 - 分支 `feature/M03-multipath-retrieval-rerank`，6 commits
 - `go test ./internal/...` 全部通过
-- 无版本号变更
+- ✅ `wails.json` → v1.1.5
+- ✅ `web/package.json` → v1.1.5
+- ✅ `npm install` → package-lock.json 刷新
+- ✅ `changelog/zh-Hans.json` → 末尾新增 v1.1.5
+- ✅ `medmemo/开发日志/v1.1/v1.1.5.md` → 创建
 
 **[Pending/Next Steps]**
 - M03 跨路召回需要更全面的 E2E 测试覆盖

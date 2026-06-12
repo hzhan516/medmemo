@@ -233,5 +233,24 @@
     "fixes": [
       "修复 embedding 缓存未按模型版本隔离导致的潜在陈旧向量召回问题"
     ]
+  },
+  {
+    "version": "v1.1.5",
+    "title": "M03 混合检索四路并行召回管线",
+    "features": [
+      "四路并行召回架构：intent（意图）/ keyword（关键词）/ vector（向量）/ recent（最近相同意图）并发执行，wg.WaitGroup 协调",
+      "意图召回：FactRepository.FindApprovedByPredicates SQL 实现，支持多 predicate IN 查询仅返回 approved 事实",
+      "关键词召回：recallByKeyword 拆分独立返回 RetrievalCandidate + KeywordScore",
+      "向量召回：expanded_query embedding + semantic search，支持 model_version 过滤与 migrationState 门控",
+      "最近相同意图召回：ConfidenceHigh 个人属性时取最新 1 条 boost/override，区别于列表式意图召回",
+      "多路合并去重：mergeCandidates 按 fact_id 去重，合并 matched_paths / reasons / 最高分",
+      "基础重排：intent_level → keyword_score → recency_score → vector_similarity → confidence → created_at 六级排序，recent boost 前置",
+      "诊断日志：logDiagnostics 汇总（总数/选中/拒绝）+ 失败路径详情（路径名/状态/原因/延迟）",
+      "Token 预算截断：applyTokenBudgetToCandidates 分离选中/拒绝候选，限制 LLM 上下文窗口",
+      "retrieveWithDiagnostics 可测试入口：四路并行→合并→重排→预算→日志，返回完整 RetrievalDiagnostics"
+    ],
+    "fixes": [
+      "修复 rerank recency 与 vector_similarity 排序优先级：recency 优先，避免陈旧高相似度事实挤占新事实"
+    ]
   }
 ]
