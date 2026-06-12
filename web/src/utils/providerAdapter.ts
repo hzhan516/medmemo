@@ -2,12 +2,9 @@ import { models } from '@wails/go/models'
 import type { ProviderConfig, AuthParams } from '@/types/provider'
 
 /**
- * Wails 生成的 ProviderConfig 缺少 models 字段声明。
- * 运行时 JSON 序列化仍能正确传递，这里用 interface merge 补全类型。
+ * Wails 生成的 ProviderConfig 类型别名，避免与前端 ProviderConfig 冲突。
  */
-export interface WailsProviderConfig extends models.ProviderConfig {
-  models?: Array<{ id: string; name: string; enabled: boolean }>
-}
+export type WailsProviderConfig = models.ProviderConfig
 
 /**
  * 将前端 ProviderConfig 转换为 Wails 后端模型。

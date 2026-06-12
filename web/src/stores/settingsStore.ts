@@ -50,7 +50,7 @@ export const useSettingsStore = create<SettingsState>()(
       showConfidenceBar: true,
       confidenceBarMode: 'compact',
       autoCheckUpdate: true,
-      updateChannel: 'beta',
+      updateChannel: 'stable',
       desensitizationLevel: 'standard',
       dataRetentionDays: 30,
       activeProviderId: null,
