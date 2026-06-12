@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"strings"
 	"time"
 )
 
@@ -62,6 +63,64 @@ type RerankScore struct {
 	VectorSimilarity float64
 	RecencyScore     float64
 	Confidence       float64
+}
+
+// BuildExpandedQuery 为向量检索生成 query-side 扩展文本。
+// 基于 normalized query + intent 结果，在不注入 LLM 的前提下附加同义词、
+// intent aliases 和 category synonyms，提高向量召回的语义覆盖度。
+// 与 BuildFactRetrievalText 保持独立（后者是 fact-side retrieval text）。
+func BuildExpandedQuery(normalized string, intent *IntentResult) string {
+	if normalized == "" {
+		return ""
+	}
+
+	parts := []string{normalized}
+
+	// 从 intent 附加 predicate 别名
+	if intent != nil {
+		for _, pred := range intent.Predicates {
+			if pred != "" && !containsFold(parts, pred) {
+				parts = append(parts, pred)
+			}
+		}
+	}
+
+	// 从 categoryRegistry 匹配同义词（基于 predicate 匹配）
+	if intent != nil {
+		cat := matchCategoryByPredicates(intent.Predicates)
+		if cat != nil {
+			for _, syn := range cat.synonyms {
+				if syn != "" && !containsFold(parts, syn) {
+					parts = append(parts, syn)
+				}
+			}
+		}
+	}
+
+	return strings.Join(parts, " ")
+}
+
+// matchCategoryByPredicates 在 categoryRegistry 中按 predicates 列表匹配分类。
+func matchCategoryByPredicates(predicates []string) *factCategory {
+	for _, pred := range predicates {
+		predLower := strings.ToLower(pred)
+		for i := range categoryRegistry {
+			if containsAnyKeyword(predLower, categoryRegistry[i].predicates) {
+				return &categoryRegistry[i]
+			}
+		}
+	}
+	return nil
+}
+
+// containsFold 检查大小写不敏感的切片包含。
+func containsFold(parts []string, s string) bool {
+	for _, p := range parts {
+		if strings.EqualFold(p, s) {
+			return true
+		}
+	}
+	return false
 }
 
 // RetrievalDiagnostics 记录一次检索的完整诊断信息。

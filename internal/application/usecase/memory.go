@@ -21,7 +21,7 @@ type MemoryQuerier interface {
 }
 
 // MemoryRetriever 编排语义记忆检索与上下文注入用例。
-// 整合向量搜索、时间衰减评分、实体提及检测、会话间隙检测和置信度过滤，
+// 整合多路召回（intent/keyword/vector/recent）、合并去重、基础重排和诊断日志，
 // 为对话提供相关历史记忆。
 type MemoryRetriever struct {
 	embeddingSvc       port.EmbeddingService
@@ -29,6 +29,8 @@ type MemoryRetriever struct {
 	factRepo           repository.FactRepository
 	decayScorer        *DecayScorer
 	migrationState     *MigrationState
+	intentResolver     *IntentResolver
+	expansionSvc       *QueryExpansionService
 	minConfidence      float64
 	tokenBudget        int
 	enabled            bool
@@ -43,6 +45,8 @@ func NewMemoryRetriever(
 	factRepo repository.FactRepository,
 	decayScorer *DecayScorer,
 	migrationState *MigrationState,
+	intentResolver *IntentResolver,
+	expansionSvc *QueryExpansionService,
 ) *MemoryRetriever {
 	return &MemoryRetriever{
 		embeddingSvc:       embeddingSvc,
@@ -50,6 +54,8 @@ func NewMemoryRetriever(
 		factRepo:           factRepo,
 		decayScorer:        decayScorer,
 		migrationState:     migrationState,
+		intentResolver:     intentResolver,
+		expansionSvc:       expansionSvc,
 		minConfidence:      0.6,
 		tokenBudget:        500,
 		enabled:            true,
@@ -101,6 +107,34 @@ func (m *MemoryRetriever) IsSessionEnabled(sessionID string) bool {
 	}
 	_, disabled := m.sessionAccessTimes["_disabled_"+sessionID]
 	return !disabled
+}
+
+// prepareRetrievalRequest 从原始 query 生成用于多路召回的 RetrievalRequest。
+// 包含规范化、意图解析和本地 query expansion。
+func (m *MemoryRetriever) prepareRetrievalRequest(query, sessionID string, limit int) *RetrievalRequest {
+	req := &RetrievalRequest{
+		RawQuery:  query,
+		SessionID: sessionID,
+		Limit:     limit,
+		Subject:   "用户",
+	}
+
+	// 规范化
+	if m.expansionSvc != nil {
+		req.Normalized = m.expansionSvc.Normalize(query)
+	} else {
+		req.Normalized = query
+	}
+
+	// 意图解析
+	if m.intentResolver != nil && req.Normalized != "" {
+		req.Intent = m.intentResolver.Resolve(req.Normalized)
+	}
+
+	// 本地 query expansion
+	req.ExpandedQuery = BuildExpandedQuery(req.Normalized, req.Intent)
+
+	return req
 }
 
 // memoryCandidate 内部候选记忆结构，用于排序和过滤
