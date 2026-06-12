@@ -217,5 +217,21 @@
       "detectEntityMentions 使用 retrieval text 做关键词匹配召回，返回 LLM 的 Content 仍是原始事实文本，避免污染上下文"
     ],
     "fixes": []
+  },
+  {
+    "version": "v1.1.4",
+    "title": "Embedding 版本化与历史向量迁移",
+    "features": [
+      "嵌入模型版本化：新增 CurrentEmbeddingVersion 常量，embedding 缓存按模型版本命名空间隔离，避免模型升级后陈旧向量污染召回",
+      "分类同义词扩展（retrieval-v2）：为体重、身高、年龄、过敏、用药等个人事实生成增强检索文本，提升同义问法语义召回率",
+      "历史 embedding 版本迁移器（EmbeddingMigrator）：版本升级后首次启动自动扫描并重建过期/缺失的 embedding",
+      "启动时 embedding 迁移流水线：ONNX 预热完成后后台执行，通过 Wails Events 推送 start/progress/done 状态",
+      "前端迁移进度 UI：底部进度条与 Spinner 实时展示已处理/总数，迁移完成后自动消失",
+      "数据库迁移 v11：为 embedding 表增加 model_version 索引，优化迁移查询与版本过滤性能",
+      "Embedding 仓库扩展：新增 CountApprovedFactsNeedingEmbedding / ListApprovedFactsNeedingEmbedding / UpdateEmbedding 支持增量重算"
+    ],
+    "fixes": [
+      "修复 embedding 缓存未按模型版本隔离导致的潜在陈旧向量召回问题"
+    ]
   }
 ]
