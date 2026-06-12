@@ -162,6 +162,9 @@ func (m *mockFactRepository) FindBySubject(ctx context.Context, subject string) 
 func (m *mockFactRepository) FindBySession(ctx context.Context, sessionID string) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
+func (m *mockFactRepository) FindApprovedByPredicates(ctx context.Context, subject string, predicates []string, limit int) ([]*entity.ExtractedFact, error) {
+	return nil, nil
+}
 func (m *mockFactRepository) FindLatestApprovedByPredicates(ctx context.Context, subject string, predicates []string) (*entity.ExtractedFact, error) {
 	if m.err != nil {
 		return nil, m.err

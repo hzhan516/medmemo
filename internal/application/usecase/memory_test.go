@@ -74,7 +74,8 @@ func (s *stubEmbeddingRepository) UpdateEmbedding(ctx context.Context, e *entity
 }
 
 type stubFactRepository struct {
-	facts map[string]*entity.ExtractedFact
+	facts                    map[string]*entity.ExtractedFact
+	approvedByPredicatesFunc func(ctx context.Context, subject string, predicates []string, limit int) ([]*entity.ExtractedFact, error)
 }
 
 func (s *stubFactRepository) Save(ctx context.Context, f *entity.ExtractedFact) error { return nil }
@@ -105,6 +106,12 @@ func (s *stubFactRepository) FindBySubject(ctx context.Context, subject string) 
 	return nil, nil
 }
 func (s *stubFactRepository) FindBySession(ctx context.Context, sessionID string) ([]*entity.ExtractedFact, error) {
+	return nil, nil
+}
+func (s *stubFactRepository) FindApprovedByPredicates(ctx context.Context, subject string, predicates []string, limit int) ([]*entity.ExtractedFact, error) {
+	if s.approvedByPredicatesFunc != nil {
+		return s.approvedByPredicatesFunc(ctx, subject, predicates, limit)
+	}
 	return nil, nil
 }
 func (s *stubFactRepository) FindLatestApprovedByPredicates(ctx context.Context, subject string, predicates []string) (*entity.ExtractedFact, error) {
@@ -174,6 +181,8 @@ func TestMemoryRetriever_SemanticSearch(t *testing.T) {
 		&stubFactRepository{facts: facts},
 		NewDecayScorer(),
 		nil,
+		nil,
+		nil,
 	)
 
 	memories, err := retriever.RetrieveForContext(context.Background(), "我的血压怎么样", "session_001", 2)
@@ -215,6 +224,8 @@ func TestMemoryRetriever_DecayRanking(t *testing.T) {
 		&stubFactRepository{facts: facts},
 		NewDecayScorer(),
 		nil,
+		nil,
+		nil,
 	)
 	retriever.minConfidence = 0.1 // 降低阈值以便测试衰减排序
 
@@ -252,6 +263,8 @@ func TestMemoryRetriever_FilterUnapproved(t *testing.T) {
 		&stubFactRepository{facts: facts},
 		NewDecayScorer(),
 		nil,
+		nil,
+		nil,
 	)
 
 	memories, err := retriever.RetrieveForContext(context.Background(), "query", "session_001", 10)
@@ -285,6 +298,8 @@ func TestMemoryRetriever_MinConfidenceFilter(t *testing.T) {
 		&stubFactRepository{facts: facts},
 		NewDecayScorer(),
 		nil,
+		nil,
+		nil,
 	)
 	retriever.minConfidence = 0.6 // 设置较高阈值
 
@@ -300,6 +315,8 @@ func TestMemoryRetriever_EmbedFailure(t *testing.T) {
 		&stubEmbeddingRepository{},
 		&stubFactRepository{},
 		NewDecayScorer(),
+		nil,
+		nil,
 		nil,
 	)
 
@@ -326,6 +343,8 @@ func TestMemoryRetriever_WeightRecallThroughSemanticSearch(t *testing.T) {
 		&stubFactRepository{facts: facts},
 		NewDecayScorer(),
 		nil,
+		nil,
+		nil,
 	)
 
 	memories, err := retriever.RetrieveForContext(context.Background(), "我现在多重", "session_weight", 3)
@@ -347,6 +366,8 @@ func TestMemoryRetriever_NoResults(t *testing.T) {
 		&stubEmbeddingRepository{results: nil},
 		&stubFactRepository{},
 		NewDecayScorer(),
+		nil,
+		nil,
 		nil,
 	)
 
@@ -380,6 +401,8 @@ func TestMemoryRetriever_TokenBudget(t *testing.T) {
 		&stubFactRepository{facts: facts},
 		NewDecayScorer(),
 		nil,
+		nil,
+		nil,
 	)
 	retriever.tokenBudget = 50 // 很小的预算，约能容纳 3 条
 
@@ -390,7 +413,7 @@ func TestMemoryRetriever_TokenBudget(t *testing.T) {
 }
 
 func TestMemoryRetriever_SetEnabled(t *testing.T) {
-	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, &stubFactRepository{}, NewDecayScorer(), nil)
+	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, &stubFactRepository{}, NewDecayScorer(), nil, nil, nil)
 	assert.True(t, retriever.IsEnabled())
 
 	retriever.SetEnabled(false)
@@ -401,7 +424,7 @@ func TestMemoryRetriever_SetEnabled(t *testing.T) {
 }
 
 func TestMemoryRetriever_SetSessionEnabled(t *testing.T) {
-	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, &stubFactRepository{}, NewDecayScorer(), nil)
+	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, &stubFactRepository{}, NewDecayScorer(), nil, nil, nil)
 
 	// 全局开启，会话默认开启
 	assert.True(t, retriever.IsSessionEnabled("sess_1"))
@@ -432,7 +455,7 @@ func TestMemoryRetriever_detectEntityMentions(t *testing.T) {
 			{FactID: "f1", Subject: "用户", Predicate: "患有", Object: "高血压", Confidence: 0.9, Status: entity.FactStatusApproved},
 		},
 	}
-	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, factRepo, NewDecayScorer(), nil)
+	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, factRepo, NewDecayScorer(), nil, nil, nil)
 
 	memories, triggered := retriever.detectEntityMentions(context.Background(), "用户最近血压怎么样")
 	assert.True(t, triggered)
@@ -442,7 +465,7 @@ func TestMemoryRetriever_detectEntityMentions(t *testing.T) {
 
 func TestMemoryRetriever_detectEntityMentions_NoMatch(t *testing.T) {
 	factRepo := &stubFactRepositoryWithSubjects{subjects: []string{"用户"}}
-	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, factRepo, NewDecayScorer(), nil)
+	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, factRepo, NewDecayScorer(), nil, nil, nil)
 
 	memories, triggered := retriever.detectEntityMentions(context.Background(), "今天天气不错")
 	assert.False(t, triggered)
@@ -457,7 +480,7 @@ func TestMemoryRetriever_detectEntityMentions_KeywordMatch(t *testing.T) {
 			{FactID: "f2", Subject: "用户", Predicate: "患有", Object: "高血压", Confidence: 0.85, Status: entity.FactStatusApproved},
 		},
 	}
-	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, factRepo, NewDecayScorer(), nil)
+	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, factRepo, NewDecayScorer(), nil, nil, nil)
 
 	// "体重" 匹配 predicate "体重是"
 	memories, triggered := retriever.detectEntityMentions(context.Background(), "我体重多少")
@@ -495,6 +518,7 @@ func TestMemoryRetriever_retrieveSemantic_error(t *testing.T) {
 		embeddingRepo: &stubEmbeddingRepository{err: fmt.Errorf("search failed")},
 		factRepo:      &stubFactRepository{},
 		decayScorer:   NewDecayScorer(),
+		expansionSvc:  NewQueryExpansionService(),
 	}
 
 	_, err := retriever.semanticSearch(context.Background(), []float32{1, 2, 3}, 3)
@@ -503,7 +527,7 @@ func TestMemoryRetriever_retrieveSemantic_error(t *testing.T) {
 }
 
 func TestMemoryRetriever_mergeMemories_sessionGap(t *testing.T) {
-	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, &stubFactRepository{}, NewDecayScorer(), nil)
+	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, &stubFactRepository{}, NewDecayScorer(), nil, nil, nil)
 
 	mentionMemories := []*entity.HealthMemory{
 		{ID: "m1", Content: "mention 1"},
@@ -523,7 +547,7 @@ func TestMemoryRetriever_mergeMemories_sessionGap(t *testing.T) {
 }
 
 func TestMemoryRetriever_checkSessionGap(t *testing.T) {
-	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, &stubFactRepository{}, NewDecayScorer(), nil)
+	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, &stubFactRepository{}, NewDecayScorer(), nil, nil, nil)
 
 	// 空 sessionID 应返回 false
 	assert.False(t, retriever.checkSessionGap(""))
@@ -547,7 +571,7 @@ func TestMemoryRetriever_checkSessionGap(t *testing.T) {
 }
 
 func TestMemoryRetriever_recordSessionAccess(t *testing.T) {
-	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, &stubFactRepository{}, NewDecayScorer(), nil)
+	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, &stubFactRepository{}, NewDecayScorer(), nil, nil, nil)
 
 	sessionID := "sess_test"
 	retriever.recordSessionAccess(sessionID)
@@ -575,6 +599,8 @@ func TestMemoryRetriever_detectEntityMentions_QueryHowManyJinMatchesWeightFact(t
 		&stubFactRepositoryWithWeightFacts{facts: facts},
 		NewDecayScorer(),
 		nil,
+		nil,
+		nil,
 	)
 
 	matched, ok := retriever.detectEntityMentions(context.Background(), "我多少斤")
@@ -599,4 +625,220 @@ func (s *stubFactRepositoryWithWeightFacts) ListByStatus(ctx context.Context, st
 		}
 	}
 	return result, nil
+}
+
+// ========== 混合检索管线测试 ==========
+
+func TestRetrieveWithDiagnostics_IntentPath(t *testing.T) {
+	now := time.Now().UTC()
+
+	facts := map[string]*entity.ExtractedFact{
+		"fact_weight": {
+			FactID: "fact_weight", Subject: "用户", Predicate: "体重是", Object: "70公斤",
+			Confidence: 0.9, Status: entity.FactStatusApproved, CreatedAt: now,
+		},
+	}
+
+	factRepo := &stubFactRepository{facts: facts}
+	factRepo.approvedByPredicatesFunc = func(ctx context.Context, subject string, predicates []string, limit int) ([]*entity.ExtractedFact, error) {
+		if len(predicates) > 0 && predicates[0] == "体重是" {
+			return []*entity.ExtractedFact{facts["fact_weight"]}, nil
+		}
+		return nil, nil
+	}
+
+	expansionSvc := NewQueryExpansionService()
+	intentResolver := NewIntentResolver(expansionSvc)
+
+	retriever := NewMemoryRetriever(
+		&stubEmbeddingService{},
+		&stubEmbeddingRepository{},
+		factRepo,
+		NewDecayScorer(),
+		nil,
+		intentResolver,
+		expansionSvc,
+	)
+
+	diag, memories, err := retriever.retrieveWithDiagnostics(context.Background(), "我多少斤", "session_001", 3)
+	require.NoError(t, err)
+
+	// 意图召回应命中
+	assert.NotEmpty(t, diag.IntentCandidates)
+	assert.Equal(t, "fact_weight", diag.IntentCandidates[0].FactID)
+	assert.Contains(t, diag.IntentCandidates[0].MatchedPaths, PathIntent)
+
+	// 诊断字段应非空
+	assert.NotNil(t, diag.DetectedIntent)
+	assert.Equal(t, ConfidenceHigh, diag.DetectedIntent.Confidence)
+	assert.NotEmpty(t, diag.PathStatuses)
+
+	_ = memories
+}
+
+func TestRetrieveWithDiagnostics_AllPathsFailGracefully(t *testing.T) {
+	// 无 embedding 结果、无 fact、无 intent → 各路径全部空，应优雅返回空
+	retriever := NewMemoryRetriever(
+		&stubEmbeddingService{},
+		&stubEmbeddingRepository{results: nil},
+		&stubFactRepository{},
+		NewDecayScorer(),
+		nil,
+		nil,
+		nil,
+	)
+
+	diag, memories, err := retriever.retrieveWithDiagnostics(context.Background(), "随便问", "session_001", 3)
+	require.NoError(t, err)
+	assert.Empty(t, memories)
+
+	// 应有 4 条 PathStatus（intent/keyword/vector/recent）
+	assert.Len(t, diag.PathStatuses, 4)
+
+	// 汇总应为 0
+	assert.Equal(t, 0, diag.TotalApprovedFacts)
+	assert.Equal(t, 0, diag.TotalRejected)
+}
+
+func TestMergeCandidates_DedupAcrossPaths(t *testing.T) {
+	now := time.Now().UTC()
+
+	// 同一个 fact 从 intent 和 keyword 两路命中
+	intentCands := []RetrievalCandidate{
+		{
+			FactID: "fact_shared", Content: "用户 血压偏高 收缩压140",
+			Snippet: "用户 血压偏高...", CreatedAt: now, Confidence: 0.9,
+			MatchedPaths: []RetrievalPath{PathIntent},
+			IntentLevel:  3, RecencyScore: 0.9,
+			Reasons: []string{"intent: blood_pressure"},
+		},
+	}
+
+	keywordCands := []RetrievalCandidate{
+		{
+			FactID: "fact_shared", Content: "用户 血压偏高 收缩压140",
+			Snippet: "用户 血压偏高...", CreatedAt: now, Confidence: 0.9,
+			MatchedPaths: []RetrievalPath{PathKeyword},
+			KeywordScore: 0.85, RecencyScore: 0.9,
+			Reasons: []string{"keyword: 血压"},
+		},
+	}
+
+	merged := mergeCandidates(intentCands, keywordCands)
+	require.Len(t, merged, 1)
+
+	// 应合并 matched_paths
+	assert.Len(t, merged[0].MatchedPaths, 2)
+	assert.Contains(t, merged[0].MatchedPaths, PathIntent)
+	assert.Contains(t, merged[0].MatchedPaths, PathKeyword)
+
+	// 应保留最高 IntentLevel
+	assert.Equal(t, 3, merged[0].IntentLevel)
+
+	// 应保留最高 KeywordScore
+	assert.Equal(t, 0.85, merged[0].KeywordScore)
+
+	// 应合并 reasons
+	assert.Len(t, merged[0].Reasons, 2)
+}
+
+func TestRerank_IntentLevelPriority(t *testing.T) {
+	now := time.Now().UTC()
+
+	candidates := []RetrievalCandidate{
+		{FactID: "f_low", Content: "low", Snippet: "low", CreatedAt: now, IntentLevel: 1, VectorSimilarity: 0.95, RecencyScore: 1.0},
+		{FactID: "f_high", Content: "high", Snippet: "high", CreatedAt: now, IntentLevel: 3, VectorSimilarity: 0.5, RecencyScore: 1.0},
+	}
+
+	req := &RetrievalRequest{
+		Intent: &IntentResult{Confidence: ConfidenceHigh},
+	}
+
+	sorted := rerank(candidates, req)
+	require.Len(t, sorted, 2)
+
+	// intent_level 高的应排前面
+	assert.Equal(t, "f_high", sorted[0].FactID)
+	assert.Equal(t, "f_low", sorted[1].FactID)
+}
+
+func TestRerank_RecencyOverVectorSimilarity(t *testing.T) {
+	now := time.Now().UTC()
+
+	candidates := []RetrievalCandidate{
+		{FactID: "f_stale_highvec", Content: "stale", Snippet: "stale", CreatedAt: now,
+			VectorSimilarity: 0.99, RecencyScore: 0.2},
+		{FactID: "f_fresh_lowvec", Content: "fresh", Snippet: "fresh", CreatedAt: now,
+			VectorSimilarity: 0.5, RecencyScore: 0.95},
+	}
+
+	sorted := rerank(candidates, nil)
+	require.Len(t, sorted, 2)
+
+	// recency 高的应排前面，即使 vector_similarity 低
+	assert.Equal(t, "f_fresh_lowvec", sorted[0].FactID)
+	assert.Equal(t, "f_stale_highvec", sorted[1].FactID)
+}
+
+func TestBuildExpandedQuery_Basic(t *testing.T) {
+	// 无 intent 时仅返回 normalized
+	result := BuildExpandedQuery("血压偏高", nil)
+	assert.Equal(t, "血压偏高", result)
+}
+
+func TestBuildExpandedQuery_WithPredicates(t *testing.T) {
+	intent := &IntentResult{
+		Intent:     "blood_pressure",
+		Confidence: ConfidenceHigh,
+		Predicates: []string{"血压偏高", "血压异常"},
+	}
+
+	result := BuildExpandedQuery("血压偏高", intent)
+	assert.Contains(t, result, "血压偏高")
+	assert.Contains(t, result, "血压异常")
+}
+
+func TestBuildExpandedQuery_EmptyInput(t *testing.T) {
+	result := BuildExpandedQuery("", nil)
+	assert.Equal(t, "", result)
+}
+
+func TestRetrieveWithDiagnostics_DiagnosticsFields(t *testing.T) {
+	now := time.Now().UTC()
+
+	facts := map[string]*entity.ExtractedFact{
+		"fact_a": {
+			FactID: "fact_a", Subject: "用户", Predicate: "服用", Object: "维生素",
+			Confidence: 0.9, Status: entity.FactStatusApproved, CreatedAt: now,
+		},
+	}
+
+	embeddings := []*entity.ScoredEmbedding{
+		{SemanticEmbedding: &entity.SemanticEmbedding{FactID: "fact_a"}, Similarity: 0.9},
+	}
+
+	retriever := NewMemoryRetriever(
+		&stubEmbeddingService{},
+		&stubEmbeddingRepository{results: embeddings},
+		&stubFactRepository{facts: facts},
+		NewDecayScorer(),
+		nil,
+		nil,
+		nil,
+	)
+
+	diag, memories, err := retriever.retrieveWithDiagnostics(context.Background(), "query", "session_test", 5)
+	require.NoError(t, err)
+	assert.NotEmpty(t, memories)
+
+	// 验证诊断字段
+	assert.NotNil(t, diag)
+	assert.Equal(t, "query", diag.ExpandedQuery)
+	assert.NotEmpty(t, diag.VectorCandidates)
+	assert.NotEmpty(t, diag.MergedCandidates)
+	assert.NotEmpty(t, diag.SelectedMemories)
+	assert.Equal(t, 1, diag.TotalApprovedFacts)
+
+	// 验证 rejected 在 token budget 截断内
+	assert.GreaterOrEqual(t, diag.TotalRejected, 0)
 }
