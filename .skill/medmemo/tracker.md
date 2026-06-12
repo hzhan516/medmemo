@@ -12,6 +12,39 @@
 
 ---
 
+### [2026-06-12 / v1.1.4] — M03 混合检索多路召回管线实现
+
+**[Modified Areas]**
+- `internal/application/usecase/memory.go` — MemoryRetriever 重构为四路并行召回管线
+  - 新增：`recallByIntent` / `recallByKeyword` / `recallByVector` / `recallRecentSameIntent` / `mergeCandidates` / `rerank` / `retrieveWithDiagnostics` / `logDiagnostics` / `applyTokenBudgetToCandidates`
+  - 新增字段：`intentResolver *IntentResolver` / `expansionSvc *QueryExpansionService`
+  - 保留兼容：`detectEntityMentions` / `mergeMemories` / `applyTokenBudget`（现有测试依赖）
+- `internal/application/usecase/memory_retrieval_types.go` — 新建，统一召回类型模型
+  - `RetrievalRequest` / `RetrievalCandidate` / `RetrievalDiagnostics` / `PathStatus` / `BuildExpandedQuery`
+- `internal/domain/repository/memory_v2.go` — FactRepository 接口新增 `FindApprovedByPredicates`
+- `internal/adapters/repository/fact_repo.go` — `FindApprovedByPredicates` SQL 实现
+- `internal/application/usecase/memory_test.go` — 新增 9 个管线测试 + stub 增强
+- `wire_gen.go` — `wire .` 重新生成
+
+**[Logic Evolution]**
+- 旧两路径（detectEntityMentions + semanticSearch）替换为四路并行召回：intent / keyword / vector / recent
+- 重排优先级：intent_level → keyword_score → recency_score → vector_similarity → confidence → created_at
+- Recent boost：ConfidenceHigh 个人属性时优先推 recent path 候选
+- mergeCandidates 按 fact_id 去重合并 matched_paths / reasons / 最高分
+- retrieveWithDiagnostics 作为可测试的内部入口，返回完整诊断信息
+- 旧 mergeMemories / applyTokenBudget 保留为兼容桩
+
+**[Checklist Status]**
+- 分支 `feature/M03-multipath-retrieval-rerank`，6 commits
+- `go test ./internal/...` 全部通过
+- 无版本号变更
+
+**[Pending/Next Steps]**
+- M03 跨路召回需要更全面的 E2E 测试覆盖
+- 考虑将 `recallByVector` 内的 category 同义词扩展与其他路径对齐
+
+---
+
 ### [2026-06-11 / v1.1.4] — Skill 按 create-skill 规范重构
 
 **[Modified Areas]**
