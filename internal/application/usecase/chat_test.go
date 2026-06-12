@@ -174,6 +174,14 @@ func (m *mockFactRepository) FindLatestApprovedByPredicates(ctx context.Context,
 	return nil, entity.ErrFactNotFound
 }
 
+func (m *mockFactRepository) CountApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string) (int64, error) {
+	return 0, nil
+}
+
+func (m *mockFactRepository) ListApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string, lastCreatedAt time.Time, lastFactID string, limit int) ([]*entity.ExtractedFact, error) {
+	return nil, nil
+}
+
 var _ repository.FactRepository = (*mockFactRepository)(nil)
 
 // newTestOrchestrator 创建带有全量 Mock 依赖的 ChatOrchestrator。

@@ -29,19 +29,12 @@ const (
 
 // Loader 配置加载器，负责从文件/环境变量/默认值加载配置。
 type Loader struct {
-	configPath     string
-	defaultChannel string
+	configPath string
 }
 
 // NewLoader 构造函数。
 func NewLoader(configPath string) *Loader {
-	return &Loader{configPath: configPath, defaultChannel: string(entity.ChannelStable)}
-}
-
-// NewLoaderWithDefaultChannel 构造函数，可指定默认更新通道。
-// 由 main.go 传入构建时注入的 updateChannel，避免 loader 直接依赖 main 包变量。
-func NewLoaderWithDefaultChannel(configPath string, defaultChannel string) *Loader {
-	return &Loader{configPath: configPath, defaultChannel: defaultChannel}
+	return &Loader{configPath: configPath}
 }
 
 // rawConfig 表示配置文件中的原始结构。
@@ -96,6 +89,7 @@ func (l *Loader) Load() (*entity.AppConfig, error) {
 }
 
 func (l *Loader) loadDefaults() *rawConfig {
+	updateChannel := string(entity.ChannelBeta)
 	desensitizationLevel := defaultDesensitizationLevel
 	dataDir := expandTilde(defaultDataDir)
 	if dataDir == "" {
@@ -113,7 +107,7 @@ func (l *Loader) loadDefaults() *rawConfig {
 		APIKeyFile:                "",
 		ModelDir:                  defaultModelDir,
 		UpdateCheckEnabled:        new(true),
-		UpdateChannel:             l.defaultChannel,
+		UpdateChannel:             updateChannel,
 		DesensitizationLevel:      desensitizationLevel,
 		DataRetentionDays:         new(defaultDataRetentionDays),
 		EmbeddingModelDownloadURL: "",

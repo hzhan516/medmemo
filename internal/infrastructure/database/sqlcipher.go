@@ -434,6 +434,14 @@ func migrateSQLiteSchema(ctx context.Context, db *sql.DB) error {
 			ALTER TABLE messages ADD COLUMN confidence_json TEXT;
 			`,
 		},
+		{
+			version: 11,
+			sql: `
+			-- v1.1.4: 为 embedding 版本迁移优化查询性能
+			CREATE INDEX IF NOT EXISTS idx_embedding_model_version 
+			    ON semantic_embeddings(model_version);
+			`,
+		},
 	}
 
 	for _, m := range migrations {
