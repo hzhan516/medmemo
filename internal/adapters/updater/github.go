@@ -98,14 +98,16 @@ func (g *GitHubUpdater) FetchLatest(ctx context.Context, channel entity.UpdateCh
 		}
 
 		info := &entity.UpdateInfo{
-			Version:     release.TagName,
-			Name:        release.Name,
-			Body:        release.Body,
-			PublishedAt: release.PublishedAt,
-			DownloadURL: asset.BrowserDownloadURL,
-			Checksum:    checksum,
-			Mandatory:   g.isMandatory(release),
-			Channel:     channel,
+			Version:        release.TagName,
+			DisplayVersion: release.Name,
+			Name:           release.Name,
+			Body:           release.Body,
+			PublishedAt:    release.PublishedAt,
+			DownloadURL:    asset.BrowserDownloadURL,
+			Checksum:       checksum,
+			Mandatory:      g.isMandatory(release),
+			Channel:        channel,
+			Prerelease:     release.Prerelease,
 		}
 
 		return info, nil
