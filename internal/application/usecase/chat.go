@@ -347,9 +347,14 @@ func (c *ChatOrchestrator) StreamExecute(ctx context.Context, req ChatRequest, o
 	}
 
 	// 合规检测（保留原始回复，不替换 SafeText；合规提示由外层通过 chat:stream:compliance 事件追加）
-	_, compErr := c.compliance.Check(ctx, reply)
+	compResult, compErr := c.compliance.Check(ctx, reply)
 	if compErr != nil {
-		return nil, nil, "", fmt.Errorf("compliance check error: %w", compErr)
+		// fail-closed: 合规检测异常时记录审计日志，返回安全替代文案，不阻断流
+		fmt.Printf("[ChatOrchestrator] compliance check error, fail-closed: %v\n", compErr)
+		reply = "内容审核服务暂时不可用，请稍后重试或咨询专业医生。"
+	} else if compResult != nil && compResult.Blocked {
+		// L1 阻断时替换为安全文案（流式结束后通过 replace 事件通知前端）
+		reply = compResult.SafeText
 	}
 
 	// 计算回答置信度

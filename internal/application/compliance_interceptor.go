@@ -8,6 +8,7 @@ import (
 	"os"
 	"regexp"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -108,6 +109,10 @@ func (ci *ComplianceInterceptor) load() error {
 
 	compiled := make([]compiledRule, 0, len(rs.Rules))
 	for _, r := range rs.Rules {
+		// L1 inline 替换规则必须配置 replacement，空值会导致替换失效
+		if r.Level == "L1" && r.ReplaceMode == "inline" && strings.TrimSpace(r.Replacement) == "" {
+			return fmt.Errorf("rule %s: L1 inline replacement cannot be empty", r.ID)
+		}
 		cr := compiledRule{ComplianceRule: r}
 		for _, p := range r.Patterns {
 			re, err := regexp.Compile(p)
