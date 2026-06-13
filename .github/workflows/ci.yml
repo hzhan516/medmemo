@@ -121,8 +121,13 @@ jobs:
       - name: Build frontend
         run: cd web && npm run build
 
+      - name: Download native libraries for integration tests
+        run: |
+          ./scripts/build/download-onnx.sh --platform=linux
+          ./scripts/build/download-tokenizers.sh --platform=linux
+
       - name: Run integration tests
-        run: go test -race -tags=integration ./...
+        run: make test-integration
 
   e2e-test:
     name: E2E Test
