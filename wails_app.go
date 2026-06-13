@@ -515,6 +515,7 @@ func (s *stringsBuilder) String() string {
 
 // saveUserMessage 单独保存一条用户消息并更新会话时间戳，
 // 用于流式生成启动前立即持久化，确保切换会话时可见。
+// 错误通过 Wails Events 推送，确保异步保存失败可观测。
 func (a *WailsApp) saveUserMessage(ctx context.Context, convID string, message models.Message) {
 	if a.msgRepo == nil || convID == "" || message.Role != models.RoleUser {
 		return
@@ -526,14 +527,33 @@ func (a *WailsApp) saveUserMessage(ctx context.Context, convID string, message m
 		Content:   message.Content,
 		Timestamp: time.Now(),
 	}); err != nil {
+		a.safeEventsEmit("chat:save_error", map[string]any{
+			"type":            "user_message",
+			"conversation_id": convID,
+			"error":           err.Error(),
+			"timestamp":       time.Now().UnixMilli(),
+		})
 		fmt.Printf("[saveUserMessage] 保存用户消息失败: %v\n", err)
 	}
 	// 同步归档到 raw_dialogues，为事实提取提供源数据
 	if a.dialogueRepo != nil {
-		_ = a.dialogueRepo.Insert(ctx, entity.NewRawDialogue(convID, entity.RoleUser, message.Content, ""))
+		if err := a.dialogueRepo.Insert(ctx, entity.NewRawDialogue(convID, entity.RoleUser, message.Content, "")); err != nil {
+			a.safeEventsEmit("chat:save_error", map[string]any{
+				"type":            "raw_dialogue",
+				"conversation_id": convID,
+				"error":           err.Error(),
+				"timestamp":       time.Now().UnixMilli(),
+			})
+		}
 	}
 	if a.convRepo != nil {
 		if err := a.convRepo.UpdateTimestamp(ctx, models.ConversationID(convID), time.Now()); err != nil {
+			a.safeEventsEmit("chat:save_error", map[string]any{
+				"type":            "update_timestamp",
+				"conversation_id": convID,
+				"error":           err.Error(),
+				"timestamp":       time.Now().UnixMilli(),
+			})
 			fmt.Printf("[saveUserMessage] 更新会话时间失败: %v\n", err)
 		}
 	}

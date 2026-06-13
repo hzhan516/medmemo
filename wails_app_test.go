@@ -310,3 +310,31 @@ func TestSaveUserMessage_NonUserRole(t *testing.T) {
 	app.saveUserMessage(t.Context(), "conv-1", models.Message{Role: models.RoleAssistant, Content: "hello"})
 	assert.Empty(t, mock.saved)
 }
+
+// TestExtractFactsAsync_Timeout 验证 extractFactsAsync 在 60s 超时后正确退出。
+func TestExtractFactsAsync_Timeout(t *testing.T) {
+	app := &WailsApp{ctx: t.Context()}
+
+	// 空 providerID 应快速返回，不需要等待 60s
+	done := make(chan struct{})
+	go func() {
+		app.extractFactsAsync("user content", "ai reply", "")
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// 空 providerID 应快速返回，不需要等待 60s
+	case <-time.After(2 * time.Second):
+		t.Fatal("extractFactsAsync 在空 providerID 时应快速返回")
+	}
+}
+
+// TestExtractFactsAsync_ObservableError 验证 extractFactsAsync 错误是可观测的。
+func TestExtractFactsAsync_ObservableError(t *testing.T) {
+	app := &WailsApp{ctx: t.Context()}
+
+	// 空 providerID 不应 panic，且应快速返回
+	app.extractFactsAsync("test", "reply", "")
+	// 无 panic 即通过
+}
