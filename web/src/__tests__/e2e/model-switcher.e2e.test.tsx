@@ -14,17 +14,11 @@ import { resetWailsMock } from '@/test/mocks/wails'
 
 type MockProviderInput = Omit<ProviderConfig, 'id' | 'createdAt' | 'updatedAt'>
 
-function mockFetchWithStatus(status: number, latencyMs = 50) {
-  return vi.fn().mockImplementation(() => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          ok: status >= 200 && status < 300,
-          status,
-          json: () => Promise.resolve({ data: [{ id: 'test-model', name: 'Test Model' }] }),
-        })
-      }, latencyMs)
-    })
+function mockFetchWithStatus(status: number) {
+  return vi.fn().mockResolvedValue({
+    ok: status >= 200 && status < 300,
+    status,
+    json: () => Promise.resolve({ data: [{ id: 'test-model', name: 'Test Model' }] }),
   })
 }
 
@@ -67,7 +61,7 @@ describe('E2E: 运行时模型切换器', () => {
   })
 
   it('渲染顶部选择器：展示当前 Provider 名称+状态圆点+下拉箭头', async () => {
-    global.fetch = mockFetchWithStatus(200, 50)
+    global.fetch = mockFetchWithStatus(200)
     const provider = createMockProvider({ name: 'Kimi Pro', modelId: 'kimi-pro' })
     useSettingsStore.setState({ activeProviderId: provider.id, activeModelId: provider.modelId })
 
@@ -83,7 +77,7 @@ describe('E2E: 运行时模型切换器', () => {
 
   it('下拉列表展开：点击箭头展示按分组折叠的 Provider 列表', async () => {
     const user = userEvent.setup()
-    global.fetch = mockFetchWithStatus(200, 50)
+    global.fetch = mockFetchWithStatus(200)
     const p1 = createMockProvider({ name: 'Kimi A', group: '工作' })
     createMockProvider({ name: 'GPT-4', group: '云端', templateId: 'openai', apiHost: 'https://api.openai.com' })
     useSettingsStore.setState({ activeProviderId: p1.id, activeModelId: p1.modelId })
@@ -104,7 +98,7 @@ describe('E2E: 运行时模型切换器', () => {
 
   it('切换 Provider：点击 Green Provider 后顶部更新并显示 Toast', async () => {
     const user = userEvent.setup()
-    global.fetch = mockFetchWithStatus(200, 50)
+    global.fetch = mockFetchWithStatus(200)
     const p1 = createMockProvider({ name: 'Kimi A', group: '工作' })
     const p2 = createMockProvider({ name: 'Kimi B', group: '工作', templateId: 'kimi2', apiHost: 'https://api2.moonshot.cn' })
     useSettingsStore.setState({ activeProviderId: p1.id })
@@ -141,6 +135,7 @@ describe('E2E: 运行时模型切换器', () => {
 
   it('Yellow Provider 置灰不可点击', async () => {
     const user = userEvent.setup()
+    global.fetch = vi.fn().mockImplementation(() => new Promise(() => {}))
     const p1 = createMockProvider({ name: 'Kimi A' })
     const p2 = createMockProvider({ name: 'Kimi Slow', templateId: 'kimi2', apiHost: 'https://slow.moonshot.cn' })
     useSettingsStore.setState({
@@ -164,6 +159,7 @@ describe('E2E: 运行时模型切换器', () => {
 
   it('Red Provider 不展示在下拉列表中', async () => {
     const user = userEvent.setup()
+    global.fetch = vi.fn().mockImplementation(() => new Promise(() => {}))
     const p1 = createMockProvider({ name: 'Kimi A' })
     const p2 = createMockProvider({ name: 'Kimi Dead', templateId: 'kimi2', apiHost: 'https://dead.moonshot.cn' })
     useSettingsStore.setState({
@@ -276,6 +272,7 @@ describe('E2E: 运行时模型切换器', () => {
 
   it('空状态下拉：无可用 Provider 时显示"添加模型"按钮', async () => {
     const user = userEvent.setup()
+    global.fetch = vi.fn().mockImplementation(() => new Promise(() => {}))
     const p1 = createMockProvider({ name: 'Kimi A' })
     useSettingsStore.setState({
       activeProviderId: p1.id,
