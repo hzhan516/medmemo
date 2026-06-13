@@ -742,8 +742,12 @@ type multiProviderStore struct {
 	providers map[string]*models.ProviderConfig
 }
 
-func (m *multiProviderStore) Create(ctx context.Context, provider *models.ProviderConfig) error { return nil }
-func (m *multiProviderStore) Update(ctx context.Context, provider *models.ProviderConfig) error { return nil }
+func (m *multiProviderStore) Create(ctx context.Context, provider *models.ProviderConfig) error {
+	return nil
+}
+func (m *multiProviderStore) Update(ctx context.Context, provider *models.ProviderConfig) error {
+	return nil
+}
 func (m *multiProviderStore) Delete(ctx context.Context, id string) error { return nil }
 func (m *multiProviderStore) Get(ctx context.Context, id string) (*models.ProviderConfig, error) {
 	if p, ok := m.providers[id]; ok {
@@ -828,8 +832,8 @@ func TestChatOrchestrator_OfflineFallback_CloudFails(t *testing.T) {
 
 	factory := &multiClientMockFactory{
 		clients: map[string]port.LLMClient{
-			"cloud-provider":  cloudClient,
-			"local-provider":  localClient,
+			"cloud-provider": cloudClient,
+			"local-provider": localClient,
 		},
 	}
 	store := &multiProviderStore{
@@ -886,8 +890,8 @@ func TestChatOrchestrator_ModelSwitching_MidConversation(t *testing.T) {
 	req1 := ChatRequest{
 		ConversationID: "conv-1",
 		Messages:       []models.Message{{Role: models.RoleUser, Content: "你好"}},
-		Model:            models.ProviderKimi,
-		ProviderID:       "kimi-provider",
+		Model:          models.ProviderKimi,
+		ProviderID:     "kimi-provider",
 	}
 	resp1, err := orch.Execute(context.Background(), req1)
 	require.NoError(t, err)
@@ -937,8 +941,8 @@ func TestChatOrchestrator_ModelSwitching_StreamMode(t *testing.T) {
 	req1 := ChatRequest{
 		ConversationID: "conv-stream-1",
 		Messages:       []models.Message{{Role: models.RoleUser, Content: "你好"}},
-		Model:            models.ProviderKimi,
-		ProviderID:       "kimi-provider",
+		Model:          models.ProviderKimi,
+		ProviderID:     "kimi-provider",
 	}
 	var chunks1 []string
 	_, _, final1, err := orch.StreamExecute(context.Background(), req1, func(chunk string) {
