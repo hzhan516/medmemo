@@ -79,7 +79,7 @@ func (f *FactExtractor) Extract(ctx context.Context, dialogues []*entity.RawDial
 
 	facts, err := f.parseResponse(response)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse fact extraction response: %w", err)
 	}
 
 	// 应用确定性质量门禁，过滤 LLM 可能产生的噪音事实

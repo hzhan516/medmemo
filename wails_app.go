@@ -2353,7 +2353,7 @@ func (a *WailsApp) GetMemoryByID(factID string) (MemoryItem, error) {
 // DeleteMemory 删除指定记忆（级联删除关联嵌入）。
 func (a *WailsApp) DeleteMemory(factID string) error {
 	if err := a.requireAuth(); err != nil {
-		return err
+		return fmt.Errorf("requireAuth failed: %w", err)
 	}
 	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
 	defer cancel()
@@ -2438,7 +2438,7 @@ func (a *WailsApp) GetPendingReviews(limit int, offset int) ([]MemoryItem, error
 // ApproveFact 审核通过指定事实。
 func (a *WailsApp) ApproveFact(factID string) error {
 	if err := a.requireAuth(); err != nil {
-		return err
+		return fmt.Errorf("requireAuth failed: %w", err)
 	}
 	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
 	defer cancel()
@@ -2479,7 +2479,7 @@ func (a *WailsApp) ApproveFact(factID string) error {
 // RejectFact 审核拒绝指定事实。
 func (a *WailsApp) RejectFact(factID string) error {
 	if err := a.requireAuth(); err != nil {
-		return err
+		return fmt.Errorf("requireAuth failed: %w", err)
 	}
 	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
 	defer cancel()
@@ -2641,7 +2641,7 @@ func (a *WailsApp) GetEmbeddingModelDirPath() (string, error) {
 func (a *WailsApp) OpenEmbeddingModelDir() error {
 	absPath, err := a.GetEmbeddingModelDirPath()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get embedding model directory: %w", err)
 	}
 
 	var cmd string
@@ -2726,7 +2726,7 @@ func (a *WailsApp) GetMemoriesBySession(sessionID string) ([]MemoryItem, error) 
 // SetMemoryInjectionEnabled 设置记忆注入全局开关。
 func (a *WailsApp) SetMemoryInjectionEnabled(enabled bool) error {
 	if err := a.requireAuth(); err != nil {
-		return err
+		return fmt.Errorf("requireAuth failed: %w", err)
 	}
 	if a.memoryRetriever == nil {
 		return fmt.Errorf("memory retriever not initialized")
@@ -2738,7 +2738,7 @@ func (a *WailsApp) SetMemoryInjectionEnabled(enabled bool) error {
 // SetSessionMemoryInjection 设置指定会话的记忆注入开关。
 func (a *WailsApp) SetSessionMemoryInjection(sessionID string, enabled bool) error {
 	if err := a.requireAuth(); err != nil {
-		return err
+		return fmt.Errorf("requireAuth failed: %w", err)
 	}
 	if a.memoryRetriever == nil {
 		return fmt.Errorf("memory retriever not initialized")
