@@ -675,16 +675,22 @@ func (m *MemoryRetriever) detectEntityMentions(ctx context.Context, query string
 	if len(candidates) == 0 {
 		return nil, false
 	}
-	var memories []*entity.HealthMemory
+
+	var matched []*entity.HealthMemory
+	seen := make(map[string]bool)
+
 	for _, c := range candidates {
-		memories = append(memories, &entity.HealthMemory{
-			ID:         models.MemoryID(c.FactID),
-			Content:    c.Content,
-			Confidence: c.Confidence,
-			CreatedAt:  c.CreatedAt,
-		})
+		if !seen[c.FactID] {
+			seen[c.FactID] = true
+			matched = append(matched, &entity.HealthMemory{
+				ID:         models.MemoryID(c.FactID),
+				Content:    c.Content,
+				Confidence: c.Confidence,
+				CreatedAt:  c.CreatedAt,
+			})
+		}
 	}
-	return memories, true
+	return matched, true
 }
 
 // 常见中文停用词，用于关键词匹配时过滤。

@@ -85,7 +85,11 @@ func (r *FactRepoSQLite) FindApprovedByPredicates(ctx context.Context, subject s
 	if err != nil {
 		return nil, fmt.Errorf("failed to query approved facts by predicates: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if cerr := rows.Close(); cerr != nil {
+			err = fmt.Errorf("failed to close rows: %w", cerr)
+		}
+	}()
 	return scanFacts(rows)
 }
 
