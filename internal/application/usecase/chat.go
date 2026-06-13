@@ -255,7 +255,7 @@ func (c *ChatOrchestrator) Execute(ctx context.Context, req ChatRequest) (*ChatR
 		// 降级放行，确保对话不中断
 		return &ChatResponse{
 			Reply:            reply,
-			ConfidenceResult: c.confidenceAggregator.CalculateWithRawScore(0.0, []string{"合规检测异常"}),
+			ConfidenceResult: c.calculateConfidenceWithRawScore(0.0, []string{"合规检测异常"}),
 			Warnings:         []string{"COMPLIANCE_CHECK_ERROR"},
 		}, nil
 	}
