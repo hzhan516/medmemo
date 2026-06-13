@@ -32,7 +32,7 @@ func BenchmarkFactExtractionRate(b *testing.B) {
 
 	start := time.Now()
 	for i := 0; i < b.N; i++ {
-		_, err := extractor.ParseFacts("用户说头疼，最近血压偏高")
+		_, err := extractor.ParseFacts(context.Background(), "用户说头疼，最近血压偏高")
 		if err != nil {
 			b.Fatalf("parse facts failed: %v", err)
 		}

@@ -497,7 +497,7 @@ func (c *ChatOrchestrator) ExtractFactsFromReply(ctx context.Context, userConten
 	}
 	adapter := &llmClientAdapter{client: client}
 	extractor := NewFactExtractor(adapter)
-	facts, err := extractor.ParseFacts(userContent)
+	facts, err := extractor.ParseFacts(ctx, userContent)
 	if err != nil {
 		return nil, err
 	}

@@ -40,16 +40,16 @@ func NewFactExtractor(llm FactLLMClient) *FactExtractor {
 
 // ParseFacts 从单条文本中解析结构化事实三元组。
 // 实际生产环境应使用 Extract 方法处理批量对话。
-func (f *FactExtractor) ParseFacts(text string) ([]*entity.ExtractedFact, error) {
+func (f *FactExtractor) ParseFacts(ctx context.Context, text string) ([]*entity.ExtractedFact, error) {
 	if err := f.checkRateLimit(); err != nil {
 		return nil, err
 	}
 
 	prompt := buildFactExtractionPrompt(text)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	chatCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	response, err := f.llm.Chat(ctx, []string{prompt})
+	response, err := f.llm.Chat(chatCtx, []string{prompt})
 	if err != nil {
 		return nil, fmt.Errorf("llm chat failed: %w", err)
 	}

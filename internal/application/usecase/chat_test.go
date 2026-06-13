@@ -693,7 +693,7 @@ func TestChatOrchestrator_ExtractFactsFromReply_UsesUserContentOnly(t *testing.T
 		response: `[{"subject":"用户","predicate":"体重是","object":"110公斤","confidence":0.95}]`,
 	}
 	extractor := NewFactExtractor(mock)
-	facts, err := extractor.ParseFacts("我体重110公斤")
+	facts, err := extractor.ParseFacts(context.Background(), "我体重110公斤")
 	require.NoError(t, err)
 	require.Len(t, facts, 1)
 	assert.Equal(t, "110公斤", facts[0].Object)
