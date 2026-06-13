@@ -17,6 +17,14 @@ import (
 // mockEmbeddingService 用于 benchmark 的 mock 嵌入服务。
 type mockEmbeddingService struct{}
 
+func (m *mockEmbeddingService) IsAvailable() bool {
+	return true
+}
+
+func (m *mockEmbeddingService) ModelVersion() string {
+	return "mock-benchmark"
+}
+
 func (m *mockEmbeddingService) Embed(ctx context.Context, texts []string) ([][]float32, error) {
 	result := make([][]float32, len(texts))
 	for i := range texts {
