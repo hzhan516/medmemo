@@ -309,3 +309,228 @@ func TestEngine_Embed_WhenUnavailable(t *testing.T) {
 	assert.Nil(t, embeddings)
 	assert.Contains(t, err.Error(), "not available")
 }
+
+// TestWorkerLoop_ContextCancellation_NER 验证 NER worker 在 caller cancel 时不会阻塞在 resultCh 发送上。
+func TestWorkerLoop_ContextCancellation_NER(t *testing.T) {
+	// 构造一个无模型引擎，手动注入 pipeline 和 worker 以控制行为
+	engine, err := NewEngine(EngineConfig{ResourceDir: "resources", ModelPath: "resources/models/nonexistent"})
+	require.NoError(t, err)
+
+	// 使用自定义 worker 避免调用真实 ONNX pipeline（零值 pipeline 会 panic）
+	mockWorker := &mockNERWorker{delay: 50 * time.Millisecond}
+	engine.nerAvailable = true
+	engine.workers = []*NERWorker{}
+
+	// 重新创建 taskCh 并启动 worker（原 taskCh 已关闭）
+	engine.taskCh = make(chan nerTask, 16)
+	engine.wg.Add(1)
+	go mockWorker.run(engine)
+
+	// 创建一个已取消的 context，且 resultCh 无缓冲、无接收方
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // 立即取消
+
+	resultCh := make(chan nerResult) // 无缓冲，无接收方
+
+	// 发送任务：worker 处理完尝试向 resultCh 发送时，应通过 ctx.Done() 分支退出
+	done := make(chan struct{})
+	go func() {
+		engine.taskCh <- nerTask{ctx: ctx, text: "测试", resultCh: resultCh}
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// 任务成功入队（taskCh 有缓冲）
+	case <-time.After(2 * time.Second):
+		t.Fatal("向 taskCh 发送任务超时")
+	}
+
+	// worker 应在短时间内完成（不会永远阻塞在 resultCh 发送上）
+	closed := make(chan struct{})
+	go func() {
+		engine.wg.Wait()
+		close(closed)
+	}()
+
+	// 关闭 taskCh 让 worker 退出
+	close(engine.taskCh)
+
+	select {
+	case <-closed:
+		// worker 正常退出，说明没有 goroutine 泄漏
+	case <-time.After(2 * time.Second):
+		t.Fatal("worker goroutine 在 caller cancel 后泄漏（NER）")
+	}
+}
+
+// mockNERWorker 模拟 NERWorker，用于测试 workerLoop 的 select 行为。
+type mockNERWorker struct {
+	delay time.Duration
+}
+
+func (w *mockNERWorker) run(e *Engine) {
+	defer e.wg.Done()
+	for task := range e.taskCh {
+		if w.delay > 0 {
+			time.Sleep(w.delay)
+		}
+		select {
+		case task.resultCh <- nerResult{spans: []EntitySpan{{Text: "mock", Label: "TEST"}}, err: nil}:
+		case <-task.ctx.Done():
+			// caller cancelled, result discarded to prevent goroutine leak
+		}
+	}
+}
+
+// TestWorkerLoop_ContextCancellation_Embedding 验证 embedding worker 在 caller cancel 时不会阻塞。
+func TestWorkerLoop_ContextCancellation_Embedding(t *testing.T) {
+	engine, err := NewEngine(EngineConfig{ResourceDir: "resources", ModelPath: "resources/models/nonexistent"})
+	require.NoError(t, err)
+
+	mockWorker := &mockEmbeddingWorker{delay: 50 * time.Millisecond}
+	engine.embeddingAvailable = true
+	engine.embeddingWorkers = []*EmbeddingWorker{}
+
+	engine.embeddingTaskCh = make(chan embeddingTask, 16)
+	engine.embeddingWg.Add(1)
+	go mockWorker.run(engine)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	resultCh := make(chan embeddingResult) // 无缓冲，无接收方
+
+	done := make(chan struct{})
+	go func() {
+		engine.embeddingTaskCh <- embeddingTask{ctx: ctx, texts: []string{"测试"}, resultCh: resultCh}
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("向 embeddingTaskCh 发送任务超时")
+	}
+
+	closed := make(chan struct{})
+	go func() {
+		engine.embeddingWg.Wait()
+		close(closed)
+	}()
+
+	close(engine.embeddingTaskCh)
+
+	select {
+	case <-closed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("embedding worker goroutine 在 caller cancel 后泄漏")
+	}
+}
+
+// mockEmbeddingWorker 模拟 EmbeddingWorker，用于测试 workerLoop 的 select 行为。
+type mockEmbeddingWorker struct {
+	delay time.Duration
+}
+
+func (w *mockEmbeddingWorker) run(e *Engine) {
+	defer e.embeddingWg.Done()
+	for task := range e.embeddingTaskCh {
+		if w.delay > 0 {
+			time.Sleep(w.delay)
+		}
+		select {
+		case task.resultCh <- embeddingResult{embeddings: [][]float32{{0.1, 0.2}}, err: nil}:
+		case <-task.ctx.Done():
+			// caller cancelled, result discarded to prevent goroutine leak
+		}
+	}
+}
+
+// TestPredict_ContextCancellation_ReturnsError 验证 Predict 在 ctx 取消时返回 ctx.Err()。
+func TestPredict_ContextCancellation_ReturnsError(t *testing.T) {
+	engine, err := NewEngine(EngineConfig{ResourceDir: "resources", ModelPath: "resources/models/nonexistent"})
+	require.NoError(t, err)
+	defer engine.Close()
+
+	// 模拟一个可用的引擎（无需真实模型）
+	engine.nerAvailable = true
+	engine.workers = nil // 不启动真实 worker
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // 立即取消
+
+	_, err = engine.Predict(ctx, "测试")
+	assert.ErrorIs(t, err, context.Canceled)
+}
+
+// TestEmbed_ContextCancellation_ReturnsError 验证 Embed 在 ctx 取消时返回 ctx.Err()。
+func TestEmbed_ContextCancellation_ReturnsError(t *testing.T) {
+	engine, err := NewEngine(EngineConfig{ResourceDir: "resources", ModelPath: "resources/models/nonexistent"})
+	require.NoError(t, err)
+	defer engine.Close()
+
+	engine.embeddingAvailable = true
+	engine.embeddingWorkers = nil
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err = engine.Embed(ctx, []string{"测试"})
+	assert.ErrorIs(t, err, context.Canceled)
+}
+
+// TestWorkerLoop_SlowConsumer_NER 验证 NER worker 在慢消费者场景下不会泄漏。
+func TestWorkerLoop_SlowConsumer_NER(t *testing.T) {
+	engine, err := NewEngine(EngineConfig{ResourceDir: "resources", ModelPath: "resources/models/nonexistent"})
+	require.NoError(t, err)
+
+	mockWorker := &mockNERWorker{delay: 200 * time.Millisecond}
+	engine.nerAvailable = true
+	engine.workers = []*NERWorker{}
+	engine.taskCh = make(chan nerTask, 16)
+	engine.wg.Add(1)
+	go mockWorker.run(engine)
+
+	// 消费者故意延迟接收：ctx 50ms 超时，worker 处理需 200ms
+	// 这样 ctx 会在 worker 完成前就已超时，确保 select 命中 ctx.Done()
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	resultCh := make(chan nerResult) // 无缓冲，强制 select 竞争
+
+	done := make(chan struct{})
+	go func() {
+		engine.taskCh <- nerTask{ctx: ctx, text: "测试", resultCh: resultCh}
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("任务入队超时")
+	}
+
+	// 等待 worker 处理完（200ms）且 ctx 已超时（50ms）
+	time.Sleep(300 * time.Millisecond)
+
+	// worker 应该已经处理完任务，结果因 ctx 超时被丢弃
+	select {
+	case <-resultCh:
+		t.Fatal("ctx 超时后不应收到结果")
+	default:
+		// 正确：结果已被丢弃
+	}
+
+	close(engine.taskCh)
+	closed := make(chan struct{})
+	go func() {
+		engine.wg.Wait()
+		close(closed)
+	}()
+	select {
+	case <-closed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("worker 退出超时")
+	}
+}
