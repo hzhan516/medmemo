@@ -711,3 +711,37 @@ func TestChatOrchestrator_ExtractFactsFromReply_UsesUserContentOnly(t *testing.T
 	// AI 回复内容不应被抽成事实，质量门禁也会过滤 AI subject
 	assert.Empty(t, facts, "不应从 AI 回复中提取事实")
 }
+
+// TestChatOrchestrator_NilConfidenceAggregator 验证 confidenceAggregator 为 nil 时不 panic。
+func TestChatOrchestrator_NilConfidenceAggregator(t *testing.T) {
+	mock := &mockLLMClient{chatReply: "你好"}
+	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
+	factory := &mockLLMClientFactory{client: mock}
+	store := &mockProviderStore{}
+	// 故意不传 ConfidenceAggregator（nil）
+	orch := NewChatOrchestrator(factory, store, nil, nil, comp, nil, nil, nil, &mockFactRepository{}, NewIntentResolver(NewQueryExpansionService()), NewLocalAnswerService())
+
+	req := ChatRequest{
+		ConversationID: "test-conv",
+		Messages: []models.Message{
+			{Role: models.RoleUser, Content: "你好"},
+		},
+		Model:      models.ProviderKimi,
+		ProviderID: "test-provider",
+	}
+
+	// Execute 路径不应 panic
+	resp, err := orch.Execute(context.Background(), req)
+	require.NoError(t, err)
+	assert.NotNil(t, resp.ConfidenceResult)
+	assert.Equal(t, entity.ConfidenceLevelE, resp.ConfidenceResult.Level)
+
+	// StreamExecute 路径不应 panic
+	var chunks []string
+	_, confResult, _, err := orch.StreamExecute(context.Background(), req, func(chunk string) {
+		chunks = append(chunks, chunk)
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, confResult)
+	assert.Equal(t, entity.ConfidenceLevelE, confResult.Level)
+}

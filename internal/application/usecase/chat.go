@@ -177,6 +177,21 @@ func (c *ChatOrchestrator) prepareMessages(ctx context.Context, req ChatRequest)
 	return messages, deidResult
 }
 
+// calculateConfidenceWithRawScore 包装 ConfidenceAggregator.CalculateWithRawScore，带 nil 防护。
+func (c *ChatOrchestrator) calculateConfidenceWithRawScore(score float64, sources []string) *entity.ConfidenceResult {
+	if c.confidenceAggregator == nil {
+		return &entity.ConfidenceResult{
+			OverallScore: score,
+			Level:        entity.ConfidenceLevelE,
+			Breakdown:    map[string]float64{},
+			Explanation:  "置信度引擎未初始化",
+			Suggestion:   entity.ConfidenceLevelE.Suggestion(),
+			MissingInfo:  []string{},
+		}
+	}
+	return c.confidenceAggregator.CalculateWithRawScore(score, sources)
+}
+
 // tryLocalAnswer 尝试对高置信个人事实查询进行本地短路回答。
 // 命中 approved fact 时返回 (answer, true, nil)；未命中时返回 ("", false, nil)；
 // 数据库异常时返回错误（调用方应降级到 LLM 链路）。
@@ -207,7 +222,7 @@ func (c *ChatOrchestrator) Execute(ctx context.Context, req ChatRequest) (*ChatR
 		} else if ok {
 			return &ChatResponse{
 				Reply:            answer,
-				ConfidenceResult: c.confidenceAggregator.CalculateWithRawScore(1.0, []string{"本地已审批事实"}),
+				ConfidenceResult: c.calculateConfidenceWithRawScore(1.0, []string{"本地已审批事实"}),
 			}, nil
 		}
 	}
@@ -287,7 +302,7 @@ func (c *ChatOrchestrator) StreamExecute(ctx context.Context, req ChatRequest, o
 			fmt.Printf("[ChatOrchestrator] tryLocalAnswer error, fallback to LLM: %v\n", err)
 		} else if ok {
 			onChunk(answer)
-			return nil, c.confidenceAggregator.CalculateWithRawScore(1.0, []string{"本地已审批事实"}), answer, nil
+			return nil, c.calculateConfidenceWithRawScore(1.0, []string{"本地已审批事实"}), answer, nil
 		}
 	}
 
