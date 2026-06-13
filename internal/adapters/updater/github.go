@@ -337,4 +337,6 @@ var ProviderSet = wire.NewSet(
 	NewGitHubUpdater,
 	NewDefaultHTTPClient,
 	wire.Bind(new(port.Updater), new(*GitHubUpdater)),
+	NewInstallerAdapter,
+	wire.Bind(new(port.Installer), new(*InstallerAdapter)),
 )

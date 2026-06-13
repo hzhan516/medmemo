@@ -20,7 +20,6 @@ import (
 	"github.com/hzhan516/medmemo/internal/infrastructure/database"
 	"github.com/hzhan516/medmemo/internal/infrastructure/onnx"
 	"github.com/hzhan516/medmemo/internal/infrastructure/secret"
-	infraUpdater "github.com/hzhan516/medmemo/internal/infrastructure/updater"
 )
 
 // InitializeApp 通过 Wire 编译期依赖注入组装完整应用。
@@ -63,7 +62,6 @@ func InitializeApp() (*App, func(), error) {
 		NewSQLCipherConnectorFromConfig,
 		onnx.ONNXSet,
 		secret.SecretSet,
-		infraUpdater.InstallerSet,
 		adapterUpdater.ProviderSet,
 		updater.ProviderSet,
 		NewEngineConfig,
