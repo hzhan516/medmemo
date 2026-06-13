@@ -85,14 +85,16 @@ func FallbackTitle(userMessage string) string {
 	return time.Now().Format("健康咨询_20060102_150405")
 }
 
+// nonAlnumRegex 预编译的正则，用于 sanitizeTitle 去除非字母/数字字符。
+var nonAlnumRegex = regexp.MustCompile(`[^\p{L}\p{N}]+`)
+
 // sanitizeTitle 清洗 AI 返回的标题：去除标点、空白、符号，仅保留字母/数字/汉字。
 func sanitizeTitle(title string) string {
 	// 去除首尾空白
 	title = strings.TrimSpace(title)
 
 	// 去除所有非字母、非数字字符（含中英文标点、空白、符号）
-	re := regexp.MustCompile(`[^\p{L}\p{N}]+`)
-	title = re.ReplaceAllString(title, "")
+	title = nonAlnumRegex.ReplaceAllString(title, "")
 
 	// 截断至 8 个汉字长度
 	return truncateChinese(title, 8)
