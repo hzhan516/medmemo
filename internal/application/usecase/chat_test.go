@@ -712,6 +712,260 @@ func TestChatOrchestrator_ExtractFactsFromReply_UsesUserContentOnly(t *testing.T
 	assert.Empty(t, facts, "不应从 AI 回复中提取事实")
 }
 
+// trackingMockLLMClientFactory 记录每次 CreateClient 调用的 ProviderConfig。
+type trackingMockLLMClientFactory struct {
+	mockLLMClientFactory
+	createdConfigs []*models.ProviderConfig
+}
+
+func (m *trackingMockLLMClientFactory) CreateClient(providerConfig *models.ProviderConfig) (port.LLMClient, error) {
+	m.createdConfigs = append(m.createdConfigs, providerConfig)
+	return m.client, nil
+}
+
+// multiClientMockFactory 根据 provider ID 返回不同的 mock client。
+type multiClientMockFactory struct {
+	clients map[string]port.LLMClient
+}
+
+func (m *multiClientMockFactory) CreateClient(providerConfig *models.ProviderConfig) (port.LLMClient, error) {
+	if client, ok := m.clients[providerConfig.ID]; ok {
+		return client, nil
+	}
+	return nil, fmt.Errorf("no mock client for provider %s", providerConfig.ID)
+}
+
+var _ port.LLMClientFactory = (*multiClientMockFactory)(nil)
+
+// multiProviderStore 返回不同 provider 配置的 store。
+type multiProviderStore struct {
+	providers map[string]*models.ProviderConfig
+}
+
+func (m *multiProviderStore) Create(ctx context.Context, provider *models.ProviderConfig) error { return nil }
+func (m *multiProviderStore) Update(ctx context.Context, provider *models.ProviderConfig) error { return nil }
+func (m *multiProviderStore) Delete(ctx context.Context, id string) error { return nil }
+func (m *multiProviderStore) Get(ctx context.Context, id string) (*models.ProviderConfig, error) {
+	if p, ok := m.providers[id]; ok {
+		return p, nil
+	}
+	return nil, fmt.Errorf("provider not found: %s", id)
+}
+func (m *multiProviderStore) List(ctx context.Context) ([]*models.ProviderConfig, error) {
+	var result []*models.ProviderConfig
+	for _, p := range m.providers {
+		result = append(result, p)
+	}
+	return result, nil
+}
+
+var _ port.ProviderStore = (*multiProviderStore)(nil)
+
+// TestChatOrchestrator_ProviderRouting_DifferentProviderID 验证不同 ProviderID 路由到正确客户端。
+func TestChatOrchestrator_ProviderRouting_DifferentProviderID(t *testing.T) {
+	kimiClient := &mockLLMClient{chatReply: "Kimi 回复"}
+	openaiClient := &mockLLMClient{chatReply: "OpenAI 回复"}
+
+	factory := &multiClientMockFactory{
+		clients: map[string]port.LLMClient{
+			"kimi-provider":   kimiClient,
+			"openai-provider": openaiClient,
+		},
+	}
+	store := &multiProviderStore{
+		providers: map[string]*models.ProviderConfig{
+			"kimi-provider":   {ID: "kimi-provider", APIHost: "https://api.moonshot.cn", ModelID: "kimi-v1"},
+			"openai-provider": {ID: "openai-provider", APIHost: "https://api.openai.com", ModelID: "gpt-4o"},
+		},
+	}
+	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
+	orch := NewChatOrchestrator(factory, store, nil, nil, comp, nil, nil, NewConfidenceAggregator(), &mockFactRepository{}, NewIntentResolver(NewQueryExpansionService()), NewLocalAnswerService())
+
+	// 测试 Kimi provider
+	req1 := ChatRequest{
+		Messages:   []models.Message{{Role: models.RoleUser, Content: "你好"}},
+		Model:      models.ProviderKimi,
+		ProviderID: "kimi-provider",
+	}
+	resp1, err := orch.Execute(context.Background(), req1)
+	require.NoError(t, err)
+	assert.Equal(t, "Kimi 回复", resp1.Reply)
+
+	// 测试 OpenAI provider
+	req2 := ChatRequest{
+		Messages:   []models.Message{{Role: models.RoleUser, Content: "hello"}},
+		Model:      models.ProviderOpenAI,
+		ProviderID: "openai-provider",
+	}
+	resp2, err := orch.Execute(context.Background(), req2)
+	require.NoError(t, err)
+	assert.Equal(t, "OpenAI 回复", resp2.Reply)
+}
+
+// TestChatOrchestrator_ProviderRouting_UnknownProviderID 验证未知 ProviderID 返回错误。
+func TestChatOrchestrator_ProviderRouting_UnknownProviderID(t *testing.T) {
+	factory := &multiClientMockFactory{clients: map[string]port.LLMClient{}}
+	store := &multiProviderStore{providers: map[string]*models.ProviderConfig{}}
+	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
+	orch := NewChatOrchestrator(factory, store, nil, nil, comp, nil, nil, NewConfidenceAggregator(), &mockFactRepository{}, NewIntentResolver(NewQueryExpansionService()), NewLocalAnswerService())
+
+	req := ChatRequest{
+		Messages:   []models.Message{{Role: models.RoleUser, Content: "test"}},
+		Model:      models.ProviderKimi,
+		ProviderID: "unknown-provider",
+	}
+	_, err := orch.Execute(context.Background(), req)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to get provider")
+}
+
+// TestChatOrchestrator_OfflineFallback_CloudFails 验证云端失败时降级到本地模型。
+func TestChatOrchestrator_OfflineFallback_CloudFails(t *testing.T) {
+	// 云端客户端返回错误
+	cloudClient := &mockLLMClient{chatErr: fmt.Errorf("connection timeout")}
+	// 本地客户端正常响应
+	localClient := &mockLLMClient{chatReply: "本地模型回复"}
+
+	factory := &multiClientMockFactory{
+		clients: map[string]port.LLMClient{
+			"cloud-provider":  cloudClient,
+			"local-provider":  localClient,
+		},
+	}
+	store := &multiProviderStore{
+		providers: map[string]*models.ProviderConfig{
+			"cloud-provider": {ID: "cloud-provider", APIHost: "https://api.moonshot.cn", ModelID: "kimi-v1"},
+			"local-provider": {ID: "local-provider", APIHost: "http://localhost:11434", ModelID: "llama3"},
+		},
+	}
+	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
+	orch := NewChatOrchestrator(factory, store, nil, nil, comp, nil, nil, NewConfidenceAggregator(), &mockFactRepository{}, NewIntentResolver(NewQueryExpansionService()), NewLocalAnswerService())
+
+	// 先测试云端失败
+	req1 := ChatRequest{
+		Messages:   []models.Message{{Role: models.RoleUser, Content: "test"}},
+		Model:      models.ProviderKimi,
+		ProviderID: "cloud-provider",
+	}
+	_, err := orch.Execute(context.Background(), req1)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "chat execution failed")
+
+	// 再测试本地成功（应用层应主动切换 providerID 到本地）
+	req2 := ChatRequest{
+		Messages:   []models.Message{{Role: models.RoleUser, Content: "test"}},
+		Model:      models.ProviderOllama,
+		ProviderID: "local-provider",
+	}
+	resp2, err := orch.Execute(context.Background(), req2)
+	require.NoError(t, err)
+	assert.Equal(t, "本地模型回复", resp2.Reply)
+}
+
+// TestChatOrchestrator_ModelSwitching_MidConversation 验证对话中切换模型。
+func TestChatOrchestrator_ModelSwitching_MidConversation(t *testing.T) {
+	kimiClient := &mockLLMClient{chatReply: "Kimi 回复"}
+	qwenClient := &mockLLMClient{chatReply: "Qwen 回复"}
+
+	factory := &multiClientMockFactory{
+		clients: map[string]port.LLMClient{
+			"kimi-provider": kimiClient,
+			"qwen-provider": qwenClient,
+		},
+	}
+	store := &multiProviderStore{
+		providers: map[string]*models.ProviderConfig{
+			"kimi-provider": {ID: "kimi-provider", APIHost: "https://api.moonshot.cn", ModelID: "kimi-v1"},
+			"qwen-provider": {ID: "qwen-provider", APIHost: "https://dashscope.aliyuncs.com", ModelID: "qwen-turbo"},
+		},
+	}
+	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
+	orch := NewChatOrchestrator(factory, store, nil, nil, comp, nil, nil, NewConfidenceAggregator(), &mockFactRepository{}, NewIntentResolver(NewQueryExpansionService()), NewLocalAnswerService())
+
+	// 第一轮：使用 Kimi
+	req1 := ChatRequest{
+		ConversationID: "conv-1",
+		Messages:       []models.Message{{Role: models.RoleUser, Content: "你好"}},
+		Model:            models.ProviderKimi,
+		ProviderID:       "kimi-provider",
+	}
+	resp1, err := orch.Execute(context.Background(), req1)
+	require.NoError(t, err)
+	assert.Equal(t, "Kimi 回复", resp1.Reply)
+
+	// 第二轮：切换到 Qwen（保持同一会话）
+	req2 := ChatRequest{
+		ConversationID: "conv-1",
+		Messages: []models.Message{
+			{Role: models.RoleUser, Content: "你好"},
+			{Role: models.RoleAssistant, Content: "Kimi 回复"},
+			{Role: models.RoleUser, Content: "换个模型回答"},
+		},
+		Model:      models.ProviderQwen,
+		ProviderID: "qwen-provider",
+	}
+	resp2, err := orch.Execute(context.Background(), req2)
+	require.NoError(t, err)
+	assert.Equal(t, "Qwen 回复", resp2.Reply)
+
+	// 验证两个客户端都被调用过
+	assert.NotEmpty(t, kimiClient.lastMessages, "Kimi client 应被调用")
+	assert.NotEmpty(t, qwenClient.lastMessages, "Qwen client 应被调用")
+}
+
+// TestChatOrchestrator_ModelSwitching_StreamMode 验证流式模式下切换模型。
+func TestChatOrchestrator_ModelSwitching_StreamMode(t *testing.T) {
+	kimiClient := &mockLLMClient{streamChunks: []string{"Kimi", "流式"}}
+	ollamaClient := &mockLLMClient{streamChunks: []string{"Ollama", "本地"}}
+
+	factory := &multiClientMockFactory{
+		clients: map[string]port.LLMClient{
+			"kimi-provider":   kimiClient,
+			"ollama-provider": ollamaClient,
+		},
+	}
+	store := &multiProviderStore{
+		providers: map[string]*models.ProviderConfig{
+			"kimi-provider":   {ID: "kimi-provider", APIHost: "https://api.moonshot.cn", ModelID: "kimi-v1"},
+			"ollama-provider": {ID: "ollama-provider", APIHost: "http://localhost:11434", ModelID: "llama3"},
+		},
+	}
+	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
+	orch := NewChatOrchestrator(factory, store, nil, nil, comp, nil, nil, NewConfidenceAggregator(), &mockFactRepository{}, NewIntentResolver(NewQueryExpansionService()), NewLocalAnswerService())
+
+	// 第一轮：Kimi 流式
+	req1 := ChatRequest{
+		ConversationID: "conv-stream-1",
+		Messages:       []models.Message{{Role: models.RoleUser, Content: "你好"}},
+		Model:            models.ProviderKimi,
+		ProviderID:       "kimi-provider",
+	}
+	var chunks1 []string
+	_, _, final1, err := orch.StreamExecute(context.Background(), req1, func(chunk string) {
+		chunks1 = append(chunks1, chunk)
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "Kimi流式", final1)
+
+	// 第二轮：切换到 Ollama 流式
+	req2 := ChatRequest{
+		ConversationID: "conv-stream-1",
+		Messages: []models.Message{
+			{Role: models.RoleUser, Content: "你好"},
+			{Role: models.RoleAssistant, Content: "Kimi流式"},
+			{Role: models.RoleUser, Content: "用本地模型"},
+		},
+		Model:      models.ProviderOllama,
+		ProviderID: "ollama-provider",
+	}
+	var chunks2 []string
+	_, _, final2, err := orch.StreamExecute(context.Background(), req2, func(chunk string) {
+		chunks2 = append(chunks2, chunk)
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "Ollama本地", final2)
+}
+
 // TestChatOrchestrator_NilConfidenceAggregator 验证 confidenceAggregator 为 nil 时不 panic。
 func TestChatOrchestrator_NilConfidenceAggregator(t *testing.T) {
 	mock := &mockLLMClient{chatReply: "你好"}
