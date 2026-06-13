@@ -712,17 +712,6 @@ func TestChatOrchestrator_ExtractFactsFromReply_UsesUserContentOnly(t *testing.T
 	assert.Empty(t, facts, "不应从 AI 回复中提取事实")
 }
 
-// trackingMockLLMClientFactory 记录每次 CreateClient 调用的 ProviderConfig。
-type trackingMockLLMClientFactory struct {
-	mockLLMClientFactory
-	createdConfigs []*models.ProviderConfig
-}
-
-func (m *trackingMockLLMClientFactory) CreateClient(providerConfig *models.ProviderConfig) (port.LLMClient, error) {
-	m.createdConfigs = append(m.createdConfigs, providerConfig)
-	return m.client, nil
-}
-
 // multiClientMockFactory 根据 provider ID 返回不同的 mock client。
 type multiClientMockFactory struct {
 	clients map[string]port.LLMClient
