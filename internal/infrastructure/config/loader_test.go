@@ -188,7 +188,7 @@ func TestLoader_Load_MissingFields_UseDefaults(t *testing.T) {
 	assert.Equal(t, defaultProviderType, cfg.ProviderType)
 	assert.Equal(t, defaultModelDir, cfg.ModelDir)
 	assert.Equal(t, entity.ChannelBeta, cfg.UpdateChannel)
-	assert.Equal(t, entity.DesensitizationStandard, cfg.DesensitizationLevel)
+	assert.Equal(t, models.DesensitizationStandard, cfg.DesensitizationLevel)
 	assert.Equal(t, defaultDataRetentionDays, cfg.DataRetentionDays)
 }
 

@@ -23,7 +23,7 @@ const (
 	defaultEnableAnalytics      = false
 	defaultProviderType         = models.ProviderKimi
 	defaultModelDir             = "resources/models/distilbert-ner"
-	defaultDesensitizationLevel = string(entity.DesensitizationStandard)
+	defaultDesensitizationLevel = string(models.DesensitizationStandard)
 	defaultDataRetentionDays    = 30
 )
 
@@ -192,7 +192,7 @@ func (l *Loader) toDomain(raw *rawConfig) *entity.AppConfig {
 		APIEndpoint:               raw.APIEndpoint,
 		ModelDir:                  expandTilde(raw.ModelDir),
 		UpdateChannel:             entity.UpdateChannel(raw.UpdateChannel),
-		DesensitizationLevel:      entity.DesensitizationLevel(raw.DesensitizationLevel),
+		DesensitizationLevel:      models.DesensitizationLevel(raw.DesensitizationLevel),
 		EmbeddingModelDownloadURL: raw.EmbeddingModelDownloadURL,
 	}
 	if raw.EnableCloud != nil {
@@ -212,7 +212,7 @@ func (l *Loader) toDomain(raw *rawConfig) *entity.AppConfig {
 		cfg.UpdateChannel = entity.ChannelBeta
 	}
 	if cfg.DesensitizationLevel == "" {
-		cfg.DesensitizationLevel = entity.DesensitizationStandard
+		cfg.DesensitizationLevel = models.DesensitizationStandard
 	}
 	if raw.DataRetentionDays != nil {
 		cfg.DataRetentionDays = *raw.DataRetentionDays
