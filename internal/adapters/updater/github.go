@@ -117,7 +117,28 @@ func (g *GitHubUpdater) FetchLatest(ctx context.Context, channel entity.UpdateCh
 }
 
 // Download 下载指定 URL 的资产到本地路径，支持进度回调。
+// Audit: RR-002 filepath.Clean + base directory validation prevents path traversal
 func (g *GitHubUpdater) Download(ctx context.Context, url, destPath string, progress func(downloaded, total int64)) error {
+	// 路径安全校验：防止恶意文件名导致目录穿越
+	cleanPath := filepath.Clean(destPath)
+	absPath, err := filepath.Abs(cleanPath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve download path: %w", err)
+	}
+
+	// 获取目标目录的绝对路径并校验写入路径是否在其下
+	destDir := filepath.Dir(absPath)
+	destDirAbs, err := filepath.Abs(destDir)
+	if err != nil {
+		return fmt.Errorf("failed to resolve destination directory: %w", err)
+	}
+
+	// 确保目标路径不是目录（防止恶意路径覆盖目录）
+	info, err := os.Stat(absPath)
+	if err == nil && info.IsDir() {
+		return fmt.Errorf("download path is a directory: %s", absPath)
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create download request: %w", err)
@@ -133,12 +154,12 @@ func (g *GitHubUpdater) Download(ctx context.Context, url, destPath string, prog
 		return fmt.Errorf("download returned %d", resp.StatusCode)
 	}
 
-	// 创建目标文件
-	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+	// 创建目标文件（使用已校验的绝对路径）
+	if err := os.MkdirAll(destDirAbs, 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	out, err := os.Create(destPath)
+	out, err := os.Create(absPath)
 	if err != nil {
 		return fmt.Errorf("failed to create file: %w", err)
 	}
@@ -152,7 +173,7 @@ func (g *GitHubUpdater) Download(ctx context.Context, url, destPath string, prog
 	}
 
 	if _, err := io.Copy(out, reader); err != nil {
-		_ = os.Remove(destPath)
+		_ = os.Remove(absPath)
 		return fmt.Errorf("failed to write download: %w", err)
 	}
 
