@@ -78,7 +78,14 @@ jobs:
         run: cd web && npm run build
 
       - name: Run unit tests
-        run: go test -race -coverprofile=coverage.out ./...
+        run: make test
+
+      - name: Download coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: ./coverage.out
+          retention-days: 7
 
       - name: Upload coverage
         uses: codecov/codecov-action@v7
