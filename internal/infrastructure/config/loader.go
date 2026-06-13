@@ -263,7 +263,7 @@ func SaveDataRetentionDays(days int) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
-	return os.WriteFile(path, data, 0644)
+	return os.WriteFile(path, data, 0600)
 }
 
 // ConfigSet 供 Wire 使用的 ProviderSet。
