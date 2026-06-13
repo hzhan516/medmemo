@@ -553,6 +553,11 @@ func (c *RuleComplianceChecker) Check(ctx context.Context, text string) (*Compli
 		return nil, fmt.Errorf("compliance evaluation failed: %w", err)
 	}
 
+	// 超时降级记录审计日志
+	if res.TimeoutDowngrade && c.logger != nil {
+		_ = c.logger.Log(ctx, "TIMEOUT_DOWNGRADE", text, res.SafeText, application.L4Normal.String())
+	}
+
 	// 命中规则时记录拦截日志
 	if res.Level != application.L4Normal.String() && c.logger != nil {
 		_ = c.logger.Log(ctx, res.MatchedRule, text, res.SafeText, res.Level)

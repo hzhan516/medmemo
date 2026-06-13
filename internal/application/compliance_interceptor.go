@@ -41,13 +41,14 @@ func (r RiskLevel) String() string {
 
 // ComplianceResult 合规检查结果。
 type ComplianceResult struct {
-	Level         string   // "L1_BLOCKED" | "L2_WARNING" | "L3_NOTICE" | "L4_NORMAL"
-	Blocked       bool     // L1 为 true
-	MatchedRule   string   // 命中的规则 ID
-	SafeText      string   // L1 时为替换文本；其他等级为原文
-	Warning       string   // L2 时的警告文案
-	Notice        string   // L3 时的提示文案
-	ReplacedTerms []string // inline 替换中被替换的用词列表
+	Level            string   // "L1_BLOCKED" | "L2_WARNING" | "L3_NOTICE" | "L4_NORMAL"
+	Blocked          bool     // L1 为 true
+	MatchedRule      string   // 命中的规则 ID
+	SafeText         string   // L1 时为替换文本；其他等级为原文
+	Warning          string   // L2 时的警告文案
+	Notice           string   // L3 时的提示文案
+	ReplacedTerms    []string // inline 替换中被替换的用词列表
+	TimeoutDowngrade bool     // true 表示因超时降级为 L4_NORMAL
 }
 
 // ComplianceRule 单条合规规则定义。
@@ -275,7 +276,7 @@ func (ci *ComplianceInterceptor) EvaluateWithTimeout(ctx context.Context, text s
 
 	select {
 	case <-ctx.Done():
-		return &ComplianceResult{Level: L4Normal.String(), SafeText: text}, nil
+		return &ComplianceResult{Level: L4Normal.String(), SafeText: text, TimeoutDowngrade: true}, nil
 	case r := <-done:
 		return r.res, r.err
 	}
