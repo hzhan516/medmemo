@@ -159,6 +159,10 @@ func (s *wailsStubFactRepo) FindLatestApprovedByPredicates(ctx context.Context, 
 	return latest, nil
 }
 
+func (s *wailsStubFactRepo) FindApprovedByPredicates(ctx context.Context, subject string, predicates []string, limit int) ([]*entity.ExtractedFact, error) {
+	return nil, nil
+}
+
 var _ repository.FactRepository = (*wailsStubFactRepo)(nil)
 
 func setupMemoryWailsApp() *WailsApp {

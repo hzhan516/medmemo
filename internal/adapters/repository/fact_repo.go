@@ -54,6 +54,45 @@ func (r *FactRepoSQLite) Save(ctx context.Context, f *entity.ExtractedFact) erro
 	return nil
 }
 
+// FindApprovedByPredicates 按 subject 和多个 predicate 查找已审批事实列表。
+// 返回按 created_at DESC 排序的结果，受 limit 限制。
+func (r *FactRepoSQLite) FindApprovedByPredicates(ctx context.Context, subject string, predicates []string, limit int) ([]*entity.ExtractedFact, error) {
+	if subject == "" || len(predicates) == 0 {
+		return nil, nil
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+
+	placeholders := make([]string, len(predicates))
+	args := make([]any, 0, len(predicates)+2)
+	args = append(args, subject)
+	for i, p := range predicates {
+		placeholders[i] = "?"
+		args = append(args, p)
+	}
+	args = append(args, limit)
+
+	query := fmt.Sprintf(`
+		SELECT fact_id, subject, predicate, object, confidence, source_msg_ids, status, is_sensitive, scored_at, reviewed_at, created_at
+		FROM extracted_facts
+		WHERE status = 'approved' AND subject = ? AND predicate IN (%s)
+		ORDER BY created_at DESC
+		LIMIT ?
+	`, strings.Join(placeholders, ","))
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query approved facts by predicates: %w", err)
+	}
+	defer func() {
+		if cerr := rows.Close(); cerr != nil {
+			err = fmt.Errorf("failed to close rows: %w", cerr)
+		}
+	}()
+	return scanFacts(rows)
+}
+
 // FindLatestApprovedByPredicates 按 subject 和多个 predicate 查找最新已审批事实。
 func (r *FactRepoSQLite) FindLatestApprovedByPredicates(ctx context.Context, subject string, predicates []string) (*entity.ExtractedFact, error) {
 	if len(predicates) == 0 {

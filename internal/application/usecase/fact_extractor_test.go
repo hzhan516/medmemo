@@ -214,6 +214,10 @@ func (m *mockFactRepo) FindLatestApprovedByPredicates(ctx context.Context, subje
 	return nil, entity.ErrFactNotFound
 }
 
+func (m *mockFactRepo) FindApprovedByPredicates(ctx context.Context, subject string, predicates []string, limit int) ([]*entity.ExtractedFact, error) {
+	return nil, nil
+}
+
 func (m *mockFactRepo) CountApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string) (int64, error) {
 	return 0, nil
 }
