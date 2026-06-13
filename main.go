@@ -150,7 +150,7 @@ func prepareEmbeddingModels(userDir string, resourceDir string) {
 		if err != nil {
 			continue
 		}
-		_ = os.WriteFile(dst, data, 0644)
+		_ = os.WriteFile(dst, data, 0600)
 	}
 }
 
