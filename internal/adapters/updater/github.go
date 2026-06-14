@@ -5,6 +5,7 @@ package updater
 import (
 	"context"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -43,6 +44,11 @@ func NewGitHubUpdater(client *http.Client) *GitHubUpdater {
 	return &GitHubUpdater{
 		client: &http.Client{
 			Timeout: defaultHTTPTimeout,
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{
+					MinVersion: tls.VersionTLS12,
+				},
+			},
 		},
 	}
 }
@@ -51,6 +57,11 @@ func NewGitHubUpdater(client *http.Client) *GitHubUpdater {
 func NewDefaultHTTPClient() *http.Client {
 	return &http.Client{
 		Timeout: defaultHTTPTimeout,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				MinVersion: tls.VersionTLS12,
+			},
+		},
 	}
 }
 
@@ -93,7 +104,7 @@ func (g *GitHubUpdater) FetchLatest(ctx context.Context, channel models.UpdateCh
 		}
 
 		// 匹配当前平台的资产文件
-		asset, checksum := g.matchPlatformAsset(release.Assets)
+		asset, checksum := g.matchPlatformAsset(ctx, release.Assets)
 		if asset == nil {
 			continue
 		}
@@ -208,11 +219,11 @@ func (g *GitHubUpdater) VerifyChecksum(path, expectedSHA256 string) error {
 
 // matchPlatformAsset 根据当前平台匹配对应的 Release 资产文件。
 // 同时查找配套的 checksums.txt 提取 SHA256 值。
-func (g *GitHubUpdater) matchPlatformAsset(assets []githubAsset) (*githubAsset, string) {
+func (g *GitHubUpdater) matchPlatformAsset(ctx context.Context, assets []githubAsset) (*githubAsset, string) {
 	targetAsset := findTargetAsset(assets, runtime.GOOS, runtime.GOARCH)
 	checksum := ""
 	if targetAsset != nil {
-		checksum = g.findChecksum(assets, targetAsset.Name)
+		checksum = g.findChecksum(ctx, assets, targetAsset.Name)
 	}
 	return targetAsset, checksum
 }
@@ -273,10 +284,10 @@ func findWindowsFallback(assets []githubAsset) *githubAsset {
 }
 
 // findChecksum 从 assets 中查找 checksums.txt 并提取目标文件的 SHA256。
-func (g *GitHubUpdater) findChecksum(assets []githubAsset, targetName string) string {
+func (g *GitHubUpdater) findChecksum(ctx context.Context, assets []githubAsset, targetName string) string {
 	for i := range assets {
 		if strings.Contains(strings.ToLower(assets[i].Name), "checksums") {
-			return g.extractChecksum(assets[i].BrowserDownloadURL, targetName)
+			return g.extractChecksum(ctx, assets[i].BrowserDownloadURL, targetName)
 		}
 	}
 	return ""
@@ -296,9 +307,12 @@ func matchArch(name, goarch string) bool {
 }
 
 // extractChecksum 从 checksums.txt 中提取指定文件名的 SHA256 值。
-// MVP 阶段简化实现：异步下载并解析。
-func (g *GitHubUpdater) extractChecksum(checksumsURL, assetName string) string {
-	resp, err := g.client.Get(checksumsURL)
+func (g *GitHubUpdater) extractChecksum(ctx context.Context, checksumsURL, assetName string) string {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, checksumsURL, nil)
+	if err != nil {
+		return ""
+	}
+	resp, err := g.client.Do(req)
 	if err != nil {
 		return ""
 	}
