@@ -384,9 +384,8 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) (err error) {
 	}
 
 	// 收集 AI 完整回复用于持久化
-	var fullReply stringsBuilder
+	var fullReply strings.Builder
 
-	start := time.Now()
 	usage, confidenceResult, finalContent, err := a.chatOrchestrator.StreamExecute(ctx, chatReq, func(chunk string) {
 		fullReply.WriteString(chunk)
 		broker.Content(chunk)
@@ -413,8 +412,6 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) (err error) {
 
 	// 保存用户消息和 AI 回复（携带 token 与置信度）
 	a.saveMessages(ctx, req.ConversationID, req.Messages, finalContent, usage, confidenceResult, req.ProviderID)
-
-	fmt.Printf("[Stream] total execution time: %v\n", time.Since(start))
 
 	// 流式结束后对完整内容做一次合规检测（MVP 简化策略）
 	compResult, compErr := a.chatOrchestrator.CheckCompliance(ctx, finalContent)
@@ -475,19 +472,6 @@ func (a *WailsApp) streamTimeout(providerID string) time.Duration {
 		return minStreamTimeout
 	}
 	return configured
-}
-
-// stringsBuilder 是 strings.Builder 的别名，用于收集流式内容。
-type stringsBuilder struct {
-	b []byte
-}
-
-func (s *stringsBuilder) WriteString(str string) {
-	s.b = append(s.b, str...)
-}
-
-func (s *stringsBuilder) String() string {
-	return string(s.b)
 }
 
 // saveUserMessage 单独保存一条用户消息并更新会话时间戳，
