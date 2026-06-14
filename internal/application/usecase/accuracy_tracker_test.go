@@ -9,7 +9,7 @@ import (
 )
 
 func TestAccuracyTracker_GetAccuracy_ColdStart(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	tracker := NewAccuracyTracker()
 	acc := tracker.GetAccuracy(entity.AnswerTypeSymptomAnalysis, "30d")
 	// 冷启动默认基准值 0.75
@@ -17,7 +17,7 @@ func TestAccuracyTracker_GetAccuracy_ColdStart(t *testing.T) {
 }
 
 func TestAccuracyTracker_RecordFeedback_ThumbsUp(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	tracker := NewAccuracyTracker()
 	tracker.RecordFeedback(entity.AnswerTypeSymptomAnalysis, true, "30d")
 
@@ -26,7 +26,7 @@ func TestAccuracyTracker_RecordFeedback_ThumbsUp(t *testing.T) {
 }
 
 func TestAccuracyTracker_RecordFeedback_ThumbsDown(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	tracker := NewAccuracyTracker()
 	tracker.RecordFeedback(entity.AnswerTypeSymptomAnalysis, false, "30d")
 
@@ -35,7 +35,7 @@ func TestAccuracyTracker_RecordFeedback_ThumbsDown(t *testing.T) {
 }
 
 func TestAccuracyTracker_GetAccuracy_MixedFeedback(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	tracker := NewAccuracyTracker()
 	// 7 正确 / 10 总计 = 0.70
 	for i := 0; i < 7; i++ {
@@ -50,7 +50,7 @@ func TestAccuracyTracker_GetAccuracy_MixedFeedback(t *testing.T) {
 }
 
 func TestAccuracyTracker_GetAccuracy_DifferentWindows(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	tracker := NewAccuracyTracker()
 	// 30d 窗口：1 正确 / 1 = 1.0
 	tracker.RecordFeedback(entity.AnswerTypeHealthInfo, true, "30d")
@@ -66,7 +66,7 @@ func TestAccuracyTracker_GetAccuracy_DifferentWindows(t *testing.T) {
 }
 
 func TestAccuracyTracker_GetAccuracy_DifferentAnswerTypes(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	tracker := NewAccuracyTracker()
 	tracker.RecordFeedback(entity.AnswerTypeSymptomAnalysis, true, "30d")
 	tracker.RecordFeedback(entity.AnswerTypeRecommendation, false, "30d")
@@ -80,7 +80,7 @@ func TestAccuracyTracker_GetAccuracy_DifferentAnswerTypes(t *testing.T) {
 }
 
 func TestAccuracyTracker_GetStats(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	tracker := NewAccuracyTracker()
 	tracker.RecordFeedback(entity.AnswerTypeSymptomAnalysis, true, "30d")
 	tracker.RecordFeedback(entity.AnswerTypeSymptomAnalysis, true, "30d")
@@ -93,7 +93,7 @@ func TestAccuracyTracker_GetStats(t *testing.T) {
 }
 
 func TestAccuracyTracker_RecordImplicitSignal_Positive(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	tracker := NewAccuracyTracker()
 	// 用户追问 = 积极信号
 	tracker.RecordImplicitSignal(entity.AnswerTypeSymptomAnalysis, true, "30d")
@@ -103,7 +103,7 @@ func TestAccuracyTracker_RecordImplicitSignal_Positive(t *testing.T) {
 }
 
 func TestAccuracyTracker_RecordImplicitSignal_Negative(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	tracker := NewAccuracyTracker()
 	// 用户未追问 = 消极信号
 	tracker.RecordImplicitSignal(entity.AnswerTypeSymptomAnalysis, false, "30d")
@@ -113,7 +113,7 @@ func TestAccuracyTracker_RecordImplicitSignal_Negative(t *testing.T) {
 }
 
 func TestAccuracyTracker_ConcurrentSafety(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	tracker := NewAccuracyTracker()
 	done := make(chan bool)
 
@@ -134,7 +134,7 @@ func TestAccuracyTracker_ConcurrentSafety(t *testing.T) {
 }
 
 func TestAccuracyTracker_GetAccuracy_InvalidWindow(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	tracker := NewAccuracyTracker()
 	// 无效窗口默认使用 30d
 	acc := tracker.GetAccuracy(entity.AnswerTypeSymptomAnalysis, "invalid")
@@ -142,7 +142,7 @@ func TestAccuracyTracker_GetAccuracy_InvalidWindow(t *testing.T) {
 }
 
 func TestAccuracyTracker_WindowExpiration(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	tracker := NewAccuracyTracker()
 	// 模拟过期数据：手动插入一个 40 天前的记录
 	oldTime := time.Now().UTC().Add(-40 * 24 * time.Hour)

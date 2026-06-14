@@ -53,7 +53,7 @@ func (m *mockInstaller) CurrentBinaryPath() string {
 }
 
 func TestServiceCheckUpdate(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	tests := []struct {
 		name           string
 		currentVersion string
@@ -121,7 +121,7 @@ func TestServiceCheckUpdate(t *testing.T) {
 }
 
 func TestServiceDownloadUpdate(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	mockU := &mockUpdater{}
 	mockI := &mockInstaller{}
 	svc := NewService(mockU, mockI)
@@ -139,7 +139,7 @@ func TestServiceDownloadUpdate(t *testing.T) {
 }
 
 func TestServiceApplyUpdate(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	tests := []struct {
 		name       string
 		installErr error
@@ -166,7 +166,7 @@ func TestServiceApplyUpdate(t *testing.T) {
 }
 
 func TestServiceSettings(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	mockU := &mockUpdater{}
 	mockI := &mockInstaller{}
 	svc := NewService(mockU, mockI)

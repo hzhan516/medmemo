@@ -27,7 +27,7 @@ func (m *mockNERDetector) IsAvailable() bool {
 
 // TestDeidentifyPipeline_L1Only 验证只有 L1 时流水线正常工作。
 func TestDeidentifyPipeline_L1Only(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	p := NewDeidentifyPipeline(NewL1RuleStage())
 	ctx := context.Background()
 
@@ -39,7 +39,7 @@ func TestDeidentifyPipeline_L1Only(t *testing.T) {
 
 // TestL2NERStage_Process_NoNER 验证 NER 不可用时降级透传。
 func TestL2NERStage_Process_NoNER(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	stage := NewL2NERStage(&mockNERDetector{available: false})
 	ctx := context.Background()
 
@@ -54,7 +54,7 @@ func TestL2NERStage_Process_NoNER(t *testing.T) {
 
 // TestL2NERStage_Process_EmptyNER 验证 NER 返回空实体时透传。
 func TestL2NERStage_Process_EmptyNER(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	stage := NewL2NERStage(&mockNERDetector{available: true, entities: nil})
 	ctx := context.Background()
 
@@ -70,7 +70,7 @@ func TestL2NERStage_Process_EmptyNER(t *testing.T) {
 // TestL2NERStage_Process_WithMockNER 验证 mock NER 结果正确替换。
 // 使用 UTF-8 byte offset（中文字符每字符 3 bytes）。
 func TestL2NERStage_Process_WithMockNER(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	// 原始文本 "张三住北京" 的 byte offset：
 	// "张"=[0,3), "三"=[3,6), "住"=[6,9), "北"=[9,12), "京"=[12,15)
 	entities := []models.SensitiveEntity{
@@ -95,7 +95,7 @@ func TestL2NERStage_Process_WithMockNER(t *testing.T) {
 
 // TestL2NERStage_Process_FilterOverlap 验证 NER 与 L1 实体重叠时被过滤。
 func TestL2NERStage_Process_FilterOverlap(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	// 原始文本："张三电话13800138000"
 	// byte offset: "张"=[0,3), "三"=[3,6), "电"=[6,9), "话"=[9,12), "1"=[12,13)...
 	// L1 实体：手机号 [12, 23)
@@ -131,7 +131,7 @@ func TestL2NERStage_Process_FilterOverlap(t *testing.T) {
 
 // TestL2NERStage_Process_PositionMapping 验证 L1 占位符长度变化后的偏移映射。
 func TestL2NERStage_Process_PositionMapping(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	// 原始文本："张三电话13800138000住北京"
 	// L1 替换 "13800138000"(11 bytes) → "{{phone_a3f7b2d1}}"(18 bytes)，delta = +7
 	// NER："北京" 原始位置 [23, 29)，映射后 [30, 36)
@@ -165,7 +165,7 @@ func TestL2NERStage_Process_PositionMapping(t *testing.T) {
 
 // TestL2NERStage_Process_EndToEnd 验证 L1+L2 端到端协同。
 func TestL2NERStage_Process_EndToEnd(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	// 原始文本："张三住北京市朝阳区，电话13800138000"
 	// L1 已替换手机号
 	// L2 应替换人名和地点
@@ -209,7 +209,7 @@ func TestL2NERStage_Process_EndToEnd(t *testing.T) {
 
 // TestL2NERStage_Process_NERError 验证 NER 推理失败时降级透传。
 func TestL2NERStage_Process_NERError(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	stage := NewL2NERStage(&mockNERDetector{available: true, err: assert.AnError})
 	ctx := context.Background()
 
@@ -225,7 +225,7 @@ func TestL2NERStage_Process_NERError(t *testing.T) {
 
 // TestFilterOverlappingEntities 验证重叠过滤逻辑。
 func TestFilterOverlappingEntities(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	l1 := []models.SensitiveEntity{
 		{StartPos: 10, EndPos: 20},
 	}
@@ -270,7 +270,7 @@ func TestFilterOverlappingEntities(t *testing.T) {
 
 // TestMapOriginalToDeidPos 验证偏移量映射。
 func TestMapOriginalToDeidPos(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	// 模拟两个 L1 实体：
 	// [5, 10) "12345" → "{{id_abc}}" (长度 10)，delta = +5
 	// [20, 25) "67890" → "{{phone_def}}" (长度 13)，delta = +8
@@ -300,7 +300,7 @@ func TestMapOriginalToDeidPos(t *testing.T) {
 
 // TestMapTypeToPlaceholderPrefix 验证占位符前缀映射。
 func TestMapTypeToPlaceholderPrefix(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	assert.Equal(t, "per", mapTypeToPlaceholderPrefix("姓名"))
 	assert.Equal(t, "loc", mapTypeToPlaceholderPrefix("地点"))
 	assert.Equal(t, "org", mapTypeToPlaceholderPrefix("机构名"))

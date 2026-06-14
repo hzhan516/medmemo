@@ -11,7 +11,7 @@ import (
 
 // TestBroker_Flow 验证完整的 Start → Content → Done 流程。
 func TestBroker_Flow(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	var chunks []models.StreamChunk
 	b := NewBroker("kimi-lite", "provider-1", func(c models.StreamChunk) {
 		chunks = append(chunks, c)
@@ -46,7 +46,7 @@ func TestBroker_Flow(t *testing.T) {
 
 // TestBroker_AutoStart 验证未显式调用 Start 时，Content 自动补发 start。
 func TestBroker_AutoStart(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	var chunks []models.StreamChunk
 	b := NewBroker("gpt-4o", "", func(c models.StreamChunk) {
 		chunks = append(chunks, c)
@@ -62,7 +62,7 @@ func TestBroker_AutoStart(t *testing.T) {
 
 // TestBroker_Error 验证 Error 输出 error chunk。
 func TestBroker_Error(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	var chunks []models.StreamChunk
 	b := NewBroker("", "", func(c models.StreamChunk) {
 		chunks = append(chunks, c)
@@ -77,7 +77,7 @@ func TestBroker_Error(t *testing.T) {
 
 // TestBroker_Latency 验证 Done 的 latencyMs 为合理正值。
 func TestBroker_Latency(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	var chunks []models.StreamChunk
 	b := NewBroker("", "", func(c models.StreamChunk) {
 		chunks = append(chunks, c)
@@ -95,7 +95,7 @@ func TestBroker_Latency(t *testing.T) {
 
 // TestBroker_Metadata 验证 start 与 done 的 Metadata 附加规则。
 func TestBroker_Metadata(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	var chunks []models.StreamChunk
 	b := NewBroker("qwen-turbo", "p-001", func(c models.StreamChunk) {
 		chunks = append(chunks, c)
@@ -119,7 +119,7 @@ func TestBroker_Metadata(t *testing.T) {
 
 // TestBroker_ErrorAfterContent 验证 content 之后出现 error 的场景。
 func TestBroker_ErrorAfterContent(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	var chunks []models.StreamChunk
 	b := NewBroker("", "", func(c models.StreamChunk) {
 		chunks = append(chunks, c)
@@ -136,7 +136,7 @@ func TestBroker_ErrorAfterContent(t *testing.T) {
 
 // TestBroker_ContextCancellation 验证流 broker 在 context 取消时不会泄漏 goroutine。
 func TestBroker_ContextCancellation(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	var chunks []models.StreamChunk
 	b := NewBroker("kimi-lite", "p-1", func(c models.StreamChunk) {
 		chunks = append(chunks, c)
@@ -155,7 +155,7 @@ func TestBroker_ContextCancellation(t *testing.T) {
 
 // TestBroker_GoroutineLeak 验证多次创建 broker 不会产生 goroutine 泄漏。
 func TestBroker_GoroutineLeak(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	for i := 0; i < 100; i++ {
 		var chunks []models.StreamChunk
 		b := NewBroker("", "", func(c models.StreamChunk) {

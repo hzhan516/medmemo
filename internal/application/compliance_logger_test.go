@@ -14,7 +14,7 @@ import (
 
 // TestComplianceLogger_Log 验证拦截日志记录。
 func TestComplianceLogger_Log(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	tmpDir := t.TempDir()
 	logger := NewComplianceLogger(tmpDir)
 
@@ -41,7 +41,7 @@ func TestComplianceLogger_Log(t *testing.T) {
 
 // TestComplianceLogger_LogFeedback 验证用户申诉反馈记录。
 func TestComplianceLogger_LogFeedback(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	tmpDir := t.TempDir()
 	logger := NewComplianceLogger(tmpDir)
 
@@ -64,7 +64,7 @@ func TestComplianceLogger_LogFeedback(t *testing.T) {
 
 // TestComplianceLogger_PrivacyProtection 验证日志不包含原始文本内容。
 func TestComplianceLogger_PrivacyProtection(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	tmpDir := t.TempDir()
 	logger := NewComplianceLogger(tmpDir)
 
@@ -88,7 +88,7 @@ func TestComplianceLogger_PrivacyProtection(t *testing.T) {
 
 // TestComplianceLogger_Rotation 验证日志文件自动轮转。
 func TestComplianceLogger_Rotation(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	tmpDir := t.TempDir()
 	logger := &ComplianceLogger{
 		logPath:      filepath.Join(tmpDir, "compliance_logs.jsonl"),
@@ -118,7 +118,7 @@ func TestComplianceLogger_Rotation(t *testing.T) {
 
 // TestComplianceLogger_DefaultPath 验证默认日志路径。
 func TestComplianceLogger_DefaultPath(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	logger := NewComplianceLogger("")
 	assert.Contains(t, logger.logPath, "data/compliance_logs.jsonl")
 	assert.Contains(t, logger.feedbackPath, "data/compliance_feedback.jsonl")
@@ -126,7 +126,7 @@ func TestComplianceLogger_DefaultPath(t *testing.T) {
 
 // TestShortHash 验证短哈希函数。
 func TestShortHash(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	h1 := shortHash("hello")
 	h2 := shortHash("hello")
 	h3 := shortHash("world")

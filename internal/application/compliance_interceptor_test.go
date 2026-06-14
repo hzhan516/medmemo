@@ -95,7 +95,7 @@ func defaultRules() string {
 
 // TestL1Blocked_DefiniteDiagnosis 验证确诊性诊断被阻断。
 func TestL1Blocked_DefiniteDiagnosis(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	path := mustWriteRules(t, defaultRules())
 	ci, err := NewComplianceInterceptor(path)
 	require.NoError(t, err)
@@ -110,7 +110,7 @@ func TestL1Blocked_DefiniteDiagnosis(t *testing.T) {
 
 // TestL1Blocked_DrugDose 验证药物剂量被阻断。
 func TestL1Blocked_DrugDose(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	path := mustWriteRules(t, defaultRules())
 	ci, err := NewComplianceInterceptor(path)
 	require.NoError(t, err)
@@ -125,7 +125,7 @@ func TestL1Blocked_DrugDose(t *testing.T) {
 
 // TestL1Blocked_Surgery 验证手术建议被阻断。
 func TestL1Blocked_Surgery(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	path := mustWriteRules(t, defaultRules())
 	ci, err := NewComplianceInterceptor(path)
 	require.NoError(t, err)
@@ -139,7 +139,7 @@ func TestL1Blocked_Surgery(t *testing.T) {
 
 // TestL1Blocked_DefaultReplacement 验证无 replacement 时使用默认阻断文案。
 func TestL1Blocked_DefaultReplacement(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	path := mustWriteRules(t, defaultRules())
 	ci, err := NewComplianceInterceptor(path)
 	require.NoError(t, err)
@@ -152,7 +152,7 @@ func TestL1Blocked_DefaultReplacement(t *testing.T) {
 
 // TestL2Warning_ImpliedDiagnosis 验证暗示性诊断触发警告。
 func TestL2Warning_ImpliedDiagnosis(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	path := mustWriteRules(t, defaultRules())
 	ci, err := NewComplianceInterceptor(path)
 	require.NoError(t, err)
@@ -168,7 +168,7 @@ func TestL2Warning_ImpliedDiagnosis(t *testing.T) {
 
 // TestL2Warning_DrugOTC 验证非处方药推荐触发警告。
 func TestL2Warning_DrugOTC(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	path := mustWriteRules(t, defaultRules())
 	ci, err := NewComplianceInterceptor(path)
 	require.NoError(t, err)
@@ -183,7 +183,7 @@ func TestL2Warning_DrugOTC(t *testing.T) {
 
 // TestL2Warning_CheckSuggest 验证检查项目建议触发警告。
 func TestL2Warning_CheckSuggest(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	path := mustWriteRules(t, defaultRules())
 	ci, err := NewComplianceInterceptor(path)
 	require.NoError(t, err)
@@ -198,7 +198,7 @@ func TestL2Warning_CheckSuggest(t *testing.T) {
 
 // TestL3Notice_SevereDisease 验证严重疾病科普触发提示。
 func TestL3Notice_SevereDisease(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	path := mustWriteRules(t, defaultRules())
 	ci, err := NewComplianceInterceptor(path)
 	require.NoError(t, err)
@@ -213,7 +213,7 @@ func TestL3Notice_SevereDisease(t *testing.T) {
 
 // TestL3Notice_ChronicDisease 验证重大慢性病科普触发提示。
 func TestL3Notice_ChronicDisease(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	path := mustWriteRules(t, defaultRules())
 	ci, err := NewComplianceInterceptor(path)
 	require.NoError(t, err)
@@ -228,7 +228,7 @@ func TestL3Notice_ChronicDisease(t *testing.T) {
 
 // TestL4Normal_HealthTips 验证一般健康科普正常放行。
 func TestL4Normal_HealthTips(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	path := mustWriteRules(t, defaultRules())
 	ci, err := NewComplianceInterceptor(path)
 	require.NoError(t, err)
@@ -244,7 +244,7 @@ func TestL4Normal_HealthTips(t *testing.T) {
 
 // TestPriority_L1BeforeL2 验证 L1 优先级高于 L2，先命中 L1 则短路返回。
 func TestPriority_L1BeforeL2(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	path := mustWriteRules(t, defaultRules())
 	ci, err := NewComplianceInterceptor(path)
 	require.NoError(t, err)
@@ -259,7 +259,7 @@ func TestPriority_L1BeforeL2(t *testing.T) {
 
 // TestFallback_SafeOnLoadError 验证规则库加载失败时返回 nil + error。
 func TestFallback_SafeOnLoadError(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	ci, err := NewComplianceInterceptor("/nonexistent/path/rules.json")
 	// 加载失败强制返回 nil，避免调用者忽略 error 后使用空规则集
 	require.Error(t, err)
@@ -268,7 +268,7 @@ func TestFallback_SafeOnLoadError(t *testing.T) {
 
 // TestConfigError_L1InlineEmptyReplacement 验证 L1 inline 规则 replacement 为空时拒绝加载。
 func TestConfigError_L1InlineEmptyReplacement(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	rules := `{
   "version": "test-invalid",
   "rules": [
@@ -292,7 +292,7 @@ func TestConfigError_L1InlineEmptyReplacement(t *testing.T) {
 
 // TestConfigError_L1InlineWhitespaceReplacement 验证 L1 inline 规则 replacement 仅含空白时拒绝加载。
 func TestConfigError_L1InlineWhitespaceReplacement(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	rules := `{
   "version": "test-invalid",
   "rules": [
@@ -316,7 +316,7 @@ func TestConfigError_L1InlineWhitespaceReplacement(t *testing.T) {
 
 // TestConfigError_L1BlockEmptyReplacementAllowed 验证非 inline 的 L1 规则允许空 replacement（使用默认文案）。
 func TestConfigError_L1BlockEmptyReplacementAllowed(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	rules := `{
   "version": "test-ok",
   "rules": [
@@ -342,7 +342,7 @@ func TestConfigError_L1BlockEmptyReplacementAllowed(t *testing.T) {
 
 // TestFallback_SafeOnEmptyRules 验证空规则库时直接放行。
 func TestFallback_SafeOnEmptyRules(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	path := mustWriteRules(t, `{"version":"empty","rules":[]}`)
 	ci, err := NewComplianceInterceptor(path)
 	require.NoError(t, err)
@@ -355,7 +355,7 @@ func TestFallback_SafeOnEmptyRules(t *testing.T) {
 
 // TestRuleHotReload 验证运行时热更新规则库。
 func TestRuleHotReload(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "rules.json")
 
@@ -384,7 +384,7 @@ func TestRuleHotReload(t *testing.T) {
 
 // TestPerformance_SingleDetection 验证单条检测延迟 <10ms。
 func TestPerformance_SingleDetection(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	path := mustWriteRules(t, defaultRules())
 	ci, err := NewComplianceInterceptor(path)
 	require.NoError(t, err)
@@ -408,7 +408,7 @@ func TestPerformance_SingleDetection(t *testing.T) {
 
 // TestEvaluateWithTimeout 验证带超时的评估在异常场景下安全降级。
 func TestEvaluateWithTimeout(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	path := mustWriteRules(t, defaultRules())
 	ci, err := NewComplianceInterceptor(path)
 	require.NoError(t, err)
@@ -420,7 +420,7 @@ func TestEvaluateWithTimeout(t *testing.T) {
 
 // TestVersion 验证规则库版本号读取。
 func TestVersion(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	path := mustWriteRules(t, defaultRules())
 	ci, err := NewComplianceInterceptor(path)
 	require.NoError(t, err)
@@ -483,7 +483,7 @@ func inlineRules() string {
 
 // TestInlineReplace_SingleTerm 验证单条 inline 替换在文中局部生效。
 func TestInlineReplace_SingleTerm(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	path := mustWriteRules(t, inlineRules())
 	ci, err := NewComplianceInterceptor(path)
 	require.NoError(t, err)
@@ -500,7 +500,7 @@ func TestInlineReplace_SingleTerm(t *testing.T) {
 
 // TestInlineReplace_MultipleTerms 验证多条 inline 规则依次替换。
 func TestInlineReplace_MultipleTerms(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	path := mustWriteRules(t, inlineRules())
 	ci, err := NewComplianceInterceptor(path)
 	require.NoError(t, err)
@@ -518,7 +518,7 @@ func TestInlineReplace_MultipleTerms(t *testing.T) {
 
 // TestInlineReplace_ThenL1Block 验证 inline 替换后仍命中整段阻断规则。
 func TestInlineReplace_ThenL1Block(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	path := mustWriteRules(t, inlineRules())
 	ci, err := NewComplianceInterceptor(path)
 	require.NoError(t, err)
@@ -536,7 +536,7 @@ func TestInlineReplace_ThenL1Block(t *testing.T) {
 
 // TestInlineReplace_NoMatch 验证未命中 inline 规则时正常放行。
 func TestInlineReplace_NoMatch(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	path := mustWriteRules(t, inlineRules())
 	ci, err := NewComplianceInterceptor(path)
 	require.NoError(t, err)
@@ -550,7 +550,7 @@ func TestInlineReplace_NoMatch(t *testing.T) {
 
 // TestInlineReplace_L2AfterReplace 验证 inline 替换后无其他规则命中时正常放行。
 func TestInlineReplace_L2AfterReplace(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	path := mustWriteRules(t, inlineRules())
 	ci, err := NewComplianceInterceptor(path)
 	require.NoError(t, err)
@@ -564,7 +564,7 @@ func TestInlineReplace_L2AfterReplace(t *testing.T) {
 
 // TestInlineReplace_L3StillWorks 验证 inline 替换不影响 L3 提示。
 func TestInlineReplace_L3StillWorks(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	path := mustWriteRules(t, inlineRules())
 	ci, err := NewComplianceInterceptor(path)
 	require.NoError(t, err)
@@ -578,7 +578,7 @@ func TestInlineReplace_L3StillWorks(t *testing.T) {
 
 // TestInlineReplace_EmptyRules 验证空规则库时 inline 替换直接放行。
 func TestInlineReplace_EmptyRules(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	path := mustWriteRules(t, `{"version":"empty","rules":[]}`)
 	ci, err := NewComplianceInterceptor(path)
 	require.NoError(t, err)
@@ -591,7 +591,7 @@ func TestInlineReplace_EmptyRules(t *testing.T) {
 
 // TestInlineReplace_CaptureGroup 验证正则捕获组在替换中正确引用。
 func TestInlineReplace_CaptureGroup(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	rules := `{
   "version": "test-capture",
   "rules": [

@@ -8,7 +8,7 @@ import (
 )
 
 func TestLocalAnswerService_Format(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	svc := NewLocalAnswerService()
 
 	tests := []struct {

@@ -8,7 +8,7 @@ import (
 )
 
 func TestKnowledgeSourceTagger_Tag_MedicalGuideline(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	tagger := NewKnowledgeSourceTagger()
 	ks := tagger.Tag(entity.SourceMedicalGuideline, "中华医学会消化指南2023")
 
@@ -18,7 +18,7 @@ func TestKnowledgeSourceTagger_Tag_MedicalGuideline(t *testing.T) {
 }
 
 func TestKnowledgeSourceTagger_Tag_EvidenceDB(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	tagger := NewKnowledgeSourceTagger()
 	ks := tagger.Tag(entity.SourceEvidenceDB, "PubMedQA")
 
@@ -27,7 +27,7 @@ func TestKnowledgeSourceTagger_Tag_EvidenceDB(t *testing.T) {
 }
 
 func TestKnowledgeSourceTagger_Tag_KnowledgeGraph(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	tagger := NewKnowledgeSourceTagger()
 	ks := tagger.Tag(entity.SourceKnowledgeGraph, "CMeKG")
 
@@ -36,7 +36,7 @@ func TestKnowledgeSourceTagger_Tag_KnowledgeGraph(t *testing.T) {
 }
 
 func TestKnowledgeSourceTagger_Tag_LLMInternal(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	tagger := NewKnowledgeSourceTagger()
 	ks := tagger.Tag(entity.SourceLLMInternal, "")
 
@@ -45,7 +45,7 @@ func TestKnowledgeSourceTagger_Tag_LLMInternal(t *testing.T) {
 }
 
 func TestKnowledgeSourceTagger_Tag_UnknownDefaultsToLLMInternal(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	tagger := NewKnowledgeSourceTagger()
 	// 未知来源类型应降级为 llm_internal
 	ks := tagger.Tag(entity.SourceType("unknown_source"), "some citation")
@@ -55,7 +55,7 @@ func TestKnowledgeSourceTagger_Tag_UnknownDefaultsToLLMInternal(t *testing.T) {
 }
 
 func TestKnowledgeSourceTagger_CalculateSourceScore(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	tagger := NewKnowledgeSourceTagger()
 
 	// 单一医学指南来源
@@ -80,7 +80,7 @@ func TestKnowledgeSourceTagger_CalculateSourceScore(t *testing.T) {
 }
 
 func TestKnowledgeSourceTagger_Tag_WithCitation(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	tagger := NewKnowledgeSourceTagger()
 	ks := tagger.Tag(entity.SourceMedicalGuideline, "Huatuo-26M")
 
@@ -88,7 +88,7 @@ func TestKnowledgeSourceTagger_Tag_WithCitation(t *testing.T) {
 }
 
 func TestKnowledgeSourceTagger_Tag_EmptyCitation(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	tagger := NewKnowledgeSourceTagger()
 	ks := tagger.Tag(entity.SourceLLMInternal, "")
 

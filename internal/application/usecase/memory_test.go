@@ -157,7 +157,7 @@ var _ repository.FactRepository = (*stubFactRepository)(nil)
 // ========== 测试 ==========
 
 func TestMemoryRetriever_SemanticSearch(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	now := time.Now().UTC()
 
 	facts := map[string]*entity.ExtractedFact{
@@ -195,7 +195,7 @@ func TestMemoryRetriever_SemanticSearch(t *testing.T) {
 }
 
 func TestMemoryRetriever_DecayRanking(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	now := time.Now().UTC()
 
 	// fact_old: 30 天前，similarity = 1.0 → 衰减后 ≈ 0.223
@@ -241,7 +241,7 @@ func TestMemoryRetriever_DecayRanking(t *testing.T) {
 }
 
 func TestMemoryRetriever_FilterUnapproved(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	now := time.Now().UTC()
 
 	facts := map[string]*entity.ExtractedFact{
@@ -277,7 +277,7 @@ func TestMemoryRetriever_FilterUnapproved(t *testing.T) {
 }
 
 func TestMemoryRetriever_MinConfidenceFilter(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	now := time.Now().UTC()
 
 	facts := map[string]*entity.ExtractedFact{
@@ -314,7 +314,7 @@ func TestMemoryRetriever_MinConfidenceFilter(t *testing.T) {
 }
 
 func TestMemoryRetriever_EmbedFailure(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	retriever := NewMemoryRetriever(
 		&stubEmbeddingService{err: fmt.Errorf("embedding failed")},
 		&stubEmbeddingRepository{},
@@ -332,7 +332,7 @@ func TestMemoryRetriever_EmbedFailure(t *testing.T) {
 }
 
 func TestMemoryRetriever_WeightRecallThroughSemanticSearch(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	now := time.Now().UTC()
 	facts := map[string]*entity.ExtractedFact{
 		"fact_weight": {
@@ -367,7 +367,7 @@ func TestMemoryRetriever_WeightRecallThroughSemanticSearch(t *testing.T) {
 }
 
 func TestMemoryRetriever_NoResults(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	retriever := NewMemoryRetriever(
 		&stubEmbeddingService{},
 		&stubEmbeddingRepository{results: nil},
@@ -384,7 +384,7 @@ func TestMemoryRetriever_NoResults(t *testing.T) {
 }
 
 func TestMemoryRetriever_TokenBudget(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	now := time.Now().UTC()
 
 	facts := map[string]*entity.ExtractedFact{}
@@ -421,7 +421,7 @@ func TestMemoryRetriever_TokenBudget(t *testing.T) {
 }
 
 func TestMemoryRetriever_SetEnabled(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, &stubFactRepository{}, NewDecayScorer(), nil, nil, nil)
 	assert.True(t, retriever.IsEnabled())
 
@@ -433,7 +433,7 @@ func TestMemoryRetriever_SetEnabled(t *testing.T) {
 }
 
 func TestMemoryRetriever_SetSessionEnabled(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, &stubFactRepository{}, NewDecayScorer(), nil, nil, nil)
 
 	// 全局开启，会话默认开启
@@ -454,7 +454,7 @@ func TestMemoryRetriever_SetSessionEnabled(t *testing.T) {
 }
 
 func TestMemoryRetriever_detectEntityMentions(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	factRepo := &stubFactRepositoryWithSubjects{
 		subjects: []string{"用户", "医生"},
 		bySubject: map[string][]*entity.ExtractedFact{
@@ -475,7 +475,7 @@ func TestMemoryRetriever_detectEntityMentions(t *testing.T) {
 }
 
 func TestMemoryRetriever_detectEntityMentions_NoMatch(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	factRepo := &stubFactRepositoryWithSubjects{subjects: []string{"用户"}}
 	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, factRepo, NewDecayScorer(), nil, nil, nil)
 
@@ -485,7 +485,7 @@ func TestMemoryRetriever_detectEntityMentions_NoMatch(t *testing.T) {
 }
 
 func TestMemoryRetriever_detectEntityMentions_KeywordMatch(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	// 测试 predicate/object 关键词匹配（新增能力）
 	factRepo := &stubFactRepositoryWithSubjects{
 		facts: []*entity.ExtractedFact{
@@ -509,7 +509,7 @@ func TestMemoryRetriever_detectEntityMentions_KeywordMatch(t *testing.T) {
 }
 
 func TestFormatMemoriesForInjection(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	memories := []*entity.HealthMemory{
 		{Content: "用户 患有 高血压", Confidence: 0.9},
 		{Content: "用户 服用 降压药", Confidence: 0.85},
@@ -521,13 +521,13 @@ func TestFormatMemoriesForInjection(t *testing.T) {
 }
 
 func TestFormatMemoriesForInjection_Empty(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	result := FormatMemoriesForInjection(nil)
 	assert.Equal(t, "", result)
 }
 
 func TestMemoryRetriever_retrieveSemantic_error(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	// 当 embeddingRepo.SearchSimilar 返回错误时，semanticSearch 应正确返回错误
 	retriever := &MemoryRetriever{
 		embeddingSvc:  &stubEmbeddingService{vectors: [][]float32{{1, 2, 3}}},
@@ -543,7 +543,7 @@ func TestMemoryRetriever_retrieveSemantic_error(t *testing.T) {
 }
 
 func TestMemoryRetriever_mergeMemories_sessionGap(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, &stubFactRepository{}, NewDecayScorer(), nil, nil, nil)
 
 	mentionMemories := []*entity.HealthMemory{
@@ -564,7 +564,7 @@ func TestMemoryRetriever_mergeMemories_sessionGap(t *testing.T) {
 }
 
 func TestMemoryRetriever_checkSessionGap(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, &stubFactRepository{}, NewDecayScorer(), nil, nil, nil)
 
 	// 空 sessionID 应返回 false
@@ -589,7 +589,7 @@ func TestMemoryRetriever_checkSessionGap(t *testing.T) {
 }
 
 func TestMemoryRetriever_recordSessionAccess(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, &stubFactRepository{}, NewDecayScorer(), nil, nil, nil)
 
 	sessionID := "sess_test"
@@ -604,7 +604,7 @@ func TestMemoryRetriever_recordSessionAccess(t *testing.T) {
 }
 
 func TestMemoryRetriever_detectEntityMentions_QueryHowManyJinMatchesWeightFact(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	now := time.Now().UTC()
 	facts := []*entity.ExtractedFact{
 		{
@@ -650,7 +650,7 @@ func (s *stubFactRepositoryWithWeightFacts) ListByStatus(ctx context.Context, st
 // ========== 混合检索管线测试 ==========
 
 func TestRetrieveWithDiagnostics_IntentPath(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	now := time.Now().UTC()
 
 	facts := map[string]*entity.ExtractedFact{
@@ -698,7 +698,7 @@ func TestRetrieveWithDiagnostics_IntentPath(t *testing.T) {
 }
 
 func TestRetrieveWithDiagnostics_AllPathsFailGracefully(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	// 无 embedding 结果、无 fact、无 intent → 各路径全部空，应优雅返回空
 	retriever := NewMemoryRetriever(
 		&stubEmbeddingService{},
@@ -723,7 +723,7 @@ func TestRetrieveWithDiagnostics_AllPathsFailGracefully(t *testing.T) {
 }
 
 func TestMergeCandidates_DedupAcrossPaths(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	now := time.Now().UTC()
 
 	// 同一个 fact 从 intent 和 keyword 两路命中
@@ -766,7 +766,7 @@ func TestMergeCandidates_DedupAcrossPaths(t *testing.T) {
 }
 
 func TestRerank_IntentLevelPriority(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	now := time.Now().UTC()
 
 	candidates := []RetrievalCandidate{
@@ -787,7 +787,7 @@ func TestRerank_IntentLevelPriority(t *testing.T) {
 }
 
 func TestRerank_RecencyOverVectorSimilarity(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	now := time.Now().UTC()
 
 	candidates := []RetrievalCandidate{
@@ -806,14 +806,14 @@ func TestRerank_RecencyOverVectorSimilarity(t *testing.T) {
 }
 
 func TestBuildExpandedQuery_Basic(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	// 无 intent 时仅返回 normalized
 	result := BuildExpandedQuery("血压偏高", nil)
 	assert.Equal(t, "血压偏高", result)
 }
 
 func TestBuildExpandedQuery_WithPredicates(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	intent := &IntentResult{
 		Intent:     "blood_pressure",
 		Confidence: ConfidenceHigh,
@@ -826,13 +826,13 @@ func TestBuildExpandedQuery_WithPredicates(t *testing.T) {
 }
 
 func TestBuildExpandedQuery_EmptyInput(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	result := BuildExpandedQuery("", nil)
 	assert.Equal(t, "", result)
 }
 
 func TestRetrieveWithDiagnostics_DiagnosticsFields(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	now := time.Now().UTC()
 
 	facts := map[string]*entity.ExtractedFact{

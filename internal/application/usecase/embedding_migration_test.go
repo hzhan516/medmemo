@@ -186,7 +186,7 @@ func (r *migratorFactRepo) ListApprovedFactsNeedingEmbedding(ctx context.Context
 // ========== 测试 ==========
 
 func TestEmbeddingMigrator_NeedsMigration(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	factRepo := &migratorFactRepo{
 		facts: []*entity.ExtractedFact{
 			{FactID: "f1", Status: entity.FactStatusApproved, CreatedAt: time.Now()},
@@ -202,7 +202,7 @@ func TestEmbeddingMigrator_NeedsMigration(t *testing.T) {
 }
 
 func TestEmbeddingMigrator_NeedsMigration_NoCandidates(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	factRepo := &migratorFactRepo{}
 	svc := &migratorEmbeddingService{modelVersion: models.CurrentEmbeddingVersion, isAvailable: true}
 	migrator := NewEmbeddingMigrator(factRepo, &migratorEmbeddingRepo{}, svc, NewMigrationState())
@@ -214,7 +214,7 @@ func TestEmbeddingMigrator_NeedsMigration_NoCandidates(t *testing.T) {
 }
 
 func TestEmbeddingMigrator_RunMigration_Success(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	now := time.Now().UTC()
 	facts := []*entity.ExtractedFact{
 		{FactID: "f1", Subject: "用户", Predicate: "体重是", Object: "70公斤", Status: entity.FactStatusApproved, CreatedAt: now},
@@ -248,7 +248,7 @@ func TestEmbeddingMigrator_RunMigration_Success(t *testing.T) {
 }
 
 func TestEmbeddingMigrator_RunMigration_UpdateExisting(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	now := time.Now().UTC()
 	facts := []*entity.ExtractedFact{
 		{FactID: "f1", Subject: "用户", Predicate: "体重是", Object: "70公斤", Status: entity.FactStatusApproved, CreatedAt: now},
@@ -279,7 +279,7 @@ func TestEmbeddingMigrator_RunMigration_UpdateExisting(t *testing.T) {
 }
 
 func TestEmbeddingMigrator_RunMigration_PartialFailure(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	now := time.Now().UTC()
 	facts := []*entity.ExtractedFact{
 		{FactID: "f1", Subject: "用户", Predicate: "体重是", Object: "70公斤", Status: entity.FactStatusApproved, CreatedAt: now},
@@ -314,7 +314,7 @@ func TestEmbeddingMigrator_RunMigration_PartialFailure(t *testing.T) {
 }
 
 func TestEmbeddingMigrator_RunMigration_FailureButRecheckZero(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	now := time.Now().UTC()
 	facts := []*entity.ExtractedFact{
 		{FactID: "f1", Subject: "用户", Predicate: "体重是", Object: "70公斤", Status: entity.FactStatusApproved, CreatedAt: now},

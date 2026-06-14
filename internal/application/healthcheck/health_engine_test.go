@@ -71,7 +71,7 @@ func (m *mockProviderStore) List(_ context.Context) ([]*models.ProviderConfig, e
 }
 
 func TestHealthEngine_CheckNow_Green(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/v1/models", r.URL.Path)
 		auth := r.Header.Get("Authorization")
@@ -99,7 +99,7 @@ func TestHealthEngine_CheckNow_Green(t *testing.T) {
 }
 
 func TestHealthEngine_CheckNow_Yellow(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// 模拟 2.5s 延迟，落在 Yellow 区间
 		time.Sleep(2500 * time.Millisecond)
@@ -130,7 +130,7 @@ func TestHealthEngine_CheckNow_Yellow(t *testing.T) {
 }
 
 func TestHealthEngine_CheckNow_Red_NonOK(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 	}))
@@ -153,7 +153,7 @@ func TestHealthEngine_CheckNow_Red_NonOK(t *testing.T) {
 }
 
 func TestHealthEngine_CheckNow_Red_500(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
@@ -176,7 +176,7 @@ func TestHealthEngine_CheckNow_Red_500(t *testing.T) {
 }
 
 func TestHealthEngine_CheckNow_Red_Timeout(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// 响应延迟超过 client 超时（1ms）
 		time.Sleep(500 * time.Millisecond)
@@ -202,7 +202,7 @@ func TestHealthEngine_CheckNow_Red_Timeout(t *testing.T) {
 }
 
 func TestHealthEngine_CheckNow_NetworkError(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	store := newMockProviderStore()
 	_ = store.Create(context.Background(), &models.ProviderConfig{
 		ID:      "p1",
@@ -220,7 +220,7 @@ func TestHealthEngine_CheckNow_NetworkError(t *testing.T) {
 }
 
 func TestHealthEngine_OnChange(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	callCount := atomic.Int32{}
 	var lastResult port.HealthResult
 
@@ -258,7 +258,7 @@ func TestHealthEngine_OnChange(t *testing.T) {
 }
 
 func TestHealthEngine_OnChange_StatusTransition(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	var statuses []port.HealthStatus
 	var mu sync.Mutex
 
@@ -304,7 +304,7 @@ func TestHealthEngine_OnChange_StatusTransition(t *testing.T) {
 }
 
 func TestHealthEngine_GetStatus(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	store := newMockProviderStore()
 	engine := NewHealthEngine(store)
 
@@ -333,7 +333,7 @@ func TestHealthEngine_GetStatus(t *testing.T) {
 }
 
 func TestHealthEngine_PeriodicCheck(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	callCount := atomic.Int32{}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -368,7 +368,7 @@ func TestHealthEngine_PeriodicCheck(t *testing.T) {
 }
 
 func TestHealthEngine_CheckNow_ProviderNotFound(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	store := newMockProviderStore()
 	engine := NewHealthEngine(store)
 
@@ -378,7 +378,7 @@ func TestHealthEngine_CheckNow_ProviderNotFound(t *testing.T) {
 }
 
 func TestHealthEngine_CheckNow_Disabled(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	store := newMockProviderStore()
 	_ = store.Create(context.Background(), &models.ProviderConfig{
 		ID:      "p1",
@@ -394,7 +394,7 @@ func TestHealthEngine_CheckNow_Disabled(t *testing.T) {
 }
 
 func TestHealthEngine_StartStop_Idempotent(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	store := newMockProviderStore()
 	engine := NewHealthEngine(store)
 
@@ -412,7 +412,7 @@ func TestHealthEngine_StartStop_Idempotent(t *testing.T) {
 }
 
 func TestClassifyLatency(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	tests := []struct {
 		latency  time.Duration
 		expected port.HealthStatus
@@ -435,7 +435,7 @@ func TestClassifyLatency(t *testing.T) {
 }
 
 func TestHealthEngine_CheckNow_NoAPIKey(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	var authHeader string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader = r.Header.Get("Authorization")
@@ -461,7 +461,7 @@ func TestHealthEngine_CheckNow_NoAPIKey(t *testing.T) {
 
 // TestHealthEngine_CheckNow_CLIToken_Success 验证 cli_token 方式正确读取凭证并通过健康检测。
 func TestHealthEngine_CheckNow_CLIToken_Success(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	tmpDir := t.TempDir()
 	credPath := tmpDir + "/kimi-code.json"
 	require.NoError(t, os.WriteFile(credPath, []byte(`{"access_token":"cli-token-hc"}`), 0600))
@@ -493,7 +493,7 @@ func TestHealthEngine_CheckNow_CLIToken_Success(t *testing.T) {
 
 // TestHealthEngine_CheckNow_OAuthDevice_CacheExpired 验证 oauth_device 方式缓存过期时返回 Red。
 func TestHealthEngine_CheckNow_OAuthDevice_CacheExpired(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	store := newMockProviderStore()
 	_ = store.Create(context.Background(), &models.ProviderConfig{
 		ID:         "oauth-p1",
@@ -518,7 +518,7 @@ func TestHealthEngine_CheckNow_OAuthDevice_CacheExpired(t *testing.T) {
 
 // TestHealthEngine_CheckNow_ServiceAccount_NotImplemented 验证 service_account 方式返回 Red。
 func TestHealthEngine_CheckNow_ServiceAccount_NotImplemented(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	store := newMockProviderStore()
 	_ = store.Create(context.Background(), &models.ProviderConfig{
 		ID:         "sa-p1",
