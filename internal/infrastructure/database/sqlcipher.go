@@ -106,6 +106,11 @@ func NewSQLCipherConnector(dataDir string, store secret.Store) (*SQLCipherConnec
 		return nil, fmt.Errorf("failed to set journal mode: %w", err)
 	}
 
+	// 加固数据库文件权限，仅允许当前用户读写
+	if err := os.Chmod(dbPath, 0600); err != nil {
+		fmt.Printf("[SQLCipher] failed to chmod %s to 0600: %v\n", dbPath, err)
+	}
+
 	return &SQLCipherConnector{db: db, path: dbPath}, nil
 }
 

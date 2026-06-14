@@ -3,6 +3,7 @@ package policy
 import "testing"
 
 func TestRiskLevel_String(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		level RiskLevel
 		want  string

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/pkg/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -18,7 +19,7 @@ type mockUpdater struct {
 	verifyErr  error
 }
 
-func (m *mockUpdater) FetchLatest(ctx context.Context, channel entity.UpdateChannel) (*entity.UpdateInfo, error) {
+func (m *mockUpdater) FetchLatest(ctx context.Context, channel models.UpdateChannel) (*entity.UpdateInfo, error) {
 	return m.latestInfo, m.fetchErr
 }
 
@@ -52,6 +53,7 @@ func (m *mockInstaller) CurrentBinaryPath() string {
 }
 
 func TestServiceCheckUpdate(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name           string
 		currentVersion string
@@ -64,25 +66,25 @@ func TestServiceCheckUpdate(t *testing.T) {
 		{
 			name:           "new version available",
 			currentVersion: "v0.1.0",
-			latestInfo:     &entity.UpdateInfo{Version: "v0.2.0", Channel: entity.ChannelBeta},
+			latestInfo:     &entity.UpdateInfo{Version: "v0.2.0", Channel: models.ChannelBeta},
 			wantInfo:       true,
 		},
 		{
 			name:           "no update same version",
 			currentVersion: "v0.2.0",
-			latestInfo:     &entity.UpdateInfo{Version: "v0.2.0", Channel: entity.ChannelBeta},
+			latestInfo:     &entity.UpdateInfo{Version: "v0.2.0", Channel: models.ChannelBeta},
 			wantInfo:       false,
 		},
 		{
 			name:           "older version",
 			currentVersion: "v0.3.0",
-			latestInfo:     &entity.UpdateInfo{Version: "v0.2.0", Channel: entity.ChannelBeta},
+			latestInfo:     &entity.UpdateInfo{Version: "v0.2.0", Channel: models.ChannelBeta},
 			wantInfo:       false,
 		},
 		{
 			name:           "user skipped version",
 			currentVersion: "v0.1.0",
-			latestInfo:     &entity.UpdateInfo{Version: "v0.2.0", Channel: entity.ChannelBeta},
+			latestInfo:     &entity.UpdateInfo{Version: "v0.2.0", Channel: models.ChannelBeta},
 			skipVersion:    "v0.2.0",
 			wantInfo:       false,
 		},
@@ -119,6 +121,7 @@ func TestServiceCheckUpdate(t *testing.T) {
 }
 
 func TestServiceDownloadUpdate(t *testing.T) {
+	t.Parallel()
 	mockU := &mockUpdater{}
 	mockI := &mockInstaller{}
 	svc := NewService(mockU, mockI)
@@ -136,6 +139,7 @@ func TestServiceDownloadUpdate(t *testing.T) {
 }
 
 func TestServiceApplyUpdate(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		installErr error
@@ -162,18 +166,19 @@ func TestServiceApplyUpdate(t *testing.T) {
 }
 
 func TestServiceSettings(t *testing.T) {
+	t.Parallel()
 	mockU := &mockUpdater{}
 	mockI := &mockInstaller{}
 	svc := NewService(mockU, mockI)
 
 	// 默认设置
 	assert.True(t, svc.GetSettings().CheckEnabled)
-	assert.Equal(t, entity.ChannelStable, svc.GetSettings().Channel)
+	assert.Equal(t, models.ChannelStable, svc.GetSettings().Channel)
 
 	// 修改设置
 	newSettings := &entity.UpdateSettings{
 		CheckEnabled: false,
-		Channel:      entity.ChannelStable,
+		Channel:      models.ChannelStable,
 		SkipVersion:  "v0.1.0",
 	}
 	svc.SetSettings(newSettings)

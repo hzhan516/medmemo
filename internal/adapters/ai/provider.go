@@ -7,7 +7,6 @@ import (
 
 	"github.com/google/wire"
 	"github.com/hzhan516/medmemo/internal/application/port"
-	"github.com/hzhan516/medmemo/internal/domain/entity"
 	"github.com/hzhan516/medmemo/pkg/models"
 )
 
@@ -50,7 +49,7 @@ const defaultRequestTimeout = 30 * time.Second
 //   - ProviderOllama  → LocalAdapter
 //   - ProviderLocal   → OpenAIAdapter
 //   - 云端 Provider   → OpenAIAdapter
-func ProviderFactory(cfg *entity.AppConfig) port.LLMClient {
+func ProviderFactory(cfg *models.AppConfig) port.LLMClient {
 	// Ollama 本地模型路由
 	if cfg.ProviderType == models.ProviderOllama {
 		endpoint := cfg.APIEndpoint

@@ -182,7 +182,7 @@ func newEmbeddingStatusTestApp(t *testing.T, available bool, failureReason strin
 
 	app := &WailsApp{
 		ctx: context.Background(),
-		config: &entity.AppConfig{
+		config: &models.AppConfig{
 			DataDir: tmpDir,
 		},
 		embeddingSvc: &mockEmbeddingStatusService{

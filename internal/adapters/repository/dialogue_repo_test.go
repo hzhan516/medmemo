@@ -12,6 +12,7 @@ import (
 )
 
 func setupDialogueTestDB(t *testing.T) (*DialogueRepoSQLite, func()) {
+	t.Helper()
 	tmpDir := t.TempDir()
 	connector, err := database.NewSQLiteConnector(tmpDir)
 	require.NoError(t, err)

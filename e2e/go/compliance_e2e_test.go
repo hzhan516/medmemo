@@ -112,8 +112,8 @@ func TestE2E_Compliance_L1Block(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// L1 阻断保留原始 AI 回复，仅在 Warnings 中标记 L1_BLOCKED
-	assert.Contains(t, resp.Reply, "你患有糖尿病，需要治疗。")
+	// L1 阻断时 reply 替换为 SafeText，同时在 Warnings 中标记 L1_BLOCKED
+	assert.Equal(t, "BLOCKED_TEXT", resp.Reply)
 	assert.Contains(t, resp.Warnings, "L1_BLOCKED")
 }
 
@@ -142,7 +142,7 @@ func TestE2E_Compliance_L1Block_DrugDose(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	assert.Contains(t, resp.Reply, "建议服用 500 毫克阿司匹林。")
+	assert.Equal(t, "DRUG_BLOCKED", resp.Reply)
 	assert.Contains(t, resp.Warnings, "L1_BLOCKED")
 }
 
@@ -260,8 +260,8 @@ func TestE2E_Compliance_PipelineEndToEnd(t *testing.T) {
 	aiMsg := &entity.Message{ID: fmt.Sprintf("msg_%d", time.Now().UnixNano()), Role: models.RoleAssistant, Content: resp.Reply, Timestamp: time.Now()}
 	require.NoError(t, msgRepo.Save(ctx, conv.ID, aiMsg))
 
-	// L1 阻断保留原始 AI 回复，仅在 Warnings 中标记 L1_BLOCKED
-	assert.Contains(t, resp.Reply, "你患有高血压病，建议服用药物。")
+	// L1 阻断时 reply 替换为 SafeText，同时在 Warnings 中标记 L1_BLOCKED
+	assert.Equal(t, "BLOCKED_TEXT", resp.Reply)
 	assert.Contains(t, resp.Warnings, "L1_BLOCKED")
 
 	// 验证消息已持久化到数据库（按时间降序）
@@ -269,7 +269,7 @@ func TestE2E_Compliance_PipelineEndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, msgs, 2)
 	assert.Equal(t, models.RoleAssistant, msgs[0].Role)
-	assert.Contains(t, msgs[0].Content, "你患有高血压病，建议服用药物。")
+	assert.Equal(t, "BLOCKED_TEXT", msgs[0].Content)
 	assert.Equal(t, models.RoleUser, msgs[1].Role)
 	assert.Equal(t, "我头晕", msgs[1].Content)
 }

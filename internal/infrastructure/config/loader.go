@@ -10,7 +10,6 @@ import (
 	"strconv"
 
 	"github.com/google/wire"
-	"github.com/hzhan516/medmemo/internal/domain/entity"
 	"github.com/hzhan516/medmemo/pkg/models"
 	"gopkg.in/yaml.v3"
 )
@@ -57,7 +56,7 @@ type rawConfig struct {
 
 // Load 加载并校验配置，返回领域层 AppConfig。
 // 加载优先级：显式 configPath > ~/.medmemo/config.{yaml|json} > ./config.{yaml|json} > 硬编码默认值。
-func (l *Loader) Load() (*entity.AppConfig, error) {
+func (l *Loader) Load() (*models.AppConfig, error) {
 	raw := l.loadDefaults()
 
 	// 尝试从文件加载
@@ -89,7 +88,7 @@ func (l *Loader) Load() (*entity.AppConfig, error) {
 }
 
 func (l *Loader) loadDefaults() *rawConfig {
-	updateChannel := string(entity.ChannelBeta)
+	updateChannel := string(models.ChannelBeta)
 	desensitizationLevel := defaultDesensitizationLevel
 	dataDir := expandTilde(defaultDataDir)
 	if dataDir == "" {
@@ -184,14 +183,14 @@ func (l *Loader) applyEnvOverrides(raw *rawConfig) {
 	}
 }
 
-func (l *Loader) toDomain(raw *rawConfig) *entity.AppConfig {
-	cfg := &entity.AppConfig{
+func (l *Loader) toDomain(raw *rawConfig) *models.AppConfig {
+	cfg := &models.AppConfig{
 		DataDir:                   expandTilde(raw.DataDir),
 		DefaultModel:              raw.DefaultModel,
 		Language:                  raw.Language,
 		APIEndpoint:               raw.APIEndpoint,
 		ModelDir:                  expandTilde(raw.ModelDir),
-		UpdateChannel:             entity.UpdateChannel(raw.UpdateChannel),
+		UpdateChannel:             models.UpdateChannel(raw.UpdateChannel),
 		DesensitizationLevel:      models.DesensitizationLevel(raw.DesensitizationLevel),
 		EmbeddingModelDownloadURL: raw.EmbeddingModelDownloadURL,
 	}
@@ -209,7 +208,7 @@ func (l *Loader) toDomain(raw *rawConfig) *entity.AppConfig {
 		cfg.ProviderType = defaultProviderType
 	}
 	if cfg.UpdateChannel == "" {
-		cfg.UpdateChannel = entity.ChannelBeta
+		cfg.UpdateChannel = models.ChannelBeta
 	}
 	if cfg.DesensitizationLevel == "" {
 		cfg.DesensitizationLevel = models.DesensitizationStandard
@@ -221,7 +220,7 @@ func (l *Loader) toDomain(raw *rawConfig) *entity.AppConfig {
 }
 
 // LoadConfig 从 Loader 加载并返回 AppConfig，供 Wire 注入。
-func LoadConfig(loader *Loader) (*entity.AppConfig, error) {
+func LoadConfig(loader *Loader) (*models.AppConfig, error) {
 	return loader.Load()
 }
 

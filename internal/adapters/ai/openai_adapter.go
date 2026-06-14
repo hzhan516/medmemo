@@ -176,29 +176,16 @@ func (a *OpenAIAdapter) doWithRetry(client *http.Client, req *http.Request) (*ht
 			}
 			// 基础退避：指数退避 2^attempt 秒
 			delay := min(2*time.Second*(1<<(attempt-1)), 60*time.Second)
-			fmt.Printf("[DIAG][OpenAI] doWithRetry attempt=%d backing off %v\n", attempt, delay)
 			select {
 			case <-time.After(delay):
 			case <-req.Context().Done():
 				return nil, fmt.Errorf("retry cancelled: %w", req.Context().Err())
 			}
 		}
-
-		fmt.Printf("[DIAG][OpenAI] doWithRetry attempt=%d client.Timeout=%v ctxDeadline=%v\n",
-			attempt, client.Timeout, func() string {
-				if d, ok := req.Context().Deadline(); ok {
-					return fmt.Sprintf("%v remaining", time.Until(d))
-				}
-				return "none"
-			}())
-		attemptStart := time.Now()
 		resp, err := client.Do(req)
-		fmt.Printf("[DIAG][OpenAI] doWithRetry attempt=%d took %v err=%v\n", attempt, time.Since(attemptStart), err)
 		if err != nil {
-			fmt.Printf("[DIAG][OpenAI] doWithRetry attempt=%d error type=%T value=%v\n", attempt, err, err)
 			return nil, fmt.Errorf("failed to send request: %w", err)
 		}
-		fmt.Printf("[DIAG][OpenAI] doWithRetry attempt=%d status=%d\n", attempt, resp.StatusCode)
 
 		if resp.StatusCode == http.StatusTooManyRequests {
 			lastErr = fmt.Errorf("attempt %d: rate limited (HTTP 429)", attempt+1)
@@ -306,15 +293,6 @@ func (a *OpenAIAdapter) StreamChat(ctx context.Context, messages []models.Messag
 	}
 
 	endpoint := openAICompatibleEndpoint(a.baseURL, "chat/completions")
-	fmt.Printf("[DIAG][OpenAI] StreamChat endpoint=%s model=%s\n", endpoint, a.model)
-	if d, ok := ctx.Deadline(); ok {
-		fmt.Printf("[DIAG][OpenAI] StreamChat ctx deadline=%v remaining=%v\n", d, time.Until(d))
-	} else {
-		fmt.Printf("[DIAG][OpenAI] StreamChat ctx has NO deadline\n")
-	}
-	if err := ctx.Err(); err != nil {
-		fmt.Printf("[DIAG][OpenAI] WARNING: ctx already expired: %v\n", err)
-	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(jsonBody))
 	if err != nil {
@@ -325,10 +303,7 @@ func (a *OpenAIAdapter) StreamChat(ctx context.Context, messages []models.Messag
 	req.Header.Set("Authorization", "Bearer "+a.apiKey)
 	req.Header.Set("Accept", "text/event-stream")
 
-	fmt.Printf("[DIAG][OpenAI] sending request...\n")
-	reqStart := time.Now()
 	resp, err := a.doWithRetry(a.streamClient, req)
-	fmt.Printf("[DIAG][OpenAI] request round-trip took %v err=%v\n", time.Since(reqStart), err)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send stream request: %w", err)
 	}

@@ -1,6 +1,7 @@
 run:
   timeout: 5m
   go: "1.26"
+  exclude-dirs-use-default: true
 
 linters:
   enable:
@@ -78,6 +79,10 @@ linters-settings:
       - name: indent-error-flow
 
 issues:
+  exclude-dirs:
+    - web/node_modules
+  exclude-files:
+    - wire_gen.go
   exclude-use-default: false
   max-issues-per-linter: 0
   max-same-issues: 0
