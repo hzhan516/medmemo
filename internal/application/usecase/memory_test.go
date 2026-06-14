@@ -696,6 +696,6 @@ func (s *stubFactRepositoryWithWeightFacts) FindApprovedByPredicates(ctx context
 	return nil, nil
 }
 
-func (s *stubFactRepositoryWithWeightFacts) FindLatestApprovedByPredicates(ctx context.Context, subject string, predicates []string) (*entity.ExtractedFact, error) {
+func (s *stubFactRepositoryWithWeightFacts) FindLatestApprovedByPredicates(_ context.Context, _ string, _ []string) (*entity.ExtractedFact, error) {
 	return nil, entity.ErrFactNotFound
 }
