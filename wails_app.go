@@ -345,24 +345,9 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) (err error) {
 			err = fmt.Errorf("stream internal error: %v", r)
 		}
 	}()
-	// 诊断日志：检查 a.ctx 和 stream context 的 deadline
 	streamTimeoutVal := a.streamTimeout(req.ProviderID)
-	if d, ok := a.ctx.Deadline(); ok {
-		fmt.Printf("[DIAG][Wails] a.ctx deadline=%v remaining=%v\n", d, time.Until(d))
-	} else {
-		fmt.Printf("[DIAG][Wails] a.ctx has NO deadline\n")
-	}
-	fmt.Printf("[DIAG][Wails] streamTimeout=%v providerID=%s\n", streamTimeoutVal, req.ProviderID)
 
 	ctx, cancel := context.WithTimeout(a.ctx, streamTimeoutVal)
-	if d, ok := ctx.Deadline(); ok {
-		fmt.Printf("[DIAG][Wails] stream ctx deadline=%v remaining=%v\n", d, time.Until(d))
-	} else {
-		fmt.Printf("[DIAG][Wails] stream ctx has NO deadline\n")
-	}
-	if err := ctx.Err(); err != nil {
-		fmt.Printf("[DIAG][Wails] WARNING: stream ctx already expired: %v\n", err)
-	}
 
 	a.streamMu.Lock()
 	a.activeStreams[req.ConversationID] = cancel
@@ -471,8 +456,6 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) (err error) {
 func (a *WailsApp) streamTimeout(providerID string) time.Duration {
 	timeout := defaultStreamTimeout
 	if a.providerStore == nil || providerID == "" {
-		fmt.Printf("[DIAG][streamTimeout] using default=%v (providerStore=nil=%v providerID=empty=%v)\n",
-			timeout, a.providerStore == nil, providerID == "")
 		return timeout
 	}
 
@@ -481,22 +464,16 @@ func (a *WailsApp) streamTimeout(providerID string) time.Duration {
 
 	provider, err := a.providerStore.Get(ctx, providerID)
 	if err != nil || provider == nil {
-		fmt.Printf("[DIAG][streamTimeout] using default=%v (get provider err=%v provider=nil=%v)\n",
-			timeout, err, provider == nil)
 		return timeout
 	}
 	if provider.TimeoutMs <= 0 {
-		fmt.Printf("[DIAG][streamTimeout] using default=%v (TimeoutMs=%d <= 0)\n", timeout, provider.TimeoutMs)
 		return timeout
 	}
 
 	configured := time.Duration(provider.TimeoutMs) * time.Millisecond
 	if configured < minStreamTimeout {
-		fmt.Printf("[DIAG][streamTimeout] using minStreamTimeout=%v (configured=%v < min=%v)\n",
-			minStreamTimeout, configured, minStreamTimeout)
 		return minStreamTimeout
 	}
-	fmt.Printf("[DIAG][streamTimeout] using configured=%v (TimeoutMs=%d)\n", configured, provider.TimeoutMs)
 	return configured
 }
 
@@ -586,8 +563,6 @@ func (a *WailsApp) saveMessages(ctx context.Context, convID string, messages []m
 					msg.ConfidenceJSON = string(jsonBytes)
 				}
 			}
-			fmt.Printf("[DIAG][Confidence][saveMessages] OverallScore=%.2f Level=%s Breakdown=%v JSON=%s\n",
-				confidence.OverallScore, confidence.Level, confidence.Breakdown, msg.ConfidenceJSON)
 		}
 		if err := a.msgRepo.Save(ctx, models.ConversationID(convID), msg); err != nil {
 			fmt.Printf("[saveMessages] 保存 AI 回复失败: %v\n", err)
@@ -787,8 +762,6 @@ func (a *WailsApp) GetConversationMessages(convID string) ([]MessageResponse, er
 				mr.Confidence = confidenceResultToMap(&cr)
 				// 防御性修复：若 JSON 解析后 overall_score 为 0 但 ConfidenceScore > 0，用 ConfidenceScore 覆盖
 				if cr.OverallScore == 0 && m.ConfidenceScore > 0 {
-					fmt.Printf("[DIAG][Confidence][GetConversationMessages] OverallScore=0 but ConfidenceScore=%.2f, using ConfidenceScore as fallback. JSON=%s\n",
-						m.ConfidenceScore, m.ConfidenceJSON)
 					mr.Confidence["overall_score"] = m.ConfidenceScore
 				}
 			} else {
@@ -796,11 +769,8 @@ func (a *WailsApp) GetConversationMessages(convID string) ([]MessageResponse, er
 				var conf map[string]interface{}
 				if err := json.Unmarshal([]byte(m.ConfidenceJSON), &conf); err == nil {
 					mr.Confidence = conf
-					fmt.Printf("[DIAG][Confidence][GetConversationMessages] fallback map parse. JSON=%s\n", m.ConfidenceJSON)
 				}
 			}
-			fmt.Printf("[DIAG][Confidence][GetConversationMessages] msgID=%s overall_score=%v breakdown=%v\n",
-				m.ID, mr.Confidence["overall_score"], mr.Confidence["breakdown"])
 		}
 		result[len(msgs)-1-i] = mr
 	}
