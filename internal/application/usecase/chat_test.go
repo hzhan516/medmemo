@@ -203,7 +203,7 @@ type mockComplianceCheckerForTest struct {
 	err    error
 }
 
-func (m *mockComplianceCheckerForTest) Check(ctx context.Context, text string) (*ComplianceResult, error) {
+func (m *mockComplianceCheckerForTest) Check(_ context.Context, _ string) (*ComplianceResult, error) {
 	return m.result, m.err
 }
 
