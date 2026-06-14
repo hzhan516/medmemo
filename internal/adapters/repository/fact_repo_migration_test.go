@@ -14,6 +14,7 @@ import (
 )
 
 func setupFactMigrationTestDB(t *testing.T) (*FactRepoSQLite, *EmbeddingRepoSQLite, func()) {
+	t.Helper()
 	tmpDir := t.TempDir()
 	connector, err := database.NewSQLiteConnector(tmpDir)
 	require.NoError(t, err)
