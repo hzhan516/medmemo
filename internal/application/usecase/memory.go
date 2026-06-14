@@ -545,8 +545,8 @@ func mergeCandidates(paths ...[]RetrievalCandidate) []RetrievalCandidate {
 					existing.Confidence = c.Confidence
 				}
 			} else {
-				cp := *c
-				byID[c.FactID] = &cp
+				byID[c.FactID] = new(RetrievalCandidate)
+				*byID[c.FactID] = *c
 			}
 		}
 	}
