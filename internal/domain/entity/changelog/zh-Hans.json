@@ -252,5 +252,39 @@
     "fixes": [
       "修复 rerank recency 与 vector_similarity 排序优先级：recency 优先，避免陈旧高相似度事实挤占新事实"
     ]
+  },
+  {
+    "version": "v1.1.6",
+    "title": "M07 代码质量全面加固",
+    "features": [
+      "合规检测 fail-closed 机制：检测异常时 usecase 层返回安全替代文案，避免静默失败",
+      "L1 inline 替换模式：敏感用词局部替换而非整段阻断，保留原回答可读性",
+      "合规范式测试完整覆盖（L1/L2/L3/L4 + inline替换 + 异常降级）",
+      "Emergency 关键词边界/阴性用例覆盖，杜绝误触发",
+      "合规超时审计日志 + E2E 规则覆盖扩展",
+      "测试并行化：application + pkg 测试文件 t.Parallel() 覆盖（30+ 文件）",
+      "Repository 测试 helper 添加 t.Helper()（7 个文件）",
+      "CI Qodana 代码质量工作流（Go + 前端静态分析）"
+    ],
+    "fixes": [
+      "替换自定义 stringsBuilder 为标准库 strings.Builder，降低复杂度",
+      "清理 32 处 [DIAG] 调试输出（wails_app/chat/openai），移除残留死代码",
+      "TLS 1.2+ MinVersion 强制：GitHubUpdater + DefaultHTTPClient 构造函数",
+      "HTTP checksum 下载链路 context 传播修复（打穿 3 层调用）",
+      "SQLCipher DB 文件 chmod 0600 权限收紧",
+      "配置文件/合规日志/模型文件权限从 0644 收紧至 0600",
+      "resourcepath 路径穿越防护（~/../ 越权）",
+      "下载路径校验 + SQLCipher attach database 路径注入加固",
+      "bare return err → fmt.Errorf 包装（全项目 errcheck）",
+      "depguard v2 配置迁移与重新启用（Clean Architecture 四层约束）",
+      "os-assigned port 替代伪随机端口选择",
+      "ONNX worker goroutine 泄漏修复（调用方取消时）",
+      "nil confidenceAggregator panic 防护（Execute + StreamExecute 双路径）",
+      "title 生成器正则预编译（避免每次调用重复编译）",
+      "Wire 返回具体类型（infrastructure updater），消除歧义",
+      "脱敏类型从 entity 移至 pkg/models，消除 domain 层外部依赖",
+      "CI 测试对齐 Makefile（单元/集成测试 + native lib 设置）",
+      "修复 E2E 合规检测断言（L1 阻断回复期望 SafeText 替代原文）"
+    ]
   }
 ]
