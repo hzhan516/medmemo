@@ -252,12 +252,19 @@ func (c *ChatOrchestrator) Execute(ctx context.Context, req ChatRequest) (*ChatR
 	// 合规检测
 	compResult, err := c.compliance.Check(ctx, reply)
 	if err != nil {
-		// 降级放行，确保对话不中断
+		// fail-closed: 合规检测异常时记录审计日志，返回安全替代文案
+		fmt.Printf("[ChatOrchestrator] compliance check error, fail-closed: %v\n", err)
+		reply = "内容审核服务暂时不可用，请稍后重试或咨询专业医生。"
+		confidence := c.calculateConfidenceWithRawScore(0.0, []string{"合规检测异常"})
 		return &ChatResponse{
 			Reply:            reply,
-			ConfidenceResult: c.calculateConfidenceWithRawScore(0.0, []string{"合规检测异常"}),
+			ConfidenceResult: confidence,
 			Warnings:         []string{"COMPLIANCE_CHECK_ERROR"},
 		}, nil
+	}
+
+	if compResult.Blocked {
+		reply = compResult.SafeText
 	}
 
 	warnings := make([]string, 0)

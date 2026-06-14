@@ -197,6 +197,25 @@ func newTestOrchestrator(mock port.LLMClient, comp *RuleComplianceChecker, deid 
 	return NewChatOrchestrator(factory, store, nil, nil, comp, deid, retriever, NewConfidenceAggregator(), factRepo, NewIntentResolver(NewQueryExpansionService()), NewLocalAnswerService())
 }
 
+// mockComplianceCheckerForTest 实现 ComplianceChecker，支持测试注入各类合规场景。
+type mockComplianceCheckerForTest struct {
+	result *ComplianceResult
+	err    error
+}
+
+func (m *mockComplianceCheckerForTest) Check(ctx context.Context, text string) (*ComplianceResult, error) {
+	return m.result, m.err
+}
+
+var _ ComplianceChecker = (*mockComplianceCheckerForTest)(nil)
+
+// newTestOrchestratorWithChecker 创建使用指定 ComplianceChecker 的测试编排器。
+func newTestOrchestratorWithChecker(mock port.LLMClient, comp ComplianceChecker) *ChatOrchestrator {
+	factory := &mockLLMClientFactory{client: mock}
+	store := &mockProviderStore{}
+	return NewChatOrchestrator(factory, store, nil, nil, comp, nil, nil, NewConfidenceAggregator(), &mockFactRepository{}, NewIntentResolver(NewQueryExpansionService()), NewLocalAnswerService())
+}
+
 // TestChatOrchestrator_Execute_Success 验证非流式对话正常返回。
 func TestChatOrchestrator_Execute_Success(t *testing.T) {
 	mock := &mockLLMClient{chatReply: "你好，有什么可以帮你的？"}
@@ -991,4 +1010,96 @@ func TestChatOrchestrator_NilConfidenceAggregator(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, confResult)
 	assert.Equal(t, entity.ConfidenceLevelE, confResult.Level)
+}
+
+// ---- 合规范式测试 ----
+
+// TestExecute_ComplianceCheckError_FailClosed 验证非流式路径合规检查异常时返回安全文案。
+func TestExecute_ComplianceCheckError_FailClosed(t *testing.T) {
+	mock := &mockLLMClient{chatReply: "你患有糖尿病，需要服用二甲双胍每天两次。"}
+	comp := &mockComplianceCheckerForTest{err: fmt.Errorf("compliance timeout")}
+	orch := newTestOrchestratorWithChecker(mock, comp)
+
+	req := ChatRequest{
+		Messages:   []models.Message{{Role: models.RoleUser, Content: "我得了什么病？"}},
+		Model:      models.ProviderKimi,
+		ProviderID: "test-provider",
+	}
+
+	resp, err := orch.Execute(context.Background(), req)
+	require.NoError(t, err)
+	assert.Equal(t, "内容审核服务暂时不可用，请稍后重试或咨询专业医生。", resp.Reply)
+	assert.Contains(t, resp.Warnings, "COMPLIANCE_CHECK_ERROR")
+}
+
+// TestExecute_ComplianceCheck_L1Block 验证 L1 阻断时 reply 替换为 SafeText。
+func TestExecute_ComplianceCheck_L1Block(t *testing.T) {
+	mock := &mockLLMClient{chatReply: "你患有糖尿病，需要治疗。"}
+	comp := &mockComplianceCheckerForTest{
+		result: &ComplianceResult{
+			Blocked:  true,
+			Level:    application.L1Blocked.String(),
+			SafeText: "BLOCKED_SAFE_TEXT",
+		},
+	}
+	orch := newTestOrchestratorWithChecker(mock, comp)
+
+	req := ChatRequest{
+		Messages:   []models.Message{{Role: models.RoleUser, Content: "我得了什么病？"}},
+		Model:      models.ProviderKimi,
+		ProviderID: "test-provider",
+	}
+
+	resp, err := orch.Execute(context.Background(), req)
+	require.NoError(t, err)
+	assert.Equal(t, "BLOCKED_SAFE_TEXT", resp.Reply)
+	assert.Contains(t, resp.Warnings, application.L1Blocked.String())
+}
+
+// TestExecute_ComplianceCheck_L2Warning 验证 L2 警告时 reply 不变但有警告信息。
+func TestExecute_ComplianceCheck_L2Warning(t *testing.T) {
+	mock := &mockLLMClient{chatReply: "建议你考虑使用布洛芬缓解疼痛。"}
+	comp := &mockComplianceCheckerForTest{
+		result: &ComplianceResult{
+			Level:   application.L2Warning.String(),
+			Warning: "药物建议需谨慎",
+		},
+	}
+	orch := newTestOrchestratorWithChecker(mock, comp)
+
+	req := ChatRequest{
+		Messages:   []models.Message{{Role: models.RoleUser, Content: "我头痛怎么办？"}},
+		Model:      models.ProviderKimi,
+		ProviderID: "test-provider",
+	}
+
+	resp, err := orch.Execute(context.Background(), req)
+	require.NoError(t, err)
+	assert.Equal(t, mock.chatReply, resp.Reply)
+	assert.Contains(t, resp.Warnings, application.L2Warning.String())
+	assert.Contains(t, resp.Warnings, "WARNING:药物建议需谨慎")
+}
+
+// TestExecute_ComplianceCheck_L3Notice 验证 L3 提示时 reply 不变但有通知信息。
+func TestExecute_ComplianceCheck_L3Notice(t *testing.T) {
+	mock := &mockLLMClient{chatReply: "高血压是一种常见慢性病，需要注意饮食和运动。"}
+	comp := &mockComplianceCheckerForTest{
+		result: &ComplianceResult{
+			Level:  application.L3Notice.String(),
+			Notice: "以上内容仅供参考",
+		},
+	}
+	orch := newTestOrchestratorWithChecker(mock, comp)
+
+	req := ChatRequest{
+		Messages:   []models.Message{{Role: models.RoleUser, Content: "什么是高血压？"}},
+		Model:      models.ProviderKimi,
+		ProviderID: "test-provider",
+	}
+
+	resp, err := orch.Execute(context.Background(), req)
+	require.NoError(t, err)
+	assert.Equal(t, mock.chatReply, resp.Reply)
+	assert.Contains(t, resp.Warnings, application.L3Notice.String())
+	assert.Contains(t, resp.Warnings, "NOTICE:以上内容仅供参考")
 }
