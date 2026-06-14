@@ -19,6 +19,7 @@ import (
 	"github.com/google/wire"
 	"github.com/hzhan516/medmemo/internal/application/port"
 	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 const (
@@ -58,7 +59,7 @@ var _ port.Updater = (*GitHubUpdater)(nil)
 
 // FetchLatest 查询 GitHub Releases API 获取适合当前通道的最新版本。
 // stable 通道过滤掉 prerelease，beta 通道包含全部。
-func (g *GitHubUpdater) FetchLatest(ctx context.Context, channel entity.UpdateChannel) (*entity.UpdateInfo, error) {
+func (g *GitHubUpdater) FetchLatest(ctx context.Context, channel models.UpdateChannel) (*entity.UpdateInfo, error) {
 	url := fmt.Sprintf("%s/repos/%s/%s/releases?per_page=30", githubAPIBase, githubRepoOwner, githubRepoName)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -87,7 +88,7 @@ func (g *GitHubUpdater) FetchLatest(ctx context.Context, channel entity.UpdateCh
 	// 遍历 releases 列表，找到适合当前通道且包含当前平台产物的第一个 release
 	for _, release := range releases {
 		// 通道过滤：stable 通道跳过 prerelease
-		if channel == entity.ChannelStable && release.Prerelease {
+		if channel == models.ChannelStable && release.Prerelease {
 			continue
 		}
 

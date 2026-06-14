@@ -41,7 +41,7 @@ type WailsApp struct {
 	ctx              context.Context
 	chatOrchestrator *usecase.ChatOrchestrator
 	memoryRetriever  *usecase.MemoryRetriever
-	config           *entity.AppConfig
+	config           *models.AppConfig
 	convRepo         port.ConversationRepository
 	msgRepo          port.MessageRepository
 	disclaimerRepo   port.DisclaimerRepository
@@ -86,7 +86,7 @@ type WailsApp struct {
 func NewWailsApp(
 	chat *usecase.ChatOrchestrator,
 	mem *usecase.MemoryRetriever,
-	cfg *entity.AppConfig,
+	cfg *models.AppConfig,
 	convRepo port.ConversationRepository,
 	msgRepo port.MessageRepository,
 	disclaimerRepo port.DisclaimerRepository,
@@ -1214,7 +1214,7 @@ func (a *WailsApp) SetUpdateSettings(req UpdateSettingsResponse) error {
 
 	s := &entity.UpdateSettings{
 		CheckEnabled: req.CheckEnabled,
-		Channel:      entity.UpdateChannel(req.Channel),
+		Channel:      models.UpdateChannel(req.Channel),
 		SkipVersion:  req.SkipVersion,
 	}
 	a.updaterSvc.SetSettings(s)

@@ -4,13 +4,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hzhan516/medmemo/internal/domain/entity"
 	"github.com/hzhan516/medmemo/pkg/models"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestProviderFactory_Ollama(t *testing.T) {
-	cfg := &entity.AppConfig{
+	cfg := &models.AppConfig{
 		ProviderType: models.ProviderOllama,
 	}
 	client := ProviderFactory(cfg)
@@ -18,7 +17,7 @@ func TestProviderFactory_Ollama(t *testing.T) {
 }
 
 func TestProviderFactory_Local(t *testing.T) {
-	cfg := &entity.AppConfig{
+	cfg := &models.AppConfig{
 		ProviderType: models.ProviderLocal,
 	}
 	client := ProviderFactory(cfg)
@@ -26,7 +25,7 @@ func TestProviderFactory_Local(t *testing.T) {
 }
 
 func TestProviderFactory_Cloud(t *testing.T) {
-	cfg := &entity.AppConfig{
+	cfg := &models.AppConfig{
 		ProviderType: models.ProviderKimi,
 	}
 	client := ProviderFactory(cfg)
@@ -34,7 +33,7 @@ func TestProviderFactory_Cloud(t *testing.T) {
 }
 
 func TestProviderFactory_Cloud_WithEndpoint(t *testing.T) {
-	cfg := &entity.AppConfig{
+	cfg := &models.AppConfig{
 		ProviderType: models.ProviderOpenAI,
 		APIEndpoint:  "https://custom.api.com",
 	}

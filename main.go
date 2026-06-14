@@ -17,7 +17,6 @@ import (
 	"github.com/hzhan516/medmemo/internal/adapters/ai"
 	"github.com/hzhan516/medmemo/internal/application/pipeline"
 	"github.com/hzhan516/medmemo/internal/application/port"
-	"github.com/hzhan516/medmemo/internal/domain/entity"
 	"github.com/hzhan516/medmemo/internal/infrastructure/config"
 	"github.com/hzhan516/medmemo/internal/infrastructure/database"
 	"github.com/hzhan516/medmemo/internal/infrastructure/onnx"
@@ -115,7 +114,7 @@ type App struct {
 
 // NewEngineConfig 从 AppConfig 构造 ONNX Engine 配置，供 Wire 注入使用。
 // 在返回前确保 embedding 模型已复制到用户数据目录，保证 onnx.NewEngine 能正确加载。
-func NewEngineConfig(cfg *entity.AppConfig) onnx.EngineConfig {
+func NewEngineConfig(cfg *models.AppConfig) onnx.EngineConfig {
 	userPath := filepath.Join(cfg.DataDir, "models", models.EmbeddingModelName)
 	resourceDir := resourcepath.Dir()
 	prepareEmbeddingModels(userPath, resourceDir)
@@ -169,7 +168,7 @@ func NewDefaultLoader() *config.Loader {
 }
 
 // NewSQLCipherConnectorFromConfig 从 AppConfig 获取数据目录创建数据库连接。
-func NewSQLCipherConnectorFromConfig(cfg *entity.AppConfig, store secret.Store) (*database.SQLCipherConnector, error) {
+func NewSQLCipherConnectorFromConfig(cfg *models.AppConfig, store secret.Store) (*database.SQLCipherConnector, error) {
 	return database.NewSQLCipherConnector(cfg.DataDir, store)
 }
 
