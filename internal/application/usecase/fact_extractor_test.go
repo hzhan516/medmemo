@@ -12,6 +12,7 @@ import (
 )
 
 func TestFactExtractor_ParseFacts(t *testing.T) {
+		t.Parallel()
 	extractor := NewFactExtractor(&mockLLMForFactExtraction{
 		response: `[{"subject":"用户","predicate":"患有","object":"头痛","confidence":0.9}]`,
 	})
@@ -26,6 +27,7 @@ func TestFactExtractor_ParseFacts(t *testing.T) {
 }
 
 func TestFactExtractor_ParseFacts_InvalidJSON(t *testing.T) {
+		t.Parallel()
 	extractor := NewFactExtractor(&mockLLMForFactExtraction{
 		response: "不是 JSON",
 	})
@@ -35,6 +37,7 @@ func TestFactExtractor_ParseFacts_InvalidJSON(t *testing.T) {
 }
 
 func TestFactExtractor_ParseFacts_EmptyArray(t *testing.T) {
+		t.Parallel()
 	extractor := NewFactExtractor(&mockLLMForFactExtraction{
 		response: "[]",
 	})
@@ -45,6 +48,7 @@ func TestFactExtractor_ParseFacts_EmptyArray(t *testing.T) {
 }
 
 func TestFactExtractor_ParseFacts_MultipleFacts(t *testing.T) {
+		t.Parallel()
 	extractor := NewFactExtractor(&mockLLMForFactExtraction{
 		response: `[{"subject":"用户","predicate":"患有","object":"头痛","confidence":0.9},{"subject":"用户","predicate":"服用","object":"阿司匹林","confidence":0.8}]`,
 	})
@@ -56,6 +60,7 @@ func TestFactExtractor_ParseFacts_MultipleFacts(t *testing.T) {
 }
 
 func TestFactExtractor_ParseFacts_DeduplicatesSameBatchTriples(t *testing.T) {
+		t.Parallel()
 	extractor := NewFactExtractor(&mockLLMForFactExtraction{
 		response: `[{"subject":"用户","predicate":"患有","object":"头痛","confidence":0.9},{"subject":" 用户 ","predicate":"患有","object":"头痛","confidence":0.8}]`,
 	})
@@ -69,6 +74,7 @@ func TestFactExtractor_ParseFacts_DeduplicatesSameBatchTriples(t *testing.T) {
 }
 
 func TestFactExtractor_ParseFacts_MissingFields(t *testing.T) {
+		t.Parallel()
 	// LLM 返回缺少字段的 JSON，应被过滤
 	extractor := NewFactExtractor(&mockLLMForFactExtraction{
 		response: `[{"subject":"用户","predicate":"","object":"头痛","confidence":0.9}]`,
@@ -80,6 +86,7 @@ func TestFactExtractor_ParseFacts_MissingFields(t *testing.T) {
 }
 
 func TestFactExtractor_RateLimiter(t *testing.T) {
+		t.Parallel()
 	extractor := NewFactExtractor(&mockLLMForFactExtraction{
 		response: `[{"subject":"用户","predicate":"患有","object":"头痛","confidence":0.9}]`,
 	})
@@ -96,6 +103,7 @@ func TestFactExtractor_RateLimiter(t *testing.T) {
 }
 
 func TestFactExtractorWorker_Lifecycle(t *testing.T) {
+		t.Parallel()
 	extractor := NewFactExtractor(&mockLLMForFactExtraction{
 		response: `[{"subject":"用户","predicate":"患有","object":"头痛","confidence":0.9}]`,
 	})
@@ -113,6 +121,7 @@ func TestFactExtractorWorker_Lifecycle(t *testing.T) {
 }
 
 func TestFactExtractor_Extract(t *testing.T) {
+		t.Parallel()
 	extractor := NewFactExtractor(&mockLLMForFactExtraction{
 		response: `[{"subject":"用户","predicate":"患有","object":"头痛","confidence":0.9}]`,
 	})
@@ -133,6 +142,7 @@ func TestFactExtractor_Extract(t *testing.T) {
 }
 
 func TestFactExtractor_Extract_RateLimited(t *testing.T) {
+		t.Parallel()
 	extractor := NewFactExtractor(&mockLLMForFactExtraction{
 		response: `[{"subject":"用户","predicate":"患有","object":"头痛","confidence":0.9}]`,
 	})
@@ -226,6 +236,7 @@ func (m *mockFactRepo) ListApprovedFactsNeedingEmbedding(ctx context.Context, ta
 }
 
 func TestFactExtractor_ParseFacts_rateLimitExceeded(t *testing.T) {
+		t.Parallel()
 	// 直接构造 FactExtractor，设置较低的速率限制以便快速触发限流
 	extractor := &FactExtractor{
 		llm:       &mockLLMForFactExtraction{response: `[]`},
@@ -246,6 +257,7 @@ func TestFactExtractor_ParseFacts_rateLimitExceeded(t *testing.T) {
 }
 
 func TestFactExtractor_ParseFacts_llmError(t *testing.T) {
+		t.Parallel()
 	// 模拟 LLM 返回错误，验证 ParseFacts 是否正确包装并向上返回
 	extractor := NewFactExtractor(&mockLLMForFactExtraction{
 		err: fmt.Errorf("llm failed"),
@@ -257,6 +269,7 @@ func TestFactExtractor_ParseFacts_llmError(t *testing.T) {
 }
 
 func TestFactExtractor_Extract_llmError(t *testing.T) {
+		t.Parallel()
 	// 模拟 LLM 返回错误，验证 Extract 是否正确包装并向上返回
 	extractor := NewFactExtractor(&mockLLMForFactExtraction{
 		err: fmt.Errorf("llm failed"),
@@ -272,6 +285,7 @@ func TestFactExtractor_Extract_llmError(t *testing.T) {
 }
 
 func TestFactExtractor_checkRateLimit(t *testing.T) {
+		t.Parallel()
 	extractor := &FactExtractor{
 		rateLimit: 2,
 		callTimes: []time.Time{},

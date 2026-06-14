@@ -8,6 +8,7 @@ import (
 )
 
 func TestReasoningChainEvaluator_Evaluate_PerfectAnswer(t *testing.T) {
+		t.Parallel()
 	evaluator := NewReasoningChainEvaluator()
 	chain := entity.ReasoningChain{
 		HasSymptomAnalysis: true,
@@ -23,6 +24,7 @@ func TestReasoningChainEvaluator_Evaluate_PerfectAnswer(t *testing.T) {
 }
 
 func TestReasoningChainEvaluator_Evaluate_PartialAnswer(t *testing.T) {
+		t.Parallel()
 	evaluator := NewReasoningChainEvaluator()
 	chain := entity.ReasoningChain{
 		HasSymptomAnalysis: true,
@@ -38,6 +40,7 @@ func TestReasoningChainEvaluator_Evaluate_PartialAnswer(t *testing.T) {
 }
 
 func TestReasoningChainEvaluator_Evaluate_IncompleteAnswer(t *testing.T) {
+		t.Parallel()
 	evaluator := NewReasoningChainEvaluator()
 	chain := entity.ReasoningChain{
 		HasSymptomAnalysis: false,
@@ -53,6 +56,7 @@ func TestReasoningChainEvaluator_Evaluate_IncompleteAnswer(t *testing.T) {
 }
 
 func TestReasoningChainEvaluator_Evaluate_ShortAnswer(t *testing.T) {
+		t.Parallel()
 	evaluator := NewReasoningChainEvaluator()
 	chain := entity.ReasoningChain{
 		HasSymptomAnalysis: false,
@@ -67,6 +71,7 @@ func TestReasoningChainEvaluator_Evaluate_ShortAnswer(t *testing.T) {
 }
 
 func TestReasoningChainEvaluator_Evaluate_ComfortOnly(t *testing.T) {
+		t.Parallel()
 	evaluator := NewReasoningChainEvaluator()
 	chain := entity.ReasoningChain{
 		HasSymptomAnalysis: false,
@@ -82,6 +87,7 @@ func TestReasoningChainEvaluator_Evaluate_ComfortOnly(t *testing.T) {
 }
 
 func TestReasoningChainEvaluator_Evaluate_MissingInfoPenalty(t *testing.T) {
+		t.Parallel()
 	evaluator := NewReasoningChainEvaluator()
 	chain := entity.ReasoningChain{
 		HasSymptomAnalysis: true,
@@ -97,6 +103,7 @@ func TestReasoningChainEvaluator_Evaluate_MissingInfoPenalty(t *testing.T) {
 }
 
 func TestReasoningChainEvaluator_DetectMissingInfo(t *testing.T) {
+		t.Parallel()
 	evaluator := NewReasoningChainEvaluator()
 	answer := "根据您的描述，胃痛可能与胃炎有关。"
 	missing := evaluator.DetectMissingInfo(answer)
@@ -108,6 +115,7 @@ func TestReasoningChainEvaluator_DetectMissingInfo(t *testing.T) {
 }
 
 func TestReasoningChainEvaluator_DetectMissingInfo_Complete(t *testing.T) {
+		t.Parallel()
 	evaluator := NewReasoningChainEvaluator()
 	answer := "根据您描述的胃痛症状（饭后加重、有反酸、持续3天，既往有胃炎病史，无过敏史，目前在服用奥美拉唑，体温正常），这种情况可能与胃酸反流或轻度胃炎有关。建议您考虑就诊消化内科。同时请注意，如果疼痛持续加重或出现呕血、黑便等情况，请立即就医。"
 	missing := evaluator.DetectMissingInfo(answer)
@@ -117,6 +125,7 @@ func TestReasoningChainEvaluator_DetectMissingInfo_Complete(t *testing.T) {
 }
 
 func TestReasoningChainEvaluator_ExtractReasoningChain(t *testing.T) {
+		t.Parallel()
 	evaluator := NewReasoningChainEvaluator()
 	answer := "您描述的症状包括头痛和发热。可能的原因有上呼吸道感染或流感。建议您多休息、多喝水。但请注意，如果症状持续加重，请及时就医。"
 	chain := evaluator.ExtractReasoningChain(answer)

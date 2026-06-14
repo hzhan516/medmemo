@@ -7,6 +7,7 @@ import (
 )
 
 func TestEvaluateEmergency_ALevel(t *testing.T) {
+		t.Parallel()
 	tests := []struct {
 		name     string
 		text     string
@@ -46,6 +47,7 @@ func TestEvaluateEmergency_ALevel(t *testing.T) {
 }
 
 func TestEvaluateEmergency_BLevel(t *testing.T) {
+		t.Parallel()
 	tests := []struct {
 		name string
 		text string
@@ -78,6 +80,7 @@ func TestEvaluateEmergency_BLevel(t *testing.T) {
 }
 
 func TestEvaluateEmergency_None(t *testing.T) {
+		t.Parallel()
 	tests := []string{
 		"今天天气不错，想了解一下健康饮食",
 		"我最近睡眠质量不好，有什么建议",
@@ -95,6 +98,7 @@ func TestEvaluateEmergency_None(t *testing.T) {
 }
 
 func TestEvaluateEmergency_Priority_AB(t *testing.T) {
+		t.Parallel()
 	// 同时包含 A 级和 B 级关键词时，应优先返回 A 级
 	text := "患者胸痛伴呼吸困难并且持续高热三天"
 	result := EvaluateEmergency(text)
@@ -102,6 +106,7 @@ func TestEvaluateEmergency_Priority_AB(t *testing.T) {
 }
 
 func TestEvaluateEmergency_CaseInsensitive(t *testing.T) {
+		t.Parallel()
 	// 中文无大小写差异，验证混合输入仍能正确匹配
 	text := "胸痛，伴呼吸困难！"
 	result := EvaluateEmergency(text)
@@ -109,6 +114,7 @@ func TestEvaluateEmergency_CaseInsensitive(t *testing.T) {
 }
 
 func TestEvaluateEmergency_PartialMatch(t *testing.T) {
+		t.Parallel()
 	// 仅包含部分关键词不应命中
 	result := EvaluateEmergency("我只是有点胸闷")
 	assert.Equal(t, LevelNone, result.Level, "胸闷不应命中 A 级")
@@ -119,6 +125,7 @@ func TestEvaluateEmergency_PartialMatch(t *testing.T) {
 
 // TestEvaluateEmergency_NegativeCases 验证不含急症关键词的正常文本不触发误报。
 func TestEvaluateEmergency_NegativeCases(t *testing.T) {
+		t.Parallel()
 	tests := []struct {
 		name string
 		text string
@@ -147,6 +154,7 @@ func TestEvaluateEmergency_NegativeCases(t *testing.T) {
 
 // TestEvaluateEmergency_BoundaryWords 验证边界词汇不触发误报。
 func TestEvaluateEmergency_BoundaryWords(t *testing.T) {
+		t.Parallel()
 	// "胸痛" 与 "胸口痛" 是不同词汇，但 "胸口痛" 不含在关键词中
 	result := EvaluateEmergency("胸口痛，但不是很严重")
 	assert.Equal(t, LevelNone, result.Level, "胸口痛不应命中 A 级(胸痛)")
@@ -170,6 +178,7 @@ func TestEvaluateEmergency_BoundaryWords(t *testing.T) {
 
 // TestEvaluateEmergency_OverlapABPriority 验证 A/B 重叠时 A 优先。
 func TestEvaluateEmergency_OverlapABPriority(t *testing.T) {
+		t.Parallel()
 	// 同时包含 A 级(胸痛+呼吸困难) 和 B 级(心悸+胸闷) — A 应优先
 	text := "胸痛伴呼吸困难，同时心悸胸闷"
 	result := EvaluateEmergency(text)
@@ -189,6 +198,7 @@ func TestEvaluateEmergency_OverlapABPriority(t *testing.T) {
 
 // TestEvaluateEmergency_RadiationChestPain 验证放射性胸痛保持 A 级。
 func TestEvaluateEmergency_RadiationChestPain(t *testing.T) {
+		t.Parallel()
 	text := "放射性胸痛，向左肩放射"
 	result := EvaluateEmergency(text)
 	assert.Equal(t, LevelA, result.Level, "放射性胸痛应保持 A 级")
@@ -197,6 +207,7 @@ func TestEvaluateEmergency_RadiationChestPain(t *testing.T) {
 }
 
 func TestContainsAll(t *testing.T) {
+		t.Parallel()
 	assert.True(t, containsAll("胸痛伴呼吸困难", "胸痛 呼吸困难"))
 	assert.True(t, containsAll("我胸痛并且呼吸困难", "胸痛 呼吸困难"))
 	assert.False(t, containsAll("只有胸痛", "胸痛 呼吸困难"))

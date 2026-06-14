@@ -10,12 +10,14 @@ import (
 )
 
 func TestDecayScorer_ZeroDays(t *testing.T) {
+		t.Parallel()
 	s := NewDecayScorer()
 	score := s.Score(1.0, 0)
 	assert.InDelta(t, 1.0, score, 0.0001)
 }
 
 func TestDecayScorer_14Days(t *testing.T) {
+		t.Parallel()
 	s := NewDecayScorer()
 	// 半衰期 = ln(2) / lambda = 0.693 / 0.05 ≈ 13.86 天
 	score := s.Score(1.0, 13.86)
@@ -23,6 +25,7 @@ func TestDecayScorer_14Days(t *testing.T) {
 }
 
 func TestDecayScorer_30Days(t *testing.T) {
+		t.Parallel()
 	s := NewDecayScorer()
 	score := s.Score(1.0, 30)
 	// exp(-0.05 * 30) = exp(-1.5) ≈ 0.223
@@ -30,6 +33,7 @@ func TestDecayScorer_30Days(t *testing.T) {
 }
 
 func TestDecayScorer_90Days(t *testing.T) {
+		t.Parallel()
 	s := NewDecayScorer()
 	score := s.Score(1.0, 90)
 	// exp(-0.05 * 90) = exp(-4.5) ≈ 0.011
@@ -37,6 +41,7 @@ func TestDecayScorer_90Days(t *testing.T) {
 }
 
 func TestDecayScorer_NegativeAge(t *testing.T) {
+		t.Parallel()
 	s := NewDecayScorer()
 	// 负年龄按 0 处理，不衰减
 	score := s.Score(0.8, -5)
@@ -44,6 +49,7 @@ func TestDecayScorer_NegativeAge(t *testing.T) {
 }
 
 func TestDecayScorer_SimilarityClamping(t *testing.T) {
+		t.Parallel()
 	s := NewDecayScorer()
 	// similarity > 1 截断到 1
 	score := s.Score(1.5, 0)
@@ -55,6 +61,7 @@ func TestDecayScorer_SimilarityClamping(t *testing.T) {
 }
 
 func TestDecayScorer_CustomLambda(t *testing.T) {
+		t.Parallel()
 	// lambda = 0.1，半衰期 ≈ 6.93 天
 	s := NewDecayScorerWithLambda(0.1)
 	score := s.Score(1.0, 6.93)
@@ -62,6 +69,7 @@ func TestDecayScorer_CustomLambda(t *testing.T) {
 }
 
 func TestDecayScorer_Rank(t *testing.T) {
+		t.Parallel()
 	s := NewDecayScorer()
 
 	items := []struct {
@@ -89,12 +97,14 @@ func TestDecayScorer_Rank(t *testing.T) {
 }
 
 func TestDecayScorer_Rank_Empty(t *testing.T) {
+		t.Parallel()
 	s := NewDecayScorer()
 	ranked := s.Rank()
 	assert.Empty(t, ranked)
 }
 
 func TestDecayScorer_ScoreFromCreatedAt(t *testing.T) {
+		t.Parallel()
 	s := NewDecayScorer()
 	now := time.Now().UTC()
 

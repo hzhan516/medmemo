@@ -9,6 +9,7 @@ import (
 )
 
 func TestBuildFactRetrievalText(t *testing.T) {
+		t.Parallel()
 	tests := []struct {
 		name     string
 		fact     *entity.ExtractedFact
@@ -110,6 +111,7 @@ func TestBuildFactRetrievalText(t *testing.T) {
 }
 
 func TestBuildFactRetrievalText_NoLLMOrUIExposure(t *testing.T) {
+		t.Parallel()
 	// 合规红线：同义词扩展文本不注入 LLM，此测试仅验证输出格式稳定。
 	fact := &entity.ExtractedFact{Subject: "用户", Predicate: "体重是", Object: "70公斤"}
 	text := BuildFactRetrievalText(fact)
@@ -119,6 +121,7 @@ func TestBuildFactRetrievalText_NoLLMOrUIExposure(t *testing.T) {
 }
 
 func TestMatchCategory_Priority(t *testing.T) {
+		t.Parallel()
 	// 体重在注册表中排第一，事实同时含体重和身高关键词时应命中体重。
 	fact := &entity.ExtractedFact{Subject: "用户", Predicate: "体重是", Object: "70公斤且身高175"}
 	cat := matchCategory(fact)

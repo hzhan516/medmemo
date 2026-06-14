@@ -8,6 +8,7 @@ import (
 )
 
 func TestConfidenceScorer_PerfectFact(t *testing.T) {
+		t.Parallel()
 	scorer := NewConfidenceScorer()
 	f := entity.NewExtractedFact("用户", "患有", "偏头痛", 0.9, []string{"msg_001", "msg_002"})
 
@@ -17,6 +18,7 @@ func TestConfidenceScorer_PerfectFact(t *testing.T) {
 }
 
 func TestConfidenceScorer_MissingSubject(t *testing.T) {
+		t.Parallel()
 	scorer := NewConfidenceScorer()
 	f := entity.NewExtractedFact("", "患有", "偏头痛", 0.9, []string{"msg_001"})
 
@@ -26,6 +28,7 @@ func TestConfidenceScorer_MissingSubject(t *testing.T) {
 }
 
 func TestConfidenceScorer_MissingPredicate(t *testing.T) {
+		t.Parallel()
 	scorer := NewConfidenceScorer()
 	f := entity.NewExtractedFact("用户", "", "偏头痛", 0.9, []string{"msg_001"})
 
@@ -35,6 +38,7 @@ func TestConfidenceScorer_MissingPredicate(t *testing.T) {
 }
 
 func TestConfidenceScorer_MissingObject(t *testing.T) {
+		t.Parallel()
 	scorer := NewConfidenceScorer()
 	f := entity.NewExtractedFact("用户", "患有", "", 0.9, []string{"msg_001"})
 
@@ -44,6 +48,7 @@ func TestConfidenceScorer_MissingObject(t *testing.T) {
 }
 
 func TestConfidenceScorer_LowConfidence(t *testing.T) {
+		t.Parallel()
 	scorer := NewConfidenceScorer()
 	f := entity.NewExtractedFact("用户", "患有", "头痛", 0.3, []string{"msg_001"})
 
@@ -53,6 +58,7 @@ func TestConfidenceScorer_LowConfidence(t *testing.T) {
 }
 
 func TestConfidenceScorer_AutoApproveThreshold(t *testing.T) {
+		t.Parallel()
 	scorer := NewConfidenceScorer()
 	f := entity.NewExtractedFact("用户", "患有", "头痛", 0.9, []string{"msg_001"})
 	// score = 0.2+0.2+0.2+0.9*0.3+0 = 0.87 >= 0.8
@@ -62,6 +68,7 @@ func TestConfidenceScorer_AutoApproveThreshold(t *testing.T) {
 }
 
 func TestConfidenceScorer_AutoRejectThreshold(t *testing.T) {
+		t.Parallel()
 	scorer := NewConfidenceScorer()
 	f := entity.NewExtractedFact("用户", "", "", 0.1, []string{"msg_001"})
 	// score = 0.2+0+0+0.1*0.3+0 = 0.23 < 0.5
@@ -71,6 +78,7 @@ func TestConfidenceScorer_AutoRejectThreshold(t *testing.T) {
 }
 
 func TestConfidenceScorer_PendingThreshold(t *testing.T) {
+		t.Parallel()
 	scorer := NewConfidenceScorer()
 	f := entity.NewExtractedFact("用户", "患有", "头痛", 0.6, []string{"msg_001"})
 	// score = 0.2+0.2+0.2+0.6*0.3+0 = 0.78
@@ -80,6 +88,7 @@ func TestConfidenceScorer_PendingThreshold(t *testing.T) {
 }
 
 func TestConfidenceScorer_ZeroConfidence(t *testing.T) {
+		t.Parallel()
 	scorer := NewConfidenceScorer()
 	f := entity.NewExtractedFact("用户", "患有", "头痛", 0.0, []string{"msg_001"})
 
@@ -89,6 +98,7 @@ func TestConfidenceScorer_ZeroConfidence(t *testing.T) {
 }
 
 func TestConfidenceScorer_SingleSource(t *testing.T) {
+		t.Parallel()
 	scorer := NewConfidenceScorer()
 	f := entity.NewExtractedFact("用户", "患有", "头痛", 0.8, []string{"msg_001"})
 
@@ -98,6 +108,7 @@ func TestConfidenceScorer_SingleSource(t *testing.T) {
 }
 
 func TestConfidenceScorer_SensitiveFact_Medical(t *testing.T) {
+		t.Parallel()
 	scorer := NewConfidenceScorer()
 	f := entity.NewExtractedFact("用户", "患有", "高血压", 0.9, []string{"msg_001"})
 
@@ -106,6 +117,7 @@ func TestConfidenceScorer_SensitiveFact_Medical(t *testing.T) {
 }
 
 func TestConfidenceScorer_SensitiveFact_PII(t *testing.T) {
+		t.Parallel()
 	scorer := NewConfidenceScorer()
 	f := entity.NewExtractedFact("用户", "身份证", "110101199001011234", 0.9, []string{"msg_001"})
 
@@ -114,6 +126,7 @@ func TestConfidenceScorer_SensitiveFact_PII(t *testing.T) {
 }
 
 func TestConfidenceScorer_NonSensitiveFact(t *testing.T) {
+		t.Parallel()
 	scorer := NewConfidenceScorer()
 	f := entity.NewExtractedFact("用户", "喜欢", "跑步", 0.9, []string{"msg_001"})
 

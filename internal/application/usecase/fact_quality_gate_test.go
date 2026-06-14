@@ -8,6 +8,7 @@ import (
 )
 
 func TestApplyFactQualityGate_RejectsQuestionIntent(t *testing.T) {
+		t.Parallel()
 	facts := []*entity.ExtractedFact{
 		entity.NewExtractedFact("用户", "询问", "体重", 0.8, []string{"msg_1"}),
 		entity.NewExtractedFact("用户", "想知道", "血压", 0.8, []string{"msg_1"}),
@@ -18,6 +19,7 @@ func TestApplyFactQualityGate_RejectsQuestionIntent(t *testing.T) {
 }
 
 func TestApplyFactQualityGate_RejectsAICapabilityLimit(t *testing.T) {
+		t.Parallel()
 	facts := []*entity.ExtractedFact{
 		entity.NewExtractedFact("AI", "无法告知", "用户体重", 0.8, []string{"msg_1"}),
 		entity.NewExtractedFact("助手", "不知道", "年龄", 0.8, []string{"msg_1"}),
@@ -28,6 +30,7 @@ func TestApplyFactQualityGate_RejectsAICapabilityLimit(t *testing.T) {
 }
 
 func TestApplyFactQualityGate_RejectsToolAdvice(t *testing.T) {
+		t.Parallel()
 	facts := []*entity.ExtractedFact{
 		entity.NewExtractedFact("用户", "需要使用", "体重秤", 0.8, []string{"msg_1"}),
 		entity.NewExtractedFact("用户", "应该使用", "血压计", 0.8, []string{"msg_1"}),
@@ -38,6 +41,7 @@ func TestApplyFactQualityGate_RejectsToolAdvice(t *testing.T) {
 }
 
 func TestApplyFactQualityGate_AcceptsConcreteWeight(t *testing.T) {
+		t.Parallel()
 	facts := []*entity.ExtractedFact{
 		entity.NewExtractedFact("用户", "体重是", "110公斤", 0.95, []string{"msg_1"}),
 	}
@@ -47,6 +51,7 @@ func TestApplyFactQualityGate_AcceptsConcreteWeight(t *testing.T) {
 }
 
 func TestApplyFactQualityGate_RejectsPersonalAttrWithoutValue(t *testing.T) {
+		t.Parallel()
 	facts := []*entity.ExtractedFact{
 		entity.NewExtractedFact("用户", "体重", "", 0.8, []string{"msg_1"}),
 		entity.NewExtractedFact("用户", "身高是", "很高", 0.8, []string{"msg_1"}),
@@ -57,6 +62,7 @@ func TestApplyFactQualityGate_RejectsPersonalAttrWithoutValue(t *testing.T) {
 }
 
 func TestApplyFactQualityGate_PassesNormalFact(t *testing.T) {
+		t.Parallel()
 	facts := []*entity.ExtractedFact{
 		entity.NewExtractedFact("用户", "患有", "偏头痛", 0.9, []string{"msg_1"}),
 		entity.NewExtractedFact("用户", "服用", "阿司匹林", 0.8, []string{"msg_1"}),
@@ -66,6 +72,7 @@ func TestApplyFactQualityGate_PassesNormalFact(t *testing.T) {
 }
 
 func TestApplyFactQualityGate_EmptyInput(t *testing.T) {
+		t.Parallel()
 	var facts []*entity.ExtractedFact
 	result := ApplyFactQualityGate(facts)
 	assert.Empty(t, result)
