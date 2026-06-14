@@ -108,7 +108,7 @@ func (l *ComplianceLogger) appendLog(path string, entry any) error {
 		return fmt.Errorf("failed to marshal log entry: %w", err)
 	}
 
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return fmt.Errorf("failed to open log file %s: %w", path, err)
 	}

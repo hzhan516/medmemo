@@ -7,23 +7,21 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-
-	"github.com/hzhan516/medmemo/internal/application/port"
 )
 
 // NewInstaller 根据当前运行平台创建对应的 Installer 实例。
-func NewInstaller() port.Installer {
+func NewInstaller() *WindowsInstaller {
 	return newWindowsInstaller()
 }
 
-// windowsInstaller 实现 Windows 平台的更新安装。
-type windowsInstaller struct {
+// WindowsInstaller 实现 Windows 平台的更新安装。
+type WindowsInstaller struct {
 	currentPath string
 	backupPath  string
 }
 
-func newWindowsInstaller() *windowsInstaller {
-	return &windowsInstaller{
+func newWindowsInstaller() *WindowsInstaller {
+	return &WindowsInstaller{
 		currentPath: getCurrentBinary(),
 	}
 }
@@ -33,7 +31,7 @@ func newWindowsInstaller() *windowsInstaller {
 // 2. 启动新安装程序（带静默安装参数 /S）
 // 3. 提示用户当前应用将在安装完成后关闭
 // 注意：Windows 不允许直接替换正在运行的 .exe，必须通过安装程序完成。
-func (w *windowsInstaller) Install(assetPath string) (string, error) {
+func (w *WindowsInstaller) Install(assetPath string) (string, error) {
 	if w.currentPath == "" {
 		return "", fmt.Errorf("failed to determine current binary path")
 	}
@@ -74,7 +72,7 @@ func (w *windowsInstaller) Install(assetPath string) (string, error) {
 }
 
 // Rollback 恢复到备份的二进制。
-func (w *windowsInstaller) Rollback() error {
+func (w *WindowsInstaller) Rollback() error {
 	if w.backupPath == "" || w.currentPath == "" {
 		return fmt.Errorf("no backup available for rollback")
 	}
@@ -88,7 +86,7 @@ func (w *windowsInstaller) Rollback() error {
 }
 
 // CurrentBinaryPath 返回当前二进制路径。
-func (w *windowsInstaller) CurrentBinaryPath() string {
+func (w *WindowsInstaller) CurrentBinaryPath() string {
 	return w.currentPath
 }
 

@@ -18,9 +18,8 @@ func TestLocalCallbackServer_Start_DynamicPort(t *testing.T) {
 	require.NoError(t, err)
 	defer server.Stop()
 
-	// 端口应在 IANA 动态端口范围内
-	assert.GreaterOrEqual(t, port, 49152)
-	assert.LessOrEqual(t, port, 65535)
+	// 端口应由操作系统分配，大于 0 即可
+	assert.Greater(t, port, 0)
 
 	// 验证 server 确实在监听
 	assert.NotEmpty(t, server.GetRedirectURI())

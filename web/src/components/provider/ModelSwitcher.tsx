@@ -34,10 +34,12 @@ export function ModelSwitcher() {
   const healthStatus = useSettingsStore((s) => s.providerHealthStatus)
   const { refreshHealth } = useProviderHealth()
 
-  // 首次加载时刷新健康状态
+  // 首次加载时刷新健康状态（仅在有 Provider 时执行）
   useEffect(() => {
-    refreshHealth()
-  }, [refreshHealth])
+    if (providers.length > 0) {
+      refreshHealth()
+    }
+  }, [refreshHealth, providers.length])
 
   // 构建所有已启用的模型列表
   const enabledModels = useMemo((): ModelItem[] => {

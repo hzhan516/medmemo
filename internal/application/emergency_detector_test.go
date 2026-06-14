@@ -117,6 +117,85 @@ func TestEvaluateEmergency_PartialMatch(t *testing.T) {
 	assert.Equal(t, LevelNone, result.Level, "仅发烧不应命中 B 级")
 }
 
+// TestEvaluateEmergency_NegativeCases 验证不含急症关键词的正常文本不触发误报。
+func TestEvaluateEmergency_NegativeCases(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+	}{
+		{"chest_pain_unrelated", "胸痛定是电视剧里常见的桥段"},
+		{"radiation_general", "放射性物质检测在实验室进行"},
+		{"chest_pain_context", "胸口痛这个词在小说里经常描写"},
+		{"normal_fever", "我有点发烧，可能是感冒了"},
+		{"normal_cough", "最近咳嗽有点厉害，想喝点止咳糖浆"},
+		{"normal_headache", "头痛可能是没睡好"},
+		{"normal_stomach", "肚子有点不舒服，可能是吃坏东西了"},
+		{"normal_exercise", "运动后胸闷气短是正常的"},
+		{"normal_stress", "工作压力大，胸口有点闷"},
+		{"normal_fatigue", "最近比较疲劳，胸口偶尔不舒服"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := EvaluateEmergency(tt.text)
+			assert.Equal(t, LevelNone, result.Level, "文本不应触发急症: %s", tt.text)
+			assert.Empty(t, result.Message)
+			assert.Empty(t, result.Action)
+		})
+	}
+}
+
+// TestEvaluateEmergency_BoundaryWords 验证边界词汇不触发误报。
+func TestEvaluateEmergency_BoundaryWords(t *testing.T) {
+	// "胸痛" 与 "胸口痛" 是不同词汇，但 "胸口痛" 不含在关键词中
+	result := EvaluateEmergency("胸口痛，但不是很严重")
+	assert.Equal(t, LevelNone, result.Level, "胸口痛不应命中 A 级(胸痛)")
+
+	// "胸闷" 单独出现不应触发 A 级
+	result = EvaluateEmergency("有点胸闷，深呼吸后缓解")
+	assert.Equal(t, LevelNone, result.Level, "单纯胸闷不应命中 A 级")
+
+	// "胸痛" 单独出现（无伴随症状）不应触发 A 级
+	result = EvaluateEmergency("偶尔胸痛，休息后好转")
+	assert.Equal(t, LevelNone, result.Level, "单纯胸痛无伴随症状不应命中 A 级")
+
+	// "放射" 单独出现不应触发
+	result = EvaluateEmergency("放射科医生在检查")
+	assert.Equal(t, LevelNone, result.Level, "放射不应命中 A 级")
+
+	// "出汗" 单独出现不应触发
+	result = EvaluateEmergency("运动后出汗很多")
+	assert.Equal(t, LevelNone, result.Level, "出汗不应命中 A 级")
+}
+
+// TestEvaluateEmergency_OverlapABPriority 验证 A/B 重叠时 A 优先。
+func TestEvaluateEmergency_OverlapABPriority(t *testing.T) {
+	// 同时包含 A 级(胸痛+呼吸困难) 和 B 级(心悸+胸闷) — A 应优先
+	text := "胸痛伴呼吸困难，同时心悸胸闷"
+	result := EvaluateEmergency(text)
+	assert.Equal(t, LevelA, result.Level, "A 级应优先于 B 级")
+	assert.Contains(t, result.Action, "120")
+
+	// 同时包含 A 级(剧烈胸痛) 和 B 级(胸痛 不剧烈) — A 应优先
+	text = "剧烈胸痛，虽然不剧烈时也有不适"
+	result = EvaluateEmergency(text)
+	assert.Equal(t, LevelA, result.Level, "剧烈胸痛(A)应优先于胸痛不剧烈(B)")
+
+	// 同时包含 A 级(昏迷) 和 B 级(头痛+颈部僵硬) — A 应优先
+	text = "患者昏迷不醒，之前头痛颈部僵硬"
+	result = EvaluateEmergency(text)
+	assert.Equal(t, LevelA, result.Level, "昏迷(A)应优先于头痛颈部僵硬(B)")
+}
+
+// TestEvaluateEmergency_RadiationChestPain 验证放射性胸痛保持 A 级。
+func TestEvaluateEmergency_RadiationChestPain(t *testing.T) {
+	text := "放射性胸痛，向左肩放射"
+	result := EvaluateEmergency(text)
+	assert.Equal(t, LevelA, result.Level, "放射性胸痛应保持 A 级")
+	assert.Contains(t, result.MatchedKeyword, "胸痛")
+	assert.Contains(t, result.Action, "120")
+}
+
 func TestContainsAll(t *testing.T) {
 	assert.True(t, containsAll("胸痛伴呼吸困难", "胸痛 呼吸困难"))
 	assert.True(t, containsAll("我胸痛并且呼吸困难", "胸痛 呼吸困难"))

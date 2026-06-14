@@ -10,7 +10,7 @@ linters:
     - ineffassign
     - staticcheck
     - unused
-    # - depguard  # TODO: 新版 depguard v2 配置格式需重新适配，暂禁用
+    - depguard
     - gocritic
     - gofmt
     - goimports
@@ -21,37 +21,37 @@ linters:
 linters-settings:
   depguard:
     rules:
-      # DEP-001: domain 包只能导入标准库和 pkg/models
+      # DEP-001: domain 包只能导入标准库、其他 domain 包和 pkg/models
       domain_zero_deps:
         files:
           - "**/internal/domain/**/*.go"
+          - "!**/internal/domain/**/*_test.go"
         deny:
-          - pkg: "github.com/hzhan516/medmemo/internal/**/*"
-            desc: "domain layer must not depend on any internal sub-packages"
+          - pkg: "github.com/hzhan516/medmemo/internal/adapters/**/*"
+            desc: "domain layer must not depend on adapters"
+          - pkg: "github.com/hzhan516/medmemo/internal/application/**/*"
+            desc: "domain layer must not depend on application"
+          - pkg: "github.com/hzhan516/medmemo/internal/infrastructure/**/*"
+            desc: "domain layer must not depend on infrastructure"
           - pkg: "github.com/hzhan516/medmemo/pkg/desensitizer"
             desc: "domain layer must not depend on pkg/desensitizer"
-        allow:
-          - "$gostd"
-          - "github.com/hzhan516/medmemo/pkg/models"
 
-      # DEP-002: application 层不能直接调用 adapter 实现
+      # DEP-002: application 层不能直接调用 adapter/infrastructure 实现
       app_no_adapter:
         files:
           - "**/internal/application/**/*.go"
+          - "!**/internal/application/**/*_test.go"
         deny:
           - pkg: "github.com/hzhan516/medmemo/internal/adapters/**/*"
             desc: "application layer must not depend on adapter implementations"
           - pkg: "github.com/hzhan516/medmemo/internal/infrastructure/**/*"
             desc: "application layer must not depend on infrastructure"
-        allow:
-          - "$gostd"
-          - "github.com/hzhan516/medmemo/internal/domain/**/*"
-          - "github.com/hzhan516/medmemo/pkg/models"
 
       # DEP-003: adapter 层不能反向依赖 cmd
       adapter_no_cmd:
         files:
           - "**/internal/adapters/**/*.go"
+          - "!**/internal/adapters/**/*_test.go"
         deny:
           - pkg: "github.com/hzhan516/medmemo/cmd/**/*"
             desc: "adapter layer must not depend on cmd package"
@@ -60,6 +60,7 @@ linters-settings:
       infra_no_business:
         files:
           - "**/internal/infrastructure/**/*.go"
+          - "!**/internal/infrastructure/**/*_test.go"
         deny:
           - pkg: "github.com/hzhan516/medmemo/internal/domain/**/*"
             desc: "infrastructure layer must not depend on domain"

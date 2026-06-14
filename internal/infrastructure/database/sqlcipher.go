@@ -183,9 +183,37 @@ func isPlaintextDB(dbPath string) (bool, error) {
 	return !encrypted, nil
 }
 
+// validateAttachPath 验证 ATTACH DATABASE 路径安全性：
+// 1. 必须是绝对路径
+// 2. 不得包含 .. 目录穿越
+// 3. 必须位于数据目录下（防止 attach 到系统敏感文件）
+// 4. 单引号已在外层转义，此处额外拒绝含单引号的路径作为纵深防御
+// Audit: RR-001 SQLCipher attach path validation
+func validateAttachPath(path, dataDir string) error {
+	if path == "" {
+		return fmt.Errorf("attach path is empty")
+	}
+	if !filepath.IsAbs(path) {
+		return fmt.Errorf("attach path must be absolute: %s", path)
+	}
+	if strings.Contains(path, "..") {
+		return fmt.Errorf("attach path contains directory traversal: %s", path)
+	}
+	if strings.Contains(path, "'") {
+		return fmt.Errorf("attach path contains single quote: %s", path)
+	}
+	dataDir = filepath.Clean(dataDir)
+	cleanPath := filepath.Clean(path)
+	if !strings.HasPrefix(cleanPath, dataDir+string(filepath.Separator)) && cleanPath != dataDir {
+		return fmt.Errorf("attach path must be under data directory: %s", path)
+	}
+	return nil
+}
+
 // migrateFromPlaintext 将明文 SQLite 迁移为 SQLCipher 加密数据库。
 // 使用 sqlcipher_export() 保证 schema、数据、索引完整复制。
 // 原始文件保留为 .backup。
+// Audit: RR-001 路径白名单验证 + 单引号转义防止 SQL 注入
 func migrateFromPlaintext(dbPath string, key []byte) error {
 	// 用 SQLCipher 打开明文数据库（不设置密钥即可打开明文 db）
 	plainDB, err := sql.Open("sqlite3", dbPath)
@@ -204,7 +232,14 @@ func migrateFromPlaintext(dbPath string, key []byte) error {
 	newPath := dbPath + ".new"
 	_ = os.Remove(newPath) // 清理可能残留的临时文件
 
-	// 对路径中的单引号做 SQL 转义，防止注入
+	// 验证 attach 路径安全性（白名单 + 目录穿越防护）
+	dataDir := filepath.Dir(dbPath)
+	if err := validateAttachPath(newPath, dataDir); err != nil {
+		_ = plainDB.Close()
+		return fmt.Errorf("attach path validation failed: %w", err)
+	}
+
+	// 对路径中的单引号做 SQL 转义，防止注入（纵深防御，validateAttachPath 已拒绝含单引号路径）
 	escapedPath := strings.ReplaceAll(newPath, "'", "''")
 	attachSQL := fmt.Sprintf("ATTACH DATABASE '%s' AS encrypted KEY \"x'%x'\"", escapedPath, key)
 	if _, err := plainDB.Exec(attachSQL); err != nil {

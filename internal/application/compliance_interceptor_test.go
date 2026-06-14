@@ -254,6 +254,77 @@ func TestFallback_SafeOnLoadError(t *testing.T) {
 	require.Nil(t, ci)
 }
 
+// TestConfigError_L1InlineEmptyReplacement 验证 L1 inline 规则 replacement 为空时拒绝加载。
+func TestConfigError_L1InlineEmptyReplacement(t *testing.T) {
+	rules := `{
+  "version": "test-invalid",
+  "rules": [
+    {
+      "id": "l1-inline-empty",
+      "level": "L1",
+      "name": "空替换测试",
+      "patterns": ["你患有([一-龥]+)"],
+      "action": "block",
+      "replace_mode": "inline",
+      "replacement": ""
+    }
+  ]
+}`
+	path := mustWriteRules(t, rules)
+	ci, err := NewComplianceInterceptor(path)
+	require.Error(t, err)
+	require.Nil(t, ci)
+	assert.Contains(t, err.Error(), "L1 inline replacement cannot be empty")
+}
+
+// TestConfigError_L1InlineWhitespaceReplacement 验证 L1 inline 规则 replacement 仅含空白时拒绝加载。
+func TestConfigError_L1InlineWhitespaceReplacement(t *testing.T) {
+	rules := `{
+  "version": "test-invalid",
+  "rules": [
+    {
+      "id": "l1-inline-ws",
+      "level": "L1",
+      "name": "空白替换测试",
+      "patterns": ["你患有([一-龥]+)"],
+      "action": "block",
+      "replace_mode": "inline",
+      "replacement": "   "
+    }
+  ]
+}`
+	path := mustWriteRules(t, rules)
+	ci, err := NewComplianceInterceptor(path)
+	require.Error(t, err)
+	require.Nil(t, ci)
+	assert.Contains(t, err.Error(), "L1 inline replacement cannot be empty")
+}
+
+// TestConfigError_L1BlockEmptyReplacementAllowed 验证非 inline 的 L1 规则允许空 replacement（使用默认文案）。
+func TestConfigError_L1BlockEmptyReplacementAllowed(t *testing.T) {
+	rules := `{
+  "version": "test-ok",
+  "rules": [
+    {
+      "id": "l1-block-empty",
+      "level": "L1",
+      "name": "整段阻断测试",
+      "patterns": ["建议手术"],
+      "action": "block"
+    }
+  ]
+}`
+	path := mustWriteRules(t, rules)
+	ci, err := NewComplianceInterceptor(path)
+	require.NoError(t, err)
+	require.NotNil(t, ci)
+
+	res, err := ci.Evaluate(context.Background(), "建议手术切除")
+	require.NoError(t, err)
+	assert.True(t, res.Blocked)
+	assert.Contains(t, res.SafeText, "无法提供医疗诊断")
+}
+
 // TestFallback_SafeOnEmptyRules 验证空规则库时直接放行。
 func TestFallback_SafeOnEmptyRules(t *testing.T) {
 	path := mustWriteRules(t, `{"version":"empty","rules":[]}`)

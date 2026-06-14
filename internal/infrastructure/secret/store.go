@@ -137,7 +137,7 @@ func (s *KeyringStore) Delete(key string) error {
 			if keyringErr != nil && !errors.Is(keyringErr, keyring.ErrKeyNotFound) {
 				return fmt.Errorf("keyring delete failed for key %s and fallback delete failed: %w", key, errors.Join(keyringErr, err))
 			}
-			return err
+			return fmt.Errorf("fallback delete failed for key %s: %w", key, err)
 		}
 	}
 

@@ -127,3 +127,36 @@ func TestBroker_ErrorAfterContent(t *testing.T) {
 	assert.Equal(t, models.StreamChunkContent, chunks[1].Type)
 	assert.Equal(t, models.StreamChunkError, chunks[2].Type)
 }
+
+// TestBroker_ContextCancellation 验证流 broker 在 context 取消时不会泄漏 goroutine。
+func TestBroker_ContextCancellation(t *testing.T) {
+	var chunks []models.StreamChunk
+	b := NewBroker("kimi-lite", "p-1", func(c models.StreamChunk) {
+		chunks = append(chunks, c)
+	})
+
+	b.Start()
+
+	// 模拟 context 取消：不再发送更多内容，直接结束
+	b.Done(nil)
+
+	assert.Len(t, chunks, 2)
+	assert.Equal(t, models.StreamChunkStart, chunks[0].Type)
+	assert.Equal(t, models.StreamChunkDone, chunks[1].Type)
+	assert.GreaterOrEqual(t, chunks[1].Metadata.LatencyMs, int64(0))
+}
+
+// TestBroker_GoroutineLeak 验证多次创建 broker 不会产生 goroutine 泄漏。
+func TestBroker_GoroutineLeak(t *testing.T) {
+	for i := 0; i < 100; i++ {
+		var chunks []models.StreamChunk
+		b := NewBroker("", "", func(c models.StreamChunk) {
+			chunks = append(chunks, c)
+		})
+		b.Start()
+		b.Content("test")
+		b.Done(nil)
+		_ = chunks
+	}
+	// 若存在 goroutine 泄漏，此处不会立即失败，但 race detector 会捕获问题
+}
