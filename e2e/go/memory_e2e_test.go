@@ -320,6 +320,15 @@ func TestE2E_Memory_FullPipeline(t *testing.T) {
 
 	// 5. MemoryRetriever 召回
 	mockSvc := &e2eMockEmbeddingService{}
+	retriever := usecase.NewMemoryRetriever(
+		mockSvc,
+		embedRepo,
+		factRepo,
+		usecase.NewDecayScorer(),
+		nil,
+		nil,
+		nil,
+	)
 
 	memories, err := retriever.RetrieveForContext(ctx, "我的血压情况", "sess_full", 3)
 	require.NoError(t, err)
