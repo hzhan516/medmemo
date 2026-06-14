@@ -12,6 +12,7 @@ import (
 
 // TestReadCLITokenFromFile_Kimi_Success 验证 Kimi 格式正确解析 access_token。
 func TestReadCLITokenFromFile_Kimi_Success(t *testing.T) {
+		t.Parallel()
 	tmpDir := t.TempDir()
 	credPath := filepath.Join(tmpDir, "kimi-code.json")
 	content := `{"access_token":"eyJkummy","refresh_token":"rt_abc","expires_at":1735689600}`
@@ -25,6 +26,7 @@ func TestReadCLITokenFromFile_Kimi_Success(t *testing.T) {
 
 // TestReadCLITokenFromFile_Kimi_MissingAccessToken 验证 Kimi 格式缺少 access_token 时降级。
 func TestReadCLITokenFromFile_Kimi_MissingAccessToken(t *testing.T) {
+		t.Parallel()
 	tmpDir := t.TempDir()
 	credPath := filepath.Join(tmpDir, "kimi-code.json")
 	content := `{"refresh_token":"rt_abc","expires_at":1735689600}`
@@ -40,6 +42,7 @@ func TestReadCLITokenFromFile_Kimi_MissingAccessToken(t *testing.T) {
 
 // TestReadCLITokenFromFile_GeminiADC_Success 验证 gcloud ADC 格式正确解析 refresh_token。
 func TestReadCLITokenFromFile_GeminiADC_Success(t *testing.T) {
+		t.Parallel()
 	tmpDir := t.TempDir()
 	credPath := filepath.Join(tmpDir, "adc.json")
 	content := `{"client_id":"cid","client_secret":"secret","refresh_token":"1//refresh_xyz","type":"authorized_user"}`
@@ -53,6 +56,7 @@ func TestReadCLITokenFromFile_GeminiADC_Success(t *testing.T) {
 
 // TestReadCLITokenFromFile_FileNotExist 验证文件不存在返回错误。
 func TestReadCLITokenFromFile_FileNotExist(t *testing.T) {
+		t.Parallel()
 	token, hint, err := ReadCLITokenFromFile("/nonexistent/path/cred.json")
 	assert.Error(t, err)
 	assert.Empty(t, token)
@@ -62,6 +66,7 @@ func TestReadCLITokenFromFile_FileNotExist(t *testing.T) {
 
 // TestReadCLITokenFromFile_EmptyPath 验证空路径返回错误。
 func TestReadCLITokenFromFile_EmptyPath(t *testing.T) {
+		t.Parallel()
 	token, hint, err := ReadCLITokenFromFile("")
 	assert.Error(t, err)
 	assert.Empty(t, token)
@@ -71,6 +76,7 @@ func TestReadCLITokenFromFile_EmptyPath(t *testing.T) {
 
 // TestReadCLITokenFromFile_EmptyFile 验证空文件返回错误。
 func TestReadCLITokenFromFile_EmptyFile(t *testing.T) {
+		t.Parallel()
 	tmpDir := t.TempDir()
 	credPath := filepath.Join(tmpDir, "empty.json")
 	require.NoError(t, os.WriteFile(credPath, []byte("   \n  "), 0600))
@@ -84,6 +90,7 @@ func TestReadCLITokenFromFile_EmptyFile(t *testing.T) {
 
 // TestReadCLITokenFromFile_InvalidJSON_FallbackPlainText 验证无效 JSON 降级为纯文本 token。
 func TestReadCLITokenFromFile_InvalidJSON_FallbackPlainText(t *testing.T) {
+		t.Parallel()
 	tmpDir := t.TempDir()
 	credPath := filepath.Join(tmpDir, "plain.txt")
 	require.NoError(t, os.WriteFile(credPath, []byte("sk-plain-token-123"), 0600))
@@ -96,6 +103,7 @@ func TestReadCLITokenFromFile_InvalidJSON_FallbackPlainText(t *testing.T) {
 
 // TestReadCLITokenFromFile_PermissionDenied 验证权限不足返回错误。
 func TestReadCLITokenFromFile_PermissionDenied(t *testing.T) {
+		t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("权限测试跳过 Windows")
 	}
@@ -115,6 +123,7 @@ func TestReadCLITokenFromFile_PermissionDenied(t *testing.T) {
 
 // TestReadCLITokenFromFile_ExpandHome 验证 ~ 展开为 home 目录。
 func TestReadCLITokenFromFile_ExpandHome(t *testing.T) {
+		t.Parallel()
 	token, hint, err := ReadCLITokenFromFile("~/nonexistent_test_file_12345.json")
 	assert.Error(t, err)
 	assert.Empty(t, token)
@@ -125,6 +134,7 @@ func TestReadCLITokenFromFile_ExpandHome(t *testing.T) {
 
 // TestReadCLICredentials_Kimi_Full 验证 Kimi 格式完整字段解析。
 func TestReadCLICredentials_Kimi_Full(t *testing.T) {
+		t.Parallel()
 	tmpDir := t.TempDir()
 	credPath := filepath.Join(tmpDir, "kimi-code.json")
 	content := `{"access_token":"acc_123","refresh_token":"rt_456","client_id":"cid_789","client_secret":"cs_abc","expires_at":1735689600}`
@@ -142,6 +152,7 @@ func TestReadCLICredentials_Kimi_Full(t *testing.T) {
 
 // TestReadCLICredentials_Kimi_RefreshOnly 验证 Kimi 格式只有 refresh_token。
 func TestReadCLICredentials_Kimi_RefreshOnly(t *testing.T) {
+		t.Parallel()
 	tmpDir := t.TempDir()
 	credPath := filepath.Join(tmpDir, "kimi-code.json")
 	content := `{"refresh_token":"rt_only","client_id":"cid","client_secret":"secret","expires_at":1735689600}`
@@ -158,6 +169,7 @@ func TestReadCLICredentials_Kimi_RefreshOnly(t *testing.T) {
 
 // TestReadCLICredentials_ADC_Full 验证 gcloud ADC 格式完整字段解析。
 func TestReadCLICredentials_ADC_Full(t *testing.T) {
+		t.Parallel()
 	tmpDir := t.TempDir()
 	credPath := filepath.Join(tmpDir, "adc.json")
 	content := `{"client_id":"gcp_cid","client_secret":"gcp_cs","refresh_token":"1//refresh","type":"authorized_user"}`
@@ -174,6 +186,7 @@ func TestReadCLICredentials_ADC_Full(t *testing.T) {
 
 // TestReadCLICredentials_PlainText 验证纯文本兜底。
 func TestReadCLICredentials_PlainText(t *testing.T) {
+		t.Parallel()
 	tmpDir := t.TempDir()
 	credPath := filepath.Join(tmpDir, "plain.txt")
 	require.NoError(t, os.WriteFile(credPath, []byte("sk-plain"), 0600))
@@ -187,6 +200,7 @@ func TestReadCLICredentials_PlainText(t *testing.T) {
 
 // TestReadCLICredentials_EmptyPath 验证空路径返回错误。
 func TestReadCLICredentials_EmptyPath(t *testing.T) {
+		t.Parallel()
 	_, err := ReadCLICredentials("")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "cli credential path is empty")
@@ -194,6 +208,7 @@ func TestReadCLICredentials_EmptyPath(t *testing.T) {
 
 // TestExpandPath 验证路径展开逻辑。
 func TestExpandPath(t *testing.T) {
+		t.Parallel()
 	home, _ := os.UserHomeDir()
 
 	tests := []struct {
