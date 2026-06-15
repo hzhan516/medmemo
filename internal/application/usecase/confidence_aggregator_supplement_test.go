@@ -13,6 +13,7 @@ import (
 
 // TestConfidenceAggregator_Calculate_ScoreAbove100 验证分数超过 100 时被截断。
 func TestConfidenceAggregator_Calculate_ScoreAbove100(t *testing.T) {
+	t.Parallel()
 	agg := NewConfidenceAggregator()
 	// 使用极端高分输入使 raw score > 100
 	sources := []entity.KnowledgeSource{
@@ -37,6 +38,7 @@ func TestConfidenceAggregator_Calculate_ScoreAbove100(t *testing.T) {
 
 // TestConfidenceAggregator_Calculate_NegativeScoreClamped 验证负分被截断到 0。
 func TestConfidenceAggregator_Calculate_NegativeScoreClamped(t *testing.T) {
+	t.Parallel()
 	agg := NewConfidenceAggregator()
 	// 大量缺失信息导致推理链负分
 	reasoning := entity.ReasoningChain{
@@ -55,6 +57,7 @@ func TestConfidenceAggregator_Calculate_NegativeScoreClamped(t *testing.T) {
 
 // TestConfidenceAggregator_Calculate_AllLLMInternalSources 验证全 llm_internal 来源时低分。
 func TestConfidenceAggregator_Calculate_AllLLMInternalSources(t *testing.T) {
+	t.Parallel()
 	agg := NewConfidenceAggregator()
 	sources := []entity.KnowledgeSource{
 		{Type: entity.SourceLLMInternal, Confidence: 0.60, Citation: ""},
@@ -78,6 +81,7 @@ func TestConfidenceAggregator_Calculate_AllLLMInternalSources(t *testing.T) {
 
 // TestConfidenceAggregator_Calculate_Boundary_At90 验证临界值 90 分。
 func TestConfidenceAggregator_Calculate_Boundary_At90(t *testing.T) {
+	t.Parallel()
 	agg := NewConfidenceAggregator()
 	result := agg.CalculateWithRawScore(90.0, []string{})
 	assert.Equal(t, entity.ConfidenceLevelA, result.Level)
@@ -85,6 +89,7 @@ func TestConfidenceAggregator_Calculate_Boundary_At90(t *testing.T) {
 
 // TestConfidenceAggregator_Calculate_Boundary_At70 验证临界值 70 分。
 func TestConfidenceAggregator_Calculate_Boundary_At70(t *testing.T) {
+	t.Parallel()
 	agg := NewConfidenceAggregator()
 	result := agg.CalculateWithRawScore(70.0, []string{})
 	assert.Equal(t, entity.ConfidenceLevelB, result.Level)
@@ -92,6 +97,7 @@ func TestConfidenceAggregator_Calculate_Boundary_At70(t *testing.T) {
 
 // TestConfidenceAggregator_Calculate_Boundary_At50 验证临界值 50 分。
 func TestConfidenceAggregator_Calculate_Boundary_At50(t *testing.T) {
+	t.Parallel()
 	agg := NewConfidenceAggregator()
 	result := agg.CalculateWithRawScore(50.0, []string{})
 	assert.Equal(t, entity.ConfidenceLevelC, result.Level)
@@ -99,6 +105,7 @@ func TestConfidenceAggregator_Calculate_Boundary_At50(t *testing.T) {
 
 // TestConfidenceAggregator_Calculate_Boundary_At30 验证临界值 30 分。
 func TestConfidenceAggregator_Calculate_Boundary_At30(t *testing.T) {
+	t.Parallel()
 	agg := NewConfidenceAggregator()
 	result := agg.CalculateWithRawScore(30.0, []string{})
 	assert.Equal(t, entity.ConfidenceLevelD, result.Level)
@@ -106,6 +113,7 @@ func TestConfidenceAggregator_Calculate_Boundary_At30(t *testing.T) {
 
 // TestConfidenceAggregator_Calculate_Boundary_At0 验证临界值 0 分。
 func TestConfidenceAggregator_Calculate_Boundary_At0(t *testing.T) {
+	t.Parallel()
 	agg := NewConfidenceAggregator()
 	result := agg.CalculateWithRawScore(0.0, []string{})
 	assert.Equal(t, entity.ConfidenceLevelE, result.Level)
@@ -114,6 +122,7 @@ func TestConfidenceAggregator_Calculate_Boundary_At0(t *testing.T) {
 
 // TestConfidenceAggregator_Calculate_ExplanationHighScore 验证高分解释文本。
 func TestConfidenceAggregator_Calculate_ExplanationHighScore(t *testing.T) {
+	t.Parallel()
 	agg := NewConfidenceAggregator()
 	result := agg.CalculateWithRawScore(95.0, []string{})
 	assert.Contains(t, result.Explanation, "可作为参考")
@@ -121,6 +130,7 @@ func TestConfidenceAggregator_Calculate_ExplanationHighScore(t *testing.T) {
 
 // TestConfidenceAggregator_Calculate_ExplanationMediumScore 验证中分解释文本。
 func TestConfidenceAggregator_Calculate_ExplanationMediumScore(t *testing.T) {
+	t.Parallel()
 	agg := NewConfidenceAggregator()
 	result := agg.CalculateWithRawScore(75.0, []string{})
 	assert.Contains(t, result.Explanation, "医生讨论")
@@ -128,6 +138,7 @@ func TestConfidenceAggregator_Calculate_ExplanationMediumScore(t *testing.T) {
 
 // TestConfidenceAggregator_Calculate_ExplanationLowScoreNoMissing 验证低分但无缺失信息的解释。
 func TestConfidenceAggregator_Calculate_ExplanationLowScoreNoMissing(t *testing.T) {
+	t.Parallel()
 	agg := NewConfidenceAggregator()
 	result := agg.CalculateWithRawScore(40.0, []string{})
 	assert.Contains(t, result.Explanation, "尽快就医")
@@ -135,6 +146,7 @@ func TestConfidenceAggregator_Calculate_ExplanationLowScoreNoMissing(t *testing.
 
 // TestKnowledgeSourceTagger_Tag_UnknownSourceDefaults 验证未知来源降级为 llm_internal。
 func TestKnowledgeSourceTagger_Tag_UnknownSourceDefaults(t *testing.T) {
+	t.Parallel()
 	tagger := NewKnowledgeSourceTagger()
 	// 使用未定义的来源类型
 	ks := tagger.Tag(entity.SourceType("nonexistent"), "citation")
@@ -144,6 +156,7 @@ func TestKnowledgeSourceTagger_Tag_UnknownSourceDefaults(t *testing.T) {
 
 // TestKnowledgeSourceTagger_CalculateSourceScore_SingleSource 验证单来源评分。
 func TestKnowledgeSourceTagger_CalculateSourceScore_SingleSource(t *testing.T) {
+	t.Parallel()
 	tagger := NewKnowledgeSourceTagger()
 	sources := []entity.KnowledgeSource{
 		{Type: entity.SourceEvidenceDB, Confidence: 0.85, Citation: "PubMed"},
@@ -154,6 +167,7 @@ func TestKnowledgeSourceTagger_CalculateSourceScore_SingleSource(t *testing.T) {
 
 // TestReasoningChainEvaluator_ExtractReasoningChain_NoKeywords 验证无关键词时全 false。
 func TestReasoningChainEvaluator_ExtractReasoningChain_NoKeywords(t *testing.T) {
+	t.Parallel()
 	evaluator := NewReasoningChainEvaluator()
 	answer := "好的。"
 	chain := evaluator.ExtractReasoningChain(answer)
@@ -167,6 +181,7 @@ func TestReasoningChainEvaluator_ExtractReasoningChain_NoKeywords(t *testing.T) 
 
 // TestReasoningChainEvaluator_ExtractReasoningChain_OnlySymptom 验证仅有症状关键词。
 func TestReasoningChainEvaluator_ExtractReasoningChain_OnlySymptom(t *testing.T) {
+	t.Parallel()
 	evaluator := NewReasoningChainEvaluator()
 	answer := "您有头痛和发热症状。"
 	chain := evaluator.ExtractReasoningChain(answer)
@@ -180,6 +195,7 @@ func TestReasoningChainEvaluator_ExtractReasoningChain_OnlySymptom(t *testing.T)
 
 // TestReasoningChainEvaluator_ExtractReasoningChain_OnlyEmergency 验证仅有紧急关键词。
 func TestReasoningChainEvaluator_ExtractReasoningChain_OnlyEmergency(t *testing.T) {
+	t.Parallel()
 	evaluator := NewReasoningChainEvaluator()
 	answer := "请立即去医院，情况严重！"
 	chain := evaluator.ExtractReasoningChain(answer)
@@ -194,6 +210,7 @@ func TestReasoningChainEvaluator_ExtractReasoningChain_OnlyEmergency(t *testing.
 
 // TestReasoningChainEvaluator_DetectMissingInfo_AllFound 验证所有关键信息均提供时无缺失。
 func TestReasoningChainEvaluator_DetectMissingInfo_AllFound(t *testing.T) {
+	t.Parallel()
 	evaluator := NewReasoningChainEvaluator()
 	answer := "患者男，35岁，头痛持续3天，既往有高血压病史，对青霉素过敏，目前在服用降压药，体温38.5度。"
 	missing := evaluator.DetectMissingInfo(answer)
@@ -203,6 +220,7 @@ func TestReasoningChainEvaluator_DetectMissingInfo_AllFound(t *testing.T) {
 
 // TestAccuracyTracker_ConcurrentMixedFeedback 验证并发混合反馈的正确性。
 func TestAccuracyTracker_ConcurrentMixedFeedback(t *testing.T) {
+	t.Parallel()
 	tracker := NewAccuracyTracker()
 	done := make(chan bool, 200)
 
@@ -230,6 +248,7 @@ func TestAccuracyTracker_ConcurrentMixedFeedback(t *testing.T) {
 
 // TestAccuracyTracker_GetStats_ColdStart 验证冷启动时 GetStats 返回零值。
 func TestAccuracyTracker_GetStats_ColdStart(t *testing.T) {
+	t.Parallel()
 	tracker := NewAccuracyTracker()
 	stats := tracker.GetStats(entity.AnswerTypeEmergency, "30d")
 
@@ -241,6 +260,7 @@ func TestAccuracyTracker_GetStats_ColdStart(t *testing.T) {
 
 // TestConfidenceResult_BreakdownNormalization 验证 Breakdown 中各维度分数正确归一化。
 func TestConfidenceResult_BreakdownNormalization(t *testing.T) {
+	t.Parallel()
 	agg := NewConfidenceAggregator()
 	sources := []entity.KnowledgeSource{
 		{Type: entity.SourceMedicalGuideline, Confidence: 0.95, Citation: "指南"},

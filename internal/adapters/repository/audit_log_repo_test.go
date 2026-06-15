@@ -11,6 +11,7 @@ import (
 )
 
 func setupAuditLogTestDB(t *testing.T) (*AuditLogRepoSQLite, func()) {
+	t.Helper()
 	tmpDir := t.TempDir()
 	connector, err := database.NewSQLiteConnector(tmpDir)
 	require.NoError(t, err)

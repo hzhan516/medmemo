@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { ChatContainer } from '@/components/chat/ChatContainer'
 import { ChatInput } from '@/components/chat/ChatInput'
 import { Sidebar } from '@/components/layout/Sidebar'
@@ -37,6 +37,7 @@ export function ChatPage() {
   const undoDelete = useChatStore((s) => s.undoDelete)
   const selectConversation = useChatStore((s) => s.selectConversation)
   const [showUndo, setShowUndo] = useState(false)
+  const isFirstRender = useRef(true)
 
   // Provider 快捷键切换
   const activeProviderId = useSettingsStore((s) => s.activeProviderId)
@@ -94,6 +95,10 @@ export function ChatPage() {
 
   // 显示撤销提示
   useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false
+      return
+    }
     if (lastDeleted) {
       setShowUndo(true)
       const timer = setTimeout(() => setShowUndo(false), 5000)

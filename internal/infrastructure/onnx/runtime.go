@@ -304,7 +304,11 @@ func (e *Engine) workerLoop(worker *NERWorker) {
 	defer e.wg.Done()
 	for task := range e.taskCh {
 		spans, err := worker.Predict(task.ctx, task.text)
-		task.resultCh <- nerResult{spans: spans, err: err}
+		select {
+		case task.resultCh <- nerResult{spans: spans, err: err}:
+		case <-task.ctx.Done():
+			// caller cancelled, result discarded to prevent goroutine leak
+		}
 	}
 }
 
@@ -454,7 +458,11 @@ func (e *Engine) embeddingWorkerLoop(worker *EmbeddingWorker) {
 	defer e.embeddingWg.Done()
 	for task := range e.embeddingTaskCh {
 		embeddings, err := worker.Embed(task.ctx, task.texts)
-		task.resultCh <- embeddingResult{embeddings: embeddings, err: err}
+		select {
+		case task.resultCh <- embeddingResult{embeddings: embeddings, err: err}:
+		case <-task.ctx.Done():
+			// caller cancelled, result discarded to prevent goroutine leak
+		}
 	}
 }
 

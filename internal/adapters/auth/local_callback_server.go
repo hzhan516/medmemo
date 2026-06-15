@@ -41,7 +41,7 @@ func NewLocalCallbackServer() *LocalCallbackServer {
 }
 
 // Start 启动 HTTP 服务器，绑定动态端口。
-// 端口范围 49152-65535（IANA 动态/私有端口范围），冲突时自动重试最多 10 次。
+// 使用操作系统分配的端口（127.0.0.1:0），避免伪随机端口选择的冲突与可预测性问题。
 // 返回实际绑定的端口号。
 func (s *LocalCallbackServer) Start() (int, error) {
 	// 生成随机 CSRF state
@@ -51,25 +51,10 @@ func (s *LocalCallbackServer) Start() (int, error) {
 	}
 	s.state = state
 
-	// 尝试绑定动态端口
-	const (
-		minPort     = 49152
-		maxPort     = 65535
-		maxAttempts = 10
-	)
-
-	var listener net.Listener
-	for i := 0; i < maxAttempts; i++ {
-		port := minPort + (int(time.Now().UnixNano()) % (maxPort - minPort + 1))
-		listener, err = net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
-		if err == nil {
-			break
-		}
-		// 端口冲突，短暂退避后重试
-		time.Sleep(10 * time.Millisecond)
-	}
+	// 使用操作系统分配端口，避免冲突与可预测性
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		return 0, fmt.Errorf("failed to bind dynamic port after %d attempts: %w", maxAttempts, err)
+		return 0, fmt.Errorf("failed to bind to localhost: %w", err)
 	}
 
 	s.listener = listener

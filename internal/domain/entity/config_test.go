@@ -3,22 +3,24 @@ package entity
 import (
 	"errors"
 	"testing"
+
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 func TestAppConfig_Validate(t *testing.T) {
 	tests := []struct {
 		name    string
-		config  AppConfig
+		config  models.AppConfig
 		wantErr error
 	}{
 		{
 			name:    "empty data dir",
-			config:  AppConfig{},
+			config:  models.AppConfig{},
 			wantErr: ErrInvalidConfig,
 		},
 		{
 			name:    "valid config",
-			config:  AppConfig{DataDir: "/tmp/medmemo"},
+			config:  models.AppConfig{DataDir: "/tmp/medmemo"},
 			wantErr: nil,
 		},
 	}

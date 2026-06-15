@@ -6,27 +6,25 @@ import (
 	"fmt"
 	"os"
 	"runtime"
-
-	"github.com/hzhan516/medmemo/internal/application/port"
 )
 
-// noopInstaller 为不支持平台的空实现，避免编译错误。
-type noopInstaller struct{}
+// NoopInstaller 为不支持平台的空实现，避免编译错误。
+type NoopInstaller struct{}
 
-func (n *noopInstaller) Install(assetPath string) (string, error) {
+func (n *NoopInstaller) Install(assetPath string) (string, error) {
 	return "", fmt.Errorf("auto-update not supported on %s", runtime.GOOS)
 }
 
-func (n *noopInstaller) Rollback() error {
+func (n *NoopInstaller) Rollback() error {
 	return fmt.Errorf("rollback not supported on %s", runtime.GOOS)
 }
 
-func (n *noopInstaller) CurrentBinaryPath() string {
+func (n *NoopInstaller) CurrentBinaryPath() string {
 	exe, _ := os.Executable()
 	return exe
 }
 
-// NewInstaller 为不支持的平台返回 noopInstaller。
-func NewInstaller() port.Installer {
-	return &noopInstaller{}
+// NewInstaller 为不支持的平台返回 NoopInstaller。
+func NewInstaller() *NoopInstaller {
+	return &NoopInstaller{}
 }

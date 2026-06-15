@@ -3,6 +3,7 @@ package network
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net/http"
 	"time"
@@ -21,10 +22,16 @@ type HTTPClient struct {
 }
 
 // NewHTTPClient 创建增强型 HTTP 客户端。
+// Audit: RR-002 TLS 1.2+ 强制，防止降级攻击
 func NewHTTPClient(baseURL string) *HTTPClient {
 	return &HTTPClient{
 		client: &http.Client{
 			Timeout: 30 * time.Second,
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{
+					MinVersion: tls.VersionTLS12,
+				},
+			},
 		},
 		baseURL:    baseURL,
 		headers:    make(map[string]string),

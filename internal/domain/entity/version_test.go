@@ -3,6 +3,8 @@ package entity
 import (
 	"testing"
 	"time"
+
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 func TestHasUpdate(t *testing.T) {
@@ -145,7 +147,7 @@ func TestDefaultUpdateSettings(t *testing.T) {
 	if !s.CheckEnabled {
 		t.Error("expected CheckEnabled to be true")
 	}
-	if s.Channel != ChannelStable {
+	if s.Channel != models.ChannelStable {
 		t.Errorf("expected default channel to be stable, got %s", s.Channel)
 	}
 	if s.SkipVersion != "" {

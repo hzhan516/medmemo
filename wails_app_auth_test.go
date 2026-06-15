@@ -256,3 +256,84 @@ func findMethod(results []AuthMethodDetectStatus, method string) *AuthMethodDete
 	}
 	return nil
 }
+
+// ========== SaveAPIKey / HasAPIKey 绑定测试 ==========
+
+// TestSaveAPIKey_Success 验证 SaveAPIKey 正常保存后 HasAPIKey 可检测。
+func TestSaveAPIKey_Success(t *testing.T) {
+	ss := newMockSecretStore()
+	app := &WailsApp{ctx: t.Context(), secretStore: ss}
+
+	err := app.SaveAPIKey("kimi", "sk-test-key-123")
+	require.NoError(t, err)
+
+	has, err := app.HasAPIKey("kimi")
+	require.NoError(t, err)
+	assert.True(t, has)
+}
+
+// TestSaveAPIKey_EmptyProvider 验证空 provider 参数返回错误。
+func TestSaveAPIKey_EmptyProvider(t *testing.T) {
+	app := &WailsApp{ctx: t.Context(), secretStore: newMockSecretStore()}
+	err := app.SaveAPIKey("", "sk-test")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "provider cannot be empty")
+}
+
+// TestSaveAPIKey_EmptyKey 验证空 API Key 参数返回错误。
+func TestSaveAPIKey_EmptyKey(t *testing.T) {
+	app := &WailsApp{ctx: t.Context(), secretStore: newMockSecretStore()}
+	err := app.SaveAPIKey("kimi", "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "api key cannot be empty")
+}
+
+// TestHasAPIKey_NotFound 验证未保存的 Key 返回 false。
+func TestHasAPIKey_NotFound(t *testing.T) {
+	app := &WailsApp{ctx: t.Context(), secretStore: newMockSecretStore()}
+	has, err := app.HasAPIKey("openai")
+	require.NoError(t, err)
+	assert.False(t, has)
+}
+
+// TestHasAPIKey_EmptyProvider 验证空 provider 参数返回错误。
+func TestHasAPIKey_EmptyProvider(t *testing.T) {
+	app := &WailsApp{ctx: t.Context(), secretStore: newMockSecretStore()}
+	_, err := app.HasAPIKey("")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "provider cannot be empty")
+}
+
+// ========== RefreshToken / EnableAutoRefresh 绑定测试 ==========
+
+// TestRefreshToken_NilService 验证 tokenRefreshSvc 为 nil 时返回错误。
+func TestRefreshToken_NilService(t *testing.T) {
+	app := &WailsApp{ctx: t.Context()}
+	err := app.RefreshToken("kimi")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "token refresh service not initialized")
+}
+
+// TestRefreshToken_EmptyProvider 验证空 providerID 返回错误。
+func TestRefreshToken_EmptyProvider(t *testing.T) {
+	app := &WailsApp{ctx: t.Context()}
+	err := app.RefreshToken("")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "provider_id cannot be empty")
+}
+
+// TestEnableAutoRefresh_NilService 验证 tokenRefreshSvc 为 nil 时返回错误。
+func TestEnableAutoRefresh_NilService(t *testing.T) {
+	app := &WailsApp{ctx: t.Context()}
+	err := app.EnableAutoRefresh("kimi")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "token refresh service not initialized")
+}
+
+// TestDisableAutoRefresh_NilService 验证 tokenRefreshSvc 为 nil 时返回错误。
+func TestDisableAutoRefresh_NilService(t *testing.T) {
+	app := &WailsApp{ctx: t.Context()}
+	err := app.DisableAutoRefresh("kimi")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "token refresh service not initialized")
+}

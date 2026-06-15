@@ -144,9 +144,7 @@ func (c *ChatOrchestrator) prepareMessages(ctx context.Context, req ChatRequest)
 	if !isLocalModel(req.Model) && c.deidPipeline != nil {
 		lastIdx := findLastUserMessage(req.Messages)
 		if lastIdx >= 0 {
-			deidStart := time.Now()
 			r, err := c.deidPipeline.Execute(ctx, req.Messages[lastIdx].Content)
-			fmt.Printf("[DIAG][Chat] deidPipeline.Execute took %v err=%v\n", time.Since(deidStart), err)
 			if err == nil {
 				deidResult = r
 				messages = make([]models.Message, len(req.Messages))
@@ -161,13 +159,7 @@ func (c *ChatOrchestrator) prepareMessages(ctx context.Context, req ChatRequest)
 	if c.memoryRetriever != nil {
 		lastIdx := findLastUserMessage(messages)
 		if lastIdx >= 0 {
-			memStart := time.Now()
-			memories, err := c.memoryRetriever.RetrieveForContext(ctx, messages[lastIdx].Content, string(req.ConversationID), 3)
-			if err != nil {
-				fmt.Printf("[DIAG][Chat] memoryRetriever.RetrieveForContext took %v err=%v\n", time.Since(memStart), err)
-			} else {
-				fmt.Printf("[DIAG][Chat] memoryRetriever.RetrieveForContext took %v memories=%d\n", time.Since(memStart), len(memories))
-			}
+			memories, _ := c.memoryRetriever.RetrieveForContext(ctx, messages[lastIdx].Content, string(req.ConversationID), 3)
 			if len(memories) > 0 {
 				messages = injectMemories(messages, memories)
 			}
@@ -175,6 +167,21 @@ func (c *ChatOrchestrator) prepareMessages(ctx context.Context, req ChatRequest)
 	}
 
 	return messages, deidResult
+}
+
+// calculateConfidenceWithRawScore 包装 ConfidenceAggregator.CalculateWithRawScore，带 nil 防护。
+func (c *ChatOrchestrator) calculateConfidenceWithRawScore(score float64, sources []string) *entity.ConfidenceResult {
+	if c.confidenceAggregator == nil {
+		return &entity.ConfidenceResult{
+			OverallScore: score,
+			Level:        entity.ConfidenceLevelE,
+			Breakdown:    map[string]float64{},
+			Explanation:  "置信度引擎未初始化",
+			Suggestion:   entity.ConfidenceLevelE.Suggestion(),
+			MissingInfo:  []string{},
+		}
+	}
+	return c.confidenceAggregator.CalculateWithRawScore(score, sources)
 }
 
 // tryLocalAnswer 尝试对高置信个人事实查询进行本地短路回答。
@@ -207,7 +214,7 @@ func (c *ChatOrchestrator) Execute(ctx context.Context, req ChatRequest) (*ChatR
 		} else if ok {
 			return &ChatResponse{
 				Reply:            answer,
-				ConfidenceResult: c.confidenceAggregator.CalculateWithRawScore(1.0, []string{"本地已审批事实"}),
+				ConfidenceResult: c.calculateConfidenceWithRawScore(1.0, []string{"本地已审批事实"}),
 			}, nil
 		}
 	}
@@ -237,12 +244,19 @@ func (c *ChatOrchestrator) Execute(ctx context.Context, req ChatRequest) (*ChatR
 	// 合规检测
 	compResult, err := c.compliance.Check(ctx, reply)
 	if err != nil {
-		// 降级放行，确保对话不中断
+		// fail-closed: 合规检测异常时记录审计日志，返回安全替代文案
+		fmt.Printf("[ChatOrchestrator] compliance check error, fail-closed: %v\n", err)
+		reply = "内容审核服务暂时不可用，请稍后重试或咨询专业医生。"
+		confidence := c.calculateConfidenceWithRawScore(0.0, []string{"合规检测异常"})
 		return &ChatResponse{
 			Reply:            reply,
-			ConfidenceResult: c.confidenceAggregator.CalculateWithRawScore(0.0, []string{"合规检测异常"}),
+			ConfidenceResult: confidence,
 			Warnings:         []string{"COMPLIANCE_CHECK_ERROR"},
 		}, nil
+	}
+
+	if compResult.Blocked {
+		reply = compResult.SafeText
 	}
 
 	warnings := make([]string, 0)
@@ -277,7 +291,6 @@ func (c *ChatOrchestrator) Execute(ctx context.Context, req ChatRequest) (*ChatR
 // 仅 L1（阻断级）返回 SafeText；L2/L3 保留原文，由外层通过
 // chat:stream:compliance 事件追加标签。流式正常结束时返回 TokenUsage、置信度与最终内容。
 func (c *ChatOrchestrator) StreamExecute(ctx context.Context, req ChatRequest, onChunk func(string)) (*models.TokenUsage, *entity.ConfidenceResult, string, error) {
-	streamExecStart := time.Now()
 
 	// 前置本地短路：高置信个人事实查询直接返回，不走 LLM Stream
 	lastIdx := findLastUserMessage(req.Messages)
@@ -287,7 +300,7 @@ func (c *ChatOrchestrator) StreamExecute(ctx context.Context, req ChatRequest, o
 			fmt.Printf("[ChatOrchestrator] tryLocalAnswer error, fallback to LLM: %v\n", err)
 		} else if ok {
 			onChunk(answer)
-			return nil, c.confidenceAggregator.CalculateWithRawScore(1.0, []string{"本地已审批事实"}), answer, nil
+			return nil, c.calculateConfidenceWithRawScore(1.0, []string{"本地已审批事实"}), answer, nil
 		}
 	}
 
@@ -295,22 +308,15 @@ func (c *ChatOrchestrator) StreamExecute(ctx context.Context, req ChatRequest, o
 	// L1 规则引擎 <1ms，L2 NER 正常 <100ms，30s 足够覆盖异常场景
 	prepCtx, prepCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer prepCancel()
-	prepStart := time.Now()
 	messages, deidResult := c.prepareMessages(prepCtx, req)
-	fmt.Printf("[DIAG][Chat] prepareMessages took %v\n", time.Since(prepStart))
 
 	// provider 查询使用独立 context，确保不受预处理耗时影响
 	resolveCtx, resolveCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer resolveCancel()
-	resolveStart := time.Now()
 	llmClient, err := c.resolveLLMClient(resolveCtx, req.ProviderID)
-	fmt.Printf("[DIAG][Chat] resolveLLMClient took %v err=%v\n", time.Since(resolveStart), err)
 	if err != nil {
 		return nil, nil, "", fmt.Errorf("failed to resolve llm client: %w", err)
 	}
-
-	fmt.Printf("[DIAG][Chat] StreamExecute pre-StreamChat total=%v streamCtxErr=%v\n",
-		time.Since(streamExecStart), ctx.Err())
 
 	// 逐 chunk 透传，保持打字机流式效果
 	var fullReply strings.Builder
@@ -332,9 +338,14 @@ func (c *ChatOrchestrator) StreamExecute(ctx context.Context, req ChatRequest, o
 	}
 
 	// 合规检测（保留原始回复，不替换 SafeText；合规提示由外层通过 chat:stream:compliance 事件追加）
-	_, compErr := c.compliance.Check(ctx, reply)
+	compResult, compErr := c.compliance.Check(ctx, reply)
 	if compErr != nil {
-		return nil, nil, "", fmt.Errorf("compliance check error: %w", compErr)
+		// fail-closed: 合规检测异常时记录审计日志，返回安全替代文案，不阻断流
+		fmt.Printf("[ChatOrchestrator] compliance check error, fail-closed: %v\n", compErr)
+		reply = "内容审核服务暂时不可用，请稍后重试或咨询专业医生。"
+	} else if compResult != nil && compResult.Blocked {
+		// L1 阻断时替换为安全文案（流式结束后通过 replace 事件通知前端）
+		reply = compResult.SafeText
 	}
 
 	// 计算回答置信度
@@ -477,7 +488,7 @@ func (c *ChatOrchestrator) ExtractFactsFromReply(ctx context.Context, userConten
 	}
 	adapter := &llmClientAdapter{client: client}
 	extractor := NewFactExtractor(adapter)
-	facts, err := extractor.ParseFacts(userContent)
+	facts, err := extractor.ParseFacts(ctx, userContent)
 	if err != nil {
 		return nil, err
 	}
@@ -531,6 +542,11 @@ func (c *RuleComplianceChecker) Check(ctx context.Context, text string) (*Compli
 			_ = c.logger.Log(ctx, "EVALUATE_ERROR", text, "", "ERROR")
 		}
 		return nil, fmt.Errorf("compliance evaluation failed: %w", err)
+	}
+
+	// 超时降级记录审计日志
+	if res.TimeoutDowngrade && c.logger != nil {
+		_ = c.logger.Log(ctx, "TIMEOUT_DOWNGRADE", text, res.SafeText, application.L4Normal.String())
 	}
 
 	// 命中规则时记录拦截日志
