@@ -376,3 +376,51 @@ func TestSQLCipherConnector_MigrateFromPlaintext_EmptyPlaintext(t *testing.T) {
 	require.NotNil(t, conn)
 	require.NoError(t, conn.Close())
 }
+
+// TestValidateAttachPath 验证 ATTACH DATABASE 路径校验逻辑。
+// Audit: RR-001 malicious path rejection
+func TestValidateAttachPath(t *testing.T) {
+	dataDir := "/home/user/.medmemo/data"
+
+	t.Run("valid_absolute_under_datadir", func(t *testing.T) {
+		err := validateAttachPath("/home/user/.medmemo/data/medmemo.db.new", dataDir)
+		require.NoError(t, err)
+	})
+
+	t.Run("reject_empty", func(t *testing.T) {
+		err := validateAttachPath("", dataDir)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "empty")
+	})
+
+	t.Run("reject_relative", func(t *testing.T) {
+		err := validateAttachPath("medmemo.db.new", dataDir)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "must be absolute")
+	})
+
+	t.Run("reject_directory_traversal", func(t *testing.T) {
+		err := validateAttachPath("/home/user/.medmemo/data/../secret.db", dataDir)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "directory traversal")
+	})
+
+	t.Run("reject_outside_datadir", func(t *testing.T) {
+		err := validateAttachPath("/tmp/malicious.db", dataDir)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "under data directory")
+	})
+
+	t.Run("reject_single_quote", func(t *testing.T) {
+		err := validateAttachPath("/home/user/.medmemo/data/foo'bar.db", dataDir)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "single quote")
+	})
+
+	t.Run("reject_traversal_prefix", func(t *testing.T) {
+		// 路径看起来在 datadir 下，但解析后穿越出去
+		err := validateAttachPath("/home/user/.medmemo/data/sub/../../../secret.db", dataDir)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "directory traversal")
+	})
+}

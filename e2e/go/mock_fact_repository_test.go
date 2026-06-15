@@ -36,11 +36,11 @@ func (m *mockFactRepository) FindBySubject(ctx context.Context, subject string) 
 func (m *mockFactRepository) FindBySession(ctx context.Context, sessionID string) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (m *mockFactRepository) FindLatestApprovedByPredicates(ctx context.Context, subject string, predicates []string) (*entity.ExtractedFact, error) {
-	return nil, entity.ErrFactNotFound
-}
 func (m *mockFactRepository) FindApprovedByPredicates(ctx context.Context, subject string, predicates []string, limit int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
+}
+func (m *mockFactRepository) FindLatestApprovedByPredicates(ctx context.Context, subject string, predicates []string) (*entity.ExtractedFact, error) {
+	return nil, entity.ErrFactNotFound
 }
 func (m *mockFactRepository) CountApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string) (int64, error) {
 	return 0, nil

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { KeyRound, Eye, EyeOff, CheckCircle2, XCircle, Loader2, AlertTriangle } from 'lucide-react'
 import { SaveAPIKey, TestAPIKey } from '@wails/go/main/WailsApp'
 import { BrowserOpenURL } from '@wails/runtime'
@@ -60,6 +60,7 @@ export function APIKeyPanel({ status, onProviderCreated }: APIKeyPanelProps) {
   const [testResult, setTestResult] = useState<{ valid: boolean; message: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pasteHint, setPasteHint] = useState<string | null>(null)
+  const pasteHintTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const provider = allProviders.find((p) => p.id === selectedProvider)!
   const prefixValid = apiKey ? (keyPrefixPatterns[selectedProvider]?.test(apiKey) ?? true) : true
@@ -77,7 +78,8 @@ export function APIKeyPanel({ status, onProviderCreated }: APIKeyPanelProps) {
         if (pattern && pattern.test(text.trim())) {
           setApiKey(text.trim())
           setPasteHint(`已从剪贴板自动填充 ${provider.name} 的 API Key`)
-          setTimeout(() => setPasteHint(null), 4000)
+          if (pasteHintTimer.current) clearTimeout(pasteHintTimer.current)
+          pasteHintTimer.current = setTimeout(() => setPasteHint(null), 4000)
           return
         }
 
@@ -88,7 +90,8 @@ export function APIKeyPanel({ status, onProviderCreated }: APIKeyPanelProps) {
             setApiKey(text.trim())
             const pName = allProviders.find((p) => p.id === pid)?.name ?? pid
             setPasteHint(`检测到 ${pName} 的 API Key，已自动切换并填充`)
-            setTimeout(() => setPasteHint(null), 4000)
+            if (pasteHintTimer.current) clearTimeout(pasteHintTimer.current)
+            pasteHintTimer.current = setTimeout(() => setPasteHint(null), 4000)
             break
           }
         }
@@ -98,7 +101,13 @@ export function APIKeyPanel({ status, onProviderCreated }: APIKeyPanelProps) {
     }
 
     window.addEventListener('focus', handleFocus)
-    return () => window.removeEventListener('focus', handleFocus)
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+      if (pasteHintTimer.current) {
+        clearTimeout(pasteHintTimer.current)
+        pasteHintTimer.current = null
+      }
+    }
   }, [selectedProvider, apiKey, provider?.name])
 
   const handleTestAndSave = useCallback(async (forceSave = false) => {

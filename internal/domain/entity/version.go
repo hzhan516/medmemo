@@ -1,5 +1,5 @@
 // Package entity 定义更新相关的领域模型。
-// 遵循 AGENTS.md 零外部依赖铁律，仅使用 Go 标准库。
+// 遵循 AGENTS.md 零外部依赖铁律，pkg/models 是唯一允许的外部依赖。
 package entity
 
 import (
@@ -7,31 +7,25 @@ import (
 	"strconv"
 	"strings"
 	"time"
-)
 
-// UpdateChannel 定义更新通道类型。
-type UpdateChannel string
-
-const (
-	ChannelStable UpdateChannel = "stable" // 稳定版通道，仅包含正式发布版本
-	ChannelBeta   UpdateChannel = "beta"   // 测试版通道，包含预发布版本
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 // UpdateInfo 描述一次可更新的版本信息。
 // 由 GitHub Releases API 响应映射而来，经领域校验后传递给前端。
 type UpdateInfo struct {
-	Version         string        `json:"version"`          // GitHub tag，如 "v1.1.3-Pre-release-build.57"
-	DisplayVersion  string        `json:"display_version"`  // UI 展示版本，如 "v1.1.3-Pre-release-build.57"
-	Name            string        `json:"name"`             // 发布标题
-	Body            string        `json:"body"`             // 发布说明（Markdown 格式）
-	PublishedAt     time.Time     `json:"published_at"`     // 发布时间
-	DownloadURL     string        `json:"download_url"`     // 对应平台产物的下载地址
-	Checksum        string        `json:"checksum"`         // SHA256 校验值
-	Mandatory       bool          `json:"mandatory"`        // 是否为强制更新（安全补丁）
-	Channel         UpdateChannel `json:"channel"`          // 用户选择的检查通道
-	Prerelease      bool          `json:"prerelease"`       // 该 release 本身是否为 prerelease
-	BuildNumber     string        `json:"build_number"`     // 构建号
-	PreReleaseLabel string        `json:"prerelease_label"` // 预发布标签，如 "Pre-release"
+	Version         string               `json:"version"`          // GitHub tag，如 "v1.1.3-Pre-release-build.57"
+	DisplayVersion  string               `json:"display_version"`  // UI 展示版本，如 "v1.1.3-Pre-release-build.57"
+	Name            string               `json:"name"`             // 发布标题
+	Body            string               `json:"body"`             // 发布说明（Markdown 格式）
+	PublishedAt     time.Time            `json:"published_at"`     // 发布时间
+	DownloadURL     string               `json:"download_url"`     // 对应平台产物的下载地址
+	Checksum        string               `json:"checksum"`         // SHA256 校验值
+	Mandatory       bool                 `json:"mandatory"`        // 是否为强制更新（安全补丁）
+	Channel         models.UpdateChannel `json:"channel"`          // 用户选择的检查通道
+	Prerelease      bool                 `json:"prerelease"`       // 该 release 本身是否为 prerelease
+	BuildNumber     string               `json:"build_number"`     // 构建号
+	PreReleaseLabel string               `json:"prerelease_label"` // 预发布标签，如 "Pre-release"
 }
 
 // HasUpdate 语义化版本比较：remote 是否比 current 更新。
@@ -181,10 +175,10 @@ func IsStableVersion(v string) bool {
 
 // UpdateSettings 存储用户的更新偏好设置。
 type UpdateSettings struct {
-	CheckEnabled bool          `json:"check_enabled"` // 是否启用自动检测
-	Channel      UpdateChannel `json:"channel"`       // 当前选择的更新通道
-	SkipVersion  string        `json:"skip_version"`  // 用户选择跳过的版本号
-	LastChecked  time.Time     `json:"last_checked"`  // 上次检测时间
+	CheckEnabled bool                 `json:"check_enabled"` // 是否启用自动检测
+	Channel      models.UpdateChannel `json:"channel"`       // 当前选择的更新通道
+	SkipVersion  string               `json:"skip_version"`  // 用户选择跳过的版本号
+	LastChecked  time.Time            `json:"last_checked"`  // 上次检测时间
 }
 
 // DefaultUpdateSettings 返回默认更新设置。
@@ -192,7 +186,7 @@ type UpdateSettings struct {
 func DefaultUpdateSettings() *UpdateSettings {
 	return &UpdateSettings{
 		CheckEnabled: true,
-		Channel:      ChannelStable,
+		Channel:      models.ChannelStable,
 		SkipVersion:  "",
 		LastChecked:  time.Time{},
 	}

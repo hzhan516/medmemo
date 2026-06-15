@@ -9,6 +9,7 @@ import (
 )
 
 func TestRuleEngine_Process_IDCard(t *testing.T) {
+	t.Parallel()
 	engine := NewRuleEngine()
 	result, err := engine.Process("我的身份证号是 110105199001011234，请帮我看看")
 	require.NoError(t, err)
@@ -21,6 +22,7 @@ func TestRuleEngine_Process_IDCard(t *testing.T) {
 }
 
 func TestRuleEngine_Process_Phone(t *testing.T) {
+	t.Parallel()
 	engine := NewRuleEngine()
 	result, err := engine.Process("联系我请拨打 13800138000")
 	require.NoError(t, err)
@@ -31,6 +33,7 @@ func TestRuleEngine_Process_Phone(t *testing.T) {
 }
 
 func TestRuleEngine_Process_PhoneWithPrefix(t *testing.T) {
+	t.Parallel()
 	engine := NewRuleEngine()
 	result, err := engine.Process("拨打 +8613800138000 联系")
 	require.NoError(t, err)
@@ -40,6 +43,7 @@ func TestRuleEngine_Process_PhoneWithPrefix(t *testing.T) {
 }
 
 func TestRuleEngine_Process_BankCard(t *testing.T) {
+	t.Parallel()
 	engine := NewRuleEngine()
 	result, err := engine.Process("银行卡号 6222021234567890123 已绑定")
 	require.NoError(t, err)
@@ -50,6 +54,7 @@ func TestRuleEngine_Process_BankCard(t *testing.T) {
 }
 
 func TestRuleEngine_Process_Email(t *testing.T) {
+	t.Parallel()
 	engine := NewRuleEngine()
 	result, err := engine.Process("请发送邮件到 user@example.com 谢谢")
 	require.NoError(t, err)
@@ -63,6 +68,7 @@ func TestRuleEngine_Process_Email(t *testing.T) {
 }
 
 func TestRuleEngine_Process_URL(t *testing.T) {
+	t.Parallel()
 	engine := NewRuleEngine()
 	result, err := engine.Process("参考链接 https://example.com/article 了解更多")
 	require.NoError(t, err)
@@ -73,6 +79,7 @@ func TestRuleEngine_Process_URL(t *testing.T) {
 }
 
 func TestRuleEngine_Process_Multiple(t *testing.T) {
+	t.Parallel()
 	engine := NewRuleEngine()
 	text := "电话 13800138000，邮箱 test@test.com，身份证 110105199001011234"
 	result, err := engine.Process(text)
@@ -84,6 +91,7 @@ func TestRuleEngine_Process_Multiple(t *testing.T) {
 }
 
 func TestRuleEngine_Process_NoSensitive(t *testing.T) {
+	t.Parallel()
 	engine := NewRuleEngine()
 	text := "今天天气不错，适合出去散步。"
 	result, err := engine.Process(text)
@@ -93,6 +101,7 @@ func TestRuleEngine_Process_NoSensitive(t *testing.T) {
 }
 
 func TestRuleEngine_Process_Empty(t *testing.T) {
+	t.Parallel()
 	engine := NewRuleEngine()
 	result, err := engine.Process("")
 	require.NoError(t, err)
@@ -101,6 +110,7 @@ func TestRuleEngine_Process_Empty(t *testing.T) {
 }
 
 func TestRestore(t *testing.T) {
+	t.Parallel()
 	engine := NewRuleEngine()
 	original := "请发送邮件到 user@example.com 谢谢"
 	result, err := engine.Process(original)
@@ -110,6 +120,7 @@ func TestRestore(t *testing.T) {
 }
 
 func TestRestore_P3Irreversible(t *testing.T) {
+	t.Parallel()
 	engine := NewRuleEngine()
 	original := "我的身份证号是 110105199001011234"
 	result, err := engine.Process(original)
@@ -121,6 +132,7 @@ func TestRestore_P3Irreversible(t *testing.T) {
 }
 
 func TestRuleEngine_Process_OverlapPhoneAndBankCard(t *testing.T) {
+	t.Parallel()
 	// 手机号前11位与银行卡16位重叠时，优先保留先命中的规则（按 rule 顺序）
 	engine := NewRuleEngine()
 	// 1380013800012345：手机号匹配 13800138000（前11位），银行卡匹配全部16位
@@ -132,6 +144,7 @@ func TestRuleEngine_Process_OverlapPhoneAndBankCard(t *testing.T) {
 }
 
 func TestRuleEngine_Process_ACSkipEmail(t *testing.T) {
+	t.Parallel()
 	// 文本中没有 @ 时，AC 预筛选应跳过 email 规则，Regexp 不应执行
 	engine := NewRuleEngine()
 	text := "请拨打电话 13800138000 联系"
@@ -142,6 +155,7 @@ func TestRuleEngine_Process_ACSkipEmail(t *testing.T) {
 }
 
 func TestRuleEngine_Process_ACSkipURL(t *testing.T) {
+	t.Parallel()
 	// 文本中没有 http:// 或 https:// 时，AC 预筛选应跳过 URL 规则
 	engine := NewRuleEngine()
 	text := "访问 example.com 首页"
@@ -152,6 +166,7 @@ func TestRuleEngine_Process_ACSkipURL(t *testing.T) {
 }
 
 func TestRuleEngine_Process_DigitScanActivatesIDCard(t *testing.T) {
+	t.Parallel()
 	// 文本中有 >=15 位连续数字时，数字扫描应激活身份证规则
 	engine := NewRuleEngine()
 	text := "编号 110105199001011234 已登记"
@@ -162,6 +177,7 @@ func TestRuleEngine_Process_DigitScanActivatesIDCard(t *testing.T) {
 }
 
 func TestRuleEngine_Process_NoLongDigitsSkipRules(t *testing.T) {
+	t.Parallel()
 	// 文本中无长数字序列时，身份证/手机号/银行卡规则应被跳过
 	engine := NewRuleEngine()
 	text := "今天去公园散步，看到一只小狗。"

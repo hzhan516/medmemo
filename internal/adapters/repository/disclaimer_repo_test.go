@@ -12,6 +12,7 @@ import (
 )
 
 func setupDisclaimerTestDB(t *testing.T) (*DisclaimerRepoSQLite, func()) {
+	t.Helper()
 	tmpDir := t.TempDir()
 	connector, err := database.NewSQLiteConnector(tmpDir)
 	require.NoError(t, err)

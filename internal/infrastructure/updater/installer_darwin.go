@@ -6,25 +6,23 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-
-	"github.com/hzhan516/medmemo/internal/application/port"
 )
 
 // NewInstaller 根据当前运行平台创建对应的 Installer 实例。
-func NewInstaller() port.Installer {
+func NewInstaller() *DarwinInstaller {
 	return newDarwinInstaller()
 }
 
-// darwinInstaller 实现 macOS 平台的更新安装。
+// DarwinInstaller 实现 macOS 平台的更新安装。
 // 当前阶段使用浏览器引导下载，后续可通过 Sparkle 框架替换。
 // TODO(Sparkle): 在 macOS 环境下集成 Sparkle 框架 CGO 绑定 [Issue#033]
-type darwinInstaller struct {
+type DarwinInstaller struct {
 	currentPath string
 	backupPath  string
 }
 
-func newDarwinInstaller() *darwinInstaller {
-	return &darwinInstaller{
+func newDarwinInstaller() *DarwinInstaller {
+	return &DarwinInstaller{
 		currentPath: getCurrentBinary(),
 	}
 }
@@ -34,7 +32,7 @@ func newDarwinInstaller() *darwinInstaller {
 // 2. 通过 BrowserOpenURL 提示用户手动打开 .dmg 安装
 // 3. 不自动替换 .app（需要用户拖拽到 Applications）
 // 后续 Sparkle 集成后可实现后台静默下载 + 前台提醒安装。
-func (d *darwinInstaller) Install(assetPath string) (string, error) {
+func (d *DarwinInstaller) Install(assetPath string) (string, error) {
 	// 将 .dmg 移动到用户下载目录，方便查找
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -59,7 +57,7 @@ func (d *darwinInstaller) Install(assetPath string) (string, error) {
 }
 
 // Rollback macOS 回滚：从备份恢复 .app。
-func (d *darwinInstaller) Rollback() error {
+func (d *DarwinInstaller) Rollback() error {
 	if d.backupPath == "" || d.currentPath == "" {
 		return fmt.Errorf("no backup available for rollback")
 	}
@@ -73,7 +71,7 @@ func (d *darwinInstaller) Rollback() error {
 }
 
 // CurrentBinaryPath 返回当前二进制路径（通常是 .app/Contents/MacOS/MedMemo）。
-func (d *darwinInstaller) CurrentBinaryPath() string {
+func (d *DarwinInstaller) CurrentBinaryPath() string {
 	return d.currentPath
 }
 

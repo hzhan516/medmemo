@@ -13,6 +13,7 @@ import (
 )
 
 func setupEmbeddingTestDB(t *testing.T) (*EmbeddingRepoSQLite, *FactRepoSQLite, func()) {
+	t.Helper()
 	tmpDir := t.TempDir()
 	connector, err := database.NewSQLiteConnector(tmpDir)
 	require.NoError(t, err)

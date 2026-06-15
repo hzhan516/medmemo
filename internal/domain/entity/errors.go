@@ -1,12 +1,16 @@
 package entity
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/hzhan516/medmemo/pkg/models"
+)
 
 // 领域层预定义错误，供各层映射与比较。
 // 采用哨兵错误模式，便于 errors.Is 判断。
 var (
 	ErrNotFound       = errors.New("record not found")
-	ErrInvalidConfig  = errors.New("invalid configuration")
+	ErrInvalidConfig  = models.ErrInvalidConfig // ErrInvalidConfig 是 models.ErrInvalidConfig 的别名，保持向后兼容
 	ErrDuplicateEntry = errors.New("duplicate entry")
 	ErrUnauthorized   = errors.New("unauthorized access")
 

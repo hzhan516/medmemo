@@ -7,13 +7,14 @@ import (
 	"io"
 
 	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 // Updater 定义更新信息获取与资产下载的端口。
 type Updater interface {
 	// FetchLatest 查询远程最新版本信息。
 	// channel 为 stable 时过滤掉 prerelease，为 beta 时包含全部。
-	FetchLatest(ctx context.Context, channel entity.UpdateChannel) (*entity.UpdateInfo, error)
+	FetchLatest(ctx context.Context, channel models.UpdateChannel) (*entity.UpdateInfo, error)
 
 	// Download 下载指定 URL 的资产到本地路径，并通过 progress 回调推送进度。
 	// progress 参数可为 nil，表示不接收进度通知。

@@ -7,6 +7,7 @@ import (
 )
 
 func TestQueryExpansionService_Normalize(t *testing.T) {
+	t.Parallel()
 	svc := NewQueryExpansionService()
 
 	tests := []struct {

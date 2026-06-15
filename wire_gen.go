@@ -14,12 +14,11 @@ import (
 	"github.com/hzhan516/medmemo/internal/adapters/updater"
 	"github.com/hzhan516/medmemo/internal/application/healthcheck"
 	"github.com/hzhan516/medmemo/internal/application/pipeline"
-	updater3 "github.com/hzhan516/medmemo/internal/application/updater"
+	updater2 "github.com/hzhan516/medmemo/internal/application/updater"
 	"github.com/hzhan516/medmemo/internal/application/usecase"
 	"github.com/hzhan516/medmemo/internal/infrastructure/config"
 	"github.com/hzhan516/medmemo/internal/infrastructure/onnx"
 	"github.com/hzhan516/medmemo/internal/infrastructure/secret"
-	updater2 "github.com/hzhan516/medmemo/internal/infrastructure/updater"
 )
 
 import (
@@ -84,8 +83,8 @@ func InitializeApp() (*App, func(), error) {
 	titleGenerator := usecase.NewTitleGenerator(llmClient)
 	client := updater.NewDefaultHTTPClient()
 	gitHubUpdater := updater.NewGitHubUpdater(client)
-	installer := updater2.NewInstaller()
-	service := updater3.NewService(gitHubUpdater, installer)
+	installerAdapter := updater.NewInstallerAdapter()
+	service := updater2.NewService(gitHubUpdater, installerAdapter)
 	tokenRefreshService := auth.NewTokenRefreshServiceBare(providerRepoSQLite)
 	oAuthDeviceFlowService := auth.NewOAuthDeviceFlowServiceBare(providerRepoSQLite)
 	auditLogRepoSQLite := repository.NewAuditLogRepoSQLite(sqlCipherConnector)

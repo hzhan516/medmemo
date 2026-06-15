@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hzhan516/medmemo/internal/domain/entity"
 	"github.com/hzhan516/medmemo/pkg/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -615,7 +614,7 @@ func TestIsNetworkError(t *testing.T) {
 // TestProviderFactory 验证 ProviderFactory 能根据配置创建对应适配器。
 func TestProviderFactory(t *testing.T) {
 	// 云端 Provider 路由到 OpenAIAdapter
-	cfg := &entity.AppConfig{
+	cfg := &models.AppConfig{
 		ProviderType: models.ProviderKimi,
 		APIEndpoint:  "https://api.moonshot.cn",
 		DefaultModel: "moonshot-v1-8k",
@@ -624,7 +623,7 @@ func TestProviderFactory(t *testing.T) {
 	require.NotNil(t, client)
 
 	// Ollama 本地 Provider 路由到 LocalAdapter
-	cfg2 := &entity.AppConfig{
+	cfg2 := &models.AppConfig{
 		ProviderType: models.ProviderOllama,
 		APIEndpoint:  "http://localhost:11434",
 		DefaultModel: "llama3",
@@ -633,7 +632,7 @@ func TestProviderFactory(t *testing.T) {
 	require.NotNil(t, client2)
 
 	// 通用本地 Provider 路由到 OpenAIAdapter（apiKey 为空）
-	cfg3 := &entity.AppConfig{
+	cfg3 := &models.AppConfig{
 		ProviderType: models.ProviderLocal,
 		APIEndpoint:  "http://localhost:8080",
 		DefaultModel: "llama3",
