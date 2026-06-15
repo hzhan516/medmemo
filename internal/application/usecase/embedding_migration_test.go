@@ -147,6 +147,10 @@ func (r *migratorFactRepo) FindLatestApprovedByPredicates(ctx context.Context, s
 	return nil, entity.ErrFactNotFound
 }
 
+func (r *migratorFactRepo) FindApprovedByPredicates(ctx context.Context, subject string, predicates []string, limit int) ([]*entity.ExtractedFact, error) {
+	return nil, nil
+}
+
 func (r *migratorFactRepo) CountApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string) (int64, error) {
 	var count int64
 	for _, f := range r.facts {

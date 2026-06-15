@@ -71,7 +71,7 @@ func BenchmarkRetrieveForContext(b *testing.B) {
 	}
 
 	mockSvc := &mockEmbeddingService{}
-	retriever := usecase.NewMemoryRetriever(mockSvc, embedRepo, factRepo, usecase.NewDecayScorer())
+	retriever := usecase.NewMemoryRetriever(mockSvc, embedRepo, factRepo, usecase.NewDecayScorer(), nil, nil, nil)
 
 	// 预热
 	_, _ = retriever.RetrieveForContext(ctx, "测试查询", "sess_1", 3)
