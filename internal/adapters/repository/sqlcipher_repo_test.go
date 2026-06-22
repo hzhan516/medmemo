@@ -7,6 +7,7 @@ import (
 
 	"github.com/hzhan516/medmemo/internal/domain/entity"
 	"github.com/hzhan516/medmemo/internal/infrastructure/database"
+	"github.com/hzhan516/medmemo/pkg/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -119,4 +120,55 @@ func TestEmbeddingRepo_SearchSimilar_SQLCipherFallback(t *testing.T) {
 	require.Len(t, results, 1)
 	assert.Equal(t, weightFact.FactID, results[0].FactID)
 	assert.InDelta(t, 1.0, results[0].Similarity, 0.001)
+}
+
+func TestEmbeddingRepo_SearchSimilarFiltered_SQLCipherFallback(t *testing.T) {
+	factRepo, embeddingRepo, cleanup := setupSQLCipherRepositoryTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	assert.False(t, embeddingRepo.vectorSQLAvailable)
+
+	factA := entity.NewExtractedFact("用户", "患有", "A", 0.9, []string{"msg_a"})
+	factA.FactID = "fact_filt_a"
+	factA.Status = entity.FactStatusApproved
+	require.NoError(t, factRepo.Save(ctx, factA))
+
+	factB := entity.NewExtractedFact("用户", "患有", "B", 0.9, []string{"msg_b"})
+	factB.FactID = "fact_filt_b"
+	factB.Status = entity.FactStatusApproved
+	require.NoError(t, factRepo.Save(ctx, factB))
+
+	vecA := make([]float32, entity.EmbeddingDimension)
+	vecA[0] = 1
+	require.NoError(t, embeddingRepo.Save(ctx, entity.NewSemanticEmbedding(factA.FactID, vecA, models.CurrentEmbeddingVersion)))
+
+	vecB := make([]float32, entity.EmbeddingDimension)
+	vecB[1] = 1
+	require.NoError(t, embeddingRepo.Save(ctx, entity.NewSemanticEmbedding(factB.FactID, vecB, "old-version")))
+
+	query := make([]float32, entity.EmbeddingDimension)
+	query[0] = 1
+
+	results, err := embeddingRepo.SearchSimilarFiltered(ctx, query, 10, models.CurrentEmbeddingVersion)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, factA.FactID, results[0].FactID)
+	assert.InDelta(t, 1.0, results[0].Similarity, 0.001)
+
+	results, err = embeddingRepo.SearchSimilarFiltered(ctx, query, 10, "")
+	require.NoError(t, err)
+	require.Len(t, results, 2)
+	assert.Equal(t, factA.FactID, results[0].FactID)
+	assert.Equal(t, factB.FactID, results[1].FactID)
+	assert.Greater(t, results[0].Similarity, results[1].Similarity)
+
+	results, err = embeddingRepo.SearchSimilarFiltered(ctx, query, 1, "")
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, factA.FactID, results[0].FactID)
+
+	results, err = embeddingRepo.SearchSimilarFiltered(ctx, query, 10, "no-such-version")
+	require.NoError(t, err)
+	assert.Empty(t, results)
 }

@@ -87,7 +87,7 @@ func (r *EmbeddingRepoSQLite) SearchSimilar(ctx context.Context, queryVector []f
 		return nil, nil
 	}
 	if !r.vectorSQLAvailable {
-		return r.searchSimilarInGo(ctx, queryVector, topK)
+		return r.searchSimilarInGo(ctx, queryVector, topK, "")
 	}
 
 	queryBlob, err := vector.EncodeEmbedding(queryVector)
@@ -120,7 +120,7 @@ func (r *EmbeddingRepoSQLite) SearchSimilarFiltered(ctx context.Context, queryVe
 		return r.SearchSimilar(ctx, queryVector, topK)
 	}
 	if !r.vectorSQLAvailable {
-		return r.searchSimilarFilteredInGo(ctx, queryVector, topK, modelVersion)
+		return r.searchSimilarInGo(ctx, queryVector, topK, modelVersion)
 	}
 
 	queryBlob, err := vector.EncodeEmbedding(queryVector)
@@ -225,11 +225,16 @@ func (r *EmbeddingRepoSQLite) scanScoredEmbeddings(rows *sql.Rows) ([]*entity.Sc
 	return results, nil
 }
 
-func (r *EmbeddingRepoSQLite) searchSimilarInGo(ctx context.Context, queryVector []float32, topK int) ([]*entity.ScoredEmbedding, error) {
-	rows, err := r.db.QueryContext(ctx, `
-		SELECT embedding_id, fact_id, vector, model_version, created_at
-		FROM semantic_embeddings
-	`)
+// searchSimilarInGo 在 Go 中完成相似度计算；modelVersion 为空时搜索全部版本。
+func (r *EmbeddingRepoSQLite) searchSimilarInGo(ctx context.Context, queryVector []float32, topK int, modelVersion string) ([]*entity.ScoredEmbedding, error) {
+	sql := `SELECT embedding_id, fact_id, vector, model_version, created_at FROM semantic_embeddings`
+	var args []any
+	if modelVersion != "" {
+		sql += " WHERE model_version = ?"
+		args = append(args, modelVersion)
+	}
+
+	rows, err := r.db.QueryContext(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list embeddings for fallback search: %w", err)
 	}
@@ -264,57 +269,6 @@ func (r *EmbeddingRepoSQLite) searchSimilarInGo(ctx context.Context, queryVector
 
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("failed to iterate embedding rows for fallback search: %w", err)
-	}
-
-	sort.Slice(results, func(i, j int) bool {
-		return results[i].Similarity > results[j].Similarity
-	})
-	if len(results) > topK {
-		results = results[:topK]
-	}
-	return results, nil
-}
-
-func (r *EmbeddingRepoSQLite) searchSimilarFilteredInGo(ctx context.Context, queryVector []float32, topK int, modelVersion string) ([]*entity.ScoredEmbedding, error) {
-	rows, err := r.db.QueryContext(ctx, `
-		SELECT embedding_id, fact_id, vector, model_version, created_at
-		FROM semantic_embeddings
-		WHERE model_version = ?
-	`, modelVersion)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list filtered embeddings for fallback search: %w", err)
-	}
-	defer rows.Close()
-
-	var results []*entity.ScoredEmbedding
-	for rows.Next() {
-		var e entity.SemanticEmbedding
-		var vectorBytes []byte
-		var created int64
-
-		if err := rows.Scan(&e.EmbeddingID, &e.FactID, &vectorBytes, &e.ModelVersion, &created); err != nil {
-			return nil, fmt.Errorf("failed to scan embedding row for filtered fallback search: %w", err)
-		}
-
-		vec, err := entity.VectorFromBytes(vectorBytes)
-		if err != nil {
-			return nil, fmt.Errorf("failed to decode embedding vector for filtered fallback search: %w", err)
-		}
-		similarity, err := cosineSimilarity(queryVector, vec)
-		if err != nil {
-			return nil, fmt.Errorf("failed to calculate filtered fallback cosine similarity: %w", err)
-		}
-
-		e.Vector = vec
-		e.CreatedAt = time.UnixMilli(created).UTC()
-		results = append(results, &entity.ScoredEmbedding{
-			SemanticEmbedding: &e,
-			Similarity:        similarity,
-		})
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("failed to iterate embedding rows for filtered fallback search: %w", err)
 	}
 
 	sort.Slice(results, func(i, j int) bool {
