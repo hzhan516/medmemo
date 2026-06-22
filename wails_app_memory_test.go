@@ -57,6 +57,15 @@ func (s *wailsStubFactRepo) GetByID(ctx context.Context, factID string) (*entity
 	}
 	return f, nil
 }
+func (s *wailsStubFactRepo) FindByIDs(ctx context.Context, factIDs []string) (map[string]*entity.ExtractedFact, error) {
+	result := make(map[string]*entity.ExtractedFact, len(factIDs))
+	for _, id := range factIDs {
+		if f, ok := s.facts[id]; ok {
+			result[id] = f
+		}
+	}
+	return result, nil
+}
 func (s *wailsStubFactRepo) ListByStatus(ctx context.Context, status entity.FactStatus, offset, limit int) ([]*entity.ExtractedFact, error) {
 	var result []*entity.ExtractedFact
 	for _, f := range s.facts {

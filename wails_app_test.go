@@ -394,6 +394,9 @@ func (m *wailsMockFactRepository) Save(ctx context.Context, f *entity.ExtractedF
 func (m *wailsMockFactRepository) GetByID(ctx context.Context, factID string) (*entity.ExtractedFact, error) {
 	return nil, entity.ErrFactNotFound
 }
+func (m *wailsMockFactRepository) FindByIDs(ctx context.Context, factIDs []string) (map[string]*entity.ExtractedFact, error) {
+	return map[string]*entity.ExtractedFact{}, nil
+}
 func (m *wailsMockFactRepository) ListByStatus(ctx context.Context, status entity.FactStatus, offset, limit int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }

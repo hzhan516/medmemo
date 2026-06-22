@@ -140,6 +140,15 @@ func (m *mockFactRepository) GetByID(ctx context.Context, factID string) (*entit
 	}
 	return f, nil
 }
+func (m *mockFactRepository) FindByIDs(ctx context.Context, factIDs []string) (map[string]*entity.ExtractedFact, error) {
+	result := make(map[string]*entity.ExtractedFact, len(factIDs))
+	for _, id := range factIDs {
+		if f, ok := m.facts[id]; ok {
+			result[id] = f
+		}
+	}
+	return result, nil
+}
 func (m *mockFactRepository) ListByStatus(ctx context.Context, status entity.FactStatus, offset, limit int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }

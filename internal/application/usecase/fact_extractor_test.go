@@ -198,6 +198,9 @@ func (m *mockFactRepo) Save(ctx context.Context, f *entity.ExtractedFact) error 
 func (m *mockFactRepo) GetByID(ctx context.Context, factID string) (*entity.ExtractedFact, error) {
 	return nil, nil
 }
+func (m *mockFactRepo) FindByIDs(ctx context.Context, factIDs []string) (map[string]*entity.ExtractedFact, error) {
+	return map[string]*entity.ExtractedFact{}, nil
+}
 func (m *mockFactRepo) ListByStatus(ctx context.Context, status entity.FactStatus, offset, limit int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }

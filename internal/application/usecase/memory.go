@@ -445,13 +445,20 @@ func (m *MemoryRetriever) recallByVector(ctx context.Context, req *RetrievalRequ
 	}
 
 	now := time.Now().UTC()
+	factIDs := make([]string, 0, len(scoredEmbeddings))
+	for _, se := range scoredEmbeddings {
+		factIDs = append(factIDs, se.FactID)
+	}
+
+	facts, err := m.factRepo.FindByIDs(ctx, factIDs)
+	if err != nil {
+		return nil, PathStatus{Path: PathVector, Status: "failure", Reason: fmt.Sprintf("batch load facts failed: %v", err)}
+	}
+
 	var candidates []RetrievalCandidate
 	for _, se := range scoredEmbeddings {
-		fact, err := m.factRepo.GetByID(ctx, se.FactID)
-		if err != nil {
-			continue
-		}
-		if fact.Status != entity.FactStatusApproved {
+		fact, ok := facts[se.FactID]
+		if !ok || fact.Status != entity.FactStatusApproved {
 			continue
 		}
 

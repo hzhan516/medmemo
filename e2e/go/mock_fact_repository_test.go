@@ -16,6 +16,9 @@ func (m *mockFactRepository) Save(ctx context.Context, f *entity.ExtractedFact) 
 func (m *mockFactRepository) GetByID(ctx context.Context, factID string) (*entity.ExtractedFact, error) {
 	return nil, entity.ErrFactNotFound
 }
+func (m *mockFactRepository) FindByIDs(ctx context.Context, factIDs []string) (map[string]*entity.ExtractedFact, error) {
+	return map[string]*entity.ExtractedFact{}, nil
+}
 func (m *mockFactRepository) ListByStatus(ctx context.Context, status entity.FactStatus, offset, limit int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }

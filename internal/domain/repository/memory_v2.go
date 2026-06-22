@@ -33,6 +33,8 @@ type FactRepository interface {
 	Save(ctx context.Context, f *entity.ExtractedFact) error
 	// GetByID 按 ID 查询事实。
 	GetByID(ctx context.Context, factID string) (*entity.ExtractedFact, error)
+	// FindByIDs 批量按 ID 查询事实，返回以 fact_id 为键的映射；不存在的 ID 不出现。
+	FindByIDs(ctx context.Context, factIDs []string) (map[string]*entity.ExtractedFact, error)
 	// ListByStatus 按审核状态分页查询。
 	ListByStatus(ctx context.Context, status entity.FactStatus, offset, limit int) ([]*entity.ExtractedFact, error)
 	// ListPending 获取待审核列表。
