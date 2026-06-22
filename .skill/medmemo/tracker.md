@@ -12,6 +12,39 @@
 
 ---
 
+### [2026-06-22 / v1.1.7] — 死代码清理、本地回答配置化与检索性能优化
+
+**[Modified Areas]**
+- `internal/application/usecase/local_answer_config.go` — 新增本地回答业务配置（subject / 人称 / intent → 模板）
+- `internal/application/usecase/local_answer.go` — `LocalAnswerService` 改为配置驱动，引入 `FactView` Null Object
+- `internal/application/usecase/chat.go` — 新增 `ChatOrchestratorDeps`，`NewChatOrchestrator` 从 11 参数改为单参数
+- `internal/application/usecase/memory.go` + `internal/adapters/repository/fact_repo.go` — `FindByIDs` 批量查询，消除 `recallByVector` N+1
+- `internal/adapters/repository/embedding_repo.go` — 统一 `searchSimilarInGo` fallback helper
+- `internal/adapters/updater/github.go` — 移除冗余 `strings.ToLower`
+- `web/src/pages/MemoryPage.tsx` / `web/src/components/UpdateModal.tsx` — 并行 I/O、模块级常量/函数
+- 删除废弃包/文件：`internal/adapters/dto/`、`internal/infrastructure/network/`、`accuracy_tracker`、domain 层多个空接口等
+
+**[Logic Evolution]**
+- 本地回答模板从 `switch` 硬编码改为 `map` + `strings.ReplaceAll` 数据驱动
+- 事实查询 subject 从硬编码 `"用户"` 改为 `LocalAnswerConfig.Subject`
+- `ChatOrchestrator` 依赖按字段分组注入，构造函数可扩展性提升
+- 向量召回候选 fact 一次性批量加载，保留原有 approved / confidence / decay / 排序逻辑
+
+**[Checklist Status]**
+- 分支 `refactor/code-cleanup-dead-code-audit`，6 commits
+- ✅ `wails.json` → v1.1.7
+- ✅ `web/package.json` → v1.1.7
+- ✅ `npm install` → package-lock.json 刷新
+- ✅ `internal/domain/entity/changelog/zh-Hans.json` → 末尾新增 v1.1.7
+- ✅ `medmemo/开发日志/v1.1/v1.1.7.md` → 创建
+- ✅ `go vet`、`go build -tags webkit2_41,ORT ./...`、`make test`、`make test-integration`、`make test-e2e`、`wire .` 全部通过
+
+**[Pending/Next Steps]**
+- `DuckDBConnector` / `FamilyRepoKuzu` 仍为冻结 stub，等待维护者决策
+- 后续可考虑将 `IntentResolver` 的 `intentAliasConfig` 也外置到 `LocalAnswerConfig` 族配置
+
+---
+
 ### [2026-06-12 / v1.1.5] — M03 混合检索多路召回管线实现
 
 **[Modified Areas]**

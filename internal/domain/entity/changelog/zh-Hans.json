@@ -286,5 +286,21 @@
       "CI 测试对齐 Makefile（单元/集成测试 + native lib 设置）",
       "修复 E2E 合规检测断言（L1 阻断回复期望 SafeText 替代原文）"
     ]
+  },
+  {
+    "version": "v1.1.7",
+    "title": "死代码清理、本地回答配置化与检索性能优化",
+    "features": [
+      "死代码审计：移除 6 个废弃包/文件、5 个无用接口、3 个未使用工具类",
+      "Embedding fallback 搜索 helper 统一，消除 58 行 copy-paste 代码",
+      "FactRepository 新增 FindByIDs 批量查询，recallByVector 消除 N+1",
+      "LocalAnswerConfig 配置驱动模板与人称，移除 type-switch 与硬编码 '用户'",
+      "ChatOrchestratorDeps 结构体替代 11 参数构造函数",
+      "Null Object 模式移除 Format 内 nil guard",
+      "热路径零分配：len([]rune) → utf8.RuneCountInString",
+      "前端 MemoryPage 6 个 I/O 调用 Promise.all 并行化",
+      "UpdateModal formatBytes / IS_MACOS 移至模块级避免重复创建"
+    ],
+    "fixes": []
   }
 ]
