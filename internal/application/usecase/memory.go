@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -577,8 +578,8 @@ func rerank(candidates []RetrievalCandidate, req *RetrievalRequest) []RetrievalC
 
 		// recent boost: 个人属性问题优先推 recent path 候选
 		if boostPersonal {
-			aRecent := containsPath(a.MatchedPaths, PathRecent)
-			bRecent := containsPath(b.MatchedPaths, PathRecent)
+			aRecent := slices.Contains(a.MatchedPaths, PathRecent)
+			bRecent := slices.Contains(b.MatchedPaths, PathRecent)
 			if aRecent != bRecent {
 				return aRecent
 			}
@@ -605,16 +606,6 @@ func rerank(candidates []RetrievalCandidate, req *RetrievalRequest) []RetrievalC
 
 	_ = recentBoost
 	return candidates
-}
-
-// containsPath 检查 matched_paths 中是否包含指定路径。
-func containsPath(paths []RetrievalPath, target RetrievalPath) bool {
-	for _, p := range paths {
-		if p == target {
-			return true
-		}
-	}
-	return false
 }
 
 // applyTokenBudgetToCandidates 对 RetrievalCandidate 列表应用 Token 预算截断。

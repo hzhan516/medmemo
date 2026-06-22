@@ -82,8 +82,8 @@ func TestLoader_Load_InvalidPath(t *testing.T) {
 
 func TestExpandTilde(t *testing.T) {
 	home, _ := os.UserHomeDir()
-	assert.Equal(t, filepath.Join(home, "/test"), expandTilde("~/test"))
-	assert.Equal(t, "/absolute/path", expandTilde("/absolute/path"))
+	assert.Equal(t, filepath.Join(home, "/test"), ExpandTilde("~/test"))
+	assert.Equal(t, "/absolute/path", ExpandTilde("/absolute/path"))
 }
 
 func TestLoader_Load_InvalidYAML(t *testing.T) {

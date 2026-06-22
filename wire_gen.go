@@ -16,7 +16,6 @@ import (
 	"github.com/hzhan516/medmemo/internal/application/pipeline"
 	updater2 "github.com/hzhan516/medmemo/internal/application/updater"
 	"github.com/hzhan516/medmemo/internal/application/usecase"
-	"github.com/hzhan516/medmemo/internal/infrastructure/config"
 	"github.com/hzhan516/medmemo/internal/infrastructure/onnx"
 	"github.com/hzhan516/medmemo/internal/infrastructure/secret"
 )
@@ -31,8 +30,7 @@ import (
 // 返回 (func()) 作为资源清理回调，由 main 函数通过 defer 调用。
 func InitializeApp() (*App, func(), error) {
 	llmClientFactory := ai.NewLLMClientFactory()
-	loader := NewDefaultLoader()
-	appConfig, err := config.LoadConfig(loader)
+	appConfig, err := NewAppConfig()
 	if err != nil {
 		return nil, nil, err
 	}

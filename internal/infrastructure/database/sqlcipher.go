@@ -1,4 +1,4 @@
-// Package database 封装 DuckDB / SQLite / SQLCipher 连接池、迁移与事务管理。
+// Package database 封装 SQLite / SQLCipher 连接池、迁移与事务管理。
 package database
 
 import (
@@ -11,10 +11,15 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/google/wire"
 	"github.com/hzhan516/medmemo/internal/infrastructure/secret"
 	sqlite3 "github.com/mutecomm/go-sqlcipher"
+	"github.com/viant/sqlite-vec/engine"
 )
+
+func init() {
+	// 必须在 sql.Open 之前注册，确保所有 SQLite 连接都能使用 vec_cosine / vec_l2
+	_ = engine.RegisterVectorFunctions(nil)
+}
 
 const dbKeyName = "db_key"
 
@@ -501,8 +506,3 @@ func migrateSQLiteSchema(ctx context.Context, db *sql.DB) error {
 
 	return nil
 }
-
-// SQLCipherSet 供 Wire 使用的 ProviderSet。
-var SQLCipherSet = wire.NewSet(
-	NewSQLCipherConnector,
-)

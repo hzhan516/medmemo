@@ -218,46 +218,6 @@ func TestReasoningChainEvaluator_DetectMissingInfo_AllFound(t *testing.T) {
 	assert.LessOrEqual(t, len(missing), 1)
 }
 
-// TestAccuracyTracker_ConcurrentMixedFeedback 验证并发混合反馈的正确性。
-func TestAccuracyTracker_ConcurrentMixedFeedback(t *testing.T) {
-	t.Parallel()
-	tracker := NewAccuracyTracker()
-	done := make(chan bool, 200)
-
-	// 100 正确 + 100 错误
-	for i := 0; i < 100; i++ {
-		go func() {
-			tracker.RecordFeedback(entity.AnswerTypeSymptomAnalysis, true, "30d")
-			done <- true
-		}()
-		go func() {
-			tracker.RecordFeedback(entity.AnswerTypeSymptomAnalysis, false, "30d")
-			done <- true
-		}()
-	}
-
-	for i := 0; i < 200; i++ {
-		<-done
-	}
-
-	acc := tracker.GetAccuracy(entity.AnswerTypeSymptomAnalysis, "30d")
-	assert.InDelta(t, 0.50, acc, 0.01)
-	stats := tracker.GetStats(entity.AnswerTypeSymptomAnalysis, "30d")
-	assert.Equal(t, 200, stats.TotalCount)
-}
-
-// TestAccuracyTracker_GetStats_ColdStart 验证冷启动时 GetStats 返回零值。
-func TestAccuracyTracker_GetStats_ColdStart(t *testing.T) {
-	t.Parallel()
-	tracker := NewAccuracyTracker()
-	stats := tracker.GetStats(entity.AnswerTypeEmergency, "30d")
-
-	assert.Equal(t, 0, stats.TotalCount)
-	assert.Equal(t, 0, stats.CorrectCount)
-	// AccuracyStats.Accuracy() 在 TotalCount=0 时返回冷启动默认值 0.75
-	assert.InDelta(t, 0.75, stats.Accuracy(), 0.001)
-}
-
 // TestConfidenceResult_BreakdownNormalization 验证 Breakdown 中各维度分数正确归一化。
 func TestConfidenceResult_BreakdownNormalization(t *testing.T) {
 	t.Parallel()

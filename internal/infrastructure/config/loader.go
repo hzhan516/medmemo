@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/google/wire"
 	"github.com/hzhan516/medmemo/pkg/models"
 	"gopkg.in/yaml.v3"
 )
@@ -90,7 +89,7 @@ func (l *Loader) Load() (*models.AppConfig, error) {
 func (l *Loader) loadDefaults() *rawConfig {
 	updateChannel := string(models.ChannelBeta)
 	desensitizationLevel := defaultDesensitizationLevel
-	dataDir := expandTilde(defaultDataDir)
+	dataDir := ExpandTilde(defaultDataDir)
 	if dataDir == "" {
 		// 兜底：若无法解析主目录，使用当前工作目录下的 .medmemo/data
 		dataDir = ".medmemo/data"
@@ -185,11 +184,11 @@ func (l *Loader) applyEnvOverrides(raw *rawConfig) {
 
 func (l *Loader) toDomain(raw *rawConfig) *models.AppConfig {
 	cfg := &models.AppConfig{
-		DataDir:                   expandTilde(raw.DataDir),
+		DataDir:                   ExpandTilde(raw.DataDir),
 		DefaultModel:              raw.DefaultModel,
 		Language:                  raw.Language,
 		APIEndpoint:               raw.APIEndpoint,
-		ModelDir:                  expandTilde(raw.ModelDir),
+		ModelDir:                  ExpandTilde(raw.ModelDir),
 		UpdateChannel:             models.UpdateChannel(raw.UpdateChannel),
 		DesensitizationLevel:      models.DesensitizationLevel(raw.DesensitizationLevel),
 		EmbeddingModelDownloadURL: raw.EmbeddingModelDownloadURL,
@@ -219,13 +218,8 @@ func (l *Loader) toDomain(raw *rawConfig) *models.AppConfig {
 	return cfg
 }
 
-// LoadConfig 从 Loader 加载并返回 AppConfig，供 Wire 注入。
-func LoadConfig(loader *Loader) (*models.AppConfig, error) {
-	return loader.Load()
-}
-
-// expandTilde 将路径中的 ~ 替换为用户主目录。
-func expandTilde(path string) string {
+// ExpandTilde 将路径中的 ~ 替换为用户主目录。
+func ExpandTilde(path string) string {
 	if len(path) > 0 && path[0] == '~' {
 		if home, err := os.UserHomeDir(); err == nil {
 			return filepath.Join(home, path[1:])
@@ -264,9 +258,3 @@ func SaveDataRetentionDays(days int) error {
 	}
 	return os.WriteFile(path, data, 0600)
 }
-
-// ConfigSet 供 Wire 使用的 ProviderSet。
-var ConfigSet = wire.NewSet(
-	NewLoader,
-	LoadConfig,
-)

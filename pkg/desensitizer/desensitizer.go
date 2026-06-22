@@ -19,6 +19,7 @@ package desensitizer
 import (
 	"crypto/sha256"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -127,7 +128,7 @@ func (e *RuleEngine) activateRules(text string) map[string]bool {
 		acMatches := e.ac.Search(text)
 		for _, m := range acMatches {
 			for _, r := range e.rules {
-				if contains(r.config.Keywords, m.Pattern) {
+				if slices.Contains(r.config.Keywords, m.Pattern) {
 					ruleActive[r.config.Name] = true
 					break
 				}
@@ -251,16 +252,6 @@ func maxDigitSequence(text string) int {
 		}
 	}
 	return maxCount
-}
-
-// contains 检查 slice 中是否包含指定字符串。
-func contains(slice []string, s string) bool {
-	for _, v := range slice {
-		if v == s {
-			return true
-		}
-	}
-	return false
 }
 
 // Restore 将脱敏后的文本还原为原始文本（仅支持 P2 级占位符）。

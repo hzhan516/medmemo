@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/hzhan516/medmemo/internal/domain/entity"
@@ -61,7 +62,7 @@ func (r *ProviderRepoSQLite) Create(ctx context.Context, provider *models.Provid
 		INSERT INTO providers (id, name, api_host, api_key, model_id, temperature, timeout_ms, max_retries, group_name, enabled, sort_order, created_at, updated_at, auth_method, auth_params)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, provider.ID, provider.Name, provider.APIHost, encryptedKey, provider.ModelID, provider.Temperature,
-		int64(provider.TimeoutMs), provider.MaxRetries, provider.GroupName, boolToInt(provider.Enabled),
+		int64(provider.TimeoutMs), provider.MaxRetries, provider.GroupName, map[bool]int{false: 0, true: 1}[provider.Enabled],
 		provider.SortOrder, now, now, string(provider.AuthMethod), authParamsJSON)
 
 	if err != nil {
@@ -97,7 +98,7 @@ func (r *ProviderRepoSQLite) Update(ctx context.Context, provider *models.Provid
 			timeout_ms = ?, max_retries = ?, group_name = ?, enabled = ?, sort_order = ?, updated_at = ?, auth_method = ?, auth_params = ?
 		WHERE id = ?
 	`, provider.Name, provider.APIHost, encryptedKey, provider.ModelID, provider.Temperature,
-		int64(provider.TimeoutMs), provider.MaxRetries, provider.GroupName, boolToInt(provider.Enabled),
+		int64(provider.TimeoutMs), provider.MaxRetries, provider.GroupName, map[bool]int{false: 0, true: 1}[provider.Enabled],
 		provider.SortOrder, now, string(provider.AuthMethod), authParamsJSON, provider.ID)
 
 	if err != nil {
@@ -280,14 +281,6 @@ func decrypt(ciphertext []byte, key []byte) (string, error) {
 	return string(plaintext), nil
 }
 
-// boolToInt 将 bool 转换为 SQLite INTEGER (0/1)。
-func boolToInt(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
-}
-
 // isUniqueConstraintError 判断是否为 SQLite 唯一约束冲突错误。
 func isUniqueConstraintError(err error) bool {
 	if err == nil {
@@ -295,18 +288,5 @@ func isUniqueConstraintError(err error) bool {
 	}
 	// 兼容 modernc.org/sqlite 和 go-sqlcipher 的错误信息
 	errStr := err.Error()
-	return contains(errStr, "UNIQUE constraint failed") || contains(errStr, "unique constraint")
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsAt(s, substr))
-}
-
-func containsAt(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
+	return strings.Contains(errStr, "UNIQUE constraint failed") || strings.Contains(errStr, "unique constraint")
 }

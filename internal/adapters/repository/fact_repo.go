@@ -44,7 +44,7 @@ func (r *FactRepoSQLite) Save(ctx context.Context, f *entity.ExtractedFact) erro
 	_, err = r.db.ExecContext(ctx, `
 		INSERT INTO extracted_facts (fact_id, subject, predicate, object, confidence, source_msg_ids, status, is_sensitive, scored_at, reviewed_at, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, f.FactID, f.Subject, f.Predicate, f.Object, f.Confidence, sourceIDs, f.Status, boolToInt(f.IsSensitive), scoredAt, reviewedAt, f.CreatedAt.UnixMilli())
+	`, f.FactID, f.Subject, f.Predicate, f.Object, f.Confidence, sourceIDs, f.Status, map[bool]int{false: 0, true: 1}[f.IsSensitive], scoredAt, reviewedAt, f.CreatedAt.UnixMilli())
 	if err != nil {
 		if database.IsSQLitePrimaryOrUniqueConstraintOn(err, "extracted_facts.fact_id") {
 			return nil
