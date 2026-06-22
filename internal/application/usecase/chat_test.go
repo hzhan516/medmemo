@@ -203,7 +203,17 @@ func newTestOrchestrator(mock port.LLMClient, comp *RuleComplianceChecker, deid 
 	if factRepo == nil {
 		factRepo = &mockFactRepository{}
 	}
-	return NewChatOrchestrator(factory, store, nil, nil, comp, deid, retriever, NewConfidenceAggregator(), factRepo, NewIntentResolver(NewQueryExpansionService()), NewLocalAnswerService())
+	return NewChatOrchestrator(ChatOrchestratorDeps{
+		LLMFactory:           factory,
+		ProviderStore:        store,
+		Compliance:           comp,
+		DeidPipeline:         deid,
+		MemoryRetriever:      retriever,
+		ConfidenceAggregator: NewConfidenceAggregator(),
+		FactRepo:             factRepo,
+		IntentResolver:       NewIntentResolver(NewQueryExpansionService()),
+		LocalAnswer:          NewLocalAnswerService(NewLocalAnswerConfig()),
+	})
 }
 
 // mockComplianceCheckerForTest 实现 ComplianceChecker，支持测试注入各类合规场景。
@@ -222,7 +232,15 @@ var _ ComplianceChecker = (*mockComplianceCheckerForTest)(nil)
 func newTestOrchestratorWithChecker(mock port.LLMClient, comp ComplianceChecker) *ChatOrchestrator {
 	factory := &mockLLMClientFactory{client: mock}
 	store := &mockProviderStore{}
-	return NewChatOrchestrator(factory, store, nil, nil, comp, nil, nil, NewConfidenceAggregator(), &mockFactRepository{}, NewIntentResolver(NewQueryExpansionService()), NewLocalAnswerService())
+	return NewChatOrchestrator(ChatOrchestratorDeps{
+		LLMFactory:           factory,
+		ProviderStore:        store,
+		Compliance:           comp,
+		ConfidenceAggregator: NewConfidenceAggregator(),
+		FactRepo:             &mockFactRepository{},
+		IntentResolver:       NewIntentResolver(NewQueryExpansionService()),
+		LocalAnswer:          NewLocalAnswerService(NewLocalAnswerConfig()),
+	})
 }
 
 // TestChatOrchestrator_Execute_Success 验证非流式对话正常返回。
@@ -690,7 +708,14 @@ func TestChatOrchestrator_calculateConfidence_nilAggregator(t *testing.T) {
 	factory := &mockLLMClientFactory{client: mock}
 	store := &mockProviderStore{}
 	// 显式将 confidenceAggregator 传为 nil
-	orch := NewChatOrchestrator(factory, store, nil, nil, comp, nil, nil, nil, &mockFactRepository{}, NewIntentResolver(NewQueryExpansionService()), NewLocalAnswerService())
+	orch := NewChatOrchestrator(ChatOrchestratorDeps{
+		LLMFactory:     factory,
+		ProviderStore:  store,
+		Compliance:     comp,
+		FactRepo:       &mockFactRepository{},
+		IntentResolver: NewIntentResolver(NewQueryExpansionService()),
+		LocalAnswer:    NewLocalAnswerService(NewLocalAnswerConfig()),
+	})
 
 	result := orch.calculateConfidence("测试回复", nil)
 
@@ -709,7 +734,15 @@ func TestChatOrchestrator_resolveLLMClient_cancelledContext(t *testing.T) {
 	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
 	factory := &mockLLMClientFactory{client: mock}
 	store := &mockProviderStoreCtxErr{}
-	orch := NewChatOrchestrator(factory, store, nil, nil, comp, nil, nil, NewConfidenceAggregator(), &mockFactRepository{}, NewIntentResolver(NewQueryExpansionService()), NewLocalAnswerService())
+	orch := NewChatOrchestrator(ChatOrchestratorDeps{
+		LLMFactory:           factory,
+		ProviderStore:        store,
+		Compliance:           comp,
+		ConfidenceAggregator: NewConfidenceAggregator(),
+		FactRepo:             &mockFactRepository{},
+		IntentResolver:       NewIntentResolver(NewQueryExpansionService()),
+		LocalAnswer:          NewLocalAnswerService(NewLocalAnswerConfig()),
+	})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // 立即取消
@@ -726,7 +759,15 @@ func TestChatOrchestrator_resolveLLMClient_contextDeadline(t *testing.T) {
 	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
 	factory := &mockLLMClientFactory{client: mock}
 	store := &mockProviderStore{}
-	orch := NewChatOrchestrator(factory, store, nil, nil, comp, nil, nil, NewConfidenceAggregator(), &mockFactRepository{}, NewIntentResolver(NewQueryExpansionService()), NewLocalAnswerService())
+	orch := NewChatOrchestrator(ChatOrchestratorDeps{
+		LLMFactory:           factory,
+		ProviderStore:        store,
+		Compliance:           comp,
+		ConfidenceAggregator: NewConfidenceAggregator(),
+		FactRepo:             &mockFactRepository{},
+		IntentResolver:       NewIntentResolver(NewQueryExpansionService()),
+		LocalAnswer:          NewLocalAnswerService(NewLocalAnswerConfig()),
+	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -754,7 +795,15 @@ func TestChatOrchestrator_ExtractFactsFromReply_UsesUserContentOnly(t *testing.T
 	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
 	factory := &mockLLMClientFactory{client: mock2}
 	store := &mockProviderStore{}
-	orch := NewChatOrchestrator(factory, store, nil, nil, comp, nil, nil, NewConfidenceAggregator(), &mockFactRepository{}, NewIntentResolver(NewQueryExpansionService()), NewLocalAnswerService())
+	orch := NewChatOrchestrator(ChatOrchestratorDeps{
+		LLMFactory:           factory,
+		ProviderStore:        store,
+		Compliance:           comp,
+		ConfidenceAggregator: NewConfidenceAggregator(),
+		FactRepo:             &mockFactRepository{},
+		IntentResolver:       NewIntentResolver(NewQueryExpansionService()),
+		LocalAnswer:          NewLocalAnswerService(NewLocalAnswerConfig()),
+	})
 
 	facts, err = orch.ExtractFactsFromReply(context.Background(), "我体重110公斤", "AI无法知道你的体重", "test-provider")
 	require.NoError(t, err)
@@ -823,7 +872,15 @@ func TestChatOrchestrator_ProviderRouting_DifferentProviderID(t *testing.T) {
 		},
 	}
 	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
-	orch := NewChatOrchestrator(factory, store, nil, nil, comp, nil, nil, NewConfidenceAggregator(), &mockFactRepository{}, NewIntentResolver(NewQueryExpansionService()), NewLocalAnswerService())
+	orch := NewChatOrchestrator(ChatOrchestratorDeps{
+		LLMFactory:           factory,
+		ProviderStore:        store,
+		Compliance:           comp,
+		ConfidenceAggregator: NewConfidenceAggregator(),
+		FactRepo:             &mockFactRepository{},
+		IntentResolver:       NewIntentResolver(NewQueryExpansionService()),
+		LocalAnswer:          NewLocalAnswerService(NewLocalAnswerConfig()),
+	})
 
 	// 测试 Kimi provider
 	req1 := ChatRequest{
@@ -852,7 +909,15 @@ func TestChatOrchestrator_ProviderRouting_UnknownProviderID(t *testing.T) {
 	factory := &multiClientMockFactory{clients: map[string]port.LLMClient{}}
 	store := &multiProviderStore{providers: map[string]*models.ProviderConfig{}}
 	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
-	orch := NewChatOrchestrator(factory, store, nil, nil, comp, nil, nil, NewConfidenceAggregator(), &mockFactRepository{}, NewIntentResolver(NewQueryExpansionService()), NewLocalAnswerService())
+	orch := NewChatOrchestrator(ChatOrchestratorDeps{
+		LLMFactory:           factory,
+		ProviderStore:        store,
+		Compliance:           comp,
+		ConfidenceAggregator: NewConfidenceAggregator(),
+		FactRepo:             &mockFactRepository{},
+		IntentResolver:       NewIntentResolver(NewQueryExpansionService()),
+		LocalAnswer:          NewLocalAnswerService(NewLocalAnswerConfig()),
+	})
 
 	req := ChatRequest{
 		Messages:   []models.Message{{Role: models.RoleUser, Content: "test"}},
@@ -885,7 +950,15 @@ func TestChatOrchestrator_OfflineFallback_CloudFails(t *testing.T) {
 		},
 	}
 	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
-	orch := NewChatOrchestrator(factory, store, nil, nil, comp, nil, nil, NewConfidenceAggregator(), &mockFactRepository{}, NewIntentResolver(NewQueryExpansionService()), NewLocalAnswerService())
+	orch := NewChatOrchestrator(ChatOrchestratorDeps{
+		LLMFactory:           factory,
+		ProviderStore:        store,
+		Compliance:           comp,
+		ConfidenceAggregator: NewConfidenceAggregator(),
+		FactRepo:             &mockFactRepository{},
+		IntentResolver:       NewIntentResolver(NewQueryExpansionService()),
+		LocalAnswer:          NewLocalAnswerService(NewLocalAnswerConfig()),
+	})
 
 	// 先测试云端失败
 	req1 := ChatRequest{
@@ -927,7 +1000,15 @@ func TestChatOrchestrator_ModelSwitching_MidConversation(t *testing.T) {
 		},
 	}
 	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
-	orch := NewChatOrchestrator(factory, store, nil, nil, comp, nil, nil, NewConfidenceAggregator(), &mockFactRepository{}, NewIntentResolver(NewQueryExpansionService()), NewLocalAnswerService())
+	orch := NewChatOrchestrator(ChatOrchestratorDeps{
+		LLMFactory:           factory,
+		ProviderStore:        store,
+		Compliance:           comp,
+		ConfidenceAggregator: NewConfidenceAggregator(),
+		FactRepo:             &mockFactRepository{},
+		IntentResolver:       NewIntentResolver(NewQueryExpansionService()),
+		LocalAnswer:          NewLocalAnswerService(NewLocalAnswerConfig()),
+	})
 
 	// 第一轮：使用 Kimi
 	req1 := ChatRequest{
@@ -979,7 +1060,15 @@ func TestChatOrchestrator_ModelSwitching_StreamMode(t *testing.T) {
 		},
 	}
 	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
-	orch := NewChatOrchestrator(factory, store, nil, nil, comp, nil, nil, NewConfidenceAggregator(), &mockFactRepository{}, NewIntentResolver(NewQueryExpansionService()), NewLocalAnswerService())
+	orch := NewChatOrchestrator(ChatOrchestratorDeps{
+		LLMFactory:           factory,
+		ProviderStore:        store,
+		Compliance:           comp,
+		ConfidenceAggregator: NewConfidenceAggregator(),
+		FactRepo:             &mockFactRepository{},
+		IntentResolver:       NewIntentResolver(NewQueryExpansionService()),
+		LocalAnswer:          NewLocalAnswerService(NewLocalAnswerConfig()),
+	})
 
 	// 第一轮：Kimi 流式
 	req1 := ChatRequest{
@@ -1022,7 +1111,14 @@ func TestChatOrchestrator_NilConfidenceAggregator(t *testing.T) {
 	factory := &mockLLMClientFactory{client: mock}
 	store := &mockProviderStore{}
 	// 故意不传 ConfidenceAggregator（nil）
-	orch := NewChatOrchestrator(factory, store, nil, nil, comp, nil, nil, nil, &mockFactRepository{}, NewIntentResolver(NewQueryExpansionService()), NewLocalAnswerService())
+	orch := NewChatOrchestrator(ChatOrchestratorDeps{
+		LLMFactory:     factory,
+		ProviderStore:  store,
+		Compliance:     comp,
+		FactRepo:       &mockFactRepository{},
+		IntentResolver: NewIntentResolver(NewQueryExpansionService()),
+		LocalAnswer:    NewLocalAnswerService(NewLocalAnswerConfig()),
+	})
 
 	req := ChatRequest{
 		ConversationID: "test-conv",

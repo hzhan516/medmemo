@@ -24,6 +24,21 @@ type Deidentifier interface {
 	Execute(ctx context.Context, raw string) (models.DeidentifyResult, error)
 }
 
+// ChatOrchestratorDeps 聚合 ChatOrchestrator 所需的全部依赖。
+type ChatOrchestratorDeps struct {
+	LLMFactory           port.LLMClientFactory
+	ProviderStore        port.ProviderStore
+	MemoryRepo           port.MemoryRepository
+	Detector             port.SensitiveDetector
+	Compliance           ComplianceChecker
+	DeidPipeline         Deidentifier
+	MemoryRetriever      MemoryQuerier
+	ConfidenceAggregator *ConfidenceAggregator
+	FactRepo             repository.FactRepository
+	IntentResolver       *IntentResolver
+	LocalAnswer          *LocalAnswerService
+}
+
 // ChatOrchestrator 对话流程编排器。
 type ChatOrchestrator struct {
 	llmFactory           port.LLMClientFactory
@@ -34,42 +49,30 @@ type ChatOrchestrator struct {
 	deidPipeline         Deidentifier
 	memoryRetriever      MemoryQuerier
 	confidenceAggregator *ConfidenceAggregator
-	factRepo             repository.FactRepository // 新增：用于本地 approved fact 直查
-	intentResolver       *IntentResolver           // 新增：意图解析
-	localAnswer          *LocalAnswerService       // 新增：本地模板回答
+	factRepo             repository.FactRepository
+	intentResolver       *IntentResolver
+	localAnswer          *LocalAnswerService
 	// 全局事实提取限流器，跨调用共享速率限制
 	factExtractMu       sync.Mutex
 	factExtractLastCall time.Time
-	factExtractMinGap   time.Duration // 最小调用间隔
+	factExtractMinGap   time.Duration // 最小 15 秒间隔，避免与主对话竞争
 }
 
 // NewChatOrchestrator 构造函数，供 Wire 注入。
-func NewChatOrchestrator(
-	llmFactory port.LLMClientFactory,
-	providerStore port.ProviderStore,
-	mem port.MemoryRepository,
-	det port.SensitiveDetector,
-	comp ComplianceChecker,
-	deid Deidentifier,
-	retriever MemoryQuerier,
-	confAgg *ConfidenceAggregator,
-	factRepo repository.FactRepository,
-	intentResolver *IntentResolver,
-	localAnswer *LocalAnswerService,
-) *ChatOrchestrator {
+func NewChatOrchestrator(deps ChatOrchestratorDeps) *ChatOrchestrator {
 	return &ChatOrchestrator{
-		llmFactory:           llmFactory,
-		providerStore:        providerStore,
-		memoryRepo:           mem,
-		detector:             det,
-		compliance:           comp,
-		deidPipeline:         deid,
-		memoryRetriever:      retriever,
-		confidenceAggregator: confAgg,
-		factRepo:             factRepo,
-		intentResolver:       intentResolver,
-		localAnswer:          localAnswer,
-		factExtractMinGap:    15 * time.Second, // 最小 15 秒间隔，避免与主对话竞争
+		llmFactory:           deps.LLMFactory,
+		providerStore:        deps.ProviderStore,
+		memoryRepo:           deps.MemoryRepo,
+		detector:             deps.Detector,
+		compliance:           deps.Compliance,
+		deidPipeline:         deps.DeidPipeline,
+		memoryRetriever:      deps.MemoryRetriever,
+		confidenceAggregator: deps.ConfidenceAggregator,
+		factRepo:             deps.FactRepo,
+		intentResolver:       deps.IntentResolver,
+		localAnswer:          deps.LocalAnswer,
+		factExtractMinGap:    15 * time.Second,
 	}
 }
 
@@ -192,15 +195,14 @@ func (c *ChatOrchestrator) tryLocalAnswer(ctx context.Context, query string) (st
 	if result == nil || result.Confidence != ConfidenceHigh {
 		return "", false, nil
 	}
-	// MVP 阶段 subject 固定为"用户"，后续可扩展为当前家庭成员
-	fact, err := c.factRepo.FindLatestApprovedByPredicates(ctx, "用户", result.Predicates)
+	fact, err := c.factRepo.FindLatestApprovedByPredicates(ctx, c.localAnswer.Subject(), result.Predicates)
 	if err != nil {
 		if errors.Is(err, entity.ErrFactNotFound) {
 			return "", false, nil
 		}
 		return "", false, fmt.Errorf("本地事实查询失败: %w", err)
 	}
-	return c.localAnswer.Format(result.Intent, fact), true, nil
+	return c.localAnswer.Format(result.Intent, AsFactView(fact)), true, nil
 }
 
 // Execute 执行单次对话用例（非流式）。
@@ -568,10 +570,12 @@ func (c *RuleComplianceChecker) Check(ctx context.Context, text string) (*Compli
 // ApplicationSet 供 Wire 使用的 ProviderSet。
 var ApplicationSet = wire.NewSet(
 	NewChatOrchestrator,
+	wire.Struct(new(ChatOrchestratorDeps), "*"),
 	NewRuleComplianceChecker,
 	NewTitleGenerator,
 	NewConfidenceAggregator,
 	NewQueryExpansionService,
 	NewIntentResolver,
 	NewLocalAnswerService,
+	NewLocalAnswerConfig,
 )

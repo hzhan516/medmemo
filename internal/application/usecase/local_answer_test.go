@@ -9,46 +9,46 @@ import (
 
 func TestLocalAnswerService_Format(t *testing.T) {
 	t.Parallel()
-	svc := NewLocalAnswerService()
+	svc := NewLocalAnswerService(NewLocalAnswerConfig())
 
 	tests := []struct {
 		intent   MemoryIntent
-		fact     *entity.ExtractedFact
+		fact     FactView
 		expected string
 	}{
 		{
 			intent:   IntentPersonalWeight,
-			fact:     &entity.ExtractedFact{Object: "110公斤"},
+			fact:     AsFactView(&entity.ExtractedFact{Object: "110公斤"}),
 			expected: "记录中显示，你当前体重为 110公斤。",
 		},
 		{
 			intent:   IntentPersonalHeight,
-			fact:     &entity.ExtractedFact{Object: "175厘米"},
+			fact:     AsFactView(&entity.ExtractedFact{Object: "175厘米"}),
 			expected: "记录中显示，你当前身高为 175厘米。",
 		},
 		{
 			intent:   IntentPersonalAge,
-			fact:     &entity.ExtractedFact{Object: "35岁"},
+			fact:     AsFactView(&entity.ExtractedFact{Object: "35岁"}),
 			expected: "记录中显示，你当前年龄为 35岁。",
 		},
 		{
 			intent:   IntentAllergyHistory,
-			fact:     &entity.ExtractedFact{Object: "对青霉素过敏"},
+			fact:     AsFactView(&entity.ExtractedFact{Object: "对青霉素过敏"}),
 			expected: "记录中显示，你的过敏相关信息为：对青霉素过敏。",
 		},
 		{
 			intent:   IntentMedicationHistory,
-			fact:     &entity.ExtractedFact{Object: "阿司匹林"},
+			fact:     AsFactView(&entity.ExtractedFact{Object: "阿司匹林"}),
 			expected: "记录中显示，你的用药相关信息为：阿司匹林。",
 		},
 		{
 			intent:   MemoryIntent("unknown"),
-			fact:     &entity.ExtractedFact{Object: "未知"},
+			fact:     AsFactView(&entity.ExtractedFact{Object: "未知"}),
 			expected: "",
 		},
 		{
 			intent:   IntentPersonalWeight,
-			fact:     nil,
+			fact:     AsFactView(nil),
 			expected: "",
 		},
 	}
@@ -58,5 +58,43 @@ func TestLocalAnswerService_Format(t *testing.T) {
 			got := svc.Format(tt.intent, tt.fact)
 			assert.Equal(t, tt.expected, got)
 		})
+	}
+}
+
+func TestLocalAnswerService_Format_ConfigurableSubject(t *testing.T) {
+	t.Parallel()
+	cfg := DefaultLocalAnswerConfig()
+	cfg.UserSubject = "用户"
+	svc := NewLocalAnswerService(cfg)
+
+	got := svc.Format(IntentPersonalWeight, AsFactView(&entity.ExtractedFact{Object: "110公斤"}))
+	assert.Equal(t, "记录中显示，用户当前体重为 110公斤。", got)
+}
+
+func TestLocalAnswerService_Format_CustomTemplate(t *testing.T) {
+	t.Parallel()
+	cfg := DefaultLocalAnswerConfig()
+	cfg.Templates[IntentPersonalWeight] = "{subject}的体重是{object}"
+	svc := NewLocalAnswerService(cfg)
+
+	got := svc.Format(IntentPersonalWeight, AsFactView(&entity.ExtractedFact{Object: "110公斤"}))
+	assert.Equal(t, "你的体重是110公斤", got)
+}
+
+func TestDefaultLocalAnswerConfig(t *testing.T) {
+	t.Parallel()
+	cfg := DefaultLocalAnswerConfig()
+
+	assert.Equal(t, "用户", cfg.Subject)
+	assert.Equal(t, "你", cfg.UserSubject)
+	assert.Len(t, cfg.Templates, 5)
+	for _, intent := range []MemoryIntent{
+		IntentPersonalWeight,
+		IntentPersonalHeight,
+		IntentPersonalAge,
+		IntentAllergyHistory,
+		IntentMedicationHistory,
+	} {
+		assert.Contains(t, cfg.Templates, intent)
 	}
 }

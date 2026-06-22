@@ -71,8 +71,22 @@ func InitializeApp() (*App, func(), error) {
 	intentResolver := usecase.NewIntentResolver(queryExpansionService)
 	memoryRetriever := usecase.NewMemoryRetriever(embeddingServiceAdapter, embeddingRepoSQLite, factRepoSQLite, decayScorer, migrationState, intentResolver, queryExpansionService)
 	confidenceAggregator := usecase.NewConfidenceAggregator()
-	localAnswerService := usecase.NewLocalAnswerService()
-	chatOrchestrator := usecase.NewChatOrchestrator(llmClientFactory, providerRepoSQLite, memoryRepoSQLite, ruleDetector, ruleComplianceChecker, deidentifyPipeline, memoryRetriever, confidenceAggregator, factRepoSQLite, intentResolver, localAnswerService)
+	localAnswerConfig := usecase.NewLocalAnswerConfig()
+	localAnswerService := usecase.NewLocalAnswerService(localAnswerConfig)
+	chatOrchestratorDeps := usecase.ChatOrchestratorDeps{
+		LLMFactory:           llmClientFactory,
+		ProviderStore:        providerRepoSQLite,
+		MemoryRepo:           memoryRepoSQLite,
+		Detector:             ruleDetector,
+		Compliance:           ruleComplianceChecker,
+		DeidPipeline:         deidentifyPipeline,
+		MemoryRetriever:      memoryRetriever,
+		ConfidenceAggregator: confidenceAggregator,
+		FactRepo:             factRepoSQLite,
+		IntentResolver:       intentResolver,
+		LocalAnswer:          localAnswerService,
+	}
+	chatOrchestrator := usecase.NewChatOrchestrator(chatOrchestratorDeps)
 	conversationRepoSQLite := repository.NewConversationRepoSQLite(sqlCipherConnector)
 	messageRepoSQLite := repository.NewMessageRepoSQLite(sqlCipherConnector)
 	disclaimerRepoSQLite := repository.NewDisclaimerRepoSQLite(sqlCipherConnector)
