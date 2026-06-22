@@ -62,7 +62,7 @@ func (r *ProviderRepoSQLite) Create(ctx context.Context, provider *models.Provid
 		INSERT INTO providers (id, name, api_host, api_key, model_id, temperature, timeout_ms, max_retries, group_name, enabled, sort_order, created_at, updated_at, auth_method, auth_params)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, provider.ID, provider.Name, provider.APIHost, encryptedKey, provider.ModelID, provider.Temperature,
-		int64(provider.TimeoutMs), provider.MaxRetries, provider.GroupName, map[bool]int{false: 0, true: 1}[provider.Enabled],
+		int64(provider.TimeoutMs), provider.MaxRetries, provider.GroupName, boolToInt(provider.Enabled),
 		provider.SortOrder, now, now, string(provider.AuthMethod), authParamsJSON)
 
 	if err != nil {
@@ -98,7 +98,7 @@ func (r *ProviderRepoSQLite) Update(ctx context.Context, provider *models.Provid
 			timeout_ms = ?, max_retries = ?, group_name = ?, enabled = ?, sort_order = ?, updated_at = ?, auth_method = ?, auth_params = ?
 		WHERE id = ?
 	`, provider.Name, provider.APIHost, encryptedKey, provider.ModelID, provider.Temperature,
-		int64(provider.TimeoutMs), provider.MaxRetries, provider.GroupName, map[bool]int{false: 0, true: 1}[provider.Enabled],
+		int64(provider.TimeoutMs), provider.MaxRetries, provider.GroupName, boolToInt(provider.Enabled),
 		provider.SortOrder, now, string(provider.AuthMethod), authParamsJSON, provider.ID)
 
 	if err != nil {
@@ -289,4 +289,12 @@ func isUniqueConstraintError(err error) bool {
 	// 兼容 modernc.org/sqlite 和 go-sqlcipher 的错误信息
 	errStr := err.Error()
 	return strings.Contains(errStr, "UNIQUE constraint failed") || strings.Contains(errStr, "unique constraint")
+}
+
+// boolToInt 将 bool 转为 SQLite 用的 0/1 整数，零分配。
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }

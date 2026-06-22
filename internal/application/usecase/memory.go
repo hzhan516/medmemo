@@ -347,6 +347,7 @@ func (m *MemoryRetriever) recallByKeyword(ctx context.Context, req *RetrievalReq
 
 	var candidates []RetrievalCandidate
 	seen := make(map[string]bool)
+	now := time.Now().UTC()
 
 	for _, f := range facts {
 		content := fmt.Sprintf("%s %s %s", f.Subject, f.Predicate, f.Object)
@@ -377,7 +378,7 @@ func (m *MemoryRetriever) recallByKeyword(ctx context.Context, req *RetrievalReq
 				Confidence:   f.Confidence,
 				MatchedPaths: []RetrievalPath{PathKeyword},
 				KeywordScore: score,
-				RecencyScore: m.decayScorer.ScoreFromCreatedAt(1.0, f.CreatedAt, time.Now().UTC()),
+				RecencyScore: m.decayScorer.ScoreFromCreatedAt(1.0, f.CreatedAt, now),
 				Reasons:      []string{reason},
 			})
 		}
@@ -391,16 +392,21 @@ func (m *MemoryRetriever) recallByKeyword(ctx context.Context, req *RetrievalReq
 	return candidates, status
 }
 
-// truncateSnippet 截断文本为指定长度的诊断用 snippet。
-func truncateSnippet(s string, maxLen int) string {
+// truncateRunes 通用 rune 截断工具，按 rune 数截断，过长时追加 suffix。
+func truncateRunes(s string, maxRunes int, suffix string) string {
 	if s == "" {
 		return ""
 	}
 	runes := []rune(s)
-	if len(runes) <= maxLen {
+	if len(runes) <= maxRunes {
 		return s
 	}
-	return string(runes[:maxLen]) + "..."
+	return string(runes[:maxRunes]) + suffix
+}
+
+// truncateSnippet 截断文本为指定长度的诊断用 snippet。
+func truncateSnippet(s string, maxLen int) string {
+	return truncateRunes(s, maxLen, "...")
 }
 
 // recallByVector 向量召回路径：使用 expanded_query 进行 embedding 和语义搜索。
@@ -566,8 +572,6 @@ func rerank(candidates []RetrievalCandidate, req *RetrievalRequest) []RetrievalC
 		return candidates
 	}
 
-	// 标记 recent path 候选用于 boost
-	recentBoost := make(map[string]bool)
 	var boostPersonal bool
 	if req != nil && req.Intent != nil && req.Intent.Confidence == ConfidenceHigh {
 		boostPersonal = true
@@ -604,7 +608,6 @@ func rerank(candidates []RetrievalCandidate, req *RetrievalRequest) []RetrievalC
 		return a.CreatedAt.After(b.CreatedAt)
 	})
 
-	_ = recentBoost
 	return candidates
 }
 
