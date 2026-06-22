@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/wire"
 	"github.com/hzhan516/medmemo/internal/application/port"
@@ -624,7 +625,7 @@ func applyTokenBudgetToCandidates(candidates []RetrievalCandidate, limit int, to
 	var selected, rejected []RetrievalCandidate
 	var tokenCount int
 	for _, c := range candidates {
-		memTokens := len([]rune(c.Content))
+		memTokens := utf8.RuneCountInString(c.Content)
 		if len(selected) > 0 && tokenCount+memTokens > tokenBudget {
 			r := c
 			r.RejectReason = "token budget exceeded"
