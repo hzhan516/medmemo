@@ -18,7 +18,6 @@ func TestLoader_Load_Defaults(t *testing.T) {
 	assert.Equal(t, "kimi-lite", cfg.DefaultModel)
 	assert.Equal(t, "zh-CN", cfg.Language)
 	assert.True(t, cfg.EnableCloud)
-	assert.False(t, cfg.EnableAnalytics)
 	assert.Equal(t, models.ProviderKimi, cfg.ProviderType)
 }
 
@@ -183,7 +182,6 @@ func TestLoader_Load_MissingFields_UseDefaults(t *testing.T) {
 	assert.Equal(t, defaultModel, cfg.DefaultModel)
 	assert.Equal(t, defaultLanguage, cfg.Language)
 	assert.Equal(t, defaultEnableCloud, cfg.EnableCloud)
-	assert.Equal(t, defaultEnableAnalytics, cfg.EnableAnalytics)
 	assert.Equal(t, defaultProviderType, cfg.ProviderType)
 	assert.Equal(t, defaultModelDir, cfg.ModelDir)
 	assert.Equal(t, models.ChannelBeta, cfg.UpdateChannel)
@@ -201,8 +199,6 @@ func TestLoader_loadDefaults(t *testing.T) {
 	assert.Equal(t, defaultLanguage, raw.Language)
 	require.NotNil(t, raw.EnableCloud)
 	assert.Equal(t, defaultEnableCloud, *raw.EnableCloud)
-	require.NotNil(t, raw.EnableAnalytics)
-	assert.Equal(t, defaultEnableAnalytics, *raw.EnableAnalytics)
 	assert.Equal(t, string(defaultProviderType), raw.ProviderType)
 	assert.Empty(t, raw.APIEndpoint)
 	assert.Empty(t, raw.APIKeyFile)

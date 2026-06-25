@@ -18,7 +18,6 @@ const (
 	defaultModel                = "kimi-lite"
 	defaultLanguage             = "zh-CN"
 	defaultEnableCloud          = true
-	defaultEnableAnalytics      = false
 	defaultProviderType         = models.ProviderKimi
 	defaultModelDir             = "resources/models/distilbert-ner"
 	defaultDesensitizationLevel = string(models.DesensitizationStandard)
@@ -41,7 +40,6 @@ type rawConfig struct {
 	DefaultModel              string `json:"default_model" yaml:"default_model"`
 	Language                  string `json:"language" yaml:"language"`
 	EnableCloud               *bool  `json:"enable_cloud" yaml:"enable_cloud"`
-	EnableAnalytics           *bool  `json:"enable_analytics" yaml:"enable_analytics"`
 	ProviderType              string `json:"provider_type" yaml:"provider_type"`
 	APIEndpoint               string `json:"api_endpoint" yaml:"api_endpoint"`
 	APIKeyFile                string `json:"api_key_file" yaml:"api_key_file"`
@@ -99,7 +97,6 @@ func (l *Loader) loadDefaults() *rawConfig {
 		DefaultModel:              defaultModel,
 		Language:                  defaultLanguage,
 		EnableCloud:               new(defaultEnableCloud),
-		EnableAnalytics:           new(defaultEnableAnalytics),
 		ProviderType:              string(defaultProviderType),
 		APIEndpoint:               "",
 		APIKeyFile:                "",
@@ -195,9 +192,6 @@ func (l *Loader) toDomain(raw *rawConfig) *models.AppConfig {
 	}
 	if raw.EnableCloud != nil {
 		cfg.EnableCloud = *raw.EnableCloud
-	}
-	if raw.EnableAnalytics != nil {
-		cfg.EnableAnalytics = *raw.EnableAnalytics
 	}
 	if raw.UpdateCheckEnabled != nil {
 		cfg.UpdateCheckEnabled = *raw.UpdateCheckEnabled
