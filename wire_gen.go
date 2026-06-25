@@ -60,8 +60,7 @@ func InitializeApp() (*App, func(), error) {
 	}
 	onnxnerDetector := detector.NewONNXNERDetector(engine)
 	l2NERStage := pipeline.NewL2NERStage(onnxnerDetector)
-	l3KeywordStage := pipeline.NewL3KeywordStage()
-	deidentifyPipeline := pipeline.NewDefaultDeidentifyPipeline(l1RuleStage, l2NERStage, l3KeywordStage)
+	deidentifyPipeline := pipeline.NewDefaultDeidentifyPipeline(l1RuleStage, l2NERStage)
 	embeddingServiceAdapter := NewEmbeddingServiceAdapterWithVersion(engine)
 	embeddingRepoSQLite := repository.NewEmbeddingRepoSQLite(sqlCipherConnector)
 	factRepoSQLite := repository.NewFactRepoSQLite(sqlCipherConnector)

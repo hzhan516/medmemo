@@ -1,5 +1,5 @@
 // Package pipeline 实现脱敏流水线的应用层编排。
-// 将 L1 规则引擎、L2 NER 模型、L3 关键词字典串联为完整处理管道。
+// 将 L1 规则引擎、L2 NER 模型串联为完整处理管道。
 package pipeline
 
 import (
@@ -172,19 +172,6 @@ func (s *L2NERStage) Process(ctx context.Context, input PipelineInput) (Pipeline
 	return PipelineOutput{Text: text, Metadata: input.Metadata}, nil
 }
 
-// L3KeywordStage 三级关键词字典脱敏阶段。
-type L3KeywordStage struct{}
-
-// NewL3KeywordStage 创建 L3 关键词字典脱敏阶段。
-func NewL3KeywordStage() *L3KeywordStage {
-	return &L3KeywordStage{}
-}
-
-func (s *L3KeywordStage) Process(ctx context.Context, input PipelineInput) (PipelineOutput, error) {
-	// TODO(作者): 接入 Trie 树前缀匹配字典 [Issue#007]
-	return PipelineOutput(input), nil
-}
-
 // --- 辅助函数 ---
 
 // filterOverlappingEntities 过滤掉与 L1 实体区域重叠的 NER 结果。
@@ -250,10 +237,10 @@ func mapTypeToPlaceholderPrefix(entityType string) string {
 	}
 }
 
-// NewDefaultDeidentifyPipeline 创建默认的三级脱敏流水线（L1→L2→L3），
+// NewDefaultDeidentifyPipeline 创建默认的二级脱敏流水线（L1→L2），
 // 供 Wire 注入使用，避免变参接口带来的多绑定问题。
-func NewDefaultDeidentifyPipeline(l1 *L1RuleStage, l2 *L2NERStage, l3 *L3KeywordStage) *DeidentifyPipeline {
-	return NewDeidentifyPipeline(l1, l2, l3)
+func NewDefaultDeidentifyPipeline(l1 *L1RuleStage, l2 *L2NERStage) *DeidentifyPipeline {
+	return NewDeidentifyPipeline(l1, l2)
 }
 
 // PipelineSet 供 Wire 使用的 ProviderSet。
@@ -261,5 +248,4 @@ var PipelineSet = wire.NewSet(
 	NewDefaultDeidentifyPipeline,
 	NewL1RuleStage,
 	NewL2NERStage,
-	NewL3KeywordStage,
 )
