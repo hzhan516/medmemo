@@ -277,6 +277,32 @@ func (r *FactRepoSQLite) FindBySubject(ctx context.Context, subject string) ([]*
 	return scanFacts(rows)
 }
 
+// SearchApproved 按关键词搜索已审批事实，使用数据库层 LIKE 过滤。
+// FTS5 在 SQLCipher driver 中不可用，因此使用 LIKE 在数据库层完成过滤，
+// 避免一次性加载全部 approved 事实到应用层再过滤。
+func (r *FactRepoSQLite) SearchApproved(ctx context.Context, query string, limit int) ([]*entity.ExtractedFact, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if query == "" {
+		return r.ListByStatus(ctx, entity.FactStatusApproved, 0, limit)
+	}
+
+	pattern := "%" + query + "%"
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT fact_id, subject, predicate, object, confidence, source_msg_ids, status, is_sensitive, scored_at, reviewed_at, created_at
+		FROM extracted_facts
+		WHERE status = 'approved' AND (subject LIKE ? OR predicate LIKE ? OR object LIKE ?)
+		ORDER BY created_at DESC
+		LIMIT ?
+	`, pattern, pattern, pattern, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search approved facts: %w", err)
+	}
+	defer rows.Close()
+	return scanFacts(rows)
+}
+
 // FindBySession 按原始对话会话 ID 查找关联的已审批事实。
 // 通过 source_msg_ids 与 raw_dialogues 关联。
 func (r *FactRepoSQLite) FindBySession(ctx context.Context, sessionID string) ([]*entity.ExtractedFact, error) {

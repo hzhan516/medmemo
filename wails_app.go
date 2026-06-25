@@ -2349,6 +2349,7 @@ func (a *WailsApp) DeleteMemory(factID string) error {
 }
 
 // SearchMemories 关键词搜索已审批的记忆。
+// 使用数据库层 LIKE 过滤，避免一次性加载全部 approved 事实到内存。
 func (a *WailsApp) SearchMemories(query string) ([]MemoryItem, error) {
 	if err := a.requireAuth(); err != nil {
 		return nil, err
@@ -2360,20 +2361,14 @@ func (a *WailsApp) SearchMemories(query string) ([]MemoryItem, error) {
 		return nil, fmt.Errorf("fact repository not initialized")
 	}
 
-	facts, err := a.factRepo.ListByStatus(ctx, entity.FactStatusApproved, 0, 1000)
+	facts, err := a.factRepo.SearchApproved(ctx, strings.TrimSpace(query), 1000)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search memories: %w", err)
 	}
 
-	query = strings.ToLower(strings.TrimSpace(query))
-	var items []MemoryItem
+	items := make([]MemoryItem, 0, len(facts))
 	for _, f := range facts {
-		if query == "" ||
-			strings.Contains(strings.ToLower(f.Subject), query) ||
-			strings.Contains(strings.ToLower(f.Predicate), query) ||
-			strings.Contains(strings.ToLower(f.Object), query) {
-			items = append(items, factToMemoryItem(f))
-		}
+		items = append(items, factToMemoryItem(f))
 	}
 	return items, nil
 }
