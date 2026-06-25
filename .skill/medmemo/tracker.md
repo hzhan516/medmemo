@@ -1,5 +1,36 @@
 # 滚动更新追踪器
 
+### [2026-06-25 / v1.1.7 第二轮 cleanup] — PONYTAIL dead code 清理
+
+**[Modified Areas]**
+- `internal/adapters/ai/compat_client.go` / `compat_types.go` / `compat_client_test.go` — 删除孤立 OpenAICompatibleClient 旧实现
+- `pkg/desensitizer/desensitizer.go` — 删除未使用的 `Stage` / `Pipeline` / `NewPipeline` 抽象
+- `internal/application/port/port_test.go` — 删除空测试
+- `internal/application/pipeline/deidentify.go` — 移除 no-op `L3KeywordStage`，`NewDefaultDeidentifyPipeline` 改为 L1→L2 二级
+- `internal/application/usecase/local_answer.go` / `chat.go` — 删除 `FactView` 接口与 Null Object，直接传入 `*entity.ExtractedFact`
+- `pkg/models/app_config.go` / `internal/infrastructure/config/loader.go` — 移除 `EnableAnalytics` 配置项
+- `internal/adapters/auth/token_refresh_service.go` — 统一为 `NewTokenRefreshService(store, opts ...)`，新增 HTTPClient / OnDegraded option
+- `wails_app_embedding.go` — 删除 `embeddingAvailabilityReporter` duck-type，直接调用 `EmbeddingService.IsAvailable()`
+
+**[Logic Evolution]**
+- 生产路径仅保留实际运行的 L1 规则引擎 + L2 NER 模型脱敏
+- `TokenRefreshService` 通过 option 模式配置，Wire 注入使用空 option slice
+- `LocalAnswerService.Format` 恢复为直接依赖 `*entity.ExtractedFact`，nil/object guard 内聚在函数内部
+
+**[Checklist Status]**
+- 分支 `refactor/code-cleanup-dead-code-audit`，本轮 7 个独立 commit
+- ✅ `internal/domain/entity/changelog/zh-Hans.json` → v1.1.7 features 追加
+- ✅ `medmemo/开发日志/v1.1/v1.1.7.md` → 新增 Stage 7
+- ✅ `medmemo/开发日志/issues.md` → Issue#007 关闭
+- ✅ `wire .` 重新生成 `wire_gen.go`
+- ✅ `go test ./...`、`go vet ./...`、`git diff --check` 通过
+
+**[Pending/Next Steps]**
+- `DBConnector` 暂未删除，影响所有 repository 构造函数，建议单独 PR
+- `LLMClientFactory` / `ProviderFactory` 暂未删除，分别被 `ChatOrchestrator` 与 `TitleGenerator` 依赖
+
+---
+
 > 🤖 **To Future AI Agents (记忆延续指令):**
 > 每次你对本项目代码进行了实质性修改、重构、版本推进，或者通过阅读代码获得了新的深层理解后，**必须**在此文件顶部追加更新记录。
 >

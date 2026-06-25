@@ -300,7 +300,8 @@
       "热路径零分配：len([]rune) → utf8.RuneCountInString",
       "前端 MemoryPage 6 个 I/O 调用 Promise.all 并行化",
       "UpdateModal formatBytes / IS_MACOS 移至模块级避免重复创建",
-      "WailsApp 绑定层按子系统拆分，覆盖对话、记忆、认证、Provider、更新、Ollama 与 Embedding 状态，降低巨型文件维护成本"
+      "WailsApp 绑定层按子系统拆分，覆盖对话、记忆、认证、Provider、更新、Ollama 与 Embedding 状态，降低巨型文件维护成本",
+      "第二轮 PONYTAIL 清理：移除废弃 OpenAICompatibleClient、未使用脱敏 Pipeline、no-op L3 脱敏阶段与无效 analytics 配置，收敛 TokenRefreshService 构造函数，简化 LocalAnswerService 事实格式化"
     ],
     "fixes": []
   }
