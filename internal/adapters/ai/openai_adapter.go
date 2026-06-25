@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -120,6 +121,27 @@ type delta struct {
 	Content string `json:"content"`
 }
 
+// message 单条对话消息（内部序列化用）。
+type message struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+// apiError API 返回的错误信息。
+type apiError struct {
+	Message string `json:"message"`
+	Type    string `json:"type"`
+	Param   string `json:"param"`
+	Code    string `json:"code"`
+}
+
+func (e *apiError) Error() string {
+	if e.Code != "" {
+		return fmt.Sprintf("api error [%s]: %s", e.Code, e.Message)
+	}
+	return fmt.Sprintf("api error: %s", e.Message)
+}
+
 // toMessages 领域消息转换为 OpenAI 消息格式。
 func toMessages(msgs []models.Message) []message {
 	result := make([]message, len(msgs))
@@ -130,6 +152,22 @@ func toMessages(msgs []models.Message) []message {
 		}
 	}
 	return result
+}
+
+// parseRetryAfter 从响应头解析 Retry-After 值（秒数）。
+func parseRetryAfter(resp *http.Response) time.Duration {
+	ra := resp.Header.Get("Retry-After")
+	if ra == "" {
+		return 0
+	}
+	// 可能是秒数（数字）或 HTTP-date
+	if sec, err := strconv.Atoi(ra); err == nil {
+		return time.Duration(sec) * time.Second
+	}
+	if t, err := http.ParseTime(ra); err == nil {
+		return time.Until(t)
+	}
+	return 0
 }
 
 // mapAPIError HTTP 状态码和 API 错误映射为用户友好错误。
