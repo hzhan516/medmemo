@@ -488,3 +488,71 @@ func TestFactRepo_FindByIDs(t *testing.T) {
 		assert.Empty(t, facts)
 	})
 }
+
+// TestFactRepo_SearchApproved 验证数据库层 LIKE 过滤搜索已审批事实。
+func TestFactRepo_SearchApproved(t *testing.T) {
+	repo, cleanup := setupFactTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// approved 事实
+	f1 := entity.NewExtractedFact("用户", "患有", "高血压", 0.9, []string{"msg_1"})
+	f1.FactID = "fact_search_1"
+	f1.SetStatus(entity.FactStatusApproved)
+	require.NoError(t, repo.Save(ctx, f1))
+
+	f2 := entity.NewExtractedFact("用户", "服用", "降压药", 0.85, []string{"msg_2"})
+	f2.FactID = "fact_search_2"
+	f2.SetStatus(entity.FactStatusApproved)
+	require.NoError(t, repo.Save(ctx, f2))
+
+	// pending 事实
+	f3 := entity.NewExtractedFact("用户", "感觉", "头晕", 0.7, []string{"msg_3"})
+	f3.FactID = "fact_search_3"
+	require.NoError(t, repo.Save(ctx, f3))
+
+	t.Run("match subject", func(t *testing.T) {
+		facts, err := repo.SearchApproved(ctx, "用户", 10)
+		require.NoError(t, err)
+		require.Len(t, facts, 2)
+	})
+
+	t.Run("match predicate", func(t *testing.T) {
+		facts, err := repo.SearchApproved(ctx, "服用", 10)
+		require.NoError(t, err)
+		require.Len(t, facts, 1)
+		assert.Equal(t, "fact_search_2", facts[0].FactID)
+	})
+
+	t.Run("match object", func(t *testing.T) {
+		facts, err := repo.SearchApproved(ctx, "高血压", 10)
+		require.NoError(t, err)
+		require.Len(t, facts, 1)
+		assert.Equal(t, "fact_search_1", facts[0].FactID)
+	})
+
+	t.Run("partial match", func(t *testing.T) {
+		facts, err := repo.SearchApproved(ctx, "降压", 10)
+		require.NoError(t, err)
+		require.Len(t, facts, 1)
+		assert.Equal(t, "fact_search_2", facts[0].FactID)
+	})
+
+	t.Run("empty query returns recent approved", func(t *testing.T) {
+		facts, err := repo.SearchApproved(ctx, "", 10)
+		require.NoError(t, err)
+		require.Len(t, facts, 2)
+	})
+
+	t.Run("no match returns empty", func(t *testing.T) {
+		facts, err := repo.SearchApproved(ctx, "糖尿病", 10)
+		require.NoError(t, err)
+		assert.Empty(t, facts)
+	})
+
+	t.Run("limit respected", func(t *testing.T) {
+		facts, err := repo.SearchApproved(ctx, "用户", 1)
+		require.NoError(t, err)
+		require.Len(t, facts, 1)
+	})
+}

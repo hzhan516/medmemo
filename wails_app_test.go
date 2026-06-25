@@ -431,6 +431,9 @@ func (m *wailsMockFactRepository) CountApprovedFactsNeedingEmbedding(ctx context
 func (m *wailsMockFactRepository) ListApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string, lastCreatedAt time.Time, lastFactID string, limit int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
+func (m *wailsMockFactRepository) SearchApproved(ctx context.Context, query string, limit int) ([]*entity.ExtractedFact, error) {
+	return nil, nil
+}
 
 var _ repository.FactRepository = (*wailsMockFactRepository)(nil)
 
