@@ -96,7 +96,8 @@ func InitializeApp() (*App, func(), error) {
 	gitHubUpdater := updater.NewGitHubUpdater(client)
 	installerAdapter := updater.NewInstallerAdapter()
 	service := updater2.NewService(gitHubUpdater, installerAdapter)
-	tokenRefreshService := auth.NewTokenRefreshServiceBare(providerRepoSQLite)
+	v := _wireValue
+	tokenRefreshService := auth.NewTokenRefreshService(providerRepoSQLite, v...)
 	oAuthDeviceFlowService := auth.NewOAuthDeviceFlowServiceBare(providerRepoSQLite)
 	auditLogRepoSQLite := repository.NewAuditLogRepoSQLite(sqlCipherConnector)
 	dialogueRepoSQLite := repository.NewDialogueRepoSQLite(sqlCipherConnector)
@@ -110,3 +111,7 @@ func InitializeApp() (*App, func(), error) {
 		cleanup()
 	}, nil
 }
+
+var (
+	_wireValue = []auth.TokenRefreshOption{}
+)
