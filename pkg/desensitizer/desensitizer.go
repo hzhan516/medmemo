@@ -26,34 +26,6 @@ import (
 	"github.com/hzhan516/medmemo/pkg/models"
 )
 
-// Stage 定义脱敏流水线中的单个处理阶段接口。
-type Stage interface {
-	Process(text string) (models.DeidentifyResult, error)
-}
-
-// Pipeline 串联多个脱敏阶段，按顺序执行。
-type Pipeline struct {
-	stages []Stage
-}
-
-// NewPipeline 创建脱敏流水线。
-func NewPipeline(stages ...Stage) *Pipeline {
-	return &Pipeline{stages: stages}
-}
-
-// Execute 依次执行各脱敏阶段，任一阶段出错即短路返回。
-func (p *Pipeline) Execute(text string) (models.DeidentifyResult, error) {
-	result := models.DeidentifyResult{OriginalText: text, SafeText: text}
-	for _, stage := range p.stages {
-		r, err := stage.Process(result.SafeText)
-		if err != nil {
-			return models.DeidentifyResult{}, fmt.Errorf("deidentify stage %T failed: %w", stage, err)
-		}
-		result = r
-	}
-	return result, nil
-}
-
 // RuleEngine 基于规则的一级脱敏引擎（L1）。
 // 采用 Aho-Corasick 多模式预筛选 + Regexp 精确验证的混合架构，
 // 时间复杂度接近 O(n)，覆盖：身份证、手机号、银行卡、邮箱、URL。
