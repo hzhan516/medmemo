@@ -19,7 +19,6 @@ import (
 
 	"github.com/hzhan516/medmemo/internal/adapters/ai"
 	"github.com/hzhan516/medmemo/internal/adapters/auth"
-	"github.com/hzhan516/medmemo/internal/application/feedback"
 	"github.com/hzhan516/medmemo/internal/application/port"
 	"github.com/hzhan516/medmemo/internal/application/updater"
 	"github.com/hzhan516/medmemo/internal/application/usecase"
@@ -142,135 +141,6 @@ func (a *WailsApp) GetModels() ([]ModelInfo, error) {
 		{ID: "qwen-turbo", Name: "通义千问 Turbo", Provider: "qwen"},
 		{ID: "llama3.1-8b", Name: "Llama 3.1 8B (本地)", Provider: "ollama"},
 	}, nil
-}
-
-// UpdateInfoResponse 前端更新信息响应。
-type UpdateInfoResponse struct {
-	Version     string `json:"version"`
-	Name        string `json:"name"`
-	Body        string `json:"body"`
-	PublishedAt string `json:"published_at"`
-	Mandatory   bool   `json:"mandatory"`
-	Channel     string `json:"channel"`
-}
-
-// CheckUpdate 检测是否存在可用更新，供前端主动调用。
-func (a *WailsApp) CheckUpdate() (*UpdateInfoResponse, error) {
-	if a.updaterSvc == nil {
-		return nil, fmt.Errorf("updater service not initialized")
-	}
-
-	info, err := a.updaterSvc.CheckUpdate(a.ctx, version)
-	if err != nil {
-		return nil, fmt.Errorf("failed to check update: %w", err)
-	}
-	if info == nil {
-		return nil, nil
-	}
-
-	return &UpdateInfoResponse{
-		Version:     info.Version,
-		Name:        info.Name,
-		Body:        info.Body,
-		PublishedAt: info.PublishedAt.Format(time.RFC3339),
-		Mandatory:   info.Mandatory,
-		Channel:     string(info.Channel),
-	}, nil
-}
-
-// DownloadUpdateRequest 下载更新请求。
-type DownloadUpdateRequest struct {
-	Version string `json:"version"`
-}
-
-// DownloadUpdate 下载指定版本的更新包。
-// 下载进度通过 Wails Events "update:progress" 推送。
-func (a *WailsApp) DownloadUpdate(req DownloadUpdateRequest) (string, error) {
-	if a.updaterSvc == nil {
-		return "", fmt.Errorf("updater service not initialized")
-	}
-
-	// 先重新获取 UpdateInfo（包含正确的下载 URL）
-	info, err := a.updaterSvc.CheckUpdate(a.ctx, version)
-	if err != nil || info == nil {
-		return "", fmt.Errorf("failed to get update info for version %s: %w", req.Version, err)
-	}
-
-	progressCb := func(downloaded, total int64) {
-		runtime.EventsEmit(a.ctx, "update:progress", map[string]int64{
-			"downloaded": downloaded,
-			"total":      total,
-		})
-	}
-
-	path, err := a.updaterSvc.DownloadUpdate(a.ctx, info, progressCb)
-	if err != nil {
-		return "", fmt.Errorf("failed to download update: %w", err)
-	}
-
-	return path, nil
-}
-
-// ApplyUpdate 应用已下载的更新。
-func (a *WailsApp) ApplyUpdate(assetPath string) error {
-	if a.updaterSvc == nil {
-		return fmt.Errorf("updater service not initialized")
-	}
-
-	if err := a.updaterSvc.ApplyUpdate(assetPath); err != nil {
-		return fmt.Errorf("failed to apply update: %w", err)
-	}
-	return nil
-}
-
-// UpdateSettingsResponse 更新设置响应。
-type UpdateSettingsResponse struct {
-	CheckEnabled bool   `json:"check_enabled"`
-	Channel      string `json:"channel"`
-	SkipVersion  string `json:"skip_version"`
-}
-
-// GetUpdateSettings 获取当前更新设置。
-func (a *WailsApp) GetUpdateSettings() (*UpdateSettingsResponse, error) {
-	if a.updaterSvc == nil {
-		return nil, fmt.Errorf("updater service not initialized")
-	}
-
-	s := a.updaterSvc.GetSettings()
-	return &UpdateSettingsResponse{
-		CheckEnabled: s.CheckEnabled,
-		Channel:      string(s.Channel),
-		SkipVersion:  s.SkipVersion,
-	}, nil
-}
-
-// SetUpdateSettings 保存更新设置。
-func (a *WailsApp) SetUpdateSettings(req UpdateSettingsResponse) error {
-	if a.updaterSvc == nil {
-		return fmt.Errorf("updater service not initialized")
-	}
-
-	s := &entity.UpdateSettings{
-		CheckEnabled: req.CheckEnabled,
-		Channel:      models.UpdateChannel(req.Channel),
-		SkipVersion:  req.SkipVersion,
-	}
-	a.updaterSvc.SetSettings(s)
-	return nil
-}
-
-// SkipUpdateVersion 标记跳过指定版本。
-func (a *WailsApp) SkipUpdateVersion(v string) error {
-	if a.updaterSvc == nil {
-		return fmt.Errorf("updater service not initialized")
-	}
-	a.updaterSvc.SkipVersion(v)
-	return nil
-}
-
-// OpenDownloadURL 通过系统浏览器打开指定 URL。
-func (a *WailsApp) OpenDownloadURL(url string) {
-	runtime.BrowserOpenURL(a.ctx, url)
 }
 
 // --- Onboarding 向导相关绑定方法 ---
@@ -408,55 +278,6 @@ func (a *WailsApp) testGeminiAPIKey(ctx context.Context, apiKey string) (*TestAP
 		Valid:   false,
 		Message: fmt.Sprintf("验证失败，HTTP %d: %s", resp.StatusCode, string(body)),
 	}, nil
-}
-
-// GetVersion 返回当前应用版本号（构建时通过 -ldflags 注入）。
-func (a *WailsApp) GetVersion() string {
-	return version
-}
-
-// CollectSystemInfo 收集当前运行环境信息，供前端展示。
-func (a *WailsApp) CollectSystemInfo() (*feedback.SystemInfo, error) {
-	reporter := feedback.NewReporter(version, buildTime)
-	return reporter.Collect(), nil
-}
-
-// OpenGitHubIssue 打开系统浏览器到 GitHub Issue 创建页面，预填日志内容。
-// 前端调用后，用户只需在浏览器中点击 Submit 即可创建 Issue。
-func (a *WailsApp) OpenGitHubIssue(userDescription string, errorLog string) error {
-	reporter := feedback.NewReporter(version, buildTime)
-	info := reporter.Collect()
-
-	logContent, err := feedback.ReadAppLogFile("")
-	if err != nil {
-		// 日志读取失败不影响主流程，仅记录
-		logContent = ""
-	}
-
-	// 合并显式传入的错误日志与本地日志文件
-	combinedLog := errorLog
-	if logContent != "" {
-		if combinedLog != "" {
-			combinedLog += "\n\n--- 本地日志 ---\n" + logContent
-		} else {
-			combinedLog = logContent
-		}
-	}
-
-	issueURL := reporter.BuildIssueURL(info, userDescription, combinedLog)
-	runtime.BrowserOpenURL(a.ctx, issueURL)
-	return nil
-}
-
-// GetVersionNotes 返回全部版本提示数据，按版本降序排列（最新在前）。
-func (a *WailsApp) GetVersionNotes() []entity.VersionNote {
-	notes := make([]entity.VersionNote, len(entity.AllVersionNotes))
-	copy(notes, entity.AllVersionNotes)
-	// 倒序：最新版本在前
-	for i, j := 0, len(notes)-1; i < j; i, j = i+1, j-1 {
-		notes[i], notes[j] = notes[j], notes[i]
-	}
-	return notes
 }
 
 // CreateProvider 创建新的 Provider 配置。
