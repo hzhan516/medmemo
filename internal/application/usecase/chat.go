@@ -202,7 +202,7 @@ func (c *ChatOrchestrator) tryLocalAnswer(ctx context.Context, query string) (st
 		}
 		return "", false, fmt.Errorf("本地事实查询失败: %w", err)
 	}
-	return c.localAnswer.Format(result.Intent, AsFactView(fact)), true, nil
+	return c.localAnswer.Format(result.Intent, fact), true, nil
 }
 
 // Execute 执行单次对话用例（非流式）。

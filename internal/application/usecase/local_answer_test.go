@@ -13,42 +13,42 @@ func TestLocalAnswerService_Format(t *testing.T) {
 
 	tests := []struct {
 		intent   MemoryIntent
-		fact     FactView
+		fact     *entity.ExtractedFact
 		expected string
 	}{
 		{
 			intent:   IntentPersonalWeight,
-			fact:     AsFactView(&entity.ExtractedFact{Object: "110公斤"}),
+			fact:     &entity.ExtractedFact{Object: "110公斤"},
 			expected: "记录中显示，你当前体重为 110公斤。",
 		},
 		{
 			intent:   IntentPersonalHeight,
-			fact:     AsFactView(&entity.ExtractedFact{Object: "175厘米"}),
+			fact:     &entity.ExtractedFact{Object: "175厘米"},
 			expected: "记录中显示，你当前身高为 175厘米。",
 		},
 		{
 			intent:   IntentPersonalAge,
-			fact:     AsFactView(&entity.ExtractedFact{Object: "35岁"}),
+			fact:     &entity.ExtractedFact{Object: "35岁"},
 			expected: "记录中显示，你当前年龄为 35岁。",
 		},
 		{
 			intent:   IntentAllergyHistory,
-			fact:     AsFactView(&entity.ExtractedFact{Object: "对青霉素过敏"}),
+			fact:     &entity.ExtractedFact{Object: "对青霉素过敏"},
 			expected: "记录中显示，你的过敏相关信息为：对青霉素过敏。",
 		},
 		{
 			intent:   IntentMedicationHistory,
-			fact:     AsFactView(&entity.ExtractedFact{Object: "阿司匹林"}),
+			fact:     &entity.ExtractedFact{Object: "阿司匹林"},
 			expected: "记录中显示，你的用药相关信息为：阿司匹林。",
 		},
 		{
 			intent:   MemoryIntent("unknown"),
-			fact:     AsFactView(&entity.ExtractedFact{Object: "未知"}),
+			fact:     &entity.ExtractedFact{Object: "未知"},
 			expected: "",
 		},
 		{
 			intent:   IntentPersonalWeight,
-			fact:     AsFactView(nil),
+			fact:     nil,
 			expected: "",
 		},
 	}
@@ -67,7 +67,7 @@ func TestLocalAnswerService_Format_ConfigurableSubject(t *testing.T) {
 	cfg.UserSubject = "用户"
 	svc := NewLocalAnswerService(cfg)
 
-	got := svc.Format(IntentPersonalWeight, AsFactView(&entity.ExtractedFact{Object: "110公斤"}))
+	got := svc.Format(IntentPersonalWeight, &entity.ExtractedFact{Object: "110公斤"})
 	assert.Equal(t, "记录中显示，用户当前体重为 110公斤。", got)
 }
 
@@ -77,7 +77,7 @@ func TestLocalAnswerService_Format_CustomTemplate(t *testing.T) {
 	cfg.Templates[IntentPersonalWeight] = "{subject}的体重是{object}"
 	svc := NewLocalAnswerService(cfg)
 
-	got := svc.Format(IntentPersonalWeight, AsFactView(&entity.ExtractedFact{Object: "110公斤"}))
+	got := svc.Format(IntentPersonalWeight, &entity.ExtractedFact{Object: "110公斤"})
 	assert.Equal(t, "你的体重是110公斤", got)
 }
 
