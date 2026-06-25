@@ -1,13 +1,11 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	goruntime "runtime"
-	"time"
 
 	"github.com/hzhan516/medmemo/pkg/models"
 	"github.com/hzhan516/medmemo/pkg/resourcepath"
@@ -25,10 +23,6 @@ type EmbeddingStatusResponse struct {
 	ModelPath         string `json:"model_path"`          // 模型存放路径
 	ModelName         string `json:"model_name"`          // 模型名称
 	DownloadURL       string `json:"download_url"`        // 模型下载页面 URL
-}
-
-type embeddingAvailabilityReporter interface {
-	IsAvailable() bool
 }
 
 type embeddingFailureReasonReporter interface {
@@ -71,18 +65,8 @@ func (a *WailsApp) GetEmbeddingStatus() (*EmbeddingStatusResponse, error) {
 	}
 
 	engineAvailable := false
-	if reporter, ok := a.embeddingSvc.(embeddingAvailabilityReporter); ok {
-		engineAvailable = reporter.IsAvailable()
-	} else if a.embeddingSvc != nil {
-		baseCtx := a.ctx
-		if baseCtx == nil {
-			baseCtx = context.Background()
-		}
-		ctx, cancel := context.WithTimeout(baseCtx, 2*time.Second)
-		defer cancel()
-		if _, err := a.embeddingSvc.EmbedSingle(ctx, "status check"); err == nil {
-			engineAvailable = true
-		}
+	if a.embeddingSvc != nil {
+		engineAvailable = a.embeddingSvc.IsAvailable()
 	}
 
 	failureReason := ""
