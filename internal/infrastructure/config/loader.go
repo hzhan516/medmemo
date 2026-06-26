@@ -26,12 +26,17 @@ const (
 
 // Loader 配置加载器，负责从文件/环境变量/默认值加载配置。
 type Loader struct {
-	configPath string
+	configPath     string
+	defaultChannel models.UpdateChannel
 }
 
 // NewLoader 构造函数。
-func NewLoader(configPath string) *Loader {
-	return &Loader{configPath: configPath}
+// defaultChannel 由构建版本推导，作为更新通道的兜底默认值。
+func NewLoader(configPath string, defaultChannel models.UpdateChannel) *Loader {
+	return &Loader{
+		configPath:     configPath,
+		defaultChannel: defaultChannel,
+	}
 }
 
 // rawConfig 表示配置文件中的原始结构。
@@ -85,7 +90,11 @@ func (l *Loader) Load() (*models.AppConfig, error) {
 }
 
 func (l *Loader) loadDefaults() *rawConfig {
-	updateChannel := string(models.ChannelBeta)
+	updateChannel := string(l.defaultChannel)
+	if updateChannel == "" {
+		// 异常兜底：构建版本未注入时保持 beta，避免正式版用户误收测试版
+		updateChannel = string(models.ChannelBeta)
+	}
 	desensitizationLevel := defaultDesensitizationLevel
 	dataDir := ExpandTilde(defaultDataDir)
 	if dataDir == "" {
@@ -201,6 +210,10 @@ func (l *Loader) toDomain(raw *rawConfig) *models.AppConfig {
 		cfg.ProviderType = defaultProviderType
 	}
 	if cfg.UpdateChannel == "" {
+		cfg.UpdateChannel = l.defaultChannel
+	}
+	if cfg.UpdateChannel == "" {
+		// 构建版本未注入时保守回退 beta
 		cfg.UpdateChannel = models.ChannelBeta
 	}
 	if cfg.DesensitizationLevel == "" {

@@ -11,7 +11,7 @@ import (
 )
 
 func TestLoader_Load_Defaults(t *testing.T) {
-	loader := NewLoader("")
+	loader := NewLoader("", models.ChannelBeta)
 	cfg, err := loader.Load()
 	require.NoError(t, err)
 	assert.NotEmpty(t, cfg.DataDir)
@@ -19,6 +19,7 @@ func TestLoader_Load_Defaults(t *testing.T) {
 	assert.Equal(t, "zh-CN", cfg.Language)
 	assert.True(t, cfg.EnableCloud)
 	assert.Equal(t, models.ProviderKimi, cfg.ProviderType)
+	assert.Equal(t, models.ChannelBeta, cfg.UpdateChannel)
 }
 
 func TestLoader_Load_FromYAML(t *testing.T) {
@@ -34,7 +35,7 @@ api_endpoint: https://custom.api.com
 `)
 	require.NoError(t, os.WriteFile(configPath, data, 0644))
 
-	loader := NewLoader(configPath)
+	loader := NewLoader(configPath, models.ChannelBeta)
 	cfg, err := loader.Load()
 	require.NoError(t, err)
 	assert.Equal(t, "/tmp/medmemo-data", cfg.DataDir)
@@ -55,7 +56,7 @@ func TestLoader_Load_FromJSON(t *testing.T) {
 }`)
 	require.NoError(t, os.WriteFile(configPath, data, 0644))
 
-	loader := NewLoader(configPath)
+	loader := NewLoader(configPath, models.ChannelBeta)
 	cfg, err := loader.Load()
 	require.NoError(t, err)
 	assert.Equal(t, "/tmp/medmemo-json", cfg.DataDir)
@@ -66,7 +67,7 @@ func TestLoader_Load_EnvOverride(t *testing.T) {
 	t.Setenv("MEDMEMO_DEFAULT_MODEL", "override-model")
 	t.Setenv("MEDMEMO_PROVIDER_TYPE", "siliconflow")
 
-	loader := NewLoader("")
+	loader := NewLoader("", models.ChannelBeta)
 	cfg, err := loader.Load()
 	require.NoError(t, err)
 	assert.Equal(t, "override-model", cfg.DefaultModel)
@@ -74,7 +75,7 @@ func TestLoader_Load_EnvOverride(t *testing.T) {
 }
 
 func TestLoader_Load_InvalidPath(t *testing.T) {
-	loader := NewLoader("/nonexistent/path/config.yaml")
+	loader := NewLoader("/nonexistent/path/config.yaml", models.ChannelBeta)
 	_, err := loader.Load()
 	require.Error(t, err)
 }
@@ -92,7 +93,7 @@ func TestLoader_Load_InvalidYAML(t *testing.T) {
 	data := []byte("data_dir: [unclosed bracket")
 	require.NoError(t, os.WriteFile(configPath, data, 0644))
 
-	loader := NewLoader(configPath)
+	loader := NewLoader(configPath, models.ChannelBeta)
 	_, err := loader.Load()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "yaml unmarshal failed")
@@ -105,7 +106,7 @@ func TestLoader_Load_InvalidJSON(t *testing.T) {
 	data := []byte("{invalid json")
 	require.NoError(t, os.WriteFile(configPath, data, 0644))
 
-	loader := NewLoader(configPath)
+	loader := NewLoader(configPath, models.ChannelBeta)
 	_, err := loader.Load()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "json unmarshal failed")
@@ -118,7 +119,7 @@ func TestLoader_Load_UnsupportedFormat(t *testing.T) {
 	data := []byte("data_dir = \"/tmp\"")
 	require.NoError(t, os.WriteFile(configPath, data, 0644))
 
-	loader := NewLoader(configPath)
+	loader := NewLoader(configPath, models.ChannelBeta)
 	_, err := loader.Load()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unsupported config format")
@@ -127,7 +128,7 @@ func TestLoader_Load_UnsupportedFormat(t *testing.T) {
 func TestLoader_Load_EnvOverride_DataRetentionDays(t *testing.T) {
 	t.Run("有效数值", func(t *testing.T) {
 		t.Setenv("MEDMEMO_DATA_RETENTION_DAYS", "90")
-		loader := NewLoader("")
+		loader := NewLoader("", models.ChannelBeta)
 		cfg, err := loader.Load()
 		require.NoError(t, err)
 		assert.Equal(t, 90, cfg.DataRetentionDays)
@@ -135,7 +136,7 @@ func TestLoader_Load_EnvOverride_DataRetentionDays(t *testing.T) {
 
 	t.Run("无效数值回退默认值", func(t *testing.T) {
 		t.Setenv("MEDMEMO_DATA_RETENTION_DAYS", "not-a-number")
-		loader := NewLoader("")
+		loader := NewLoader("", models.ChannelBeta)
 		cfg, err := loader.Load()
 		require.NoError(t, err)
 		assert.Equal(t, defaultDataRetentionDays, cfg.DataRetentionDays)
@@ -145,7 +146,7 @@ func TestLoader_Load_EnvOverride_DataRetentionDays(t *testing.T) {
 func TestLoader_Load_EnvOverride_Boolean(t *testing.T) {
 	t.Run("true 字符串", func(t *testing.T) {
 		t.Setenv("MEDMEMO_UPDATE_CHECK", "true")
-		loader := NewLoader("")
+		loader := NewLoader("", models.ChannelBeta)
 		cfg, err := loader.Load()
 		require.NoError(t, err)
 		assert.True(t, cfg.UpdateCheckEnabled)
@@ -153,7 +154,7 @@ func TestLoader_Load_EnvOverride_Boolean(t *testing.T) {
 
 	t.Run("1 字符串", func(t *testing.T) {
 		t.Setenv("MEDMEMO_UPDATE_CHECK", "1")
-		loader := NewLoader("")
+		loader := NewLoader("", models.ChannelBeta)
 		cfg, err := loader.Load()
 		require.NoError(t, err)
 		assert.True(t, cfg.UpdateCheckEnabled)
@@ -161,7 +162,7 @@ func TestLoader_Load_EnvOverride_Boolean(t *testing.T) {
 
 	t.Run("false 字符串", func(t *testing.T) {
 		t.Setenv("MEDMEMO_UPDATE_CHECK", "false")
-		loader := NewLoader("")
+		loader := NewLoader("", models.ChannelBeta)
 		cfg, err := loader.Load()
 		require.NoError(t, err)
 		assert.False(t, cfg.UpdateCheckEnabled)
@@ -175,7 +176,7 @@ func TestLoader_Load_MissingFields_UseDefaults(t *testing.T) {
 	data := []byte("data_dir: /tmp/medmemo-only\n")
 	require.NoError(t, os.WriteFile(configPath, data, 0644))
 
-	loader := NewLoader(configPath)
+	loader := NewLoader(configPath, models.ChannelBeta)
 	cfg, err := loader.Load()
 	require.NoError(t, err)
 	assert.Equal(t, "/tmp/medmemo-only", cfg.DataDir)
@@ -191,7 +192,7 @@ func TestLoader_Load_MissingFields_UseDefaults(t *testing.T) {
 
 func TestLoader_loadDefaults(t *testing.T) {
 	// 直接调用 loadDefaults，验证返回的 rawConfig 包含所有预期默认值
-	loader := NewLoader("")
+	loader := NewLoader("", models.ChannelBeta)
 	raw := loader.loadDefaults()
 	require.NotNil(t, raw)
 	assert.NotEmpty(t, raw.DataDir)
@@ -210,4 +211,40 @@ func TestLoader_loadDefaults(t *testing.T) {
 	require.NotNil(t, raw.DataRetentionDays)
 	assert.Equal(t, defaultDataRetentionDays, *raw.DataRetentionDays)
 	assert.Empty(t, raw.EmbeddingModelDownloadURL)
+}
+
+func TestLoader_DefaultChannel(t *testing.T) {
+	t.Run("stable 构建", func(t *testing.T) {
+		loader := NewLoader("", models.ChannelStable)
+		cfg, err := loader.Load()
+		require.NoError(t, err)
+		assert.Equal(t, models.ChannelStable, cfg.UpdateChannel)
+	})
+
+	t.Run("beta 构建", func(t *testing.T) {
+		loader := NewLoader("", models.ChannelBeta)
+		cfg, err := loader.Load()
+		require.NoError(t, err)
+		assert.Equal(t, models.ChannelBeta, cfg.UpdateChannel)
+	})
+
+	t.Run("环境变量覆盖默认通道", func(t *testing.T) {
+		t.Setenv("MEDMEMO_UPDATE_CHANNEL", "stable")
+		loader := NewLoader("", models.ChannelBeta)
+		cfg, err := loader.Load()
+		require.NoError(t, err)
+		assert.Equal(t, models.ChannelStable, cfg.UpdateChannel)
+	})
+
+	t.Run("配置文件覆盖默认通道", func(t *testing.T) {
+		dir := t.TempDir()
+		configPath := filepath.Join(dir, "config.yaml")
+		data := []byte("update_channel: stable\n")
+		require.NoError(t, os.WriteFile(configPath, data, 0644))
+
+		loader := NewLoader(configPath, models.ChannelBeta)
+		cfg, err := loader.Load()
+		require.NoError(t, err)
+		assert.Equal(t, models.ChannelStable, cfg.UpdateChannel)
+	})
 }

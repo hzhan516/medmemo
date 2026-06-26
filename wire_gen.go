@@ -18,6 +18,8 @@ import (
 	"github.com/hzhan516/medmemo/internal/application/usecase"
 	"github.com/hzhan516/medmemo/internal/infrastructure/onnx"
 	"github.com/hzhan516/medmemo/internal/infrastructure/secret"
+	"github.com/hzhan516/medmemo/pkg/models"
+	"strings"
 )
 
 import (
@@ -30,7 +32,8 @@ import (
 // 返回 (func()) 作为资源清理回调，由 main 函数通过 defer 调用。
 func InitializeApp() (*App, func(), error) {
 	llmClientFactory := ai.NewLLMClientFactory()
-	appConfig, err := NewAppConfig()
+	updateChannel := ProvideDefaultUpdateChannel()
+	appConfig, err := NewAppConfig(updateChannel)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -95,7 +98,7 @@ func InitializeApp() (*App, func(), error) {
 	client := updater.NewDefaultHTTPClient()
 	gitHubUpdater := updater.NewGitHubUpdater(client)
 	installerAdapter := updater.NewInstallerAdapter()
-	service := updater2.NewService(gitHubUpdater, installerAdapter)
+	service := updater2.NewService(gitHubUpdater, installerAdapter, updateChannel)
 	v := _wireValue
 	tokenRefreshService := auth.NewTokenRefreshService(providerRepoSQLite, v...)
 	oAuthDeviceFlowService := auth.NewOAuthDeviceFlowServiceBare(providerRepoSQLite)
@@ -115,3 +118,14 @@ func InitializeApp() (*App, func(), error) {
 var (
 	_wireValue = []auth.TokenRefreshOption{}
 )
+
+// wire.go:
+
+// ProvideDefaultUpdateChannel 根据构建版本返回默认更新通道。
+// 正式版默认 stable，预发布或 dev 构建默认 beta。
+func ProvideDefaultUpdateChannel() models.UpdateChannel {
+	if strings.EqualFold(version, "dev") {
+		return models.ChannelBeta
+	}
+	return models.ParseAppVersion(version).Channel
+}

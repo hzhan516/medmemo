@@ -109,17 +109,27 @@ func (g *GitHubUpdater) FetchLatest(ctx context.Context, channel models.UpdateCh
 			continue
 		}
 
+		// 解析 tag 得到结构化版本信息，供前端展示与后续版本比较
+		version := models.ParseAppVersion(release.TagName)
+		displayVersion := version.DisplayVersion
+		if displayVersion == "" {
+			// 解析失败时回退到发布标题，避免 UI 展示空值
+			displayVersion = release.Name
+		}
+
 		info := &entity.UpdateInfo{
-			Version:        release.TagName,
-			DisplayVersion: release.Name,
-			Name:           release.Name,
-			Body:           release.Body,
-			PublishedAt:    release.PublishedAt,
-			DownloadURL:    asset.BrowserDownloadURL,
-			Checksum:       checksum,
-			Mandatory:      g.isMandatory(release),
-			Channel:        channel,
-			Prerelease:     release.Prerelease,
+			Version:         release.TagName,
+			DisplayVersion:  displayVersion,
+			Name:            release.Name,
+			Body:            release.Body,
+			PublishedAt:     release.PublishedAt,
+			DownloadURL:     asset.BrowserDownloadURL,
+			Checksum:        checksum,
+			Mandatory:       g.isMandatory(release),
+			Channel:         channel,
+			Prerelease:      release.Prerelease,
+			BuildNumber:     version.BuildNumber,
+			PreReleaseLabel: version.PrereleaseLabel,
 		}
 
 		return info, nil
