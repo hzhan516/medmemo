@@ -15,6 +15,7 @@ VIAddVersionKey "ProductName"     "${INFO_PRODUCTNAME}"
 ManifestDPIAware true
 
 !include "MUI.nsh"
+!include "LogicLib.nsh"
 
 !define MUI_ICON "..\icon.ico"
 !define MUI_UNICON "..\icon.ico"
@@ -62,7 +63,19 @@ Section
     !insertmacro wails.associateFiles
     !insertmacro wails.associateCustomProtocols
 
+    ; 记录安装路径到注册表，供自动更新器识别原安装目录
+    UserInfo::GetAccountType
+    Pop $0
+    ${If} $0 == "Admin"
+        WriteRegStr HKLM "Software\MedMemo" "InstallPath" $INSTDIR
+    ${Else}
+        WriteRegStr HKCU "Software\MedMemo" "InstallPath" $INSTDIR
+    ${EndIf}
+
     !insertmacro wails.writeUninstaller
+
+    ; 安装完成后启动新版本
+    Exec '"$INSTDIR\${PRODUCT_EXECUTABLE}"'
 SectionEnd
 
 Section "uninstall"
@@ -77,6 +90,15 @@ Section "uninstall"
 
     !insertmacro wails.unassociateFiles
     !insertmacro wails.unassociateCustomProtocols
+
+    ; 清理安装路径注册表
+    UserInfo::GetAccountType
+    Pop $0
+    ${If} $0 == "Admin"
+        DeleteRegKey HKLM "Software\MedMemo"
+    ${Else}
+        DeleteRegKey HKCU "Software\MedMemo"
+    ${EndIf}
 
     !insertmacro wails.deleteUninstaller
 SectionEnd
