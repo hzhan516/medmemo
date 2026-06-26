@@ -394,6 +394,9 @@ func (m *wailsMockFactRepository) Save(ctx context.Context, f *entity.ExtractedF
 func (m *wailsMockFactRepository) GetByID(ctx context.Context, factID string) (*entity.ExtractedFact, error) {
 	return nil, entity.ErrFactNotFound
 }
+func (m *wailsMockFactRepository) FindByIDs(ctx context.Context, factIDs []string) (map[string]*entity.ExtractedFact, error) {
+	return map[string]*entity.ExtractedFact{}, nil
+}
 func (m *wailsMockFactRepository) ListByStatus(ctx context.Context, status entity.FactStatus, offset, limit int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
@@ -426,6 +429,9 @@ func (m *wailsMockFactRepository) CountApprovedFactsNeedingEmbedding(ctx context
 	return 0, nil
 }
 func (m *wailsMockFactRepository) ListApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string, lastCreatedAt time.Time, lastFactID string, limit int) ([]*entity.ExtractedFact, error) {
+	return nil, nil
+}
+func (m *wailsMockFactRepository) SearchApproved(ctx context.Context, query string, limit int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
 
@@ -466,7 +472,15 @@ func TestWailsApp_SendMessage_RequestMapping(t *testing.T) {
 	comp := wailsNewTestComplianceChecker(t, wailsMustEmptyRulesPath(t))
 	factory := &wailsMockLLMClientFactory{client: mock}
 	store := newMockProviderStore()
-	orch := usecase.NewChatOrchestrator(factory, store, nil, nil, comp, nil, nil, usecase.NewConfidenceAggregator(), &wailsMockFactRepository{}, usecase.NewIntentResolver(usecase.NewQueryExpansionService()), usecase.NewLocalAnswerService())
+	orch := usecase.NewChatOrchestrator(usecase.ChatOrchestratorDeps{
+		LLMFactory:           factory,
+		ProviderStore:        store,
+		Compliance:           comp,
+		ConfidenceAggregator: usecase.NewConfidenceAggregator(),
+		FactRepo:             &wailsMockFactRepository{},
+		IntentResolver:       usecase.NewIntentResolver(usecase.NewQueryExpansionService()),
+		LocalAnswer:          usecase.NewLocalAnswerService(usecase.NewLocalAnswerConfig()),
+	})
 
 	app := &WailsApp{
 		ctx:              t.Context(),
@@ -493,7 +507,15 @@ func TestWailsApp_SendMessage_ErrorPropagation(t *testing.T) {
 	comp := wailsNewTestComplianceChecker(t, wailsMustEmptyRulesPath(t))
 	factory := &wailsMockLLMClientFactory{client: mock}
 	store := newMockProviderStore()
-	orch := usecase.NewChatOrchestrator(factory, store, nil, nil, comp, nil, nil, usecase.NewConfidenceAggregator(), &wailsMockFactRepository{}, usecase.NewIntentResolver(usecase.NewQueryExpansionService()), usecase.NewLocalAnswerService())
+	orch := usecase.NewChatOrchestrator(usecase.ChatOrchestratorDeps{
+		LLMFactory:           factory,
+		ProviderStore:        store,
+		Compliance:           comp,
+		ConfidenceAggregator: usecase.NewConfidenceAggregator(),
+		FactRepo:             &wailsMockFactRepository{},
+		IntentResolver:       usecase.NewIntentResolver(usecase.NewQueryExpansionService()),
+		LocalAnswer:          usecase.NewLocalAnswerService(usecase.NewLocalAnswerConfig()),
+	})
 
 	app := &WailsApp{
 		ctx:              t.Context(),

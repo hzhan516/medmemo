@@ -1,4 +1,4 @@
-// Package database 封装 DuckDB / SQLite 连接池、迁移与事务管理。
+// Package database 封装 SQLite / SQLCipher 连接池、迁移与事务管理。
 package database
 
 import (
@@ -7,39 +7,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-
-	"github.com/google/wire"
-	"github.com/viant/sqlite-vec/engine"
-	_ "modernc.org/sqlite"
 )
 
-func init() {
-	// 必须在 sql.Open 之前注册，确保所有 SQLite 连接都能使用 vec_cosine / vec_l2
-	_ = engine.RegisterVectorFunctions(nil)
-}
-
-// DuckDBConnector DuckDB 嵌入式数据库连接管理器（已冻结，项目已降级至 SQLite）。
-type DuckDBConnector struct {
-	path string
-}
-
-// NewDuckDBConnector 创建 DuckDB 连接。
-func NewDuckDBConnector(dataDir string) (*DuckDBConnector, error) {
-	return &DuckDBConnector{path: dataDir + "/medmemo.duckdb"}, nil
-}
-
-// Close 关闭数据库连接。
-func (c *DuckDBConnector) Close() error {
-	return nil
-}
-
-// Migrate 执行数据库迁移脚本。
-func (c *DuckDBConnector) Migrate(ctx context.Context) error {
-	// TODO(作者): 执行 schema 迁移 [Issue#023]
-	return fmt.Errorf("DuckDBConnector.Migrate not implemented")
-}
-
 // SQLiteConnector SQLite 连接管理器，用于事务型数据存储。
+// 当前主要供测试与降级场景使用，生产环境使用 SQLCipherConnector。
 type SQLiteConnector struct {
 	db   *sql.DB
 	path string
@@ -70,7 +41,7 @@ func NewSQLiteConnector(dataDir string) (*SQLiteConnector, error) {
 
 	// 启用外键约束
 	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
-		_ = db.Close() // 外键启用失败后的清理关闭，关闭错误非关键（上方已返回主错误）
+		_ = db.Close()
 		return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
 	}
 
@@ -100,10 +71,3 @@ func (c *SQLiteConnector) Close() error {
 func (c *SQLiteConnector) Migrate(ctx context.Context) error {
 	return migrateSQLiteSchema(ctx, c.db)
 }
-
-// DatabaseSet 供 Wire 使用的 ProviderSet。
-var DatabaseSet = wire.NewSet(
-	NewDuckDBConnector,
-	NewSQLiteConnector,
-	NewSQLCipherConnector,
-)

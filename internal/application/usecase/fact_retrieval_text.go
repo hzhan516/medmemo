@@ -176,10 +176,5 @@ func containsKeywordBounded(text, keyword string) bool {
 
 // isAllASCII 判断字符串是否仅含 ASCII 字符。
 func isAllASCII(s string) bool {
-	for _, r := range s {
-		if r > 127 {
-			return false
-		}
-	}
-	return true
+	return strings.IndexFunc(s, func(r rune) bool { return r > 127 }) == -1
 }

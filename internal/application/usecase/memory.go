@@ -3,10 +3,12 @@ package usecase
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/wire"
 	"github.com/hzhan516/medmemo/internal/application/port"
@@ -346,6 +348,7 @@ func (m *MemoryRetriever) recallByKeyword(ctx context.Context, req *RetrievalReq
 
 	var candidates []RetrievalCandidate
 	seen := make(map[string]bool)
+	now := time.Now().UTC()
 
 	for _, f := range facts {
 		content := fmt.Sprintf("%s %s %s", f.Subject, f.Predicate, f.Object)
@@ -376,7 +379,7 @@ func (m *MemoryRetriever) recallByKeyword(ctx context.Context, req *RetrievalReq
 				Confidence:   f.Confidence,
 				MatchedPaths: []RetrievalPath{PathKeyword},
 				KeywordScore: score,
-				RecencyScore: m.decayScorer.ScoreFromCreatedAt(1.0, f.CreatedAt, time.Now().UTC()),
+				RecencyScore: m.decayScorer.ScoreFromCreatedAt(1.0, f.CreatedAt, now),
 				Reasons:      []string{reason},
 			})
 		}
@@ -390,16 +393,21 @@ func (m *MemoryRetriever) recallByKeyword(ctx context.Context, req *RetrievalReq
 	return candidates, status
 }
 
-// truncateSnippet 截断文本为指定长度的诊断用 snippet。
-func truncateSnippet(s string, maxLen int) string {
+// truncateRunes 通用 rune 截断工具，按 rune 数截断，过长时追加 suffix。
+func truncateRunes(s string, maxRunes int, suffix string) string {
 	if s == "" {
 		return ""
 	}
 	runes := []rune(s)
-	if len(runes) <= maxLen {
+	if len(runes) <= maxRunes {
 		return s
 	}
-	return string(runes[:maxLen]) + "..."
+	return string(runes[:maxRunes]) + suffix
+}
+
+// truncateSnippet 截断文本为指定长度的诊断用 snippet。
+func truncateSnippet(s string, maxLen int) string {
+	return truncateRunes(s, maxLen, "...")
 }
 
 // recallByVector 向量召回路径：使用 expanded_query 进行 embedding 和语义搜索。
@@ -438,13 +446,20 @@ func (m *MemoryRetriever) recallByVector(ctx context.Context, req *RetrievalRequ
 	}
 
 	now := time.Now().UTC()
+	factIDs := make([]string, 0, len(scoredEmbeddings))
+	for _, se := range scoredEmbeddings {
+		factIDs = append(factIDs, se.FactID)
+	}
+
+	facts, err := m.factRepo.FindByIDs(ctx, factIDs)
+	if err != nil {
+		return nil, PathStatus{Path: PathVector, Status: "failure", Reason: fmt.Sprintf("batch load facts failed: %v", err)}
+	}
+
 	var candidates []RetrievalCandidate
 	for _, se := range scoredEmbeddings {
-		fact, err := m.factRepo.GetByID(ctx, se.FactID)
-		if err != nil {
-			continue
-		}
-		if fact.Status != entity.FactStatusApproved {
+		fact, ok := facts[se.FactID]
+		if !ok || fact.Status != entity.FactStatusApproved {
 			continue
 		}
 
@@ -565,8 +580,6 @@ func rerank(candidates []RetrievalCandidate, req *RetrievalRequest) []RetrievalC
 		return candidates
 	}
 
-	// 标记 recent path 候选用于 boost
-	recentBoost := make(map[string]bool)
 	var boostPersonal bool
 	if req != nil && req.Intent != nil && req.Intent.Confidence == ConfidenceHigh {
 		boostPersonal = true
@@ -577,8 +590,8 @@ func rerank(candidates []RetrievalCandidate, req *RetrievalRequest) []RetrievalC
 
 		// recent boost: 个人属性问题优先推 recent path 候选
 		if boostPersonal {
-			aRecent := containsPath(a.MatchedPaths, PathRecent)
-			bRecent := containsPath(b.MatchedPaths, PathRecent)
+			aRecent := slices.Contains(a.MatchedPaths, PathRecent)
+			bRecent := slices.Contains(b.MatchedPaths, PathRecent)
 			if aRecent != bRecent {
 				return aRecent
 			}
@@ -603,18 +616,7 @@ func rerank(candidates []RetrievalCandidate, req *RetrievalRequest) []RetrievalC
 		return a.CreatedAt.After(b.CreatedAt)
 	})
 
-	_ = recentBoost
 	return candidates
-}
-
-// containsPath 检查 matched_paths 中是否包含指定路径。
-func containsPath(paths []RetrievalPath, target RetrievalPath) bool {
-	for _, p := range paths {
-		if p == target {
-			return true
-		}
-	}
-	return false
 }
 
 // applyTokenBudgetToCandidates 对 RetrievalCandidate 列表应用 Token 预算截断。
@@ -623,7 +625,7 @@ func applyTokenBudgetToCandidates(candidates []RetrievalCandidate, limit int, to
 	var selected, rejected []RetrievalCandidate
 	var tokenCount int
 	for _, c := range candidates {
-		memTokens := len([]rune(c.Content))
+		memTokens := utf8.RuneCountInString(c.Content)
 		if len(selected) > 0 && tokenCount+memTokens > tokenBudget {
 			r := c
 			r.RejectReason = "token budget exceeded"

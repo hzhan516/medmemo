@@ -5,13 +5,6 @@ package updater
 import (
 	"os"
 	"path/filepath"
-
-	"github.com/google/wire"
-)
-
-// InstallerSet 供 Wire 使用的 Provider 集合。
-var InstallerSet = wire.NewSet(
-	NewInstaller,
 )
 
 // getCurrentBinary 获取当前运行二进制文件的绝对路径。

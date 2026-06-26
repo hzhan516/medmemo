@@ -51,51 +51,131 @@
   },
   {
     "version": "v0.5",
-    "title": "记忆系统与数据安全层（Sprint 6）",
+    "title": "内测准备层（Sprint 8-10）",
     "features": [
-      "记忆控制台（事实列表、审核状态、置信度可视化）",
-      "事实提取流水线（LLM 提取 + 置信度评分 + 质量门控）",
-      "Embedding 生成与向量存储（ONNX Runtime + sqlite-vec）",
-      "语义搜索与记忆召回（向量相似度 + 时间衰减排序）",
-      "SQLCipher AES-256 加密数据库",
-      "API Key 操作系统密钥链存储"
+      "跨平台打包与自动发布（GoReleaser + GitHub Actions）",
+      "自动更新机制（GitHub Releases API + 前端更新弹窗）",
+      "首次启动安装向导（3 步引导：欢迎 → 隐私 → 模型配置）",
+      "完整 E2E 测试套件（11 条用例 + CI 集成）",
+      "用户文档完善（12 份文档：安装指南/隐私政策/FAQ）",
+      "开源合规审查（499 个依赖许可证扫描）"
     ],
     "fixes": [
-      "修复脱敏 Pipeline 中 Aho-Corasick 与 NER 模型并发冲突"
+      "ArrowUp 编辑上一条消息",
+      "linter 告警清理与 golangci-lint 升级",
+      "代码审查 4 项问题修复"
     ]
   },
   {
     "version": "v1.0",
-    "title": "正式版发布（Sprint 7-8）",
+    "title": "多模型自由配置系统",
     "features": [
-      "多 Provider 架构（Kimi / OpenAI / Qwen / SiliconFlow / Ollama / llama.cpp）",
-      "Provider 模板系统与动态配置",
-      "OAuth 设备流授权与 Token 自动刷新",
-      "CLI Token 本地认证模式",
-      "自动更新系统（GitHub Release 检测 + 增量下载 + 安装器）",
-      "版本号结构化元数据（SemVer + 构建号 + 预发布标签）",
-      "家族健康关系图谱（Kùzǔ 图数据库 stub）"
+      "通用 OpenAICompatibleClient（零厂商硬编码）",
+      "Provider 配置存储层（SQLite + AES-256-GCM 加密）",
+      "健康检测引擎（异步 goroutine + 四级状态）",
+      "流式响应统一处理层（SSE 解析 + StreamChunk 统一包装）",
+      "21 个预置 Provider 模板（一键添加）",
+      "自定义 Provider 表单（apiHost/Key/Model + 验证）",
+      "测试连接与模型列表拉取",
+      "运行时模型切换 UI（顶部选择器 + 状态指示）",
+      "Provider 配置导入导出（JSON 格式）",
+      "四层认证体系：CLI Token → OAuth Device Flow → API Key → 本地模型",
+      "认证方式智能选择 UI（自动检测并推荐最佳方式）",
+      "API Key 获取引导（5 厂商分步指引）",
+      "稳定版定义与版本提示弹窗（三段式版本号判定 + 更新后自动展示）"
     ],
     "fixes": [
-      "修复正式版更新检测失效：版本号解析逻辑支持预发布标签与构建号",
-      "修复 Windows 安装包数字签名验证失败"
+      "isNetworkError 无脑返回 true 的 Critical 修复",
+      "删除环境变量硬编码 API Key",
+      "本地适配器添加 120s 默认超时",
+      "OAuth token 字段加 json:\"-\" 防泄漏",
+      "密钥派生增强（加入 os.Getuid() + 随机 salt）",
+      "合规拦截 goroutine 泄漏修复",
+      "流式输出先合规检测后推送",
+      "SQL 注入风险修复（migrateFromPlaintext 路径转义）",
+      "http:// 明文传输安全警告（API Host 输入框下方橙色提示）",
+      "fetch 超时保护完善（clearTimeout 移至 finally 覆盖完整链路）",
+      "API Key 输入框添加 maxLength={1024} 防止超长粘贴卡顿"
     ]
   },
   {
-    "version": "v1.1",
-    "title": "M03 记忆系统重构与检索增强",
+    "version": "v1.0.1",
+    "title": "稳定性修复与自动发布",
     "features": [
-      "记忆系统三层架构：原始对话层 → 提取事实层 → 语义嵌入层",
-      "事实提取与审批工作流：提取 → 评分 → 人工审核 → 持久化",
-      "语义 Embedding 增量重算：版本化模型管理 + 稳定 cursor 分页",
-      "历史记忆 Embedding 重新索引：全量迁移 + 进度持久化 + 可中断恢复",
-      "DecayScorer 时间衰减评分：指数衰减 + 可配置 lambda",
-      "ConfidenceAggregator 多事实置信度聚合：加权平均 + 衰减调和",
-      "数据库迁移 v11：为 embedding 表增加 model_version 索引，优化迁移查询与版本过滤性能",
-      "Embedding 仓库扩展：新增 CountApprovedFactsNeedingEmbedding / ListApprovedFactsNeedingEmbedding / UpdateEmbedding 支持增量重算"
+      "build-and-release 自动发布工作流",
+      "GitHubUpdater.FetchLatest 单元测试"
     ],
     "fixes": [
-      "修复 embedding 缓存未按模型版本隔离导致的潜在陈旧向量召回问题"
+      "AI 429 速率限制 nil 显示 bug 修复，添加指数退避重试",
+      "L3 合规层不再错误阻塞流式输出",
+      "GitHub 仓库外部链接打开方式修复",
+      "相对数据目录解析为绝对路径",
+      "AppImage 打包后资源加载路径修复",
+      "自动更新器双通道发布资源命名对齐",
+      "CI 发布流程修复（GitHub Actions、immutable-release 资源上传）"
+    ]
+  },
+  {
+    "version": "v1.0.2",
+    "title": "前端消息同步修复与文档完善",
+    "features": [
+      "react-virtuoso 虚拟列表优化长会话渲染性能",
+      "流式事件按 conversation_id 路由，消除会话切换时的消息丢失",
+      "Wails 前后端绑定完整 API 契约文档（6 个模块）",
+      "架构决策记录 ADR-002/003/004 中文翻译",
+      "gitleaks Secret 扫描规则（排除测试文件假密钥误报）"
+    ],
+    "fixes": [
+      "修复主聊天区域消息显示为空（messages/messagesMap 双存储同步缺陷）",
+      "修复 addMessage 在 currentConversationId 为 null 时丢失消息到 messagesMap",
+      "修复 TypingIndicator 在 messages 为空数组时的条件判断异常",
+      "修正代码 TODO 编号与 issues.md 不一致（#017→#019、#021→#023）",
+      "清理 wails_app.go 遗留的 fmt.Println 调试代码"
+    ]
+  },
+  {
+    "version": "v1.1.0",
+    "title": "分层长期记忆池 + 回答置信度机制",
+    "features": [
+      "MemoryEntry 三层数据模型（RawDialogue / ExtractedFact / SemanticEmbedding）",
+      "原始对话层 SQLite CRUD + 批量写入优化（>1000 msg/s）",
+      "LLM 异步事实提取服务（prompt 工程 + worker 队列 + 速率限制 5 次/分）",
+      "置信度评分与审核队列（自动通过/拒绝 + 人工审核标记）",
+      "ONNX Runtime Go 绑定集成（三平台 + 动态库自动查找）",
+      "all-MiniLM-L6-v2 嵌入推理服务（384 维归一化向量 + LRU 缓存 1000 条）",
+      "sqlite-vec 向量索引集成（KNN 近似最近邻，1 万向量 <50ms）",
+      "指数时间衰减算法（半衰期 14 天，λ=0.05，0 天=1.0 / 14 天≈0.5）",
+      "记忆注入对话上下文（实体提及触发 + 会话间隙 >10min 触发）",
+      "记忆管理基础 API（CRUD + 语义搜索 + 审核 + 审计日志）",
+      "知识源标记器（RAG 层：医学指南/循证数据/知识图谱/通用推理）",
+      "推理链评估器（五要素完整性：症状分析/鉴别诊断/建议/不确定性/紧急检查）",
+      "置信度聚合计算器（五维度加权 → ABCDE 五级，计算延迟 <50ms）",
+      "历史准确率统计服务（滚动窗口 30/90 天 + 冷启动基准 0.75）",
+      "置信度条 UI 组件（绿/蓝/黄/橙/红五级颜色条，展开/折叠/隐藏三模式）",
+      "置信度展开面板（五维度分数 + \"为什么不是100%\" 解释 + 缺失信息列表）",
+      "低置信度追问建议联动（C 级提示补充 / D 级建议就医 / E 级强制就医）",
+      "嵌入模型自动下载与状态面板（设置页一键下载 + 进度显示）",
+      "敏感记忆标记与合规保护（is_sensitive 字段 + API 认证中间件）"
+    ],
+    "fixes": [
+      "ONNX Engine.available 拆分为 nerAvailable/embeddingAvailable",
+      "流式 SSE 请求添加独立 streamClient（Timeout=0 避免误触发中断）",
+      "流式上下文隔离 + ONNX 预热 + CGO_LDFLAGS 修复",
+      "SQLite 连接池设置 busy_timeout + 异步 saveUserMessage 防阻塞",
+      "事实提取共享速率限制器 + 静默 429 跳过修复",
+      "AI 429 重试增强（支持 Retry-After header，最大重试 5 次）",
+      "ONNX 动态库路径鲁棒性修复（.so.1 fallback + AppImage 支持）",
+      "嵌入模型初始化顺序修复（确保模型文件复制先于引擎加载）",
+      "事实提取后保存嵌入向量 + 启动时存量数据回溯填充",
+      "记忆检索修复（缺失嵌入路径 + 弱实体检测增强）",
+      "事实提取范围修正（使用完整对话 user+AI 而非仅 AI 回复）",
+      "置信度结果持久化键名统一为 snake_case",
+      "L1 阻断时保留 AI 回复 + 置信度条开关修复",
+      "置信度条防崩溃（无效 level 保护）+ 模式可切换 + 面板精简",
+      "回收站会话持久化 + 数据保留期清理流程",
+      "嵌入模型目录路径修复 + 设置页下载按钮可用性修复",
+      "前端构建修复（prismjs chunk 顺序、TypeScript 6.0、Vite 8 兼容）",
+      "Wire 注入歧义字符串修复（Wails 绑定恢复）"
     ]
   },
   {
@@ -206,5 +286,23 @@
       "CI 测试对齐 Makefile（单元/集成测试 + native lib 设置）",
       "修复 E2E 合规检测断言（L1 阻断回复期望 SafeText 替代原文）"
     ]
+  },
+  {
+    "version": "v1.1.7",
+    "title": "死代码清理、本地回答配置化与检索性能优化",
+    "features": [
+      "死代码审计：移除 6 个废弃包/文件、5 个无用接口、3 个未使用工具类",
+      "Embedding fallback 搜索 helper 统一，消除 58 行 copy-paste 代码",
+      "FactRepository 新增 FindByIDs 批量查询，recallByVector 消除 N+1",
+      "LocalAnswerConfig 配置驱动模板与人称，移除 type-switch 与硬编码 '用户'",
+      "ChatOrchestratorDeps 结构体替代 11 参数构造函数",
+      "Null Object 模式移除 Format 内 nil guard",
+      "热路径零分配：len([]rune) → utf8.RuneCountInString",
+      "前端 MemoryPage 6 个 I/O 调用 Promise.all 并行化",
+      "UpdateModal formatBytes / IS_MACOS 移至模块级避免重复创建",
+      "WailsApp 绑定层按子系统拆分，覆盖对话、记忆、认证、Provider、更新、Ollama 与 Embedding 状态，降低巨型文件维护成本",
+      "第二轮 PONYTAIL 清理：移除废弃 OpenAICompatibleClient、未使用脱敏 Pipeline、no-op L3 脱敏阶段与无效 analytics 配置，收敛 TokenRefreshService 构造函数，简化 LocalAnswerService 事实格式化"
+    ],
+    "fixes": []
   }
 ]

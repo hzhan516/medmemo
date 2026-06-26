@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/hzhan516/medmemo/internal/infrastructure/config"
 	"github.com/hzhan516/medmemo/pkg/models"
 )
 
@@ -73,7 +73,7 @@ func (s *CLITokenService) Detect(providerType string) (*CLIDetectResult, error) 
 		CredentialPath: credPath,
 	}
 
-	expanded := expandHome(credPath)
+	expanded := config.ExpandTilde(credPath)
 	info, err := os.Stat(expanded)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -206,16 +206,4 @@ func (s *CLITokenService) BuildProviderConfig(providerType, modelID string) (*mo
 		CreatedAt: now.UnixMilli(),
 		UpdatedAt: now.UnixMilli(),
 	}, nil
-}
-
-// expandHome 将路径中的 ~ 展开为用户主目录。
-func expandHome(path string) string {
-	if !strings.HasPrefix(path, "~/") {
-		return path
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return path
-	}
-	return filepath.Join(home, path[2:])
 }

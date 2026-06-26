@@ -134,45 +134,6 @@ func parseSemver(v string) (semver, error) {
 	return s, nil
 }
 
-// IsStableVersion 判断版本是否为稳定版。
-//
-// 以下格式视为稳定版：
-//   - 三段或四段纯数字版本（如 v1.0.1、1.1.2.54）
-//   - 带 -build.N 后缀的版本（如 1.1.2-build.54）
-//
-// 以下格式视为非稳定版：
-//   - 含非 build 预发布标签（如 -alpha、-Pre-release-build.53）
-//   - 1~2 段版本号
-//   - 含构建元数据（如 +build123）
-func IsStableVersion(v string) bool {
-	v = strings.TrimPrefix(v, "v")
-
-	raw := v
-	if idx := strings.Index(raw, "+"); idx != -1 {
-		return false
-	}
-
-	if idx := strings.Index(raw, "-"); idx != -1 {
-		preStr := raw[idx+1:]
-		if !strings.HasPrefix(preStr, "build.") {
-			return false
-		}
-		raw = raw[:idx]
-	}
-
-	parts := strings.Split(raw, ".")
-	if len(parts) < 3 || len(parts) > 4 {
-		return false
-	}
-
-	for _, p := range parts {
-		if _, err := strconv.Atoi(p); err != nil {
-			return false
-		}
-	}
-	return true
-}
-
 // UpdateSettings 存储用户的更新偏好设置。
 type UpdateSettings struct {
 	CheckEnabled bool                 `json:"check_enabled"` // 是否启用自动检测

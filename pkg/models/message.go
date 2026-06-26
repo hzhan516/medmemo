@@ -2,8 +2,6 @@
 // 该包仅依赖 Go 标准库，可被 internal/domain/ 引用。
 package models
 
-import "time"
-
 // Role 表示对话消息的角色类型。
 type Role string
 
@@ -27,6 +25,3 @@ type MemoryID string
 
 // MemberID 家族成员唯一标识。
 type MemberID string
-
-// Timestamp 统一时间戳类型别名。
-type Timestamp = time.Time

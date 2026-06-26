@@ -238,7 +238,7 @@ func TestE2E_Conversation_FullFlow(t *testing.T) {
 		streamChunks: []string{"流", "式", "回", "复"},
 	}
 	checker := &mockComplianceChecker{interceptor: comp}
-	chatOrch := usecase.NewChatOrchestrator(&mockLLMClientFactory{client: mockLLM}, newMockProviderStore(), &mockMemoryRepository{}, &mockSensitiveDetector{}, checker, nil, &mockMemoryQuerier{}, usecase.NewConfidenceAggregator(), &mockFactRepository{}, usecase.NewIntentResolver(usecase.NewQueryExpansionService()), usecase.NewLocalAnswerService())
+	chatOrch := newTestChatOrchestrator(mockLLM, checker, nil)
 
 	ctx := context.Background()
 
@@ -311,7 +311,7 @@ func TestE2E_Conversation_MultipleSessions(t *testing.T) {
 	convRepo := repository.NewConversationRepoSQLite(conn)
 	msgRepo := repository.NewMessageRepoSQLite(conn)
 	checker := &mockComplianceChecker{interceptor: comp}
-	chatOrch := usecase.NewChatOrchestrator(&mockLLMClientFactory{client: &mockLLMClient{chatReply: "回复"}}, newMockProviderStore(), &mockMemoryRepository{}, &mockSensitiveDetector{}, checker, nil, &mockMemoryQuerier{}, usecase.NewConfidenceAggregator(), &mockFactRepository{}, usecase.NewIntentResolver(usecase.NewQueryExpansionService()), usecase.NewLocalAnswerService())
+	chatOrch := newTestChatOrchestrator(&mockLLMClient{chatReply: "回复"}, checker, nil)
 
 	ctx := context.Background()
 

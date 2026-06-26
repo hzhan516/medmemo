@@ -430,3 +430,129 @@ func TestFactRepo_FindLatestApprovedByPredicates_MultiPredicate(t *testing.T) {
 	assert.NotNil(t, fact)
 	assert.True(t, fact.Predicate == "服用" || fact.Predicate == "正在服用")
 }
+
+// TestFactRepo_FindByIDs 验证批量按 ID 查询事实。
+func TestFactRepo_FindByIDs(t *testing.T) {
+	repo, cleanup := setupFactTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	f1 := entity.NewExtractedFact("用户", "患有", "A", 0.9, []string{"msg_001"})
+	f1.FactID = "fact_find_a"
+	f1.SetStatus(entity.FactStatusApproved)
+	require.NoError(t, repo.Save(ctx, f1))
+
+	f2 := entity.NewExtractedFact("用户", "服用", "B", 0.8, []string{"msg_002"})
+	f2.FactID = "fact_find_b"
+	f2.SetStatus(entity.FactStatusApproved)
+	require.NoError(t, repo.Save(ctx, f2))
+
+	f3 := entity.NewExtractedFact("用户", "检查", "C", 0.7, []string{"msg_003"})
+	f3.FactID = "fact_find_c"
+	require.NoError(t, repo.Save(ctx, f3))
+
+	t.Run("normal", func(t *testing.T) {
+		facts, err := repo.FindByIDs(ctx, []string{"fact_find_a", "fact_find_b"})
+		require.NoError(t, err)
+		require.Len(t, facts, 2)
+		assert.Equal(t, "A", facts["fact_find_a"].Object)
+		assert.Equal(t, "B", facts["fact_find_b"].Object)
+	})
+
+	t.Run("deduplicate", func(t *testing.T) {
+		facts, err := repo.FindByIDs(ctx, []string{"fact_find_a", "fact_find_a"})
+		require.NoError(t, err)
+		require.Len(t, facts, 1)
+	})
+
+	t.Run("empty input", func(t *testing.T) {
+		facts, err := repo.FindByIDs(ctx, nil)
+		require.NoError(t, err)
+		assert.Empty(t, facts)
+	})
+
+	t.Run("partial missing", func(t *testing.T) {
+		facts, err := repo.FindByIDs(ctx, []string{"fact_find_a", "nonexistent"})
+		require.NoError(t, err)
+		require.Len(t, facts, 1)
+		assert.Equal(t, "A", facts["fact_find_a"].Object)
+	})
+
+	t.Run("large batch chunks", func(t *testing.T) {
+		ids := make([]string, 1000)
+		for i := range ids {
+			ids[i] = "nonexistent_" + string(rune('0'+i%10)) + string(rune(i))
+		}
+		facts, err := repo.FindByIDs(ctx, ids)
+		require.NoError(t, err)
+		assert.Empty(t, facts)
+	})
+}
+
+// TestFactRepo_SearchApproved 验证数据库层 LIKE 过滤搜索已审批事实。
+func TestFactRepo_SearchApproved(t *testing.T) {
+	repo, cleanup := setupFactTestDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// approved 事实
+	f1 := entity.NewExtractedFact("用户", "患有", "高血压", 0.9, []string{"msg_1"})
+	f1.FactID = "fact_search_1"
+	f1.SetStatus(entity.FactStatusApproved)
+	require.NoError(t, repo.Save(ctx, f1))
+
+	f2 := entity.NewExtractedFact("用户", "服用", "降压药", 0.85, []string{"msg_2"})
+	f2.FactID = "fact_search_2"
+	f2.SetStatus(entity.FactStatusApproved)
+	require.NoError(t, repo.Save(ctx, f2))
+
+	// pending 事实
+	f3 := entity.NewExtractedFact("用户", "感觉", "头晕", 0.7, []string{"msg_3"})
+	f3.FactID = "fact_search_3"
+	require.NoError(t, repo.Save(ctx, f3))
+
+	t.Run("match subject", func(t *testing.T) {
+		facts, err := repo.SearchApproved(ctx, "用户", 10)
+		require.NoError(t, err)
+		require.Len(t, facts, 2)
+	})
+
+	t.Run("match predicate", func(t *testing.T) {
+		facts, err := repo.SearchApproved(ctx, "服用", 10)
+		require.NoError(t, err)
+		require.Len(t, facts, 1)
+		assert.Equal(t, "fact_search_2", facts[0].FactID)
+	})
+
+	t.Run("match object", func(t *testing.T) {
+		facts, err := repo.SearchApproved(ctx, "高血压", 10)
+		require.NoError(t, err)
+		require.Len(t, facts, 1)
+		assert.Equal(t, "fact_search_1", facts[0].FactID)
+	})
+
+	t.Run("partial match", func(t *testing.T) {
+		facts, err := repo.SearchApproved(ctx, "降压", 10)
+		require.NoError(t, err)
+		require.Len(t, facts, 1)
+		assert.Equal(t, "fact_search_2", facts[0].FactID)
+	})
+
+	t.Run("empty query returns recent approved", func(t *testing.T) {
+		facts, err := repo.SearchApproved(ctx, "", 10)
+		require.NoError(t, err)
+		require.Len(t, facts, 2)
+	})
+
+	t.Run("no match returns empty", func(t *testing.T) {
+		facts, err := repo.SearchApproved(ctx, "糖尿病", 10)
+		require.NoError(t, err)
+		assert.Empty(t, facts)
+	})
+
+	t.Run("limit respected", func(t *testing.T) {
+		facts, err := repo.SearchApproved(ctx, "用户", 1)
+		require.NoError(t, err)
+		require.Len(t, facts, 1)
+	})
+}

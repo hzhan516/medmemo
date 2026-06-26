@@ -198,6 +198,9 @@ func (m *mockFactRepo) Save(ctx context.Context, f *entity.ExtractedFact) error 
 func (m *mockFactRepo) GetByID(ctx context.Context, factID string) (*entity.ExtractedFact, error) {
 	return nil, nil
 }
+func (m *mockFactRepo) FindByIDs(ctx context.Context, factIDs []string) (map[string]*entity.ExtractedFact, error) {
+	return map[string]*entity.ExtractedFact{}, nil
+}
 func (m *mockFactRepo) ListByStatus(ctx context.Context, status entity.FactStatus, offset, limit int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
@@ -218,6 +221,9 @@ func (m *mockFactRepo) FindBySubject(ctx context.Context, subject string) ([]*en
 	return nil, nil
 }
 func (m *mockFactRepo) FindBySession(ctx context.Context, sessionID string) ([]*entity.ExtractedFact, error) {
+	return nil, nil
+}
+func (m *mockFactRepo) SearchApproved(ctx context.Context, query string, limit int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
 func (m *mockFactRepo) FindApprovedByPredicates(ctx context.Context, subject string, predicates []string, limit int) ([]*entity.ExtractedFact, error) {

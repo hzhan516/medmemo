@@ -89,7 +89,7 @@ func TestFactRepo_ListApprovedFactsNeedingEmbedding_Cursor(t *testing.T) {
 	require.NoError(t, embedRepo.Save(ctx, entity.NewSemanticEmbedding("fact_c1", v, "old-version")))
 
 	// 第一页：limit=2，应返回 fact_c1（旧版本）和 fact_c3（无 embedding）
-	page1, err := factRepo.ListApprovedFactsNeedingEmbedding(ctx, models.CurrentEmbeddingVersion, zeroTime(), "", 2)
+	page1, err := factRepo.ListApprovedFactsNeedingEmbedding(ctx, models.CurrentEmbeddingVersion, time.Time{}, "", 2)
 	require.NoError(t, err)
 	require.Len(t, page1, 2)
 	assert.Equal(t, "fact_c1", page1[0].FactID)
@@ -117,7 +117,7 @@ func TestFactRepo_ListApprovedFactsNeedingEmbedding_UpdateDuringScan(t *testing.
 	}
 
 	// 第一页取 1 条
-	page1, err := factRepo.ListApprovedFactsNeedingEmbedding(ctx, models.CurrentEmbeddingVersion, zeroTime(), "", 1)
+	page1, err := factRepo.ListApprovedFactsNeedingEmbedding(ctx, models.CurrentEmbeddingVersion, time.Time{}, "", 1)
 	require.NoError(t, err)
 	require.Len(t, page1, 1)
 
@@ -132,10 +132,4 @@ func TestFactRepo_ListApprovedFactsNeedingEmbedding_UpdateDuringScan(t *testing.
 	require.Len(t, page2, 2)
 	assert.Equal(t, "fact_u1", page2[0].FactID)
 	assert.Equal(t, "fact_u2", page2[1].FactID)
-}
-
-// zeroTime 返回 time.Time 零值，用于 cursor 首页。
-func zeroTime() time.Time {
-	var t time.Time
-	return t
 }
