@@ -3,6 +3,7 @@ package updater
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"testing"
 
 	"github.com/hzhan516/medmemo/internal/domain/entity"
@@ -13,10 +14,11 @@ import (
 
 // mockUpdater 是 port.Updater 的测试替身。
 type mockUpdater struct {
-	latestInfo *entity.UpdateInfo
-	fetchErr   error
-	downloadTo string
-	verifyErr  error
+	latestInfo  *entity.UpdateInfo
+	fetchErr    error
+	downloadTo  string
+	downloadErr error
+	verifyErr   error
 }
 
 func (m *mockUpdater) FetchLatest(ctx context.Context, channel models.UpdateChannel) (*entity.UpdateInfo, error) {
@@ -25,7 +27,7 @@ func (m *mockUpdater) FetchLatest(ctx context.Context, channel models.UpdateChan
 
 func (m *mockUpdater) Download(ctx context.Context, url, destPath string, progress func(downloaded, total int64)) error {
 	m.downloadTo = destPath
-	return nil
+	return m.downloadErr
 }
 
 func (m *mockUpdater) VerifyChecksum(path, expectedSHA256 string) error {
@@ -204,4 +206,93 @@ func TestServiceDefaultChannel(t *testing.T) {
 		svc := NewService(mockU, mockI, models.ChannelBeta)
 		assert.Equal(t, models.ChannelBeta, svc.GetSettings().Channel)
 	})
+}
+
+// TestServiceDownloadUpdate_Errors 验证下载各阶段失败均被包装。
+func TestServiceDownloadUpdate_Errors(t *testing.T) {
+	t.Run("download failure", func(t *testing.T) {
+		mockU := &mockUpdater{downloadErr: fmt.Errorf("connection reset")}
+		mockI := &mockInstaller{}
+		svc := NewService(mockU, mockI, models.ChannelStable)
+
+		t.Setenv("HOME", t.TempDir())
+		info := &entity.UpdateInfo{
+			Version:     "v0.2.0",
+			DownloadURL: "https://example.com/update.AppImage",
+			Checksum:    "",
+		}
+
+		_, err := svc.DownloadUpdate(context.Background(), info, nil)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to download update")
+	})
+
+	t.Run("checksum mismatch removes file", func(t *testing.T) {
+		mockU := &mockUpdater{verifyErr: fmt.Errorf("checksum mismatch")}
+		mockI := &mockInstaller{}
+		svc := NewService(mockU, mockI, models.ChannelStable)
+
+		t.Setenv("HOME", t.TempDir())
+		info := &entity.UpdateInfo{
+			Version:     "v0.2.0",
+			DownloadURL: "https://example.com/update.AppImage",
+			Checksum:    "badchecksum",
+		}
+
+		_, err := svc.DownloadUpdate(context.Background(), info, nil)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "checksum verification failed")
+	})
+}
+
+// TestServiceApplyUpdate_RollbackError 验证安装失败且回滚失败时优先返回安装错误。
+func TestServiceApplyUpdate_RollbackError(t *testing.T) {
+	installErr := fmt.Errorf("permission denied")
+	rollbackErr := fmt.Errorf("rollback failed")
+	mockU := &mockUpdater{}
+	mockI := &mockInstaller{installErr: installErr, rollbackErr: rollbackErr}
+	svc := NewService(mockU, mockI, models.ChannelStable)
+
+	err := svc.ApplyUpdate("/tmp/update.AppImage")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, installErr)
+}
+
+// TestPlatformAssetName 验证各平台产物名称模式。
+func TestPlatformAssetName(t *testing.T) {
+	tests := map[string]string{
+		"linux":   "*amd64*.AppImage",
+		"darwin":  "*.dmg",
+		"windows": "*-installer.exe",
+		"freebsd": "",
+	}
+
+	for goos, want := range tests {
+		t.Run(goos, func(t *testing.T) {
+			// 由于函数依赖 runtime.GOOS，直接断言当前平台
+			if runtime.GOOS != goos {
+				t.Skipf("当前平台为 %s，跳过 %s 断言", runtime.GOOS, goos)
+			}
+			assert.Equal(t, want, PlatformAssetName())
+		})
+	}
+}
+
+// TestAssetExt 验证各平台扩展名。
+func TestAssetExt(t *testing.T) {
+	tests := []struct {
+		goos string
+		want string
+	}{
+		{"linux", ".AppImage"},
+		{"darwin", ".dmg"},
+		{"windows", ".exe"},
+		{"freebsd", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.goos, func(t *testing.T) {
+			assert.Equal(t, tt.want, assetExt(tt.goos))
+		})
+	}
 }

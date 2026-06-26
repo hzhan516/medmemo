@@ -248,3 +248,45 @@ func TestLoader_DefaultChannel(t *testing.T) {
 		assert.Equal(t, models.ChannelStable, cfg.UpdateChannel)
 	})
 }
+
+// TestLoader_Load_DefaultChannelEmptyFallback 验证构建版本为空时回退 beta。
+func TestLoader_Load_DefaultChannelEmptyFallback(t *testing.T) {
+	loader := NewLoader("", models.UpdateChannel(""))
+	raw := loader.loadDefaults()
+	assert.Equal(t, string(models.ChannelBeta), raw.UpdateChannel)
+
+	cfg, err := loader.Load()
+	require.NoError(t, err)
+	assert.Equal(t, models.ChannelBeta, cfg.UpdateChannel)
+}
+
+// TestSaveDataRetentionDays 验证数据留存天数持久化不丢失其他字段。
+func TestSaveDataRetentionDays(t *testing.T) {
+	t.Run("create new file", func(t *testing.T) {
+		t.Setenv("HOME", t.TempDir())
+		require.NoError(t, SaveDataRetentionDays(90))
+
+		loader := NewLoader("", models.ChannelBeta)
+		cfg, err := loader.Load()
+		require.NoError(t, err)
+		assert.Equal(t, 90, cfg.DataRetentionDays)
+	})
+
+	t.Run("preserve existing fields", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+
+		configPath := filepath.Join(home, ".medmemo", "config.yaml")
+		require.NoError(t, os.MkdirAll(filepath.Dir(configPath), 0755))
+		require.NoError(t, os.WriteFile(configPath, []byte("default_model: gpt-4o-mini\nlanguage: en-US\n"), 0644))
+
+		require.NoError(t, SaveDataRetentionDays(60))
+
+		data, err := os.ReadFile(configPath)
+		require.NoError(t, err)
+		content := string(data)
+		assert.Contains(t, content, "data_retention_days: 60")
+		assert.Contains(t, content, "default_model: gpt-4o-mini")
+		assert.Contains(t, content, "language: en-US")
+	})
+}

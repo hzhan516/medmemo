@@ -71,6 +71,9 @@ func TestProvideDefaultUpdateChannel(t *testing.T) {
 		{"stable", "v1.1.8", "stable"},
 		{"prerelease", "v1.1.8-Pre-release-build.123", "beta"},
 		{"dev", "dev", "beta"},
+		{"DEV_uppercase", "DEV", "beta"},
+		{"four_segment", "v1.1.8.123", "beta"},
+		{"empty_fallback", "", "stable"},
 	}
 
 	for _, tt := range tests {
@@ -80,6 +83,64 @@ func TestProvideDefaultUpdateChannel(t *testing.T) {
 			defer func() { version = old }()
 
 			assert.Equal(t, tt.want, string(ProvideDefaultUpdateChannel()))
+		})
+	}
+}
+
+// TestGetVersionInfo_EdgeCases 验证 GetVersionInfo 对特殊版本号的处理。
+func TestGetVersionInfo_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name            string
+		version         string
+		wantVersion     string
+		wantDisplay     string
+		wantChannel     string
+		wantPrerelease  bool
+		wantBuildNumber string
+		wantLabel       string
+	}{
+		{
+			name:            "four_segment",
+			version:         "1.1.8.57",
+			wantVersion:     "v1.1.8-build.57",
+			wantDisplay:     "v1.1.8",
+			wantChannel:     "beta",
+			wantPrerelease:  true,
+			wantBuildNumber: "57",
+		},
+		{
+			name:           "empty_fallback",
+			version:        "",
+			wantVersion:    "v0.0.0",
+			wantDisplay:    "v0.0.0",
+			wantChannel:    "stable",
+			wantPrerelease: false,
+		},
+		{
+			name:           "DEV_uppercase",
+			version:        "DEV",
+			wantVersion:    "dev",
+			wantDisplay:    "dev",
+			wantChannel:    "stable",
+			wantPrerelease: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			old := version
+			version = tt.version
+			defer func() { version = old }()
+
+			app := &WailsApp{}
+			info, err := app.GetVersionInfo()
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantVersion, info.Version)
+			assert.Equal(t, tt.wantDisplay, info.DisplayVersion)
+			assert.Equal(t, tt.wantChannel, info.Channel)
+			assert.Equal(t, tt.wantPrerelease, info.Prerelease)
+			assert.Equal(t, tt.wantBuildNumber, info.BuildNumber)
+			assert.Equal(t, tt.wantLabel, info.PrereleaseLabel)
 		})
 	}
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -36,6 +37,35 @@ type mockInstaller struct{}
 func (m *mockInstaller) Install(assetPath string) (string, error) { return "", nil }
 func (m *mockInstaller) Rollback() error                          { return nil }
 func (m *mockInstaller) CurrentBinaryPath() string                { return "" }
+
+// TestCheckUpdate_NoUpdate 验证远程版本与当前一致时返回 nil。
+func TestCheckUpdate_NoUpdate(t *testing.T) {
+	old := version
+	version = "v1.1.8"
+	defer func() { version = old }()
+
+	info := &entity.UpdateInfo{Version: "v1.1.8", Channel: models.ChannelStable}
+	svc := updater.NewService(&mockUpdater{info: info}, &mockInstaller{}, models.ChannelStable)
+	app := &WailsApp{ctx: t.Context(), updaterSvc: svc}
+
+	resp, err := app.CheckUpdate()
+	require.NoError(t, err)
+	assert.Nil(t, resp)
+}
+
+// TestCheckUpdate_ServiceError 验证更新检测错误被正确包装。
+func TestCheckUpdate_ServiceError(t *testing.T) {
+	old := version
+	version = "v1.1.0"
+	defer func() { version = old }()
+
+	svc := updater.NewService(&mockUpdater{err: fmt.Errorf("network unreachable")}, &mockInstaller{}, models.ChannelStable)
+	app := &WailsApp{ctx: t.Context(), updaterSvc: svc}
+
+	_, err := app.CheckUpdate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to check update")
+}
 
 // TestCheckUpdate_MapsFields 验证 CheckUpdate 将 entity.UpdateInfo 的扩展字段完整映射到前端响应。
 func TestCheckUpdate_MapsFields(t *testing.T) {
@@ -74,4 +104,42 @@ func TestCheckUpdate_MapsFields(t *testing.T) {
 	assert.Equal(t, info.Prerelease, resp.Prerelease)
 	assert.Equal(t, info.PreReleaseLabel, resp.PrereleaseLabel)
 	assert.Equal(t, info.BuildNumber, resp.BuildNumber)
+}
+
+// TestSetUpdateSettings_NilService 验证保存设置时 updaterSvc 未初始化返回错误。
+func TestSetUpdateSettings_NilService(t *testing.T) {
+	app := &WailsApp{ctx: t.Context()}
+	err := app.SetUpdateSettings(UpdateSettingsResponse{Channel: "stable"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "updater service not initialized")
+}
+
+// TestSetUpdateSettings_MapsFields 验证设置可正确同步到 updater 服务。
+func TestSetUpdateSettings_MapsFields(t *testing.T) {
+	svc := updater.NewService(&mockUpdater{}, &mockInstaller{}, models.ChannelStable)
+	app := &WailsApp{ctx: t.Context(), updaterSvc: svc}
+
+	req := UpdateSettingsResponse{
+		CheckEnabled: false,
+		Channel:      "beta",
+		SkipVersion:  "v1.1.0",
+	}
+	require.NoError(t, app.SetUpdateSettings(req))
+
+	got, err := app.GetUpdateSettings()
+	require.NoError(t, err)
+	assert.Equal(t, req.CheckEnabled, got.CheckEnabled)
+	assert.Equal(t, req.Channel, got.Channel)
+	assert.Equal(t, req.SkipVersion, got.SkipVersion)
+}
+
+// TestSkipUpdateVersion_MapsToService 验证跳过版本可同步到 updater 服务。
+func TestSkipUpdateVersion_MapsToService(t *testing.T) {
+	svc := updater.NewService(&mockUpdater{}, &mockInstaller{}, models.ChannelStable)
+	app := &WailsApp{ctx: t.Context(), updaterSvc: svc}
+
+	require.NoError(t, app.SkipUpdateVersion("v1.1.0"))
+	settings, err := app.GetUpdateSettings()
+	require.NoError(t, err)
+	assert.Equal(t, "v1.1.0", settings.SkipVersion)
 }
