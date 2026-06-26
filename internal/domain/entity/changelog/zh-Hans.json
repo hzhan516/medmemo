@@ -315,6 +315,10 @@
       "构建时通过 -ldflags 注入版本、commit、channel，保证非开发包体版本号准确",
       "About 面板与设置页版本号同源，避免 wails.json 与前端硬编码不一致"
     ],
-    "fixes": []
+    "fixes": [
+      "修复 Linux AppImage 自动更新误替换 /tmp/.mount_* 运行时文件的问题",
+      "修复 macOS DMG 更新仅提示下载、无法自动替换 .app 的问题，授权失败时回退手动安装",
+      "修复 Windows 安装程序 per-user 与 all-users 升级路径混淆的问题"
+    ]
   }
 ]
