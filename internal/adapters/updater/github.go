@@ -294,8 +294,8 @@ func (g *GitHubUpdater) findChecksum(ctx context.Context, assets []githubAsset, 
 }
 
 // matchArch 检查文件名是否包含目标架构标识。
+// 注意：调用方（matchesPlatform）已将 name 转为小写，此处无需重复。
 func matchArch(name, goarch string) bool {
-	name = strings.ToLower(name)
 	switch goarch {
 	case "amd64":
 		return strings.Contains(name, "amd64") || strings.Contains(name, "x86_64")

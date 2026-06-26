@@ -152,10 +152,10 @@ func TestTokenRefreshService_Refresh_Kimi_Success(t *testing.T) {
 	require.NoError(t, store.Create(context.Background(), p))
 
 	var degradedID, degradedReason string
-	svc := NewTokenRefreshServiceWithClient(store, server.Client(), func(id, reason string) {
+	svc := NewTokenRefreshService(store, WithTokenRefreshHTTPClient(server.Client()), WithTokenRefreshOnDegraded(func(id, reason string) {
 		degradedID = id
 		degradedReason = reason
-	})
+	}))
 
 	result, err := svc.Refresh("kimi-test")
 	require.NoError(t, err)
@@ -218,7 +218,7 @@ func TestTokenRefreshService_Refresh_Gemini_Success(t *testing.T) {
 	p := newGeminiProvider("gemini-test", credPath)
 	require.NoError(t, store.Create(context.Background(), p))
 
-	svc := NewTokenRefreshServiceWithClient(store, server.Client(), nil)
+	svc := NewTokenRefreshService(store, WithTokenRefreshHTTPClient(server.Client()))
 
 	result, err := svc.Refresh("gemini-test")
 	require.NoError(t, err)
@@ -244,7 +244,7 @@ func TestTokenRefreshService_Refresh_MissingClientCredentials(t *testing.T) {
 	p := newKimiProvider("kimi-no-client", credPath)
 	require.NoError(t, store.Create(context.Background(), p))
 
-	svc := NewTokenRefreshService(store, nil)
+	svc := NewTokenRefreshService(store)
 	_, err := svc.Refresh("kimi-no-client")
 	assert.Error(t, err)
 	// 缺少 client_id 不会导致立即报错，而是会在 doRefresh 中根据 endpoint 返回错误
@@ -273,10 +273,10 @@ func TestTokenRefreshService_Refresh_4xx_Degraded(t *testing.T) {
 	require.NoError(t, store.Create(context.Background(), p))
 
 	var degradedID, degradedReason string
-	svc := NewTokenRefreshServiceWithClient(store, server.Client(), func(id, reason string) {
+	svc := NewTokenRefreshService(store, WithTokenRefreshHTTPClient(server.Client()), WithTokenRefreshOnDegraded(func(id, reason string) {
 		degradedID = id
 		degradedReason = reason
-	})
+	}))
 
 	_, err := svc.Refresh("kimi-degraded")
 	assert.Error(t, err)
@@ -312,9 +312,9 @@ func TestTokenRefreshService_Refresh_5xx_Retryable(t *testing.T) {
 	require.NoError(t, store.Create(context.Background(), p))
 
 	var degradedCalled bool
-	svc := NewTokenRefreshServiceWithClient(store, server.Client(), func(_, _ string) {
+	svc := NewTokenRefreshService(store, WithTokenRefreshHTTPClient(server.Client()), WithTokenRefreshOnDegraded(func(_, _ string) {
 		degradedCalled = true
-	})
+	}))
 
 	_, err := svc.Refresh("kimi-500")
 	assert.Error(t, err)
@@ -335,7 +335,7 @@ func TestTokenRefreshService_ScheduleAutoRefresh_FutureExpiry(t *testing.T) {
 	p.AuthParams.OAuthExpiresAt = time.Now().Add(1 * time.Hour).Unix()
 	require.NoError(t, store.Create(context.Background(), p))
 
-	svc := NewTokenRefreshService(store, nil)
+	svc := NewTokenRefreshService(store)
 	require.NoError(t, svc.ScheduleAutoRefresh("kimi-schedule"))
 
 	// 验证 timer 已创建
@@ -373,7 +373,7 @@ func TestTokenRefreshService_ScheduleAutoRefresh_AlreadyExpired(t *testing.T) {
 	p.AuthParams.OAuthExpiresAt = time.Now().Add(-10 * time.Minute).Unix()
 	require.NoError(t, store.Create(context.Background(), p))
 
-	svc := NewTokenRefreshServiceWithClient(store, server.Client(), nil)
+	svc := NewTokenRefreshService(store, WithTokenRefreshHTTPClient(server.Client()))
 	require.NoError(t, svc.ScheduleAutoRefresh("kimi-expired"))
 
 	// 由于 timer 是立即触发的（AfterFunc 0 延迟），等待一小段时间让 goroutine 执行
@@ -394,7 +394,7 @@ func TestTokenRefreshService_CancelAutoRefresh(t *testing.T) {
 	p.AuthParams.OAuthExpiresAt = time.Now().Add(1 * time.Hour).Unix()
 	require.NoError(t, store.Create(context.Background(), p))
 
-	svc := NewTokenRefreshService(store, nil)
+	svc := NewTokenRefreshService(store)
 	require.NoError(t, svc.ScheduleAutoRefresh("kimi-cancel"))
 
 	svc.CancelAutoRefresh("kimi-cancel")
@@ -414,7 +414,7 @@ func TestTokenRefreshService_Shutdown(t *testing.T) {
 		require.NoError(t, store.Create(context.Background(), p))
 	}
 
-	svc := NewTokenRefreshService(store, nil)
+	svc := NewTokenRefreshService(store)
 	for i := 0; i < 3; i++ {
 		require.NoError(t, svc.ScheduleAutoRefresh(fmt.Sprintf("kimi-%d", i)))
 	}
@@ -438,7 +438,7 @@ func TestTokenRefreshService_Refresh_UnsupportedAuthMethod(t *testing.T) {
 	}
 	require.NoError(t, store.Create(context.Background(), p))
 
-	svc := NewTokenRefreshService(store, nil)
+	svc := NewTokenRefreshService(store)
 	_, err := svc.Refresh("api-key-provider")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "does not support refresh")
@@ -455,7 +455,7 @@ func TestTokenRefreshService_Refresh_NoRefreshToken(t *testing.T) {
 	p := newKimiProvider("kimi-no-rt", credPath)
 	require.NoError(t, store.Create(context.Background(), p))
 
-	svc := NewTokenRefreshService(store, nil)
+	svc := NewTokenRefreshService(store)
 	_, err := svc.Refresh("kimi-no-rt")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "has no refresh_token available")
@@ -485,7 +485,7 @@ func TestTokenRefreshService_RefreshProvider_Direct(t *testing.T) {
 	p := newKimiProvider("kimi-direct", credPath)
 	require.NoError(t, store.Create(context.Background(), p))
 
-	svc := NewTokenRefreshServiceWithClient(store, server.Client(), nil)
+	svc := NewTokenRefreshService(store, WithTokenRefreshHTTPClient(server.Client()))
 	result, err := svc.RefreshProvider(p)
 	require.NoError(t, err)
 	assert.Equal(t, "acc_direct", result.AccessToken)
@@ -516,7 +516,7 @@ func TestTokenRefreshService_Integration_FullCycle(t *testing.T) {
 	p.AuthParams.OAuthExpiresAt = time.Now().Add(-5 * time.Minute).Unix() // 已过期
 	require.NoError(t, store.Create(context.Background(), p))
 
-	svc := NewTokenRefreshServiceWithClient(store, server.Client(), nil)
+	svc := NewTokenRefreshService(store, WithTokenRefreshHTTPClient(server.Client()))
 
 	// 1. 调度自动刷新（应立即触发，因为已过期）
 	require.NoError(t, svc.ScheduleAutoRefresh("kimi-int"))

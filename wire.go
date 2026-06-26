@@ -16,7 +16,6 @@ import (
 	"github.com/hzhan516/medmemo/internal/application/updater"
 	"github.com/hzhan516/medmemo/internal/application/usecase"
 	domainRepo "github.com/hzhan516/medmemo/internal/domain/repository"
-	"github.com/hzhan516/medmemo/internal/infrastructure/config"
 	"github.com/hzhan516/medmemo/internal/infrastructure/database"
 	"github.com/hzhan516/medmemo/internal/infrastructure/onnx"
 	"github.com/hzhan516/medmemo/internal/infrastructure/secret"
@@ -57,8 +56,7 @@ func InitializeApp() (*App, func(), error) {
 		detector.ProviderSet,
 		detector.ONNXNERSet,
 		pipeline.PipelineSet,
-		NewDefaultLoader,
-		config.LoadConfig,
+		NewAppConfig,
 		NewSQLCipherConnectorFromConfig,
 		onnx.ONNXSet,
 		secret.SecretSet,

@@ -123,6 +123,9 @@ func (r *migratorFactRepo) Save(ctx context.Context, f *entity.ExtractedFact) er
 func (r *migratorFactRepo) GetByID(ctx context.Context, factID string) (*entity.ExtractedFact, error) {
 	return nil, entity.ErrFactNotFound
 }
+func (r *migratorFactRepo) FindByIDs(ctx context.Context, factIDs []string) (map[string]*entity.ExtractedFact, error) {
+	return map[string]*entity.ExtractedFact{}, nil
+}
 func (r *migratorFactRepo) ListByStatus(ctx context.Context, status entity.FactStatus, offset, limit int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
@@ -148,6 +151,9 @@ func (r *migratorFactRepo) FindApprovedByPredicates(ctx context.Context, subject
 }
 func (r *migratorFactRepo) FindLatestApprovedByPredicates(ctx context.Context, subject string, predicates []string) (*entity.ExtractedFact, error) {
 	return nil, entity.ErrFactNotFound
+}
+func (r *migratorFactRepo) SearchApproved(ctx context.Context, query string, limit int) ([]*entity.ExtractedFact, error) {
+	return nil, nil
 }
 
 func (r *migratorFactRepo) CountApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string) (int64, error) {

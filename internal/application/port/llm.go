@@ -38,16 +38,6 @@ type NERDetector interface {
 	IsAvailable() bool
 }
 
-// RecordStore 定义记录存储端口（适配多种底层存储）。
-type RecordStore interface {
-	// Save 持久化键值记录。
-	Save(ctx context.Context, key string, value []byte) error
-	// Get 读取键值记录。
-	Get(ctx context.Context, key string) ([]byte, error)
-	// Delete 删除记录。
-	Delete(ctx context.Context, key string) error
-}
-
 // SensitiveDetector 定义敏感信息检测端口。
 type SensitiveDetector interface {
 	// Detect 检测文本中的敏感实体，返回分级标记结果。

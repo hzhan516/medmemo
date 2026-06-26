@@ -102,11 +102,7 @@ func sanitizeTitle(title string) string {
 
 // truncateChinese 截断字符串至最多 maxRunes 个 rune，过长时追加 "…"。
 func truncateChinese(s string, maxRunes int) string {
-	runes := []rune(s)
-	if len(runes) <= maxRunes {
-		return s
-	}
-	return string(runes[:maxRunes]) + "…"
+	return truncateRunes(s, maxRunes, "…")
 }
 
 // isMostlyChinese 判断字符串是否以中文字符为主（>50% rune 为中文）。

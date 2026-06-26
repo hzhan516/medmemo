@@ -115,7 +115,7 @@ func TestOAuthDeviceFlowService_FullFlow_Success(t *testing.T) {
 	}()
 
 	store := newMockProviderStore()
-	refreshSvc := NewTokenRefreshServiceWithClient(store, &http.Client{Timeout: 5 * time.Second}, nil)
+	refreshSvc := NewTokenRefreshService(store, WithTokenRefreshHTTPClient(&http.Client{Timeout: 5 * time.Second}))
 	svc := NewOAuthDeviceFlowServiceWithClient(store, refreshSvc, server.Client())
 
 	var successEvent struct {
@@ -614,7 +614,7 @@ func TestOAuthDeviceFlowService_SetRefreshService(t *testing.T) {
 	svc := NewOAuthDeviceFlowServiceBare(store)
 	assert.Nil(t, svc.refreshSvc)
 
-	refreshSvc := NewTokenRefreshServiceWithClient(store, &http.Client{Timeout: 5 * time.Second}, nil)
+	refreshSvc := NewTokenRefreshService(store, WithTokenRefreshHTTPClient(&http.Client{Timeout: 5 * time.Second}))
 	svc.SetRefreshService(refreshSvc)
 	assert.NotNil(t, svc.refreshSvc)
 }

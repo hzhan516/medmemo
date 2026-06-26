@@ -19,39 +19,12 @@ package desensitizer
 import (
 	"crypto/sha256"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
 	"github.com/hzhan516/medmemo/pkg/models"
 )
-
-// Stage 定义脱敏流水线中的单个处理阶段接口。
-type Stage interface {
-	Process(text string) (models.DeidentifyResult, error)
-}
-
-// Pipeline 串联多个脱敏阶段，按顺序执行。
-type Pipeline struct {
-	stages []Stage
-}
-
-// NewPipeline 创建脱敏流水线。
-func NewPipeline(stages ...Stage) *Pipeline {
-	return &Pipeline{stages: stages}
-}
-
-// Execute 依次执行各脱敏阶段，任一阶段出错即短路返回。
-func (p *Pipeline) Execute(text string) (models.DeidentifyResult, error) {
-	result := models.DeidentifyResult{OriginalText: text, SafeText: text}
-	for _, stage := range p.stages {
-		r, err := stage.Process(result.SafeText)
-		if err != nil {
-			return models.DeidentifyResult{}, fmt.Errorf("deidentify stage %T failed: %w", stage, err)
-		}
-		result = r
-	}
-	return result, nil
-}
 
 // RuleEngine 基于规则的一级脱敏引擎（L1）。
 // 采用 Aho-Corasick 多模式预筛选 + Regexp 精确验证的混合架构，
@@ -127,7 +100,7 @@ func (e *RuleEngine) activateRules(text string) map[string]bool {
 		acMatches := e.ac.Search(text)
 		for _, m := range acMatches {
 			for _, r := range e.rules {
-				if contains(r.config.Keywords, m.Pattern) {
+				if slices.Contains(r.config.Keywords, m.Pattern) {
 					ruleActive[r.config.Name] = true
 					break
 				}
@@ -251,16 +224,6 @@ func maxDigitSequence(text string) int {
 		}
 	}
 	return maxCount
-}
-
-// contains 检查 slice 中是否包含指定字符串。
-func contains(slice []string, s string) bool {
-	for _, v := range slice {
-		if v == s {
-			return true
-		}
-	}
-	return false
 }
 
 // Restore 将脱敏后的文本还原为原始文本（仅支持 P2 级占位符）。

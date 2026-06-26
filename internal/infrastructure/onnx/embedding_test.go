@@ -19,17 +19,6 @@ func TestEmbeddingWorker_EmbedDimension(t *testing.T) {
 	require.Len(t, output.embeddings[0], 384)
 }
 
-func TestModelDownloader_ModelPath(t *testing.T) {
-	d := NewModelDownloader("/tmp/models")
-	assert.Equal(t, "/tmp/models/all-MiniLM-L6-v2", d.ModelPath("all-MiniLM-L6-v2"))
-}
-
-func TestModelDownloader_IsModelPresent(t *testing.T) {
-	// 模型不存在时应返回 false
-	d := NewModelDownloader(t.TempDir())
-	assert.False(t, d.IsModelPresent("all-MiniLM-L6-v2"))
-}
-
 func TestNormalizeL2(t *testing.T) {
 	vector := []float32{3.0, 4.0}
 	normalized := normalizeL2(vector)

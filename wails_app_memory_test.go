@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -57,6 +58,15 @@ func (s *wailsStubFactRepo) GetByID(ctx context.Context, factID string) (*entity
 	}
 	return f, nil
 }
+func (s *wailsStubFactRepo) FindByIDs(ctx context.Context, factIDs []string) (map[string]*entity.ExtractedFact, error) {
+	result := make(map[string]*entity.ExtractedFact, len(factIDs))
+	for _, id := range factIDs {
+		if f, ok := s.facts[id]; ok {
+			result[id] = f
+		}
+	}
+	return result, nil
+}
 func (s *wailsStubFactRepo) ListByStatus(ctx context.Context, status entity.FactStatus, offset, limit int) ([]*entity.ExtractedFact, error) {
 	var result []*entity.ExtractedFact
 	for _, f := range s.facts {
@@ -106,6 +116,28 @@ func (s *wailsStubFactRepo) FindBySubject(ctx context.Context, subject string) (
 }
 func (s *wailsStubFactRepo) FindBySession(ctx context.Context, sessionID string) ([]*entity.ExtractedFact, error) {
 	return nil, nil
+}
+func (s *wailsStubFactRepo) SearchApproved(ctx context.Context, query string, limit int) ([]*entity.ExtractedFact, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	query = strings.ToLower(strings.TrimSpace(query))
+	var result []*entity.ExtractedFact
+	for _, f := range s.facts {
+		if f.Status != entity.FactStatusApproved {
+			continue
+		}
+		if query == "" ||
+			strings.Contains(strings.ToLower(f.Subject), query) ||
+			strings.Contains(strings.ToLower(f.Predicate), query) ||
+			strings.Contains(strings.ToLower(f.Object), query) {
+			result = append(result, f)
+		}
+	}
+	if limit > len(result) {
+		limit = len(result)
+	}
+	return result[:limit], nil
 }
 func (s *wailsStubFactRepo) CountApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string) (int64, error) {
 	var count int64
