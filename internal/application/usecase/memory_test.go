@@ -86,6 +86,33 @@ func (s *stubFactRepository) GetByID(ctx context.Context, factID string) (*entit
 	}
 	return f, nil
 }
+func (s *stubFactRepository) FindByIDs(ctx context.Context, factIDs []string) (map[string]*entity.ExtractedFact, error) {
+	result := make(map[string]*entity.ExtractedFact, len(factIDs))
+	for _, id := range factIDs {
+		if f, ok := s.facts[id]; ok {
+			result[id] = f
+		}
+	}
+	return result, nil
+}
+
+// spyFactRepository 用于验证 recallByVector 只通过 FindByIDs 批量加载事实。
+type spyFactRepository struct {
+	stubFactRepository
+	findByIDsCalls int
+	getByIDCalls   int
+}
+
+func (s *spyFactRepository) GetByID(ctx context.Context, factID string) (*entity.ExtractedFact, error) {
+	s.getByIDCalls++
+	return s.stubFactRepository.GetByID(ctx, factID)
+}
+
+func (s *spyFactRepository) FindByIDs(ctx context.Context, factIDs []string) (map[string]*entity.ExtractedFact, error) {
+	s.findByIDsCalls++
+	return s.stubFactRepository.FindByIDs(ctx, factIDs)
+}
+
 func (s *stubFactRepository) ListByStatus(ctx context.Context, status entity.FactStatus, offset, limit int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
@@ -116,6 +143,9 @@ func (s *stubFactRepository) FindApprovedByPredicates(ctx context.Context, subje
 }
 func (s *stubFactRepository) FindLatestApprovedByPredicates(ctx context.Context, subject string, predicates []string) (*entity.ExtractedFact, error) {
 	return nil, entity.ErrFactNotFound
+}
+func (s *stubFactRepository) SearchApproved(ctx context.Context, query string, limit int) ([]*entity.ExtractedFact, error) {
+	return nil, nil
 }
 
 func (s *stubFactRepository) CountApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string) (int64, error) {
@@ -192,6 +222,58 @@ func TestMemoryRetriever_SemanticSearch(t *testing.T) {
 
 	assert.Equal(t, "用户 患有 高血压", memories[0].Content)
 	assert.Equal(t, "用户 服用 降压药", memories[1].Content)
+}
+
+func TestMemoryRetriever_RecallByVector_BatchFetch(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+
+	facts := map[string]*entity.ExtractedFact{
+		"fact_a": {
+			FactID: "fact_a", Subject: "用户", Predicate: "患有", Object: "高血压",
+			Confidence: 0.85, Status: entity.FactStatusApproved, CreatedAt: now,
+		},
+		"fact_b": {
+			FactID: "fact_b", Subject: "用户", Predicate: "服用", Object: "降压药",
+			Confidence: 0.75, Status: entity.FactStatusApproved, CreatedAt: now,
+		},
+		"fact_c": {
+			FactID: "fact_c", Subject: "用户", Predicate: "患有", Object: "低血压",
+			Confidence: 0.50, Status: entity.FactStatusApproved, CreatedAt: now,
+		},
+		"fact_d": {
+			FactID: "fact_d", Subject: "用户", Predicate: "患有", Object: "糖尿病",
+			Confidence: 0.85, Status: entity.FactStatusPending, CreatedAt: now,
+		},
+	}
+
+	embeddings := []*entity.ScoredEmbedding{
+		{SemanticEmbedding: &entity.SemanticEmbedding{FactID: "fact_a"}, Similarity: 0.95},
+		{SemanticEmbedding: &entity.SemanticEmbedding{FactID: "fact_b"}, Similarity: 0.88},
+		{SemanticEmbedding: &entity.SemanticEmbedding{FactID: "fact_c"}, Similarity: 0.80},
+		{SemanticEmbedding: &entity.SemanticEmbedding{FactID: "fact_d"}, Similarity: 0.90},
+		{SemanticEmbedding: &entity.SemanticEmbedding{FactID: "missing"}, Similarity: 0.85},
+	}
+
+	spy := &spyFactRepository{stubFactRepository: stubFactRepository{facts: facts}}
+	retriever := NewMemoryRetriever(
+		&stubEmbeddingService{},
+		&stubEmbeddingRepository{results: embeddings},
+		spy,
+		NewDecayScorer(),
+		nil,
+		nil,
+		nil,
+	)
+
+	diag, _, err := retriever.retrieveWithDiagnostics(context.Background(), "我的血压怎么样", "session_001", 5)
+	require.NoError(t, err)
+
+	require.Len(t, diag.VectorCandidates, 2)
+	assert.Equal(t, "fact_a", diag.VectorCandidates[0].FactID)
+	assert.Equal(t, "fact_b", diag.VectorCandidates[1].FactID)
+	assert.Equal(t, 1, spy.findByIDsCalls, "应通过一次批量查询加载事实")
+	assert.Equal(t, 0, spy.getByIDCalls, "不应再逐个调用 GetByID")
 }
 
 func TestMemoryRetriever_DecayRanking(t *testing.T) {

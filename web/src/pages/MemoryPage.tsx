@@ -83,8 +83,7 @@ export function MemoryPage() {
   const handleApprove = async (factID: string) => {
     try {
       await approveFact(factID)
-      await loadItems()
-      await loadStats()
+      await Promise.all([loadItems(), loadStats()])
     } catch (err) {
       console.error('Failed to approve:', err)
     }
@@ -93,8 +92,7 @@ export function MemoryPage() {
   const handleReject = async (factID: string) => {
     try {
       await rejectFact(factID)
-      await loadItems()
-      await loadStats()
+      await Promise.all([loadItems(), loadStats()])
     } catch (err) {
       console.error('Failed to reject:', err)
     }
@@ -107,13 +105,11 @@ export function MemoryPage() {
     setDetail(prev => prev?.fact_id === factID ? null : prev)
     try {
       await deleteMemory(factID)
-      await loadItems()
-      await loadStats()
+      await Promise.all([loadItems(), loadStats()])
     } catch (err) {
       console.error('Failed to delete:', err)
       // 删除失败时回滚：重新拉取后端权威数据恢复列表
-      await loadItems()
-      await loadStats()
+      await Promise.all([loadItems(), loadStats()])
     }
   }
 

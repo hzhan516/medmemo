@@ -149,7 +149,7 @@ func prepareEmbeddingModels(userDir string, resourceDir string) {
 		if err != nil {
 			continue
 		}
-		_ = os.WriteFile(dst, data, 0644)
+		_ = os.WriteFile(dst, data, 0600)
 	}
 }
 
@@ -162,9 +162,9 @@ func findBundledModelDir(resourceDir string) string {
 	return ""
 }
 
-// NewDefaultLoader 创建使用默认搜索路径的配置加载器。
-func NewDefaultLoader() *config.Loader {
-	return config.NewLoader("")
+// NewAppConfig 加载并返回应用配置。
+func NewAppConfig() (*models.AppConfig, error) {
+	return config.NewLoader("").Load()
 }
 
 // NewSQLCipherConnectorFromConfig 从 AppConfig 获取数据目录创建数据库连接。

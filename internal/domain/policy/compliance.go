@@ -1,18 +1,6 @@
 // Package policy 定义合规策略与敏感分级策略的抽象。
 package policy
 
-import "context"
-
-// CompliancePolicy 定义合规拦截策略接口。
-// 实现应覆盖 L1~L4 四级风险等级的检测逻辑。
-type CompliancePolicy interface {
-	// Evaluate 评估单条文本的风险等级，返回分类结果与置信度。
-	Evaluate(ctx context.Context, text string) (RiskLevel, float64, error)
-
-	// ShouldBlock 判断文本是否应被阻断（L1 级）。
-	ShouldBlock(ctx context.Context, text string) (bool, string, error)
-}
-
 // RiskLevel 表示合规风险等级。
 type RiskLevel int
 

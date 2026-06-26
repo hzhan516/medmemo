@@ -148,18 +148,18 @@ func (r *IntentResolver) matchesHigh(normalized string, patterns []string) bool 
 
 // matchesMedium 检查 normalized 是否包含任意 MediumKeyword。
 func (r *IntentResolver) matchesMedium(normalized string, keywords []string) bool {
-	for _, k := range keywords {
-		if strings.Contains(normalized, k) {
-			return true
-		}
-	}
-	return false
+	return containsAny(normalized, keywords)
 }
 
 // hasBlockedSuffix 检查 normalized 是否包含任意阻断后缀。
 func (r *IntentResolver) hasBlockedSuffix(normalized string, suffixes []string) bool {
-	for _, s := range suffixes {
-		if strings.Contains(normalized, s) {
+	return containsAny(normalized, suffixes)
+}
+
+// containsAny 检查 s 是否包含 candidates 中任意子串。
+func containsAny(s string, candidates []string) bool {
+	for _, c := range candidates {
+		if strings.Contains(s, c) {
 			return true
 		}
 	}

@@ -3,6 +3,16 @@ import { X, Download, SkipForward, ExternalLink, Loader2, CheckCircle2 } from 'l
 import { Button } from '@/components/ui/button'
 import type { UpdateInfo } from '@/hooks/useUpdate'
 
+const IS_MACOS = /mac/i.test(navigator.platform)
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+}
+
 interface UpdateModalProps {
   info: UpdateInfo | null
   isDownloading: boolean
@@ -37,19 +47,10 @@ export function UpdateModal({
 
   if (!info) return null
 
-  const isMacOS = navigator.platform.toLowerCase().includes('mac')
   const progressPercent =
     downloadProgress && downloadProgress.total > 0
       ? Math.round((downloadProgress.downloaded / downloadProgress.total) * 100)
       : 0
-
-  const formatBytes = (bytes: number) => {
-    if (bytes === 0) return '0 B'
-    const k = 1024
-    const sizes = ['B', 'KB', 'MB', 'GB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
-  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -145,7 +146,7 @@ export function UpdateModal({
             </Button>
           )}
 
-          {isMacOS ? (
+          {IS_MACOS ? (
             <Button
               size="sm"
               onClick={() => {
