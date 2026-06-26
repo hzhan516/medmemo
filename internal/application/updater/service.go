@@ -97,13 +97,14 @@ func (s *Service) DownloadUpdate(ctx context.Context, info *entity.UpdateInfo, p
 
 // ApplyUpdate 应用已下载的更新包。
 // 安装前自动备份当前二进制，安装失败时触发回滚。
-func (s *Service) ApplyUpdate(assetPath string) error {
-	if _, err := s.installer.Install(assetPath); err != nil {
+func (s *Service) ApplyUpdate(assetPath string) (string, error) {
+	installedPath, err := s.installer.Install(assetPath)
+	if err != nil {
 		// 安装失败时尝试回滚
 		_ = s.installer.Rollback()
-		return fmt.Errorf("failed to install update: %w", err)
+		return "", fmt.Errorf("failed to install update: %w", err)
 	}
-	return nil
+	return installedPath, nil
 }
 
 // GetSettings 返回当前更新设置。
