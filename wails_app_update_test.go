@@ -31,10 +31,13 @@ func (m *mockUpdater) VerifyChecksum(path, checksum string) error {
 	return nil
 }
 
-// mockInstaller 是 port.Installer 的测试替身，安装与回滚均直接成功。
-type mockInstaller struct{}
+// mockInstaller 是 port.Installer 的测试替身。
+type mockInstaller struct {
+	installPath string
+	installErr  error
+}
 
-func (m *mockInstaller) Install(assetPath string) (string, error) { return "", nil }
+func (m *mockInstaller) Install(assetPath string) (string, error) { return m.installPath, m.installErr }
 func (m *mockInstaller) Rollback() error                          { return nil }
 func (m *mockInstaller) CurrentBinaryPath() string                { return "" }
 
@@ -142,4 +145,24 @@ func TestSkipUpdateVersion_MapsToService(t *testing.T) {
 	settings, err := app.GetUpdateSettings()
 	require.NoError(t, err)
 	assert.Equal(t, "v1.1.0", settings.SkipVersion)
+}
+
+// TestApplyUpdate_InstallFails 验证安装失败时不触发重启。
+func TestApplyUpdate_InstallFails(t *testing.T) {
+	svc := updater.NewService(&mockUpdater{}, &mockInstaller{installErr: fmt.Errorf("permission denied")}, models.ChannelStable)
+	app := &WailsApp{ctx: t.Context(), updaterSvc: svc}
+
+	err := app.ApplyUpdate("/tmp/update.AppImage")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to apply update")
+}
+
+// TestApplyUpdate_RestartFails 验证安装成功但重启失败时返回明确错误。
+func TestApplyUpdate_RestartFails(t *testing.T) {
+	svc := updater.NewService(&mockUpdater{}, &mockInstaller{installPath: "/nonexistent/AppImage"}, models.ChannelStable)
+	app := &WailsApp{ctx: t.Context(), updaterSvc: svc}
+
+	err := app.ApplyUpdate("/tmp/update.AppImage")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "update installed but failed to restart")
 }

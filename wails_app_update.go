@@ -84,15 +84,22 @@ func (a *WailsApp) DownloadUpdate(req DownloadUpdateRequest) (string, error) {
 	return path, nil
 }
 
-// ApplyUpdate 应用已下载的更新。
+// ApplyUpdate 应用已下载的更新并启动新版本。
 func (a *WailsApp) ApplyUpdate(assetPath string) error {
 	if a.updaterSvc == nil {
 		return fmt.Errorf("updater service not initialized")
 	}
 
-	if err := a.updaterSvc.ApplyUpdate(assetPath); err != nil {
+	installedPath, err := a.updaterSvc.ApplyUpdate(assetPath)
+	if err != nil {
 		return fmt.Errorf("failed to apply update: %w", err)
 	}
+
+	if err := restartAfterUpdate(a.ctx, installedPath); err != nil {
+		return fmt.Errorf("update installed but failed to restart: %w", err)
+	}
+
+	runtime.Quit(a.ctx)
 	return nil
 }
 
