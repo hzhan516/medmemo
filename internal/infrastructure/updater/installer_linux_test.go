@@ -11,13 +11,38 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestLinuxInstallerInstall(t *testing.T) {
-	// 创建临时目录模拟当前二进制
+func TestResolveAppImagePathWith_ARGV0(t *testing.T) {
 	tmpDir := t.TempDir()
-	currentBinary := filepath.Join(tmpDir, "MedMemo")
+	appImage := filepath.Join(tmpDir, "MedMemo.AppImage")
+	require.NoError(t, os.WriteFile(appImage, []byte("x"), 0755))
+
+	got := resolveAppImagePathWith(appImage, nil, func() string { return "/fallback" })
+	assert.Equal(t, appImage, got)
+}
+
+func TestResolveAppImagePathWith_ProcCmdline(t *testing.T) {
+	tmpDir := t.TempDir()
+	appImage := filepath.Join(tmpDir, "MedMemo.AppImage")
+	require.NoError(t, os.WriteFile(appImage, []byte("x"), 0755))
+
+	cmdline := []byte(appImage + "\x00arg1\x00arg2\x00")
+	got := resolveAppImagePathWith("/not-an-appimage", cmdline, func() string { return "/fallback" })
+	assert.Equal(t, appImage, got)
+}
+
+func TestResolveAppImagePathWith_FallbackExecutable(t *testing.T) {
+	fallback := "/some/exe"
+	got := resolveAppImagePathWith("/not-an-appimage", []byte("/usr/bin/go\x00test\x00"), func() string { return fallback })
+	assert.Equal(t, fallback, got)
+}
+
+func TestLinuxInstaller_Install_ReplacesOriginalAppImage(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+
+	currentBinary := filepath.Join(tmpDir, "MedMemo.AppImage")
 	require.NoError(t, os.WriteFile(currentBinary, []byte("old binary"), 0755))
 
-	// 创建新的 AppImage
 	newAppImage := filepath.Join(tmpDir, "MedMemo-v0.2.0.AppImage")
 	require.NoError(t, os.WriteFile(newAppImage, []byte("new binary"), 0644))
 
@@ -26,16 +51,45 @@ func TestLinuxInstallerInstall(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, currentBinary, path)
 
-	// 验证已替换
 	content, err := os.ReadFile(currentBinary)
 	require.NoError(t, err)
 	assert.Equal(t, "new binary", string(content))
 
-	// 由于测试使用真实 home 目录，此处简化验证备份路径已设置
+	info, err := os.Stat(currentBinary)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0755), info.Mode().Perm())
+
 	assert.NotEmpty(t, installer.backupPath)
 }
 
-func TestLinuxInstallerRollback(t *testing.T) {
+func TestLinuxInstaller_Install_NotWritableFallback(t *testing.T) {
+	tmpDir := t.TempDir()
+	readOnlyDir := filepath.Join(tmpDir, "readonly")
+	require.NoError(t, os.Mkdir(readOnlyDir, 0755))
+
+	currentBinary := filepath.Join(readOnlyDir, "MedMemo.AppImage")
+	require.NoError(t, os.WriteFile(currentBinary, []byte("old"), 0755))
+	require.NoError(t, os.Chmod(readOnlyDir, 0555))
+	t.Cleanup(func() { _ = os.Chmod(readOnlyDir, 0755) })
+
+	installer := &LinuxInstaller{currentPath: currentBinary}
+	_, err := installer.Install(filepath.Join(tmpDir, "new.AppImage"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "AppImage directory is not writable")
+}
+
+func TestLinuxInstaller_Install_NotAppImageReturnsManualError(t *testing.T) {
+	tmpDir := t.TempDir()
+	currentBinary := filepath.Join(tmpDir, "MedMemo")
+	require.NoError(t, os.WriteFile(currentBinary, []byte("old"), 0755))
+
+	installer := &LinuxInstaller{currentPath: currentBinary}
+	_, err := installer.Install(filepath.Join(tmpDir, "new.AppImage"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "manual update required")
+}
+
+func TestLinuxInstaller_Rollback(t *testing.T) {
 	tmpDir := t.TempDir()
 	currentBinary := filepath.Join(tmpDir, "MedMemo")
 	backupBinary := filepath.Join(tmpDir, "MedMemo.backup")
@@ -56,7 +110,7 @@ func TestLinuxInstallerRollback(t *testing.T) {
 	assert.Equal(t, "good binary", string(content))
 }
 
-func TestLinuxInstallerRollbackNoBackup(t *testing.T) {
+func TestLinuxInstaller_RollbackNoBackup(t *testing.T) {
 	installer := &LinuxInstaller{}
 	err := installer.Rollback()
 	assert.Error(t, err)
@@ -78,7 +132,6 @@ func TestCopyFile(t *testing.T) {
 
 func TestGetCurrentBinary(t *testing.T) {
 	path := getCurrentBinary()
-	// 当前进程为 go test，应返回非空路径
 	assert.NotEmpty(t, path)
 }
 
@@ -98,20 +151,20 @@ func TestLinuxInstallerInstall_EmptyCurrentPath(t *testing.T) {
 
 func TestLinuxInstallerInstall_CopyFileFails(t *testing.T) {
 	tmpDir := t.TempDir()
-	currentBinary := filepath.Join(tmpDir, "MedMemo")
+	currentBinary := filepath.Join(tmpDir, "MedMemo.AppImage")
 	require.NoError(t, os.WriteFile(currentBinary, []byte("old"), 0755))
 
 	installer := &LinuxInstaller{currentPath: currentBinary}
-	// 传入不存在的 source 路径，使 copyFile 失败
 	_, err := installer.Install("/nonexistent/AppImage")
 	assert.Error(t, err)
 }
 
 func TestLinuxInstallerInstall_RenameFails(t *testing.T) {
 	tmpDir := t.TempDir()
-	currentBinary := filepath.Join(tmpDir, "MedMemo")
+	t.Setenv("HOME", t.TempDir())
+
+	currentBinary := filepath.Join(tmpDir, "MedMemo.AppImage")
 	require.NoError(t, os.WriteFile(currentBinary, []byte("old"), 0755))
-	// 创建一个目录，使 os.Rename 无法覆盖
 	require.NoError(t, os.Mkdir(filepath.Join(tmpDir, "new.AppImage"), 0755))
 
 	installer := &LinuxInstaller{currentPath: currentBinary}
@@ -132,7 +185,6 @@ func TestLinuxInstallerRollback_BackupNotFound(t *testing.T) {
 
 func TestLinuxInstallerRollback_RenameFails(t *testing.T) {
 	tmpDir := t.TempDir()
-	// backup 存在，currentPath 是目录导致 rename 失败
 	backupPath := filepath.Join(tmpDir, "backup")
 	currentPath := filepath.Join(tmpDir, "current_dir")
 	require.NoError(t, os.WriteFile(backupPath, []byte("good"), 0644))
@@ -151,4 +203,14 @@ func TestCopyFile_ReadFails(t *testing.T) {
 	err := copyFile("/nonexistent/file", "/tmp/dest")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to read source file")
+}
+
+func TestAssertDirWritable(t *testing.T) {
+	tmpDir := t.TempDir()
+	require.NoError(t, assertDirWritable(tmpDir))
+
+	readOnly := filepath.Join(tmpDir, "ro")
+	require.NoError(t, os.Mkdir(readOnly, 0555))
+	t.Cleanup(func() { _ = os.Chmod(readOnly, 0755) })
+	assert.Error(t, assertDirWritable(readOnly))
 }
