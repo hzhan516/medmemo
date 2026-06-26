@@ -13,6 +13,7 @@ import (
 	"github.com/google/wire"
 	"github.com/hzhan516/medmemo/internal/application/port"
 	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 // CheckInterval 默认更新检测间隔（24 小时）。
@@ -26,11 +27,14 @@ type Service struct {
 }
 
 // NewService 构造函数，供 Wire 注入。
-func NewService(u port.Updater, i port.Installer) *Service {
+// defaultChannel 由构建版本自动推导，保证正式版与测试版默认通道一致。
+func NewService(u port.Updater, i port.Installer, defaultChannel models.UpdateChannel) *Service {
+	settings := entity.DefaultUpdateSettings()
+	settings.Channel = defaultChannel
 	return &Service{
 		updater:   u,
 		installer: i,
-		settings:  entity.DefaultUpdateSettings(),
+		settings:  settings,
 	}
 }
 

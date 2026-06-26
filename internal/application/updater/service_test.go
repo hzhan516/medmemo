@@ -101,7 +101,7 @@ func TestServiceCheckUpdate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockU := &mockUpdater{latestInfo: tt.latestInfo, fetchErr: tt.fetchErr}
 			mockI := &mockInstaller{}
-			svc := NewService(mockU, mockI)
+			svc := NewService(mockU, mockI, models.ChannelStable)
 			svc.settings.SkipVersion = tt.skipVersion
 
 			info, err := svc.CheckUpdate(context.Background(), tt.currentVersion)
@@ -124,7 +124,7 @@ func TestServiceDownloadUpdate(t *testing.T) {
 	t.Parallel()
 	mockU := &mockUpdater{}
 	mockI := &mockInstaller{}
-	svc := NewService(mockU, mockI)
+	svc := NewService(mockU, mockI, models.ChannelStable)
 
 	info := &entity.UpdateInfo{
 		Version:     "v0.2.0",
@@ -153,7 +153,7 @@ func TestServiceApplyUpdate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockU := &mockUpdater{}
 			mockI := &mockInstaller{installErr: tt.installErr}
-			svc := NewService(mockU, mockI)
+			svc := NewService(mockU, mockI, models.ChannelStable)
 
 			err := svc.ApplyUpdate("/tmp/update.AppImage")
 			if tt.wantErr {
@@ -169,7 +169,7 @@ func TestServiceSettings(t *testing.T) {
 	t.Parallel()
 	mockU := &mockUpdater{}
 	mockI := &mockInstaller{}
-	svc := NewService(mockU, mockI)
+	svc := NewService(mockU, mockI, models.ChannelStable)
 
 	// 默认设置
 	assert.True(t, svc.GetSettings().CheckEnabled)
@@ -187,4 +187,21 @@ func TestServiceSettings(t *testing.T) {
 	// 跳过版本
 	svc.SkipVersion("v0.5.0")
 	assert.Equal(t, "v0.5.0", svc.GetSettings().SkipVersion)
+}
+
+func TestServiceDefaultChannel(t *testing.T) {
+	t.Parallel()
+	t.Run("stable", func(t *testing.T) {
+		mockU := &mockUpdater{}
+		mockI := &mockInstaller{}
+		svc := NewService(mockU, mockI, models.ChannelStable)
+		assert.Equal(t, models.ChannelStable, svc.GetSettings().Channel)
+	})
+
+	t.Run("beta", func(t *testing.T) {
+		mockU := &mockUpdater{}
+		mockI := &mockInstaller{}
+		svc := NewService(mockU, mockI, models.ChannelBeta)
+		assert.Equal(t, models.ChannelBeta, svc.GetSettings().Channel)
+	})
 }

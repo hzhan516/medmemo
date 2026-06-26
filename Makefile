@@ -2,7 +2,7 @@
 
 # 版本号从 wails.json 读取（单一来源，使用 JSON 解析器而非 grep/sed）
 VERSION ?= $(shell go run scripts/read-version.go wails.json)
-LDFLAGS := -ldflags "-s -w -X main.version=$(VERSION)"
+LDFLAGS := -ldflags "-s -w -X main.version=v$(VERSION)"
 
 # 平台检测（用于本地构建）
 UNAME_S := $(shell uname -s)
@@ -100,7 +100,7 @@ build-linux:
 
 # 本地完整打包（当前平台，含版本注入与平台安装包）
 release-local:
-	CGO_LDFLAGS="$(CGO_LDFLAGS_LINUX)" ./scripts/build/wails-build.sh $(shell go env GOOS) $(VERSION)
+	CGO_LDFLAGS="$(CGO_LDFLAGS_LINUX)" ./scripts/build/wails-build.sh $(shell go env GOOS) v$(VERSION)
 
 # GoReleaser 本地快照验证（不发布，仅验证配置与归档）
 release-dry-run:

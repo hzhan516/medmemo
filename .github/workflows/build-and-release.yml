@@ -25,15 +25,10 @@ jobs:
         run: |
           BASE_VERSION=$(jq -r '.info.productVersion' wails.json)
           RUN_NUMBER=${{ github.run_number }}
-          BRANCH=${{ github.ref_name }}
 
-          if [ "$BRANCH" = "main" ]; then
-            VERSION="${BASE_VERSION}.${RUN_NUMBER}"
-            PRERELEASE="false"
-          else
-            VERSION="${BASE_VERSION}-Pre-release-build.${RUN_NUMBER}"
-            PRERELEASE="true"
-          fi
+          # branch push（main/release）统一生成预发布版本，避免稳定用户收到 CI 构建版本
+          VERSION="v${BASE_VERSION}-Pre-release-build.${RUN_NUMBER}"
+          PRERELEASE="true"
 
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "prerelease=$PRERELEASE" >> $GITHUB_OUTPUT

@@ -239,7 +239,12 @@ jobs:
 
       - name: Install SQLCipher (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libsqlcipher-dev
+        run: |
+          # packages.microsoft.com repositories occasionally return 403 on GitHub-hosted runners.
+          # They are not required for libsqlcipher-dev, so disable them before apt-get update.
+          sudo sed -i 's/^deb.*packages.microsoft.com/# &/' /etc/apt/sources.list.d/*.list 2>/dev/null || true
+          sudo apt-get update
+          sudo apt-get install -y libsqlcipher-dev
 
       - name: Install Wails Linux dependencies
         if: runner.os == 'Linux'

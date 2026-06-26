@@ -304,5 +304,17 @@
       "第二轮 PONYTAIL 清理：移除废弃 OpenAICompatibleClient、未使用脱敏 Pipeline、no-op L3 脱敏阶段与无效 analytics 配置，收敛 TokenRefreshService 构造函数，简化 LocalAnswerService 事实格式化"
     ],
     "fixes": []
+  },
+  {
+    "version": "v1.1.8",
+    "title": "版本显示与更新通道统一",
+    "features": [
+      "GetVersionInfo 后端绑定统一返回 productVersion、buildChannel、goVersion、commit 等多维版本信息",
+      "更新弹窗字段标准化：标题/版本号/发布说明/下载进度/通道标识全部与后端元数据对齐",
+      "默认更新通道从 'stable' 收敛为 'release'，与 CI 构建产物命名一致",
+      "构建时通过 -ldflags 注入版本、commit、channel，保证非开发包体版本号准确",
+      "About 面板与设置页版本号同源，避免 wails.json 与前端硬编码不一致"
+    ],
+    "fixes": []
   }
 ]

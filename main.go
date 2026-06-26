@@ -163,8 +163,9 @@ func findBundledModelDir(resourceDir string) string {
 }
 
 // NewAppConfig 加载并返回应用配置。
-func NewAppConfig() (*models.AppConfig, error) {
-	return config.NewLoader("").Load()
+// defaultChannel 由构建版本推导，保证配置默认值与 updater 服务一致。
+func NewAppConfig(defaultChannel models.UpdateChannel) (*models.AppConfig, error) {
+	return config.NewLoader("", defaultChannel).Load()
 }
 
 // NewSQLCipherConnectorFromConfig 从 AppConfig 获取数据目录创建数据库连接。
