@@ -8,6 +8,7 @@ import (
 )
 
 func TestIntentResolver_Resolve(t *testing.T) {
+	t.Parallel()
 	resolver := NewIntentResolver(NewQueryExpansionService())
 
 	tests := []struct {
@@ -66,6 +67,7 @@ func TestIntentResolver_Resolve(t *testing.T) {
 }
 
 func TestIntentResolver_Resolve_BlockedSuffixes(t *testing.T) {
+	t.Parallel()
 	resolver := NewIntentResolver(NewQueryExpansionService())
 
 	// 阻断后缀应阻止 High/Medium 升级为本地短路
@@ -87,6 +89,7 @@ func TestIntentResolver_Resolve_BlockedSuffixes(t *testing.T) {
 }
 
 func TestIntentResolver_Resolve_AmbiguousNotShortCircuit(t *testing.T) {
+	t.Parallel()
 	resolver := NewIntentResolver(NewQueryExpansionService())
 
 	// 这些 query 不应触发 High 本地短路

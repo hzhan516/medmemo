@@ -6,29 +6,27 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-
-	"github.com/hzhan516/medmemo/internal/application/port"
 )
 
 // NewInstaller 根据当前运行平台创建对应的 Installer 实例。
-func NewInstaller() port.Installer {
+func NewInstaller() *LinuxInstaller {
 	return newLinuxInstaller()
 }
 
-// linuxInstaller 实现 Linux 平台（AppImage）的更新安装与回滚。
-type linuxInstaller struct {
+// LinuxInstaller 实现 Linux 平台（AppImage）的更新安装与回滚。
+type LinuxInstaller struct {
 	currentPath string
 	backupPath  string
 }
 
-func newLinuxInstaller() *linuxInstaller {
-	return &linuxInstaller{
+func newLinuxInstaller() *LinuxInstaller {
+	return &LinuxInstaller{
 		currentPath: getCurrentBinary(),
 	}
 }
 
 // Install 安装更新：备份当前 AppImage → 替换为新版本 → 设置可执行权限。
-func (l *linuxInstaller) Install(assetPath string) (string, error) {
+func (l *LinuxInstaller) Install(assetPath string) (string, error) {
 	if l.currentPath == "" {
 		return "", fmt.Errorf("failed to determine current binary path")
 	}
@@ -66,7 +64,7 @@ func (l *linuxInstaller) Install(assetPath string) (string, error) {
 }
 
 // Rollback 恢复到备份的二进制版本。
-func (l *linuxInstaller) Rollback() error {
+func (l *LinuxInstaller) Rollback() error {
 	if l.backupPath == "" || l.currentPath == "" {
 		return fmt.Errorf("no backup available for rollback")
 	}
@@ -80,7 +78,7 @@ func (l *linuxInstaller) Rollback() error {
 }
 
 // CurrentBinaryPath 返回当前二进制路径。
-func (l *linuxInstaller) CurrentBinaryPath() string {
+func (l *LinuxInstaller) CurrentBinaryPath() string {
 	return l.currentPath
 }
 

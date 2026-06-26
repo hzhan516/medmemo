@@ -10,6 +10,7 @@ import (
 )
 
 func TestReporter_Collect(t *testing.T) {
+	t.Parallel()
 	r := NewReporter("v1.2.3", "2026-05-20")
 	info := r.Collect()
 
@@ -21,6 +22,7 @@ func TestReporter_Collect(t *testing.T) {
 }
 
 func TestReporter_BuildIssueURL(t *testing.T) {
+	t.Parallel()
 	r := NewReporter("v0.5.0", "")
 	info := &SystemInfo{
 		AppVersion: "v0.5.0",
@@ -51,6 +53,7 @@ func TestReporter_BuildIssueURL(t *testing.T) {
 }
 
 func TestReporter_BuildIssueURL_EmptyDescription(t *testing.T) {
+	t.Parallel()
 	r := NewReporter("v0.1.0", "")
 	info := &SystemInfo{AppVersion: "v0.1.0", OS: "linux", Arch: "amd64"}
 
@@ -64,6 +67,7 @@ func TestReporter_BuildIssueURL_EmptyDescription(t *testing.T) {
 }
 
 func TestSanitizeLog(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		input      string
@@ -107,6 +111,7 @@ func TestSanitizeLog(t *testing.T) {
 }
 
 func TestReadAppLogFile_NotExist(t *testing.T) {
+	t.Parallel()
 	// 使用不存在的临时目录
 	content, err := ReadAppLogFile("/tmp/nonexistent_medmemo_dir_12345")
 	require.NoError(t, err)

@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/pkg/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -68,7 +68,7 @@ func TestFetchLatest_StableSkipsPrerelease(t *testing.T) {
 	client := &http.Client{Transport: &mockTransport{statusCode: http.StatusOK, body: body}}
 	g := NewGitHubUpdater(client)
 
-	info, err := g.FetchLatest(context.Background(), entity.ChannelStable)
+	info, err := g.FetchLatest(context.Background(), models.ChannelStable)
 	require.NoError(t, err)
 	assert.Equal(t, "0.1.0-build.10", info.Version)
 	assert.Equal(t, "Stable", info.Name)
@@ -104,7 +104,7 @@ func TestFetchLatest_BetaIncludesPrerelease(t *testing.T) {
 	client := &http.Client{Transport: &mockTransport{statusCode: http.StatusOK, body: body}}
 	g := NewGitHubUpdater(client)
 
-	info, err := g.FetchLatest(context.Background(), entity.ChannelBeta)
+	info, err := g.FetchLatest(context.Background(), models.ChannelBeta)
 	require.NoError(t, err)
 	assert.Equal(t, "0.1.0-Pre-release-build.20", info.Version)
 	assert.Equal(t, "https://example.com/pre-release", info.DownloadURL)
@@ -128,7 +128,7 @@ func TestFetchLatest_StableNoReleaseAvailable(t *testing.T) {
 	client := &http.Client{Transport: &mockTransport{statusCode: http.StatusOK, body: body}}
 	g := NewGitHubUpdater(client)
 
-	_, err := g.FetchLatest(context.Background(), entity.ChannelStable)
+	_, err := g.FetchLatest(context.Background(), models.ChannelStable)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no suitable release found")
 }
@@ -150,7 +150,7 @@ func TestFetchLatest_NoMatchingAsset(t *testing.T) {
 	client := &http.Client{Transport: &mockTransport{statusCode: http.StatusOK, body: body}}
 	g := NewGitHubUpdater(client)
 
-	_, err := g.FetchLatest(context.Background(), entity.ChannelStable)
+	_, err := g.FetchLatest(context.Background(), models.ChannelStable)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no suitable release found")
 }
@@ -159,7 +159,7 @@ func TestFetchLatest_APIError(t *testing.T) {
 	client := &http.Client{Transport: &mockTransport{statusCode: http.StatusInternalServerError, body: `{"message":"Internal Server Error"}`}}
 	g := NewGitHubUpdater(client)
 
-	_, err := g.FetchLatest(context.Background(), entity.ChannelStable)
+	_, err := g.FetchLatest(context.Background(), models.ChannelStable)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "github api returned 500")
 }
@@ -168,7 +168,7 @@ func TestFetchLatest_EmptyList(t *testing.T) {
 	client := &http.Client{Transport: &mockTransport{statusCode: http.StatusOK, body: `[]`}}
 	g := NewGitHubUpdater(client)
 
-	_, err := g.FetchLatest(context.Background(), entity.ChannelStable)
+	_, err := g.FetchLatest(context.Background(), models.ChannelStable)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no suitable release found")
 }

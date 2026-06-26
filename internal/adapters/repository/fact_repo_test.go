@@ -12,6 +12,7 @@ import (
 )
 
 func setupFactTestDB(t *testing.T) (*FactRepoSQLite, func()) {
+	t.Helper()
 	tmpDir := t.TempDir()
 	connector, err := database.NewSQLiteConnector(tmpDir)
 	require.NoError(t, err)

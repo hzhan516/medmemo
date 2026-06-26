@@ -12,6 +12,7 @@ import (
 )
 
 func setupMemoryRepo(t *testing.T) (*MemoryRepoSQLite, func()) {
+	t.Helper()
 	dir := t.TempDir()
 	connector, err := database.NewSQLiteConnector(dir)
 	require.NoError(t, err)

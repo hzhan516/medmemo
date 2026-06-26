@@ -8,6 +8,7 @@ import (
 )
 
 func TestConfidenceAggregator_Calculate_FullScore(t *testing.T) {
+	t.Parallel()
 	agg := NewConfidenceAggregator()
 	sources := []entity.KnowledgeSource{
 		{Type: entity.SourceMedicalGuideline, Confidence: 0.95, Citation: "指南"},
@@ -34,6 +35,7 @@ func TestConfidenceAggregator_Calculate_FullScore(t *testing.T) {
 }
 
 func TestConfidenceAggregator_Calculate_MediumScore(t *testing.T) {
+	t.Parallel()
 	agg := NewConfidenceAggregator()
 	sources := []entity.KnowledgeSource{
 		{Type: entity.SourceEvidenceDB, Confidence: 0.85, Citation: "PubMed"},
@@ -61,6 +63,7 @@ func TestConfidenceAggregator_Calculate_MediumScore(t *testing.T) {
 }
 
 func TestConfidenceAggregator_Calculate_LowScore(t *testing.T) {
+	t.Parallel()
 	agg := NewConfidenceAggregator()
 	sources := []entity.KnowledgeSource{
 		{Type: entity.SourceLLMInternal, Confidence: 0.60, Citation: ""},
@@ -86,6 +89,7 @@ func TestConfidenceAggregator_Calculate_LowScore(t *testing.T) {
 }
 
 func TestConfidenceAggregator_Calculate_EmergencyOverride(t *testing.T) {
+	t.Parallel()
 	agg := NewConfidenceAggregator()
 	// 紧急症状兜底：无论各维度如何，固定 A 级
 	sources := []entity.KnowledgeSource{
@@ -111,6 +115,7 @@ func TestConfidenceAggregator_Calculate_EmergencyOverride(t *testing.T) {
 }
 
 func TestConfidenceAggregator_Calculate_Boundary_AtoB(t *testing.T) {
+	t.Parallel()
 	agg := NewConfidenceAggregator()
 	// 89.9 分应为 B 级
 	result := agg.CalculateWithRawScore(89.9, []string{})
@@ -118,6 +123,7 @@ func TestConfidenceAggregator_Calculate_Boundary_AtoB(t *testing.T) {
 }
 
 func TestConfidenceAggregator_Calculate_Boundary_BtoC(t *testing.T) {
+	t.Parallel()
 	agg := NewConfidenceAggregator()
 	// 69.9 分应为 C 级
 	result := agg.CalculateWithRawScore(69.9, []string{})
@@ -125,6 +131,7 @@ func TestConfidenceAggregator_Calculate_Boundary_BtoC(t *testing.T) {
 }
 
 func TestConfidenceAggregator_Calculate_Boundary_CtoD(t *testing.T) {
+	t.Parallel()
 	agg := NewConfidenceAggregator()
 	// 49.9 分应为 D 级
 	result := agg.CalculateWithRawScore(49.9, []string{})
@@ -132,6 +139,7 @@ func TestConfidenceAggregator_Calculate_Boundary_CtoD(t *testing.T) {
 }
 
 func TestConfidenceAggregator_Calculate_Boundary_DtoE(t *testing.T) {
+	t.Parallel()
 	agg := NewConfidenceAggregator()
 	// 29.9 分应为 E 级
 	result := agg.CalculateWithRawScore(29.9, []string{})
@@ -139,6 +147,7 @@ func TestConfidenceAggregator_Calculate_Boundary_DtoE(t *testing.T) {
 }
 
 func TestConfidenceAggregator_Calculate_Breakdown(t *testing.T) {
+	t.Parallel()
 	agg := NewConfidenceAggregator()
 	sources := []entity.KnowledgeSource{
 		{Type: entity.SourceMedicalGuideline, Confidence: 0.95, Citation: "指南"},
@@ -163,6 +172,7 @@ func TestConfidenceAggregator_Calculate_Breakdown(t *testing.T) {
 }
 
 func TestConfidenceAggregator_Calculate_MissingInfoExplanation(t *testing.T) {
+	t.Parallel()
 	agg := NewConfidenceAggregator()
 	missing := []string{"疼痛持续时间", "既往病史"}
 	result := agg.CalculateWithRawScore(65.0, missing)
@@ -173,6 +183,7 @@ func TestConfidenceAggregator_Calculate_MissingInfoExplanation(t *testing.T) {
 }
 
 func TestConfidenceAggregator_Calculate_EmptySources(t *testing.T) {
+	t.Parallel()
 	agg := NewConfidenceAggregator()
 	sources := []entity.KnowledgeSource{}
 	reasoning := entity.ReasoningChain{
@@ -191,6 +202,7 @@ func TestConfidenceAggregator_Calculate_EmptySources(t *testing.T) {
 }
 
 func TestConfidenceAggregator_Calculate_Latency(t *testing.T) {
+	t.Parallel()
 	agg := NewConfidenceAggregator()
 	sources := []entity.KnowledgeSource{
 		{Type: entity.SourceMedicalGuideline, Confidence: 0.95, Citation: "指南"},

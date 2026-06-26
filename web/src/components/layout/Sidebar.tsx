@@ -56,9 +56,9 @@ export function Sidebar({
   useEffect(() => {
     const checkMobile = () => {
       const mobile = window.innerWidth < COLLAPSE_BREAKPOINT
-      setIsMobile(mobile)
+      setIsMobile((prev) => (prev !== mobile ? mobile : prev))
       if (mobile) {
-        setIsCollapsed(true)
+        setIsCollapsed((prev) => (prev !== true ? true : prev))
       }
     }
     checkMobile()

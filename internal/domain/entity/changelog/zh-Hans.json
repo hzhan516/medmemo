@@ -99,6 +99,62 @@
     ]
   },
   {
+    "version": "v1.1.1",
+    "title": "记忆管理质量硬版本",
+    "features": [
+      "确定性事实质量门禁 FactQualityGate（零外部依赖，规则覆盖询问意图/AI能力限制/工具建议/无数值属性）",
+      "FactRepoSQLite.Delete 显式事务删除 embedding + fact，避免 stale 向量污染召回",
+      "Embedding 生命周期收紧：pending 不生成 embedding，rejected 清理已有 embedding",
+      "用户事实优先：ExtractFactsFromReply 与 Extract 仅处理 RoleUser 消息，排除 AI 回复",
+      "事实抽取 Prompt 收紧约束与正反例（\"我现在体重多少？\"→[] / \"我体重110公斤\"→[...]）",
+      "MemoryPage 乐观删除 + 详情弹窗清理，提升删除刷新体验"
+    ],
+    "fixes": [
+      "修复 tx.Rollback() 返回值未检查导致的 golangci-lint errcheck 失败"
+    ]
+  },
+  {
+    "version": "v1.1.2",
+    "title": "同义问法召回已审批事实（本地 Intent 短路）",
+    "features": [
+      "本地 Intent/Alias 映射（体重/身高/年龄/过敏/用药 5 类个人事实）",
+      "QueryExpansionService 查询规范化（去标点/全半角转换/合并空白）",
+      "IntentResolver 三级置信度分级（High 本地短路 / Medium 检索扩展 / Low 阻断）",
+      "高置信个人事实查询本地短路回答（Execute/StreamExecute 入口前置，零云端调用）",
+      "LocalAnswerService 固定模板回答（只复述已记录事实，不输出医疗建议）",
+      "FactRepository.FindLatestApprovedByPredicates（多 predicate IN 查询，仅返回 approved）",
+      "误触发防护：阻断后缀（怎么办/该吃/怎么治）+ 模糊 query（缺少主语代词）不触发短路"
+    ],
+    "fixes": []
+  },
+  {
+    "version": "v1.1.3",
+    "title": "体重类同义问法语义召回增强",
+    "features": [
+      "新增 BuildFactRetrievalText：为体重类 approved fact 追加 12 个同义词扩展（多重/几斤/多少斤/斤/公斤/千克/kg/体重/体重值/重量/我现在多重/我多少斤）",
+      "ApproveFact 生成 embedding 时改用 enhanced retrieval text，提升同义问法向量召回率",
+      "backfillEmbeddings 对缺失 embedding 的 approved fact 补向量时使用 enhanced text，已有 embedding 跳过",
+      "detectEntityMentions 使用 retrieval text 做关键词匹配召回，返回 LLM 的 Content 仍是原始事实文本，避免污染上下文"
+    ],
+    "fixes": []
+  },
+  {
+    "version": "v1.1.4",
+    "title": "Embedding 版本化与历史向量迁移",
+    "features": [
+      "嵌入模型版本化：新增 CurrentEmbeddingVersion 常量，embedding 缓存按模型版本命名空间隔离，避免模型升级后陈旧向量污染召回",
+      "分类同义词扩展（retrieval-v2）：为体重、身高、年龄、过敏、用药等个人事实生成增强检索文本，提升同义问法语义召回率",
+      "历史 embedding 版本迁移器（EmbeddingMigrator）：版本升级后首次启动自动扫描并重建过期/缺失的 embedding",
+      "启动时 embedding 迁移流水线：ONNX 预热完成后后台执行，通过 Wails Events 推送 start/progress/done 状态",
+      "前端迁移进度 UI：底部进度条与 Spinner 实时展示已处理/总数，迁移完成后自动消失",
+      "数据库迁移 v11：为 embedding 表增加 model_version 索引，优化迁移查询与版本过滤性能",
+      "Embedding 仓库扩展：新增 CountApprovedFactsNeedingEmbedding / ListApprovedFactsNeedingEmbedding / UpdateEmbedding 支持增量重算"
+    ],
+    "fixes": [
+      "修复 embedding 缓存未按模型版本隔离导致的潜在陈旧向量召回问题"
+    ]
+  },
+  {
     "version": "v1.1.5",
     "title": "M03 混合检索四路并行召回管线",
     "features": [
@@ -115,6 +171,40 @@
     ],
     "fixes": [
       "修复 rerank recency 与 vector_similarity 排序优先级：recency 优先，避免陈旧高相似度事实挤占新事实"
+    ]
+  },
+  {
+    "version": "v1.1.6",
+    "title": "M07 代码质量全面加固",
+    "features": [
+      "合规检测 fail-closed 机制：检测异常时 usecase 层返回安全替代文案，避免静默失败",
+      "L1 inline 替换模式：敏感用词局部替换而非整段阻断，保留原回答可读性",
+      "合规范式测试完整覆盖（L1/L2/L3/L4 + inline替换 + 异常降级）",
+      "Emergency 关键词边界/阴性用例覆盖，杜绝误触发",
+      "合规超时审计日志 + E2E 规则覆盖扩展",
+      "测试并行化：application + pkg 测试文件 t.Parallel() 覆盖（30+ 文件）",
+      "Repository 测试 helper 添加 t.Helper()（7 个文件）",
+      "CI Qodana 代码质量工作流（Go + 前端静态分析）"
+    ],
+    "fixes": [
+      "替换自定义 stringsBuilder 为标准库 strings.Builder，降低复杂度",
+      "清理 32 处 [DIAG] 调试输出（wails_app/chat/openai），移除残留死代码",
+      "TLS 1.2+ MinVersion 强制：GitHubUpdater + DefaultHTTPClient 构造函数",
+      "HTTP checksum 下载链路 context 传播修复（打穿 3 层调用）",
+      "SQLCipher DB 文件 chmod 0600 权限收紧",
+      "配置文件/合规日志/模型文件权限从 0644 收紧至 0600",
+      "resourcepath 路径穿越防护（~/../ 越权）",
+      "下载路径校验 + SQLCipher attach database 路径注入加固",
+      "bare return err → fmt.Errorf 包装（全项目 errcheck）",
+      "depguard v2 配置迁移与重新启用（Clean Architecture 四层约束）",
+      "os-assigned port 替代伪随机端口选择",
+      "ONNX worker goroutine 泄漏修复（调用方取消时）",
+      "nil confidenceAggregator panic 防护（Execute + StreamExecute 双路径）",
+      "title 生成器正则预编译（避免每次调用重复编译）",
+      "Wire 返回具体类型（infrastructure updater），消除歧义",
+      "脱敏类型从 entity 移至 pkg/models，消除 domain 层外部依赖",
+      "CI 测试对齐 Makefile（单元/集成测试 + native lib 设置）",
+      "修复 E2E 合规检测断言（L1 阻断回复期望 SafeText 替代原文）"
     ]
   }
 ]

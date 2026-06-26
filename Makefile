@@ -1,7 +1,7 @@
 .PHONY: all dev build test lint wire clean install-tools
 
-# 版本号从 wails.json 读取（单一来源）
-VERSION ?= $(shell cat wails.json | grep '"productVersion"' | sed 's/.*"productVersion": *"\(.*\)".*/\1/')
+# 版本号从 wails.json 读取（单一来源，使用 JSON 解析器而非 grep/sed）
+VERSION ?= $(shell go run scripts/read-version.go wails.json)
 LDFLAGS := -ldflags "-s -w -X main.version=$(VERSION)"
 
 # 平台检测（用于本地构建）

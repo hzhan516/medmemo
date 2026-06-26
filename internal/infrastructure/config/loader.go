@@ -10,7 +10,6 @@ import (
 	"strconv"
 
 	"github.com/google/wire"
-	"github.com/hzhan516/medmemo/internal/domain/entity"
 	"github.com/hzhan516/medmemo/pkg/models"
 	"gopkg.in/yaml.v3"
 )
@@ -23,7 +22,7 @@ const (
 	defaultEnableAnalytics      = false
 	defaultProviderType         = models.ProviderKimi
 	defaultModelDir             = "resources/models/distilbert-ner"
-	defaultDesensitizationLevel = string(entity.DesensitizationStandard)
+	defaultDesensitizationLevel = string(models.DesensitizationStandard)
 	defaultDataRetentionDays    = 30
 )
 
@@ -57,7 +56,7 @@ type rawConfig struct {
 
 // Load 加载并校验配置，返回领域层 AppConfig。
 // 加载优先级：显式 configPath > ~/.medmemo/config.{yaml|json} > ./config.{yaml|json} > 硬编码默认值。
-func (l *Loader) Load() (*entity.AppConfig, error) {
+func (l *Loader) Load() (*models.AppConfig, error) {
 	raw := l.loadDefaults()
 
 	// 尝试从文件加载
@@ -89,7 +88,7 @@ func (l *Loader) Load() (*entity.AppConfig, error) {
 }
 
 func (l *Loader) loadDefaults() *rawConfig {
-	updateChannel := string(entity.ChannelBeta)
+	updateChannel := string(models.ChannelBeta)
 	desensitizationLevel := defaultDesensitizationLevel
 	dataDir := expandTilde(defaultDataDir)
 	if dataDir == "" {
@@ -184,15 +183,15 @@ func (l *Loader) applyEnvOverrides(raw *rawConfig) {
 	}
 }
 
-func (l *Loader) toDomain(raw *rawConfig) *entity.AppConfig {
-	cfg := &entity.AppConfig{
+func (l *Loader) toDomain(raw *rawConfig) *models.AppConfig {
+	cfg := &models.AppConfig{
 		DataDir:                   expandTilde(raw.DataDir),
 		DefaultModel:              raw.DefaultModel,
 		Language:                  raw.Language,
 		APIEndpoint:               raw.APIEndpoint,
 		ModelDir:                  expandTilde(raw.ModelDir),
-		UpdateChannel:             entity.UpdateChannel(raw.UpdateChannel),
-		DesensitizationLevel:      entity.DesensitizationLevel(raw.DesensitizationLevel),
+		UpdateChannel:             models.UpdateChannel(raw.UpdateChannel),
+		DesensitizationLevel:      models.DesensitizationLevel(raw.DesensitizationLevel),
 		EmbeddingModelDownloadURL: raw.EmbeddingModelDownloadURL,
 	}
 	if raw.EnableCloud != nil {
@@ -209,10 +208,10 @@ func (l *Loader) toDomain(raw *rawConfig) *entity.AppConfig {
 		cfg.ProviderType = defaultProviderType
 	}
 	if cfg.UpdateChannel == "" {
-		cfg.UpdateChannel = entity.ChannelBeta
+		cfg.UpdateChannel = models.ChannelBeta
 	}
 	if cfg.DesensitizationLevel == "" {
-		cfg.DesensitizationLevel = entity.DesensitizationStandard
+		cfg.DesensitizationLevel = models.DesensitizationStandard
 	}
 	if raw.DataRetentionDays != nil {
 		cfg.DataRetentionDays = *raw.DataRetentionDays
@@ -221,7 +220,7 @@ func (l *Loader) toDomain(raw *rawConfig) *entity.AppConfig {
 }
 
 // LoadConfig 从 Loader 加载并返回 AppConfig，供 Wire 注入。
-func LoadConfig(loader *Loader) (*entity.AppConfig, error) {
+func LoadConfig(loader *Loader) (*models.AppConfig, error) {
 	return loader.Load()
 }
 
@@ -263,7 +262,7 @@ func SaveDataRetentionDays(days int) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
-	return os.WriteFile(path, data, 0644)
+	return os.WriteFile(path, data, 0600)
 }
 
 // ConfigSet 供 Wire 使用的 ProviderSet。

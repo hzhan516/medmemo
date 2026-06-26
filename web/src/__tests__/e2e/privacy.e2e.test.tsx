@@ -30,7 +30,8 @@ describe('E2E: 隐私与设置流程', () => {
     setMockHandlers({
       SendMessageStream: async (req: { conversation_id: string }) => {
         const convId = req.conversation_id
-        await new Promise((r) => setTimeout(r, 150))
+        // 微任务延迟确保 EventsOn listener 已注册
+        await new Promise((r) => setTimeout(r, 0))
         EventsEmit('chat:stream_chunk', { type: 'start', payload: '', metadata: { conversation_id: convId } })
         EventsEmit('chat:stream_chunk', { type: 'content', payload: '用户 <NAME_1> 的联系方式是 <PHONE_1>，身份证 <ID_1>。', metadata: { conversation_id: convId } })
         EventsEmit('chat:stream_chunk', { type: 'done', payload: '', metadata: { conversation_id: convId } })
