@@ -30,6 +30,7 @@ export function useUpdate() {
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null)
   const [downloadProgress, setDownloadProgress] = useState<DownloadProgress | null>(null)
   const [isDownloading, setIsDownloading] = useState(false)
+  const [isRestarting, setIsRestarting] = useState(false)
   const [downloadPath, setDownloadPath] = useState<string>('')
   const [error, setError] = useState<string>('')
 
@@ -86,14 +87,16 @@ export function useUpdate() {
   }, [updateInfo, downloadUpdate])
 
   /**
-   * 应用更新（安装）。
+   * 应用更新（安装并重启）。
    */
   const doApply = useCallback(async () => {
     if (!downloadPath) return
+    setIsRestarting(true)
     setError('')
     try {
       await applyUpdate(downloadPath)
     } catch (err) {
+      setIsRestarting(false)
       const msg = err instanceof Error ? err.message : String(err)
       setError(msg)
     }
@@ -136,6 +139,7 @@ export function useUpdate() {
     updateInfo,
     downloadProgress,
     isDownloading,
+    isRestarting,
     downloadPath,
     error,
     doCheckUpdate,
