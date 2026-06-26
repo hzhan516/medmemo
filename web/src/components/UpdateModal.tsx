@@ -16,6 +16,7 @@ function formatBytes(bytes: number): string {
 interface UpdateModalProps {
   info: UpdateInfo | null
   isDownloading: boolean
+  isRestarting: boolean
   downloadProgress: { downloaded: number; total: number } | null
   downloadPath: string
   error: string
@@ -34,6 +35,7 @@ interface UpdateModalProps {
 export function UpdateModal({
   info,
   isDownloading,
+  isRestarting,
   downloadProgress,
   downloadPath,
   error,
@@ -125,12 +127,19 @@ export function UpdateModal({
           {downloadPath && !isDownloading && (
             <div className="flex items-center gap-2 rounded-md bg-green-50 p-3 text-sm text-green-800 dark:bg-green-900/20 dark:text-green-300">
               <CheckCircle2 size={16} />
-              <span>下载完成</span>
+              <span>下载完成，立即重启完成更新</span>
+            </div>
+          )}
+
+          {/* macOS 授权失败回退提示 */}
+          {error && error.toLowerCase().includes('manual install') && (
+            <div className="rounded-md bg-orange-50 p-3 text-sm text-orange-800 dark:bg-orange-900/20 dark:text-orange-300">
+              macOS 自动替换需要管理员授权。请打开下载的 DMG 文件，手动将 MedMemo.app 拖拽到 Applications 文件夹完成安装。
             </div>
           )}
 
           {/* 错误提示 */}
-          {error && (
+          {error && !error.toLowerCase().includes('manual install') && (
             <div className="rounded-md bg-red-50 p-3 text-sm text-red-800 dark:bg-red-900/20 dark:text-red-300">
               {error}
             </div>
@@ -159,12 +168,16 @@ export function UpdateModal({
               前往下载
             </Button>
           ) : downloadPath ? (
-            <Button size="sm" onClick={onApply}>
-              <CheckCircle2 size={14} className="mr-1" />
-              安装更新
+            <Button size="sm" onClick={onApply} disabled={isRestarting}>
+              {isRestarting ? (
+                <Loader2 size={14} className="mr-1 animate-spin" />
+              ) : (
+                <CheckCircle2 size={14} className="mr-1" />
+              )}
+              {isRestarting ? '重启中...' : '立即重启完成更新'}
             </Button>
           ) : (
-            <Button size="sm" onClick={onDownload} disabled={isDownloading}>
+            <Button size="sm" onClick={onDownload} disabled={isDownloading || isRestarting}>
               {isDownloading ? (
                 <Loader2 size={14} className="mr-1 animate-spin" />
               ) : (

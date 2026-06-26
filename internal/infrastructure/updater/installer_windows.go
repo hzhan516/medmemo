@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"golang.org/x/sys/windows/registry"
 )
 
 // NewInstaller 根据当前运行平台创建对应的 Installer 实例。
@@ -26,17 +28,17 @@ func newWindowsInstaller() *WindowsInstaller {
 	}
 }
 
-// Install Windows 安装策略：
-// 1. 备份当前 .exe
-// 2. 启动新安装程序（带静默安装参数 /S）
-// 3. 提示用户当前应用将在安装完成后关闭
-// 注意：Windows 不允许直接替换正在运行的 .exe，必须通过安装程序完成。
+// Install 备份当前 exe 并启动安装程序，由 NSIS 在原安装目录完成静默升级。
 func (w *WindowsInstaller) Install(assetPath string) (string, error) {
 	if w.currentPath == "" {
 		return "", fmt.Errorf("failed to determine current binary path")
 	}
 
-	// 创建备份
+	installDir, err := resolveInstallDir(w.currentPath, defaultReadInstallPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve install directory: %w", err)
+	}
+
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("failed to get home directory: %w", err)
@@ -51,7 +53,6 @@ func (w *WindowsInstaller) Install(assetPath string) (string, error) {
 		return "", fmt.Errorf("failed to backup current binary: %w", err)
 	}
 
-	// 将安装包移动到临时目录并启动
 	tempDir := os.TempDir()
 	installerPath := filepath.Join(tempDir, filepath.Base(assetPath))
 	if err := os.Rename(assetPath, installerPath); err != nil {
@@ -61,14 +62,14 @@ func (w *WindowsInstaller) Install(assetPath string) (string, error) {
 		_ = os.Remove(assetPath)
 	}
 
-	// 启动安装程序（NSIS 静默安装参数 /S）
-	cmd := exec.Command(installerPath, "/S")
+	// /D= 必须是最后一个参数
+	cmd := exec.Command(installerPath, "/S", "/D="+installDir)
 	if err := cmd.Start(); err != nil {
 		_ = w.Rollback()
 		return "", fmt.Errorf("failed to start installer: %w", err)
 	}
 
-	return installerPath, nil
+	return filepath.Join(installDir, "MedMemo.exe"), nil
 }
 
 // Rollback 恢复到备份的二进制。
@@ -88,6 +89,49 @@ func (w *WindowsInstaller) Rollback() error {
 // CurrentBinaryPath 返回当前二进制路径。
 func (w *WindowsInstaller) CurrentBinaryPath() string {
 	return w.currentPath
+}
+
+// readInstallPathFunc 读取注册表中 InstallPath 值的函数签名。
+type readInstallPathFunc func(key registry.Key, path string) (string, error)
+
+// defaultReadInstallPath 从 Windows 注册表读取 InstallPath。
+func defaultReadInstallPath(key registry.Key, path string) (string, error) {
+	k, err := registry.OpenKey(key, path, registry.QUERY_VALUE)
+	if err != nil {
+		return "", err
+	}
+	defer k.Close()
+
+	value, _, err := k.GetStringValue("InstallPath")
+	if err != nil {
+		return "", err
+	}
+	return value, nil
+}
+
+// resolveInstallDir 根据当前 exe 路径与注册表记录确定升级目标目录。
+func resolveInstallDir(currentExe string, readPath readInstallPathFunc) (string, error) {
+	currentDir := filepath.Dir(currentExe)
+
+	hkcu, _ := readPath(registry.CURRENT_USER, `Software\MedMemo`)
+	hklm, _ := readPath(registry.LOCAL_MACHINE, `Software\MedMemo`)
+
+	// 优先匹配当前运行 exe 所在目录，防止 per-user/all-users 混淆
+	if hkcu != "" && filepath.Dir(hkcu) == currentDir {
+		return currentDir, nil
+	}
+	if hklm != "" && filepath.Dir(hklm) == currentDir {
+		return currentDir, nil
+	}
+
+	// fallback：按 HKCU → HKLM → 当前 exe 目录
+	if hkcu != "" {
+		return filepath.Dir(hkcu), nil
+	}
+	if hklm != "" {
+		return filepath.Dir(hklm), nil
+	}
+	return currentDir, nil
 }
 
 // copyFileWindows 复制文件。

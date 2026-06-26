@@ -3,12 +3,36 @@ package main
 import (
 	"github.com/hzhan516/medmemo/internal/application/feedback"
 	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/pkg/models"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // GetVersion 返回当前应用版本号（构建时通过 -ldflags 注入）。
 func (a *WailsApp) GetVersion() string {
 	return version
+}
+
+// VersionInfoResponse 当前应用版本结构化信息，供 About 页与状态栏展示。
+type VersionInfoResponse struct {
+	Version         string `json:"version"`
+	DisplayVersion  string `json:"display_version"`
+	BuildNumber     string `json:"build_number"`
+	Channel         string `json:"channel"`
+	PrereleaseLabel string `json:"prerelease_label"`
+	Prerelease      bool   `json:"prerelease"`
+}
+
+// GetVersionInfo 解析当前版本号为结构化信息。
+func (a *WailsApp) GetVersionInfo() (*VersionInfoResponse, error) {
+	v := models.ParseAppVersion(version)
+	return &VersionInfoResponse{
+		Version:         v.Version,
+		DisplayVersion:  v.DisplayVersion,
+		BuildNumber:     v.BuildNumber,
+		Channel:         string(v.Channel),
+		PrereleaseLabel: v.PrereleaseLabel,
+		Prerelease:      v.Prerelease,
+	}, nil
 }
 
 // CollectSystemInfo 收集当前运行环境信息，供前端展示。

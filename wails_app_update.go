@@ -11,12 +11,16 @@ import (
 
 // UpdateInfoResponse 前端更新信息响应。
 type UpdateInfoResponse struct {
-	Version     string `json:"version"`
-	Name        string `json:"name"`
-	Body        string `json:"body"`
-	PublishedAt string `json:"published_at"`
-	Mandatory   bool   `json:"mandatory"`
-	Channel     string `json:"channel"`
+	Version         string `json:"version"`
+	DisplayVersion  string `json:"display_version"`
+	Name            string `json:"name"`
+	Body            string `json:"body"`
+	PublishedAt     string `json:"published_at"`
+	Mandatory       bool   `json:"mandatory"`
+	Channel         string `json:"channel"`
+	Prerelease      bool   `json:"prerelease"`
+	PrereleaseLabel string `json:"prerelease_label"`
+	BuildNumber     string `json:"build_number"`
 }
 
 // CheckUpdate 检测是否存在可用更新，供前端主动调用。
@@ -34,12 +38,16 @@ func (a *WailsApp) CheckUpdate() (*UpdateInfoResponse, error) {
 	}
 
 	return &UpdateInfoResponse{
-		Version:     info.Version,
-		Name:        info.Name,
-		Body:        info.Body,
-		PublishedAt: info.PublishedAt.Format(time.RFC3339),
-		Mandatory:   info.Mandatory,
-		Channel:     string(info.Channel),
+		Version:         info.Version,
+		DisplayVersion:  info.DisplayVersion,
+		Name:            info.Name,
+		Body:            info.Body,
+		PublishedAt:     info.PublishedAt.Format(time.RFC3339),
+		Mandatory:       info.Mandatory,
+		Channel:         string(info.Channel),
+		Prerelease:      info.Prerelease,
+		PrereleaseLabel: info.PreReleaseLabel,
+		BuildNumber:     info.BuildNumber,
 	}, nil
 }
 
@@ -76,15 +84,22 @@ func (a *WailsApp) DownloadUpdate(req DownloadUpdateRequest) (string, error) {
 	return path, nil
 }
 
-// ApplyUpdate 应用已下载的更新。
+// ApplyUpdate 应用已下载的更新并启动新版本。
 func (a *WailsApp) ApplyUpdate(assetPath string) error {
 	if a.updaterSvc == nil {
 		return fmt.Errorf("updater service not initialized")
 	}
 
-	if err := a.updaterSvc.ApplyUpdate(assetPath); err != nil {
+	installedPath, err := a.updaterSvc.ApplyUpdate(assetPath)
+	if err != nil {
 		return fmt.Errorf("failed to apply update: %w", err)
 	}
+
+	if err := restartAfterUpdate(a.ctx, installedPath); err != nil {
+		return fmt.Errorf("update installed but failed to restart: %w", err)
+	}
+
+	runtime.Quit(a.ctx)
 	return nil
 }
 

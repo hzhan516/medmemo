@@ -59,6 +59,7 @@ function App() {
     updateInfo,
     downloadProgress,
     isDownloading,
+    isRestarting,
     downloadPath,
     error: updateError,
     doDownload,
@@ -371,6 +372,7 @@ function App() {
       <UpdateModal
         info={updateInfo}
         isDownloading={isDownloading}
+        isRestarting={isRestarting}
         downloadProgress={downloadProgress}
         downloadPath={downloadPath}
         error={updateError}

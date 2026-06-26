@@ -4,6 +4,8 @@
 package main
 
 import (
+	"strings"
+
 	"github.com/google/wire"
 	"github.com/hzhan516/medmemo/internal/adapters/ai"
 	"github.com/hzhan516/medmemo/internal/adapters/auth"
@@ -19,7 +21,17 @@ import (
 	"github.com/hzhan516/medmemo/internal/infrastructure/database"
 	"github.com/hzhan516/medmemo/internal/infrastructure/onnx"
 	"github.com/hzhan516/medmemo/internal/infrastructure/secret"
+	"github.com/hzhan516/medmemo/pkg/models"
 )
+
+// ProvideDefaultUpdateChannel 根据构建版本返回默认更新通道。
+// 正式版默认 stable，预发布或 dev 构建默认 beta。
+func ProvideDefaultUpdateChannel() models.UpdateChannel {
+	if strings.EqualFold(version, "dev") {
+		return models.ChannelBeta
+	}
+	return models.ParseAppVersion(version).Channel
+}
 
 // InitializeApp 通过 Wire 编译期依赖注入组装完整应用。
 // 返回 (func()) 作为资源清理回调，由 main 函数通过 defer 调用。
@@ -27,6 +39,7 @@ func InitializeApp() (*App, func(), error) {
 	wire.Build(
 		NewApp,
 		NewWailsApp,
+		ProvideDefaultUpdateChannel,
 		usecase.ApplicationSet,
 		usecase.NewMemoryRetriever,
 		usecase.NewDecayScorer,
