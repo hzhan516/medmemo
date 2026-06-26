@@ -46,25 +46,36 @@ type TokenRefreshService struct {
 	onDegraded func(providerID, reason string)
 }
 
-// NewTokenRefreshService 创建 Token 刷新服务。
-// onDegraded 在刷新失败（4xx）导致认证降级时被调用，可为 nil。
-func NewTokenRefreshService(store port.ProviderStore, onDegraded func(providerID, reason string)) *TokenRefreshService {
-	return NewTokenRefreshServiceWithClient(store, &http.Client{Timeout: 15 * time.Second}, onDegraded)
-}
+// TokenRefreshOption 配置 TokenRefreshService 的可选参数。
+type TokenRefreshOption func(*TokenRefreshService)
 
-// NewTokenRefreshServiceBare 创建不带降级回调的 Token 刷新服务（供 Wire 注入）。
-func NewTokenRefreshServiceBare(store port.ProviderStore) *TokenRefreshService {
-	return NewTokenRefreshServiceWithClient(store, &http.Client{Timeout: 15 * time.Second}, nil)
-}
-
-// NewTokenRefreshServiceWithClient 使用自定义 HTTP 客户端创建服务（主要用于测试）。
-func NewTokenRefreshServiceWithClient(store port.ProviderStore, client *http.Client, onDegraded func(providerID, reason string)) *TokenRefreshService {
-	return &TokenRefreshService{
-		store:      store,
-		httpClient: client,
-		timers:     make(map[string]*time.Timer),
-		onDegraded: onDegraded,
+// WithTokenRefreshHTTPClient 使用自定义 HTTP 客户端。
+func WithTokenRefreshHTTPClient(client *http.Client) TokenRefreshOption {
+	return func(s *TokenRefreshService) {
+		s.httpClient = client
 	}
+}
+
+// WithTokenRefreshOnDegraded 设置认证降级回调。
+func WithTokenRefreshOnDegraded(cb func(providerID, reason string)) TokenRefreshOption {
+	return func(s *TokenRefreshService) {
+		s.onDegraded = cb
+	}
+}
+
+// NewTokenRefreshService 创建 Token 刷新服务。
+// 默认 HTTP 客户端超时 15 秒；可通过 WithTokenRefreshHTTPClient 覆盖。
+// 降级回调可通过 WithTokenRefreshOnDegraded 设置，供 WailsApp 在获取 runtime context 后注入。
+func NewTokenRefreshService(store port.ProviderStore, opts ...TokenRefreshOption) *TokenRefreshService {
+	s := &TokenRefreshService{
+		store:      store,
+		httpClient: &http.Client{Timeout: 15 * time.Second},
+		timers:     make(map[string]*time.Timer),
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 // SetOnDegraded 设置降级回调（供 WailsApp 在获取 runtime context 后调用）。
@@ -401,6 +412,8 @@ func inferProviderType(p *models.ProviderConfig) string {
 }
 
 // TokenRefreshProviderSet 是 TokenRefreshService 的 Wire ProviderSet。
-// 使用 NewTokenRefreshServiceBare 避免在 Wire 阶段就需要降级回调。
-// WailsApp 在 Startup 中通过 SetOnDegraded 注入回调。
-var TokenRefreshProviderSet = wire.NewSet(NewTokenRefreshServiceBare)
+// 使用 NewTokenRefreshService 无回调版本注入，WailsApp 在 Startup 中通过 SetOnDegraded 注入回调。
+var TokenRefreshProviderSet = wire.NewSet(
+	NewTokenRefreshService,
+	wire.Value([]TokenRefreshOption{}),
+)

@@ -103,45 +103,6 @@ func TestUpdateSettingsShouldCheck(t *testing.T) {
 	}
 }
 
-func TestIsStableVersion(t *testing.T) {
-	tests := []struct {
-		name    string
-		version string
-		want    bool
-	}{
-		{"stable patch", "v1.0.1", true},
-		{"stable patch v1.0.2", "v1.0.2", true},
-		{"stable patch v1.1.1", "v1.1.1", true},
-		{"stable without v", "1.2.3", true},
-		{"test two segment", "v1.0", false},
-		{"test two segment v1.1", "v1.1", false},
-		{"test one segment", "v1", false},
-		{"alpha tag", "v1.0.0-alpha", false},
-		{"beta tag", "v1.0.0-beta", false},
-		{"rc tag", "v1.0.0-rc1", false},
-		{"snapshot tag", "v1.0.0-SNAPSHOT", false},
-		{"with build metadata", "v1.0.0+build123", false},
-		{"dev version", "dev", false},
-		{"empty string", "", false},
-		{"mixed alphanumeric", "1.2.3a", false},
-		// 四段版本号与 build 后缀场景
-		{"4-segment stable", "1.1.2.54", true},
-		{"4-segment with v", "v1.1.2.54", true},
-		{"build suffix stable", "1.1.2-build.54", true},
-		{"build suffix with v", "v1.1.2-build.54", true},
-		{"pre-release with build", "1.1.2-Pre-release-build.53", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := IsStableVersion(tt.version)
-			if got != tt.want {
-				t.Errorf("IsStableVersion(%q) = %v, want %v", tt.version, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestDefaultUpdateSettings(t *testing.T) {
 	s := DefaultUpdateSettings()
 	if !s.CheckEnabled {

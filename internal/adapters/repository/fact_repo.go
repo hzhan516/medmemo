@@ -125,6 +125,57 @@ func (r *FactRepoSQLite) GetByID(ctx context.Context, factID string) (*entity.Ex
 	return scanFact(row)
 }
 
+// FindByIDs 批量按 ID 查询事实，返回以 fact_id 为键的映射；不存在的 ID 不出现。
+func (r *FactRepoSQLite) FindByIDs(ctx context.Context, factIDs []string) (map[string]*entity.ExtractedFact, error) {
+	if len(factIDs) == 0 {
+		return map[string]*entity.ExtractedFact{}, nil
+	}
+
+	idSet := make(map[string]struct{}, len(factIDs))
+	uniqueIDs := make([]string, 0, len(factIDs))
+	for _, id := range factIDs {
+		if _, ok := idSet[id]; ok {
+			continue
+		}
+		idSet[id] = struct{}{}
+		uniqueIDs = append(uniqueIDs, id)
+	}
+
+	const chunkSize = 900 // SQLite 变量数上限保守值
+	result := make(map[string]*entity.ExtractedFact, len(uniqueIDs))
+	for i := 0; i < len(uniqueIDs); i += chunkSize {
+		end := i + chunkSize
+		if end > len(uniqueIDs) {
+			end = len(uniqueIDs)
+		}
+		chunk := uniqueIDs[i:end]
+		placeholders := make([]string, len(chunk))
+		args := make([]any, len(chunk))
+		for j := range chunk {
+			placeholders[j] = "?"
+			args[j] = chunk[j]
+		}
+
+		query := fmt.Sprintf(`
+			SELECT fact_id, subject, predicate, object, confidence, source_msg_ids, status, is_sensitive, scored_at, reviewed_at, created_at
+			FROM extracted_facts
+			WHERE fact_id IN (%s)
+		`, strings.Join(placeholders, ","))
+		rows, err := r.db.QueryContext(ctx, query, args...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to query facts by ids: %w", err)
+		}
+		facts, err := scanFacts(rows)
+		if err != nil {
+			return nil, err
+		}
+		for _, f := range facts {
+			result[f.FactID] = f
+		}
+	}
+	return result, nil
+}
+
 // ListByStatus 按审核状态分页查询。
 func (r *FactRepoSQLite) ListByStatus(ctx context.Context, status entity.FactStatus, offset, limit int) ([]*entity.ExtractedFact, error) {
 	if limit <= 0 {
@@ -221,6 +272,32 @@ func (r *FactRepoSQLite) FindBySubject(ctx context.Context, subject string) ([]*
 	`, subject)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find facts by subject: %w", err)
+	}
+	defer rows.Close()
+	return scanFacts(rows)
+}
+
+// SearchApproved 按关键词搜索已审批事实，使用数据库层 LIKE 过滤。
+// FTS5 在 SQLCipher driver 中不可用，因此使用 LIKE 在数据库层完成过滤，
+// 避免一次性加载全部 approved 事实到应用层再过滤。
+func (r *FactRepoSQLite) SearchApproved(ctx context.Context, query string, limit int) ([]*entity.ExtractedFact, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if query == "" {
+		return r.ListByStatus(ctx, entity.FactStatusApproved, 0, limit)
+	}
+
+	pattern := "%" + query + "%"
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT fact_id, subject, predicate, object, confidence, source_msg_ids, status, is_sensitive, scored_at, reviewed_at, created_at
+		FROM extracted_facts
+		WHERE status = 'approved' AND (subject LIKE ? OR predicate LIKE ? OR object LIKE ?)
+		ORDER BY created_at DESC
+		LIMIT ?
+	`, pattern, pattern, pattern, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search approved facts: %w", err)
 	}
 	defer rows.Close()
 	return scanFacts(rows)

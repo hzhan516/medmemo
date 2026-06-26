@@ -56,8 +56,8 @@ func (r *MemoryRepoSQLite) GetByID(ctx context.Context, id models.MemoryID) (*en
 		return nil, fmt.Errorf("failed to get memory: %w", err)
 	}
 	mem.Tags = splitTags(tags)
-	mem.CreatedAt = msToTime(createdAt)
-	mem.AccessedAt = msToTime(accessedAt)
+	mem.CreatedAt = time.UnixMilli(createdAt)
+	mem.AccessedAt = time.UnixMilli(accessedAt)
 	return &mem, nil
 }
 
@@ -141,8 +141,8 @@ func scanMemories(rows *sql.Rows) ([]*entity.HealthMemory, error) {
 			return nil, fmt.Errorf("failed to scan memory: %w", err)
 		}
 		mem.Tags = splitTags(tags)
-		mem.CreatedAt = msToTime(createdAt)
-		mem.AccessedAt = msToTime(accessedAt)
+		mem.CreatedAt = time.UnixMilli(createdAt)
+		mem.AccessedAt = time.UnixMilli(accessedAt)
 		result = append(result, &mem)
 	}
 	if err := rows.Err(); err != nil {
@@ -157,13 +157,6 @@ func splitTags(s string) []string {
 	}
 	return strings.Split(s, ",")
 }
-
-func msToTime(ms int64) time.Time {
-	return time.UnixMilli(ms)
-}
-
-// DuckDBConnection 占位类型，待 infrastructure/database 完成后替换 [Issue#025]。
-type DuckDBConnection struct{}
 
 // RepositorySet 供 Wire 使用的 ProviderSet。
 // 当前使用 SQLite 降级实现 MemoryRepo。

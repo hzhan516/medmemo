@@ -16,7 +16,6 @@ import (
 	"github.com/hzhan516/medmemo/internal/application/pipeline"
 	updater2 "github.com/hzhan516/medmemo/internal/application/updater"
 	"github.com/hzhan516/medmemo/internal/application/usecase"
-	"github.com/hzhan516/medmemo/internal/infrastructure/config"
 	"github.com/hzhan516/medmemo/internal/infrastructure/onnx"
 	"github.com/hzhan516/medmemo/internal/infrastructure/secret"
 )
@@ -31,8 +30,7 @@ import (
 // 返回 (func()) 作为资源清理回调，由 main 函数通过 defer 调用。
 func InitializeApp() (*App, func(), error) {
 	llmClientFactory := ai.NewLLMClientFactory()
-	loader := NewDefaultLoader()
-	appConfig, err := config.LoadConfig(loader)
+	appConfig, err := NewAppConfig()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -62,8 +60,7 @@ func InitializeApp() (*App, func(), error) {
 	}
 	onnxnerDetector := detector.NewONNXNERDetector(engine)
 	l2NERStage := pipeline.NewL2NERStage(onnxnerDetector)
-	l3KeywordStage := pipeline.NewL3KeywordStage()
-	deidentifyPipeline := pipeline.NewDefaultDeidentifyPipeline(l1RuleStage, l2NERStage, l3KeywordStage)
+	deidentifyPipeline := pipeline.NewDefaultDeidentifyPipeline(l1RuleStage, l2NERStage)
 	embeddingServiceAdapter := NewEmbeddingServiceAdapterWithVersion(engine)
 	embeddingRepoSQLite := repository.NewEmbeddingRepoSQLite(sqlCipherConnector)
 	factRepoSQLite := repository.NewFactRepoSQLite(sqlCipherConnector)
@@ -73,8 +70,22 @@ func InitializeApp() (*App, func(), error) {
 	intentResolver := usecase.NewIntentResolver(queryExpansionService)
 	memoryRetriever := usecase.NewMemoryRetriever(embeddingServiceAdapter, embeddingRepoSQLite, factRepoSQLite, decayScorer, migrationState, intentResolver, queryExpansionService)
 	confidenceAggregator := usecase.NewConfidenceAggregator()
-	localAnswerService := usecase.NewLocalAnswerService()
-	chatOrchestrator := usecase.NewChatOrchestrator(llmClientFactory, providerRepoSQLite, memoryRepoSQLite, ruleDetector, ruleComplianceChecker, deidentifyPipeline, memoryRetriever, confidenceAggregator, factRepoSQLite, intentResolver, localAnswerService)
+	localAnswerConfig := usecase.NewLocalAnswerConfig()
+	localAnswerService := usecase.NewLocalAnswerService(localAnswerConfig)
+	chatOrchestratorDeps := usecase.ChatOrchestratorDeps{
+		LLMFactory:           llmClientFactory,
+		ProviderStore:        providerRepoSQLite,
+		MemoryRepo:           memoryRepoSQLite,
+		Detector:             ruleDetector,
+		Compliance:           ruleComplianceChecker,
+		DeidPipeline:         deidentifyPipeline,
+		MemoryRetriever:      memoryRetriever,
+		ConfidenceAggregator: confidenceAggregator,
+		FactRepo:             factRepoSQLite,
+		IntentResolver:       intentResolver,
+		LocalAnswer:          localAnswerService,
+	}
+	chatOrchestrator := usecase.NewChatOrchestrator(chatOrchestratorDeps)
 	conversationRepoSQLite := repository.NewConversationRepoSQLite(sqlCipherConnector)
 	messageRepoSQLite := repository.NewMessageRepoSQLite(sqlCipherConnector)
 	disclaimerRepoSQLite := repository.NewDisclaimerRepoSQLite(sqlCipherConnector)
@@ -85,7 +96,8 @@ func InitializeApp() (*App, func(), error) {
 	gitHubUpdater := updater.NewGitHubUpdater(client)
 	installerAdapter := updater.NewInstallerAdapter()
 	service := updater2.NewService(gitHubUpdater, installerAdapter)
-	tokenRefreshService := auth.NewTokenRefreshServiceBare(providerRepoSQLite)
+	v := _wireValue
+	tokenRefreshService := auth.NewTokenRefreshService(providerRepoSQLite, v...)
 	oAuthDeviceFlowService := auth.NewOAuthDeviceFlowServiceBare(providerRepoSQLite)
 	auditLogRepoSQLite := repository.NewAuditLogRepoSQLite(sqlCipherConnector)
 	dialogueRepoSQLite := repository.NewDialogueRepoSQLite(sqlCipherConnector)
@@ -99,3 +111,7 @@ func InitializeApp() (*App, func(), error) {
 		cleanup()
 	}, nil
 }
+
+var (
+	_wireValue = []auth.TokenRefreshOption{}
+)

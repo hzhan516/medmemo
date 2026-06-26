@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/hzhan516/medmemo/internal/domain/entity"
@@ -280,14 +281,6 @@ func decrypt(ciphertext []byte, key []byte) (string, error) {
 	return string(plaintext), nil
 }
 
-// boolToInt 将 bool 转换为 SQLite INTEGER (0/1)。
-func boolToInt(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
-}
-
 // isUniqueConstraintError 判断是否为 SQLite 唯一约束冲突错误。
 func isUniqueConstraintError(err error) bool {
 	if err == nil {
@@ -295,18 +288,13 @@ func isUniqueConstraintError(err error) bool {
 	}
 	// 兼容 modernc.org/sqlite 和 go-sqlcipher 的错误信息
 	errStr := err.Error()
-	return contains(errStr, "UNIQUE constraint failed") || contains(errStr, "unique constraint")
+	return strings.Contains(errStr, "UNIQUE constraint failed") || strings.Contains(errStr, "unique constraint")
 }
 
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsAt(s, substr))
-}
-
-func containsAt(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
+// boolToInt 将 bool 转为 SQLite 用的 0/1 整数，零分配。
+func boolToInt(b bool) int {
+	if b {
+		return 1
 	}
-	return false
+	return 0
 }

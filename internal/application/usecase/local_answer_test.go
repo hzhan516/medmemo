@@ -9,7 +9,7 @@ import (
 
 func TestLocalAnswerService_Format(t *testing.T) {
 	t.Parallel()
-	svc := NewLocalAnswerService()
+	svc := NewLocalAnswerService(NewLocalAnswerConfig())
 
 	tests := []struct {
 		intent   MemoryIntent
@@ -58,5 +58,43 @@ func TestLocalAnswerService_Format(t *testing.T) {
 			got := svc.Format(tt.intent, tt.fact)
 			assert.Equal(t, tt.expected, got)
 		})
+	}
+}
+
+func TestLocalAnswerService_Format_ConfigurableSubject(t *testing.T) {
+	t.Parallel()
+	cfg := DefaultLocalAnswerConfig()
+	cfg.UserSubject = "用户"
+	svc := NewLocalAnswerService(cfg)
+
+	got := svc.Format(IntentPersonalWeight, &entity.ExtractedFact{Object: "110公斤"})
+	assert.Equal(t, "记录中显示，用户当前体重为 110公斤。", got)
+}
+
+func TestLocalAnswerService_Format_CustomTemplate(t *testing.T) {
+	t.Parallel()
+	cfg := DefaultLocalAnswerConfig()
+	cfg.Templates[IntentPersonalWeight] = "{subject}的体重是{object}"
+	svc := NewLocalAnswerService(cfg)
+
+	got := svc.Format(IntentPersonalWeight, &entity.ExtractedFact{Object: "110公斤"})
+	assert.Equal(t, "你的体重是110公斤", got)
+}
+
+func TestDefaultLocalAnswerConfig(t *testing.T) {
+	t.Parallel()
+	cfg := DefaultLocalAnswerConfig()
+
+	assert.Equal(t, "用户", cfg.Subject)
+	assert.Equal(t, "你", cfg.UserSubject)
+	assert.Len(t, cfg.Templates, 5)
+	for _, intent := range []MemoryIntent{
+		IntentPersonalWeight,
+		IntentPersonalHeight,
+		IntentPersonalAge,
+		IntentAllergyHistory,
+		IntentMedicationHistory,
+	} {
+		assert.Contains(t, cfg.Templates, intent)
 	}
 }

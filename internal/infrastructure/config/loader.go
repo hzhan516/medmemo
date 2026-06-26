@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/google/wire"
 	"github.com/hzhan516/medmemo/pkg/models"
 	"gopkg.in/yaml.v3"
 )
@@ -19,7 +18,6 @@ const (
 	defaultModel                = "kimi-lite"
 	defaultLanguage             = "zh-CN"
 	defaultEnableCloud          = true
-	defaultEnableAnalytics      = false
 	defaultProviderType         = models.ProviderKimi
 	defaultModelDir             = "resources/models/distilbert-ner"
 	defaultDesensitizationLevel = string(models.DesensitizationStandard)
@@ -42,7 +40,6 @@ type rawConfig struct {
 	DefaultModel              string `json:"default_model" yaml:"default_model"`
 	Language                  string `json:"language" yaml:"language"`
 	EnableCloud               *bool  `json:"enable_cloud" yaml:"enable_cloud"`
-	EnableAnalytics           *bool  `json:"enable_analytics" yaml:"enable_analytics"`
 	ProviderType              string `json:"provider_type" yaml:"provider_type"`
 	APIEndpoint               string `json:"api_endpoint" yaml:"api_endpoint"`
 	APIKeyFile                string `json:"api_key_file" yaml:"api_key_file"`
@@ -90,7 +87,7 @@ func (l *Loader) Load() (*models.AppConfig, error) {
 func (l *Loader) loadDefaults() *rawConfig {
 	updateChannel := string(models.ChannelBeta)
 	desensitizationLevel := defaultDesensitizationLevel
-	dataDir := expandTilde(defaultDataDir)
+	dataDir := ExpandTilde(defaultDataDir)
 	if dataDir == "" {
 		// 兜底：若无法解析主目录，使用当前工作目录下的 .medmemo/data
 		dataDir = ".medmemo/data"
@@ -100,7 +97,6 @@ func (l *Loader) loadDefaults() *rawConfig {
 		DefaultModel:              defaultModel,
 		Language:                  defaultLanguage,
 		EnableCloud:               new(defaultEnableCloud),
-		EnableAnalytics:           new(defaultEnableAnalytics),
 		ProviderType:              string(defaultProviderType),
 		APIEndpoint:               "",
 		APIKeyFile:                "",
@@ -185,20 +181,17 @@ func (l *Loader) applyEnvOverrides(raw *rawConfig) {
 
 func (l *Loader) toDomain(raw *rawConfig) *models.AppConfig {
 	cfg := &models.AppConfig{
-		DataDir:                   expandTilde(raw.DataDir),
+		DataDir:                   ExpandTilde(raw.DataDir),
 		DefaultModel:              raw.DefaultModel,
 		Language:                  raw.Language,
 		APIEndpoint:               raw.APIEndpoint,
-		ModelDir:                  expandTilde(raw.ModelDir),
+		ModelDir:                  ExpandTilde(raw.ModelDir),
 		UpdateChannel:             models.UpdateChannel(raw.UpdateChannel),
 		DesensitizationLevel:      models.DesensitizationLevel(raw.DesensitizationLevel),
 		EmbeddingModelDownloadURL: raw.EmbeddingModelDownloadURL,
 	}
 	if raw.EnableCloud != nil {
 		cfg.EnableCloud = *raw.EnableCloud
-	}
-	if raw.EnableAnalytics != nil {
-		cfg.EnableAnalytics = *raw.EnableAnalytics
 	}
 	if raw.UpdateCheckEnabled != nil {
 		cfg.UpdateCheckEnabled = *raw.UpdateCheckEnabled
@@ -219,13 +212,8 @@ func (l *Loader) toDomain(raw *rawConfig) *models.AppConfig {
 	return cfg
 }
 
-// LoadConfig 从 Loader 加载并返回 AppConfig，供 Wire 注入。
-func LoadConfig(loader *Loader) (*models.AppConfig, error) {
-	return loader.Load()
-}
-
-// expandTilde 将路径中的 ~ 替换为用户主目录。
-func expandTilde(path string) string {
+// ExpandTilde 将路径中的 ~ 替换为用户主目录。
+func ExpandTilde(path string) string {
 	if len(path) > 0 && path[0] == '~' {
 		if home, err := os.UserHomeDir(); err == nil {
 			return filepath.Join(home, path[1:])
@@ -264,9 +252,3 @@ func SaveDataRetentionDays(days int) error {
 	}
 	return os.WriteFile(path, data, 0600)
 }
-
-// ConfigSet 供 Wire 使用的 ProviderSet。
-var ConfigSet = wire.NewSet(
-	NewLoader,
-	LoadConfig,
-)

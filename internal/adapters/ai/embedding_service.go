@@ -7,7 +7,6 @@ import (
 	"math"
 	"sync"
 
-	"github.com/google/wire"
 	"github.com/hzhan516/medmemo/internal/application/port"
 )
 
@@ -281,8 +280,3 @@ func copyVector(v []float32) []float32 {
 	copy(out, v)
 	return out
 }
-
-// EmbeddingServiceSet 供 Wire 使用的 ProviderSet。
-var EmbeddingServiceSet = wire.NewSet(
-	NewEmbeddingServiceAdapter,
-)
