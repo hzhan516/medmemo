@@ -52,7 +52,7 @@ func (r *AccuracyRepoSQLite) RecordFeedback(ctx context.Context, messageID, answ
 	if err != nil {
 		return fmt.Errorf("failed to begin accuracy feedback transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	now := time.Now().UnixMilli()
 	if _, err := tx.ExecContext(ctx, `

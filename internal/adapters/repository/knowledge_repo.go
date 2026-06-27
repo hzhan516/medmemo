@@ -52,7 +52,7 @@ func (r *KnowledgeRepoSQLite) SaveChunks(ctx context.Context, chunks []*entity.K
 	if err != nil {
 		return fmt.Errorf("failed to begin chunks transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	stmt, err := tx.PrepareContext(ctx, `
 		INSERT OR REPLACE INTO knowledge_chunks
@@ -118,7 +118,7 @@ func (r *KnowledgeRepoSQLite) DeleteDocument(ctx context.Context, id string) err
 	if err != nil {
 		return fmt.Errorf("failed to begin delete transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	if _, err := tx.ExecContext(ctx, `DELETE FROM knowledge_terms WHERE document_id = ?`, id); err != nil {
 		return fmt.Errorf("failed to delete knowledge terms: %w", err)
@@ -200,14 +200,14 @@ func (r *KnowledgeRepoSQLite) SearchKeyword(ctx context.Context, terms []string,
 
 	N, err := r.CountChunks(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to count chunks for keyword search: %w", err)
 	}
 	if N == 0 {
 		return nil, nil
 	}
 	avgChunkLen, err := r.AverageChunkTokenCount(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get average chunk length for keyword search: %w", err)
 	}
 	if avgChunkLen == 0 {
 		avgChunkLen = 1
@@ -220,7 +220,7 @@ func (r *KnowledgeRepoSQLite) SearchKeyword(ctx context.Context, terms []string,
 	for _, term := range terms {
 		df, err := r.CountTermDF(ctx, term)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to count document frequency for term %s: %w", term, err)
 		}
 		if df == 0 {
 			continue
@@ -409,7 +409,7 @@ func (r *KnowledgeRepoSQLite) SaveTerms(ctx context.Context, chunkID, documentID
 	if err != nil {
 		return fmt.Errorf("failed to begin terms transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	if _, err := tx.ExecContext(ctx, `DELETE FROM knowledge_terms WHERE chunk_id = ?`, chunkID); err != nil {
 		return fmt.Errorf("failed to clear old terms: %w", err)
@@ -478,7 +478,7 @@ func (r *KnowledgeRepoSQLite) scanDocument(scanner interface {
 	var sourceType string
 	var createdAt, updatedAt int64
 	if err := scanner.Scan(&doc.DocumentID, &doc.Title, &sourceType, &doc.Citation, &doc.URL, &doc.Language, &doc.Checksum, &doc.MetadataJSON, &createdAt, &updatedAt); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to scan knowledge document: %w", err)
 	}
 	doc.SourceType = entity.KnowledgeSourceType(sourceType)
 	doc.CreatedAt = time.UnixMilli(createdAt)

@@ -159,7 +159,7 @@ func (i *KnowledgeImporter) parseAndChunk(filePath string, content []byte) (*ent
 	case ".jsonl":
 		chunks, err := i.chunker.ChunkJSONL(content)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("failed to chunk JSONL knowledge file: %w", err)
 		}
 		return &entity.KnowledgeDocument{
 			DocumentID: uuid.New().String(),

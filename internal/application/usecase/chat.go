@@ -574,7 +574,7 @@ func (c *ChatOrchestrator) ExtractFactsFromReply(ctx context.Context, userConten
 	extractor := NewFactExtractor(adapter)
 	facts, err := extractor.ParseFacts(ctx, userContent)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse facts: %w", err)
 	}
 	return ApplyFactQualityGate(facts), nil
 }
