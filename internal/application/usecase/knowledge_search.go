@@ -22,6 +22,7 @@ func NewKnowledgeSearchService(repo repository.KnowledgeRepository, tokenizer *K
 }
 
 // Search 执行混合检索；若向量服务不可用则自动回退到纯关键词检索。
+// 无论召回路径如何，最终候选都会经过 reranker 重排后再返回。
 func (s *KnowledgeSearchService) Search(ctx context.Context, query string, limit int) ([]*repository.KnowledgeSearchResult, error) {
 	terms := tokenizeToSlice(s.tokenizer, query)
 	if len(terms) == 0 {
@@ -51,21 +52,22 @@ func (s *KnowledgeSearchService) Search(ctx context.Context, query string, limit
 		r.SourceType = "vector"
 	}
 
+	var candidates []*repository.KnowledgeSearchResult
 	if len(vectorResults) == 0 {
-		return keywordResults, nil
-	}
-
-	hybrid := RRFMerge([][]*repository.KnowledgeSearchResult{keywordResults, vectorResults}, []float64{1.0, 1.0}, 60, limit)
-	for _, r := range hybrid {
-		if r.SourceType != "keyword" && r.SourceType != "vector" {
-			r.SourceType = "hybrid"
+		candidates = keywordResults
+	} else {
+		candidates = RRFMerge([][]*repository.KnowledgeSearchResult{keywordResults, vectorResults}, []float64{1.0, 1.0}, 60, limit)
+		for _, r := range candidates {
+			if r.SourceType != "keyword" && r.SourceType != "vector" {
+				r.SourceType = "hybrid"
+			}
 		}
 	}
 
-	if s.reranker != nil {
-		hybrid = s.reranker.Rerank(hybrid, query)
+	if s.reranker != nil && len(candidates) > 0 {
+		candidates = s.reranker.Rerank(candidates, query)
 	}
-	return hybrid, nil
+	return candidates, nil
 }
 
 // SearchKeyword 仅执行关键词检索。

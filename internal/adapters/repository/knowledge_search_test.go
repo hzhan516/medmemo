@@ -2,13 +2,42 @@ package repository
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/hzhan516/medmemo/internal/application/usecase"
 	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/internal/domain/repository"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// spyReranker 包装 KnowledgeReranker，记录 Rerank 调用次数与入参。
+type spyReranker struct {
+	*usecase.KnowledgeReranker
+	mu         sync.Mutex
+	calls      int
+	queries    []string
+	candidates [][]*repository.KnowledgeSearchResult
+}
+
+func newSpyReranker() *spyReranker {
+	s := &spyReranker{KnowledgeReranker: usecase.NewKnowledgeReranker()}
+	s.SetBeforeRerankHook(func(results []*repository.KnowledgeSearchResult, query string) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		s.calls++
+		s.queries = append(s.queries, query)
+		s.candidates = append(s.candidates, results)
+	})
+	return s
+}
+
+func (s *spyReranker) Calls() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.calls
+}
 
 func TestKnowledgeSearchService_KeywordOnly(t *testing.T) {
 	repo, cleanup := newTestKnowledgeRepo(t)
@@ -76,7 +105,8 @@ func TestKnowledgeSearchService_RerankBoostPhrase(t *testing.T) {
 
 	ctx := context.Background()
 	tokenizer := usecase.NewKnowledgeTokenizer()
-	searchSvc := usecase.NewKnowledgeSearchService(repo, tokenizer, nil, usecase.NewKnowledgeReranker())
+	reranker := newSpyReranker()
+	searchSvc := usecase.NewKnowledgeSearchService(repo, tokenizer, nil, reranker.KnowledgeReranker)
 
 	// 构造两个片段，关键词检索时后者命中，但精确短语匹配应让前者排到第一
 	require.NoError(t, repo.SaveDocument(ctx, &entity.KnowledgeDocument{
@@ -95,6 +125,7 @@ func TestKnowledgeSearchService_RerankBoostPhrase(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, results)
 	assert.Equal(t, "预防感冒要多洗手。", results[0].Content)
+	assert.GreaterOrEqual(t, reranker.Calls(), 1, "reranker should be called for keyword-only results")
 }
 
 // staticEmbeddingSvc 返回固定向量的测试用 embedding 服务。
@@ -113,6 +144,34 @@ func (s *staticEmbeddingSvc) Embed(ctx context.Context, texts []string) ([][]flo
 		out[i] = s.vec
 	}
 	return out, nil
+}
+
+func TestKnowledgeSearchService_KeywordOnlyReranks(t *testing.T) {
+	repo, cleanup := newTestKnowledgeRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	tokenizer := usecase.NewKnowledgeTokenizer()
+	reranker := newSpyReranker()
+	// embedding 服务不可用，强制走 keyword-only 路径
+	searchSvc := usecase.NewKnowledgeSearchService(repo, tokenizer, nil, reranker.KnowledgeReranker)
+
+	require.NoError(t, repo.SaveDocument(ctx, &entity.KnowledgeDocument{
+		DocumentID: "doc_ko",
+		Title:      "健康指南",
+		SourceType: entity.KnowledgeSourceMarkdown,
+	}))
+	require.NoError(t, repo.SaveChunks(ctx, []*entity.KnowledgeChunk{
+		{ChunkID: "chunk_ko_1", DocumentID: "doc_ko", ChunkIndex: 0, Content: "预防感冒要多洗手。"},
+		{ChunkID: "chunk_ko_2", DocumentID: "doc_ko", ChunkIndex: 1, Content: "感冒通常由病毒引起。"},
+	}))
+	require.NoError(t, repo.SaveTerms(ctx, "chunk_ko_1", "doc_ko", map[string]int{"预防": 1, "感冒": 1}))
+	require.NoError(t, repo.SaveTerms(ctx, "chunk_ko_2", "doc_ko", map[string]int{"感冒": 1, "病毒": 1, "引起": 1}))
+
+	results, err := searchSvc.Search(ctx, "预防感冒", 10)
+	require.NoError(t, err)
+	require.NotEmpty(t, results)
+	assert.GreaterOrEqual(t, reranker.Calls(), 1, "reranker must be called even when vector search is unavailable")
 }
 
 func TestKnowledgeSearchService_HybridFallbackToKeyword(t *testing.T) {
