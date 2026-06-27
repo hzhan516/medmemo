@@ -43,7 +43,7 @@ export function KnowledgePage() {
         try {
           const updated = await getKnowledgeImportJob(result.job_id)
           setJob(updated)
-          if (updated.status !== 'pending' && updated.status !== 'indexed_vector_unavailable') {
+          if (updated.status !== 'pending') {
             clearInterval(poll)
             setImporting(false)
             loadDocuments()
