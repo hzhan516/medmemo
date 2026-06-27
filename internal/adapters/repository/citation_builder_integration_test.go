@@ -22,7 +22,7 @@ func TestCitationBuilder_Build(t *testing.T) {
 	_, err := importer.ImportFile(ctx, "health.md", content, false)
 	require.NoError(t, err)
 
-	searcher := usecase.NewKnowledgeSearchService(repo, tokenizer, nil)
+	searcher := usecase.NewKnowledgeSearchService(repo, tokenizer, nil, nil)
 	builder := usecase.NewCitationBuilder(repo)
 
 	results, err := searcher.Search(ctx, "心血管疾病", 10)

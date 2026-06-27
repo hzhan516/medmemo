@@ -99,6 +99,45 @@ func TestKnowledgeRepoSQLite_SearchKeyword(t *testing.T) {
 	assert.True(t, found)
 }
 
+func TestKnowledgeRepoSQLite_SearchVector(t *testing.T) {
+	repo, cleanup := newTestKnowledgeRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	doc := &entity.KnowledgeDocument{
+		DocumentID: "doc_vector",
+		Title:      "vector test",
+		SourceType: entity.KnowledgeSourceMarkdown,
+	}
+	require.NoError(t, repo.SaveDocument(ctx, doc))
+
+	chunk := &entity.KnowledgeChunk{
+		ChunkID:    "chunk_vector_1",
+		DocumentID: "doc_vector",
+		ChunkIndex: 0,
+		Content:    "向量检索测试片段",
+	}
+	require.NoError(t, repo.SaveChunks(ctx, []*entity.KnowledgeChunk{chunk}))
+
+	// 构造一个查询向量与存储向量高度相似的 384 维向量
+	stored := make([]float32, 384)
+	query := make([]float32, 384)
+	for i := range stored {
+		stored[i] = 0.01
+		query[i] = 0.01
+	}
+	stored[0] = 1.0
+	query[0] = 1.0
+	require.NoError(t, repo.SaveEmbedding(ctx, chunk.ChunkID, "test-model", len(stored), stored))
+
+	results, err := repo.SearchVector(ctx, query, 10)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, chunk.ChunkID, results[0].ChunkID)
+	assert.Equal(t, chunk.Content, results[0].Content)
+	assert.Greater(t, results[0].Score, 0.99)
+}
+
 func TestKnowledgeRepoSQLite_DeleteDocument(t *testing.T) {
 	repo, cleanup := newTestKnowledgeRepo(t)
 	defer cleanup()

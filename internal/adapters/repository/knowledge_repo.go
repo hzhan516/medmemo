@@ -14,16 +14,19 @@ import (
 	"github.com/hzhan516/medmemo/internal/domain/entity"
 	"github.com/hzhan516/medmemo/internal/domain/repository"
 	"github.com/hzhan516/medmemo/internal/infrastructure/database"
+	"github.com/viant/sqlite-vec/vector"
 )
 
 // KnowledgeRepoSQLite 基于 SQLite/SQLCipher 的知识库实现。
 type KnowledgeRepoSQLite struct {
-	db *sql.DB
+	db                 *sql.DB
+	vectorSQLAvailable bool
 }
 
 // NewKnowledgeRepoSQLite 构造函数。
 func NewKnowledgeRepoSQLite(connector database.DBConnector) *KnowledgeRepoSQLite {
-	return &KnowledgeRepoSQLite{db: connector.DB()}
+	db := connector.DB()
+	return &KnowledgeRepoSQLite{db: db, vectorSQLAvailable: detectVectorSQLAvailable(db)}
 }
 
 // SaveDocument 保存或更新文档。
@@ -288,14 +291,113 @@ func (r *KnowledgeRepoSQLite) SaveEmbedding(ctx context.Context, chunkID, modelV
 	return nil
 }
 
-// SearchVector 基于余弦相似度检索（无 embedding 服务时返回空）。
+// SearchVector 基于余弦相似度检索；sqlite-vec 不可用时在 Go 端计算兜底。
 func (r *KnowledgeRepoSQLite) SearchVector(ctx context.Context, embedding []float32, limit int) ([]*repository.KnowledgeSearchResult, error) {
 	if len(embedding) == 0 {
 		return nil, nil
 	}
-	// 本版本仅实现占位：实际生产环境需通过 sqlite-vec 或 ONNX 计算相似度。
-	// 为避免引入未测试的复杂向量运算，返回空结果让上层回退到 keyword-only。
-	return nil, nil
+	if r.vectorSQLAvailable {
+		return r.searchVectorSQL(ctx, embedding, limit)
+	}
+	return r.searchVectorGo(ctx, embedding, limit)
+}
+
+// searchVectorSQL 通过 sqlite-vec 的 vec_cosine 计算相似度并排序。
+func (r *KnowledgeRepoSQLite) searchVectorSQL(ctx context.Context, embedding []float32, limit int) ([]*repository.KnowledgeSearchResult, error) {
+	queryBlob, err := vector.EncodeEmbedding(embedding)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode query vector: %w", err)
+	}
+
+	limitClause := ""
+	args := []any{queryBlob}
+	if limit > 0 {
+		limitClause = "LIMIT ?"
+		args = append(args, limit)
+	}
+
+	rows, err := r.db.QueryContext(ctx, fmt.Sprintf(`
+		SELECT e.chunk_id, c.document_id, c.content, vec_cosine(?, e.embedding) AS score
+		FROM knowledge_embeddings e
+		JOIN knowledge_chunks c ON e.chunk_id = c.chunk_id
+		ORDER BY score DESC
+		%s
+	`, limitClause), args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute vector search: %w", err)
+	}
+	defer rows.Close()
+
+	return r.scanVectorResults(rows)
+}
+
+// searchVectorGo 在 sqlite-vec 不可用时用 Go 计算余弦相似度，避免功能完全退化。
+func (r *KnowledgeRepoSQLite) searchVectorGo(ctx context.Context, embedding []float32, limit int) ([]*repository.KnowledgeSearchResult, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT e.chunk_id, c.document_id, c.content, e.embedding
+		FROM knowledge_embeddings e
+		JOIN knowledge_chunks c ON e.chunk_id = c.chunk_id
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list embeddings: %w", err)
+	}
+	defer rows.Close()
+
+	var results []*repository.KnowledgeSearchResult
+	for rows.Next() {
+		var chunkID, documentID, content string
+		var embeddingBytes []byte
+		if err := rows.Scan(&chunkID, &documentID, &content, &embeddingBytes); err != nil {
+			return nil, fmt.Errorf("failed to scan embedding row: %w", err)
+		}
+		vec, err := vector.DecodeEmbedding(embeddingBytes)
+		if err != nil || len(vec) == 0 {
+			continue
+		}
+		score, err := cosineSimilarity(embedding, vec)
+		if err != nil {
+			continue
+		}
+		results = append(results, &repository.KnowledgeSearchResult{
+			ChunkID:    chunkID,
+			DocumentID: documentID,
+			Content:    content,
+			Score:      score,
+			SourceType: "vector",
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate embeddings: %w", err)
+	}
+
+	sort.Slice(results, func(i, j int) bool { return results[i].Score > results[j].Score })
+	if limit > 0 && limit < len(results) {
+		results = results[:limit]
+	}
+	return results, nil
+}
+
+// scanVectorResults 扫描向量搜索结果行。
+func (r *KnowledgeRepoSQLite) scanVectorResults(rows *sql.Rows) ([]*repository.KnowledgeSearchResult, error) {
+	var results []*repository.KnowledgeSearchResult
+	for rows.Next() {
+		var chunkID, documentID, content string
+		var score float64
+		if err := rows.Scan(&chunkID, &documentID, &content, &score); err != nil {
+			return nil, fmt.Errorf("failed to scan vector result: %w", err)
+		}
+		results = append(results, &repository.KnowledgeSearchResult{
+			ChunkID:    chunkID,
+			DocumentID: documentID,
+			Content:    content,
+			Score:      score,
+			SourceType: "vector",
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate vector results: %w", err)
+	}
+	return results, nil
 }
 
 // SaveTerms 保存片段词项频率。

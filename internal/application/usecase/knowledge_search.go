@@ -13,11 +13,12 @@ type KnowledgeSearchService struct {
 	repo         repository.KnowledgeRepository
 	tokenizer    *KnowledgeTokenizer
 	embeddingSvc port.EmbeddingService
+	reranker     *KnowledgeReranker
 }
 
 // NewKnowledgeSearchService 构造函数。
-func NewKnowledgeSearchService(repo repository.KnowledgeRepository, tokenizer *KnowledgeTokenizer, embeddingSvc port.EmbeddingService) *KnowledgeSearchService {
-	return &KnowledgeSearchService{repo: repo, tokenizer: tokenizer, embeddingSvc: embeddingSvc}
+func NewKnowledgeSearchService(repo repository.KnowledgeRepository, tokenizer *KnowledgeTokenizer, embeddingSvc port.EmbeddingService, reranker *KnowledgeReranker) *KnowledgeSearchService {
+	return &KnowledgeSearchService{repo: repo, tokenizer: tokenizer, embeddingSvc: embeddingSvc, reranker: reranker}
 }
 
 // Search 执行混合检索；若向量服务不可用则自动回退到纯关键词检索。
@@ -59,6 +60,10 @@ func (s *KnowledgeSearchService) Search(ctx context.Context, query string, limit
 		if r.SourceType != "keyword" && r.SourceType != "vector" {
 			r.SourceType = "hybrid"
 		}
+	}
+
+	if s.reranker != nil {
+		hybrid = s.reranker.Rerank(hybrid, query)
 	}
 	return hybrid, nil
 }

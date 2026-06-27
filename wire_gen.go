@@ -79,7 +79,8 @@ func InitializeApp() (*App, func(), error) {
 	accuracyService := usecase.NewAccuracyService(accuracyRepoSQLite)
 	knowledgeRepoSQLite := repository.NewKnowledgeRepoSQLite(sqlCipherConnector)
 	knowledgeTokenizer := usecase.NewKnowledgeTokenizer()
-	knowledgeSearchService := usecase.NewKnowledgeSearchService(knowledgeRepoSQLite, knowledgeTokenizer, embeddingServiceAdapter)
+	knowledgeReranker := usecase.NewKnowledgeReranker()
+	knowledgeSearchService := usecase.NewKnowledgeSearchService(knowledgeRepoSQLite, knowledgeTokenizer, embeddingServiceAdapter, knowledgeReranker)
 	citationBuilder := usecase.NewCitationBuilder(knowledgeRepoSQLite)
 	chatOrchestratorDeps := usecase.ChatOrchestratorDeps{
 		LLMFactory:           llmClientFactory,
