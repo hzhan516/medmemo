@@ -300,11 +300,13 @@ export function useConversation() {
 
       try {
         // 使用已快照的历史消息 + 当前用户消息构造请求，不重复读取 store
+        // ai_message_id 由前端生成，确保反馈统计与持久化消息使用同一 id
         await wails.sendMessageStream({
           conversation_id: convId,
           messages: [...history, { role: 'user', content: content.trim() }],
           model: targetModelId || targetProvider?.modelId || 'kimi-lite',
           provider_id: targetProvider?.id || '',
+          ai_message_id: aiMsgId,
         } as Parameters<typeof wails.sendMessageStream>[0])
 
         // 首条用户消息后异步生成标题（不阻塞流式输出）
