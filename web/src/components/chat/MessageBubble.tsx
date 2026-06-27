@@ -8,6 +8,7 @@ interface MessageBubbleProps {
   message: ChatMessage
   onRetry?: (messageId: string) => void
   onReportCompliance?: (messageId: string, ruleID: string) => void
+  onFollowupClick?: (text: string) => void
 }
 
 /**
@@ -36,7 +37,7 @@ function getFriendlyErrorMessage(error: string): string {
  * 系统提示：浅色背景，居中，13px 小字。
  * 合规标记：L2_WARNING 橙色警告框，L3_NOTICE 蓝色提示条。
  */
-export function MessageBubble({ message, onRetry, onReportCompliance }: MessageBubbleProps) {
+export function MessageBubble({ message, onRetry, onReportCompliance, onFollowupClick }: MessageBubbleProps) {
   const showConfidenceBar = useSettingsStore((s) => s.showConfidenceBar)
   const confidenceBarMode = useSettingsStore((s) => s.confidenceBarMode)
   const setConfidenceBarMode = useSettingsStore((s) => s.setConfidenceBarMode)
@@ -239,6 +240,7 @@ export function MessageBubble({ message, onRetry, onReportCompliance }: MessageB
                   result={message.confidence}
                   mode={confidenceBarMode}
                   onModeChange={setConfidenceBarMode}
+                  onFollowupClick={onFollowupClick}
                 />
               </div>
             )}
