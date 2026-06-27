@@ -16,10 +16,10 @@ import (
 
 // KnowledgeImporter 编排知识库文件导入流程。
 type KnowledgeImporter struct {
-	repo            repository.KnowledgeRepository
-	chunker         *KnowledgeChunker
-	tokenizer       *KnowledgeTokenizer
-	embeddingSvc    port.EmbeddingService
+	repo         repository.KnowledgeRepository
+	chunker      *KnowledgeChunker
+	tokenizer    *KnowledgeTokenizer
+	embeddingSvc port.EmbeddingService
 }
 
 // NewKnowledgeImporter 构造函数。

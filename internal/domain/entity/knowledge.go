@@ -37,21 +37,21 @@ type KnowledgeChunk struct {
 
 // KnowledgeCitation 表示聊天回答中引用知识库的条目。
 type KnowledgeCitation struct {
-	ID     string `json:"id"`
-	Title  string `json:"title"`
-	Source string `json:"source"`
-	URL    string `json:"url,omitempty"`
-	Snippet string `json:"snippet"`
-	Score  float64 `json:"score"`
+	ID      string  `json:"id"`
+	Title   string  `json:"title"`
+	Source  string  `json:"source"`
+	URL     string  `json:"url,omitempty"`
+	Snippet string  `json:"snippet"`
+	Score   float64 `json:"score"`
 }
 
 // KnowledgeImportStatus 表示导入作业状态。
 type KnowledgeImportStatus string
 
 const (
-	KnowledgeImportPending   KnowledgeImportStatus = "pending"
-	KnowledgeImportIndexed   KnowledgeImportStatus = "indexed"
-	KnowledgeImportError     KnowledgeImportStatus = "error"
+	KnowledgeImportPending           KnowledgeImportStatus = "pending"
+	KnowledgeImportIndexed           KnowledgeImportStatus = "indexed"
+	KnowledgeImportError             KnowledgeImportStatus = "error"
 	KnowledgeImportVectorUnavailable KnowledgeImportStatus = "indexed_vector_unavailable"
 )
 

@@ -12,8 +12,8 @@ import (
 
 // KnowledgeChunker 将原始文档内容切分为适合检索的片段。
 type KnowledgeChunker struct {
-	chunkSize  int
-	overlap    int
+	chunkSize      int
+	overlap        int
 	tokenEstimator func(string) int
 }
 

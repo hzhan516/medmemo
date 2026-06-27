@@ -10,8 +10,8 @@ import (
 
 // KnowledgeSearchService 提供知识库检索能力。
 type KnowledgeSearchService struct {
-	repo        repository.KnowledgeRepository
-	tokenizer   *KnowledgeTokenizer
+	repo         repository.KnowledgeRepository
+	tokenizer    *KnowledgeTokenizer
 	embeddingSvc port.EmbeddingService
 }
 

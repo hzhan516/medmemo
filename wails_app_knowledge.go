@@ -24,11 +24,11 @@ type KnowledgeDocumentDTO struct {
 
 // ImportKnowledgeResponse 知识导入响应。
 type ImportKnowledgeResponse struct {
-	JobID   string `json:"job_id"`
-	Status  string `json:"status"`
-	Total   int    `json:"total"`
-	Processed int  `json:"processed"`
-	Error   string `json:"error,omitempty"`
+	JobID     string `json:"job_id"`
+	Status    string `json:"status"`
+	Total     int    `json:"total"`
+	Processed int    `json:"processed"`
+	Error     string `json:"error,omitempty"`
 }
 
 // SelectKnowledgeFile 打开系统文件选择对话框，返回所选文件路径。
@@ -139,4 +139,3 @@ func (a *WailsApp) GetKnowledgeImportJob(jobID string) (*ImportKnowledgeResponse
 		Error:     job.ErrorMessage,
 	}, nil
 }
-
