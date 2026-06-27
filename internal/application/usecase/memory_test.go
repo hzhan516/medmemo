@@ -76,6 +76,7 @@ func (s *stubEmbeddingRepository) UpdateEmbedding(ctx context.Context, e *entity
 type stubFactRepository struct {
 	facts                    map[string]*entity.ExtractedFact
 	approvedByPredicatesFunc func(ctx context.Context, subject string, predicates []string, limit int) ([]*entity.ExtractedFact, error)
+	findBySessionFunc        func(ctx context.Context, sessionID string) ([]*entity.ExtractedFact, error)
 }
 
 func (s *stubFactRepository) Save(ctx context.Context, f *entity.ExtractedFact) error { return nil }
@@ -133,6 +134,9 @@ func (s *stubFactRepository) FindBySubject(ctx context.Context, subject string) 
 	return nil, nil
 }
 func (s *stubFactRepository) FindBySession(ctx context.Context, sessionID string) ([]*entity.ExtractedFact, error) {
+	if s.findBySessionFunc != nil {
+		return s.findBySessionFunc(ctx, sessionID)
+	}
 	return nil, nil
 }
 func (s *stubFactRepository) FindApprovedByPredicates(ctx context.Context, subject string, predicates []string, limit int) ([]*entity.ExtractedFact, error) {
@@ -154,6 +158,35 @@ func (s *stubFactRepository) CountApprovedFactsNeedingEmbedding(ctx context.Cont
 
 func (s *stubFactRepository) ListApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string, lastCreatedAt time.Time, lastFactID string, limit int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
+}
+
+// stubMemoryRepository 用于 ArchiveConversation 测试的 memoryRepo stub。
+type stubMemoryRepository struct {
+	saved []*entity.HealthMemory
+	err   error
+}
+
+func (s *stubMemoryRepository) Save(ctx context.Context, mem *entity.HealthMemory) error {
+	if s.err != nil {
+		return s.err
+	}
+	s.saved = append(s.saved, mem)
+	return nil
+}
+func (s *stubMemoryRepository) GetByID(ctx context.Context, id models.MemoryID) (*entity.HealthMemory, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (s *stubMemoryRepository) Search(ctx context.Context, query string, limit int) ([]*entity.HealthMemory, error) {
+	return nil, nil
+}
+func (s *stubMemoryRepository) SemanticSearch(ctx context.Context, embedding []float32, topK int) ([]*entity.HealthMemory, error) {
+	return nil, nil
+}
+func (s *stubMemoryRepository) ListByTier(ctx context.Context, tier entity.MemoryTier, limit int) ([]*entity.HealthMemory, error) {
+	return nil, nil
+}
+func (s *stubMemoryRepository) Delete(ctx context.Context, id models.MemoryID) error {
+	return nil
 }
 
 // stubFactRepositoryWithSubjects 支持实体提及检测的 stub
@@ -209,7 +242,7 @@ func TestMemoryRetriever_SemanticSearch(t *testing.T) {
 	retriever := NewMemoryRetriever(
 		&stubEmbeddingService{},
 		&stubEmbeddingRepository{results: embeddings},
-		&stubFactRepository{facts: facts},
+		&stubFactRepository{facts: facts}, nil,
 		NewDecayScorer(),
 		nil,
 		nil,
@@ -259,7 +292,7 @@ func TestMemoryRetriever_RecallByVector_BatchFetch(t *testing.T) {
 	retriever := NewMemoryRetriever(
 		&stubEmbeddingService{},
 		&stubEmbeddingRepository{results: embeddings},
-		spy,
+		spy, nil,
 		NewDecayScorer(),
 		nil,
 		nil,
@@ -305,7 +338,7 @@ func TestMemoryRetriever_DecayRanking(t *testing.T) {
 	retriever := NewMemoryRetriever(
 		&stubEmbeddingService{},
 		&stubEmbeddingRepository{results: embeddings},
-		&stubFactRepository{facts: facts},
+		&stubFactRepository{facts: facts}, nil,
 		NewDecayScorer(),
 		nil,
 		nil,
@@ -345,7 +378,7 @@ func TestMemoryRetriever_FilterUnapproved(t *testing.T) {
 	retriever := NewMemoryRetriever(
 		&stubEmbeddingService{},
 		&stubEmbeddingRepository{results: embeddings},
-		&stubFactRepository{facts: facts},
+		&stubFactRepository{facts: facts}, nil,
 		NewDecayScorer(),
 		nil,
 		nil,
@@ -381,7 +414,7 @@ func TestMemoryRetriever_MinConfidenceFilter(t *testing.T) {
 	retriever := NewMemoryRetriever(
 		&stubEmbeddingService{},
 		&stubEmbeddingRepository{results: embeddings},
-		&stubFactRepository{facts: facts},
+		&stubFactRepository{facts: facts}, nil,
 		NewDecayScorer(),
 		nil,
 		nil,
@@ -400,7 +433,7 @@ func TestMemoryRetriever_EmbedFailure(t *testing.T) {
 	retriever := NewMemoryRetriever(
 		&stubEmbeddingService{err: fmt.Errorf("embedding failed")},
 		&stubEmbeddingRepository{},
-		&stubFactRepository{},
+		&stubFactRepository{}, nil,
 		NewDecayScorer(),
 		nil,
 		nil,
@@ -428,7 +461,7 @@ func TestMemoryRetriever_WeightRecallThroughSemanticSearch(t *testing.T) {
 	retriever := NewMemoryRetriever(
 		&stubEmbeddingService{},
 		&stubEmbeddingRepository{results: embeddings},
-		&stubFactRepository{facts: facts},
+		&stubFactRepository{facts: facts}, nil,
 		NewDecayScorer(),
 		nil,
 		nil,
@@ -453,7 +486,7 @@ func TestMemoryRetriever_NoResults(t *testing.T) {
 	retriever := NewMemoryRetriever(
 		&stubEmbeddingService{},
 		&stubEmbeddingRepository{results: nil},
-		&stubFactRepository{},
+		&stubFactRepository{}, nil,
 		NewDecayScorer(),
 		nil,
 		nil,
@@ -488,7 +521,7 @@ func TestMemoryRetriever_TokenBudget(t *testing.T) {
 	retriever := NewMemoryRetriever(
 		&stubEmbeddingService{},
 		&stubEmbeddingRepository{results: embeddings},
-		&stubFactRepository{facts: facts},
+		&stubFactRepository{facts: facts}, nil,
 		NewDecayScorer(),
 		nil,
 		nil,
@@ -504,7 +537,7 @@ func TestMemoryRetriever_TokenBudget(t *testing.T) {
 
 func TestMemoryRetriever_SetEnabled(t *testing.T) {
 	t.Parallel()
-	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, &stubFactRepository{}, NewDecayScorer(), nil, nil, nil)
+	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, &stubFactRepository{}, nil, NewDecayScorer(), nil, nil, nil)
 	assert.True(t, retriever.IsEnabled())
 
 	retriever.SetEnabled(false)
@@ -516,7 +549,7 @@ func TestMemoryRetriever_SetEnabled(t *testing.T) {
 
 func TestMemoryRetriever_SetSessionEnabled(t *testing.T) {
 	t.Parallel()
-	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, &stubFactRepository{}, NewDecayScorer(), nil, nil, nil)
+	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, &stubFactRepository{}, nil, NewDecayScorer(), nil, nil, nil)
 
 	// 全局开启，会话默认开启
 	assert.True(t, retriever.IsSessionEnabled("sess_1"))
@@ -548,7 +581,7 @@ func TestMemoryRetriever_detectEntityMentions(t *testing.T) {
 			{FactID: "f1", Subject: "用户", Predicate: "患有", Object: "高血压", Confidence: 0.9, Status: entity.FactStatusApproved},
 		},
 	}
-	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, factRepo, NewDecayScorer(), nil, nil, nil)
+	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, factRepo, nil, NewDecayScorer(), nil, nil, nil)
 
 	memories, triggered := retriever.detectEntityMentions(context.Background(), "用户最近血压怎么样")
 	assert.True(t, triggered)
@@ -559,7 +592,7 @@ func TestMemoryRetriever_detectEntityMentions(t *testing.T) {
 func TestMemoryRetriever_detectEntityMentions_NoMatch(t *testing.T) {
 	t.Parallel()
 	factRepo := &stubFactRepositoryWithSubjects{subjects: []string{"用户"}}
-	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, factRepo, NewDecayScorer(), nil, nil, nil)
+	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, factRepo, nil, NewDecayScorer(), nil, nil, nil)
 
 	memories, triggered := retriever.detectEntityMentions(context.Background(), "今天天气不错")
 	assert.False(t, triggered)
@@ -575,7 +608,7 @@ func TestMemoryRetriever_detectEntityMentions_KeywordMatch(t *testing.T) {
 			{FactID: "f2", Subject: "用户", Predicate: "患有", Object: "高血压", Confidence: 0.85, Status: entity.FactStatusApproved},
 		},
 	}
-	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, factRepo, NewDecayScorer(), nil, nil, nil)
+	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, factRepo, nil, NewDecayScorer(), nil, nil, nil)
 
 	// "体重" 匹配 predicate "体重是"
 	memories, triggered := retriever.detectEntityMentions(context.Background(), "我体重多少")
@@ -626,7 +659,7 @@ func TestMemoryRetriever_retrieveSemantic_error(t *testing.T) {
 
 func TestMemoryRetriever_mergeMemories_sessionGap(t *testing.T) {
 	t.Parallel()
-	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, &stubFactRepository{}, NewDecayScorer(), nil, nil, nil)
+	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, &stubFactRepository{}, nil, NewDecayScorer(), nil, nil, nil)
 
 	mentionMemories := []*entity.HealthMemory{
 		{ID: "m1", Content: "mention 1"},
@@ -647,7 +680,7 @@ func TestMemoryRetriever_mergeMemories_sessionGap(t *testing.T) {
 
 func TestMemoryRetriever_checkSessionGap(t *testing.T) {
 	t.Parallel()
-	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, &stubFactRepository{}, NewDecayScorer(), nil, nil, nil)
+	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, &stubFactRepository{}, nil, NewDecayScorer(), nil, nil, nil)
 
 	// 空 sessionID 应返回 false
 	assert.False(t, retriever.checkSessionGap(""))
@@ -672,7 +705,7 @@ func TestMemoryRetriever_checkSessionGap(t *testing.T) {
 
 func TestMemoryRetriever_recordSessionAccess(t *testing.T) {
 	t.Parallel()
-	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, &stubFactRepository{}, NewDecayScorer(), nil, nil, nil)
+	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, &stubFactRepository{}, nil, NewDecayScorer(), nil, nil, nil)
 
 	sessionID := "sess_test"
 	retriever.recordSessionAccess(sessionID)
@@ -683,6 +716,68 @@ func TestMemoryRetriever_recordSessionAccess(t *testing.T) {
 
 	require.True(t, ok, "应记录会话访问时间")
 	assert.WithinDuration(t, time.Now().UTC(), accessTime, 2*time.Second)
+}
+
+func TestMemoryRetriever_recallBySessionGap(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	facts := map[string]*entity.ExtractedFact{
+		"fact_bp": {
+			FactID: "fact_bp", Subject: "用户", Predicate: "患有", Object: "高血压",
+			Confidence: 0.9, Status: entity.FactStatusApproved, CreatedAt: now,
+		},
+		"fact_weight": {
+			FactID: "fact_weight", Subject: "用户", Predicate: "体重是", Object: "70公斤",
+			Confidence: 0.85, Status: entity.FactStatusApproved, CreatedAt: now,
+		},
+	}
+	factRepo := &stubFactRepository{
+		facts: facts,
+		findBySessionFunc: func(ctx context.Context, sessionID string) ([]*entity.ExtractedFact, error) {
+			return []*entity.ExtractedFact{facts["fact_bp"], facts["fact_weight"]}, nil
+		},
+	}
+	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, factRepo, nil, NewDecayScorer(), nil, nil, nil)
+
+	candidates, status := retriever.recallBySessionGap(context.Background(), "sess_gap_1")
+	require.Equal(t, "success", status.Status)
+	require.Len(t, candidates, 2)
+	assert.Contains(t, candidates[0].Content, "高血压")
+	assert.Equal(t, []RetrievalPath{PathSessionGap}, candidates[0].MatchedPaths)
+}
+
+func TestMemoryRetriever_ArchiveConversation(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	facts := map[string]*entity.ExtractedFact{
+		"fact_bp": {
+			FactID: "fact_bp", Subject: "用户", Predicate: "患有", Object: "高血压",
+			Confidence: 0.9, Status: entity.FactStatusApproved, CreatedAt: now,
+		},
+	}
+	factRepo := &stubFactRepository{
+		facts: facts,
+		findBySessionFunc: func(ctx context.Context, sessionID string) ([]*entity.ExtractedFact, error) {
+			return []*entity.ExtractedFact{facts["fact_bp"]}, nil
+		},
+	}
+	memRepo := &stubMemoryRepository{}
+	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, factRepo, memRepo, NewDecayScorer(), nil, nil, nil)
+
+	err := retriever.ArchiveConversation(context.Background(), "conv_archive_1")
+	require.NoError(t, err)
+	require.Len(t, memRepo.saved, 1)
+	assert.Equal(t, entity.TierShortTerm, memRepo.saved[0].Tier)
+	assert.Contains(t, memRepo.saved[0].Content, "高血压")
+	assert.Equal(t, models.ConversationID("conv_archive_1"), memRepo.saved[0].SourceConv)
+}
+
+func TestMemoryRetriever_ArchiveConversation_NoMemoryRepo(t *testing.T) {
+	t.Parallel()
+	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, &stubFactRepository{}, nil, NewDecayScorer(), nil, nil, nil)
+	err := retriever.ArchiveConversation(context.Background(), "conv_x")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "memory repository not available")
 }
 
 func TestMemoryRetriever_detectEntityMentions_QueryHowManyJinMatchesWeightFact(t *testing.T) {
@@ -698,7 +793,7 @@ func TestMemoryRetriever_detectEntityMentions_QueryHowManyJinMatchesWeightFact(t
 	retriever := NewMemoryRetriever(
 		&stubEmbeddingService{},
 		&stubEmbeddingRepository{},
-		&stubFactRepositoryWithWeightFacts{facts: facts},
+		&stubFactRepositoryWithWeightFacts{facts: facts}, nil,
 		NewDecayScorer(),
 		nil,
 		nil,
@@ -756,7 +851,7 @@ func TestRetrieveWithDiagnostics_IntentPath(t *testing.T) {
 	retriever := NewMemoryRetriever(
 		&stubEmbeddingService{},
 		&stubEmbeddingRepository{},
-		factRepo,
+		factRepo, nil,
 		NewDecayScorer(),
 		nil,
 		intentResolver,
@@ -785,7 +880,7 @@ func TestRetrieveWithDiagnostics_AllPathsFailGracefully(t *testing.T) {
 	retriever := NewMemoryRetriever(
 		&stubEmbeddingService{},
 		&stubEmbeddingRepository{results: nil},
-		&stubFactRepository{},
+		&stubFactRepository{}, nil,
 		NewDecayScorer(),
 		nil,
 		nil,
@@ -796,8 +891,8 @@ func TestRetrieveWithDiagnostics_AllPathsFailGracefully(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, memories)
 
-	// 应有 4 条 PathStatus（intent/keyword/vector/recent）
-	assert.Len(t, diag.PathStatuses, 4)
+	// 应有 5 条 PathStatus（intent/keyword/vector/recent/session_gap）
+	assert.Len(t, diag.PathStatuses, 5)
 
 	// 汇总应为 0
 	assert.Equal(t, 0, diag.TotalApprovedFacts)
@@ -931,7 +1026,7 @@ func TestRetrieveWithDiagnostics_DiagnosticsFields(t *testing.T) {
 	retriever := NewMemoryRetriever(
 		&stubEmbeddingService{},
 		&stubEmbeddingRepository{results: embeddings},
-		&stubFactRepository{facts: facts},
+		&stubFactRepository{facts: facts}, nil,
 		NewDecayScorer(),
 		nil,
 		nil,

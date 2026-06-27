@@ -71,7 +71,7 @@ func InitializeApp() (*App, func(), error) {
 	migrationState := usecase.NewMigrationState()
 	queryExpansionService := usecase.NewQueryExpansionService()
 	intentResolver := usecase.NewIntentResolver(queryExpansionService)
-	memoryRetriever := usecase.NewMemoryRetriever(embeddingServiceAdapter, embeddingRepoSQLite, factRepoSQLite, decayScorer, migrationState, intentResolver, queryExpansionService)
+	memoryRetriever := usecase.NewMemoryRetriever(embeddingServiceAdapter, embeddingRepoSQLite, factRepoSQLite, memoryRepoSQLite, decayScorer, migrationState, intentResolver, queryExpansionService)
 	confidenceAggregator := usecase.NewConfidenceAggregator()
 	localAnswerConfig := usecase.NewLocalAnswerConfig()
 	localAnswerService := usecase.NewLocalAnswerService(localAnswerConfig)

@@ -243,7 +243,9 @@
 
 | ID | 描述 | 计划解决方案 |
 |:---|:---|:---|
-| Issue#004 | `ArchiveConversation` 未实现 | v1.2 记忆整合冲刺 |
+| — | — | — |
+
+> **更新（v1.1.9）**：Issue#004 与 Issue#035 已在记忆模块中解决。`ArchiveConversation` 现在将已审批事实归档为 L2 短期记忆，会话间隙召回通过 `FindBySession` 复用会话关联事实。其余未关闭项（#002、#016、#019）记录在 `medmemo/开发日志/issues.md` 的 M04 分类下。
 
 ---
 
