@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/hzhan516/medmemo/internal/application/usecase"
@@ -31,7 +32,8 @@ func TestKnowledgeRepoSQLite_ImportMarkdown(t *testing.T) {
 
 	ctx := context.Background()
 	chunker := usecase.NewKnowledgeChunker(512, 32)
-	importer := usecase.NewKnowledgeImporter(repo, chunker)
+	tokenizer := usecase.NewKnowledgeTokenizer()
+	importer := usecase.NewKnowledgeImporter(repo, chunker, tokenizer, nil)
 
 	content := []byte("# 健康指南\n\n感冒通常由病毒引起。")
 	job, err := importer.ImportFile(ctx, "guide.md", content, false)
@@ -54,7 +56,8 @@ func TestKnowledgeRepoSQLite_ImportSameFileTwice(t *testing.T) {
 
 	ctx := context.Background()
 	chunker := usecase.NewKnowledgeChunker(512, 32)
-	importer := usecase.NewKnowledgeImporter(repo, chunker)
+	tokenizer := usecase.NewKnowledgeTokenizer()
+	importer := usecase.NewKnowledgeImporter(repo, chunker, tokenizer, nil)
 
 	content := []byte("# 健康指南\n")
 	job1, err := importer.ImportFile(ctx, "guide.md", content, false)
@@ -70,13 +73,40 @@ func TestKnowledgeRepoSQLite_ImportSameFileTwice(t *testing.T) {
 	assert.Len(t, docs, 1)
 }
 
+func TestKnowledgeRepoSQLite_SearchKeyword(t *testing.T) {
+	repo, cleanup := newTestKnowledgeRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	chunker := usecase.NewKnowledgeChunker(512, 32)
+	tokenizer := usecase.NewKnowledgeTokenizer()
+	importer := usecase.NewKnowledgeImporter(repo, chunker, tokenizer, nil)
+
+	content := []byte("# 健康指南\n\n感冒通常由病毒引起。发热是身体免疫反应。")
+	_, err := importer.ImportFile(ctx, "guide.md", content, false)
+	require.NoError(t, err)
+
+	results, err := repo.SearchKeyword(ctx, []string{"感冒"}, 10)
+	require.NoError(t, err)
+	require.NotEmpty(t, results)
+	found := false
+	for _, r := range results {
+		if strings.Contains(r.Content, "感冒") {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found)
+}
+
 func TestKnowledgeRepoSQLite_DeleteDocument(t *testing.T) {
 	repo, cleanup := newTestKnowledgeRepo(t)
 	defer cleanup()
 
 	ctx := context.Background()
 	chunker := usecase.NewKnowledgeChunker(512, 32)
-	importer := usecase.NewKnowledgeImporter(repo, chunker)
+	tokenizer := usecase.NewKnowledgeTokenizer()
+	importer := usecase.NewKnowledgeImporter(repo, chunker, tokenizer, nil)
 
 	content := []byte("# 健康指南\n\n感冒通常由病毒引起。")
 	job, err := importer.ImportFile(ctx, "guide.md", content, false)

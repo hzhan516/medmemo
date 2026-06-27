@@ -9,19 +9,22 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/hzhan516/medmemo/internal/application/port"
 	"github.com/hzhan516/medmemo/internal/domain/entity"
 	"github.com/hzhan516/medmemo/internal/domain/repository"
 )
 
 // KnowledgeImporter 编排知识库文件导入流程。
 type KnowledgeImporter struct {
-	repo    repository.KnowledgeRepository
-	chunker *KnowledgeChunker
+	repo            repository.KnowledgeRepository
+	chunker         *KnowledgeChunker
+	tokenizer       *KnowledgeTokenizer
+	embeddingSvc    port.EmbeddingService
 }
 
 // NewKnowledgeImporter 构造函数。
-func NewKnowledgeImporter(repo repository.KnowledgeRepository, chunker *KnowledgeChunker) *KnowledgeImporter {
-	return &KnowledgeImporter{repo: repo, chunker: chunker}
+func NewKnowledgeImporter(repo repository.KnowledgeRepository, chunker *KnowledgeChunker, tokenizer *KnowledgeTokenizer, embeddingSvc port.EmbeddingService) *KnowledgeImporter {
+	return &KnowledgeImporter{repo: repo, chunker: chunker, tokenizer: tokenizer, embeddingSvc: embeddingSvc}
 }
 
 // ImportFile 导入单个知识文件。
@@ -92,7 +95,42 @@ func (i *KnowledgeImporter) ImportFile(ctx context.Context, filePath string, con
 		return job, fmt.Errorf("failed to save knowledge chunks: %w", err)
 	}
 
-	job.Status = entity.KnowledgeImportIndexed
+	// 为每个片段建立关键词索引
+	for _, c := range chunks {
+		termFreq := i.tokenizer.Tokenize(c.Content)
+		if err := i.repo.SaveTerms(ctx, c.ChunkID, doc.DocumentID, termFreq); err != nil {
+			job.Status = entity.KnowledgeImportError
+			job.ErrorMessage = err.Error()
+			job.UpdatedAt = time.Now()
+			_ = i.repo.SaveImportJob(ctx, job)
+			return job, fmt.Errorf("failed to save knowledge terms: %w", err)
+		}
+	}
+
+	// 可选：生成向量嵌入
+	status := entity.KnowledgeImportIndexed
+	if i.embeddingSvc != nil && i.embeddingSvc.IsAvailable() {
+		texts := make([]string, len(chunks))
+		for idx, c := range chunks {
+			texts[idx] = c.Content
+		}
+		vectors, err := i.embeddingSvc.Embed(ctx, texts)
+		if err != nil {
+			status = entity.KnowledgeImportVectorUnavailable
+		} else {
+			for idx, c := range chunks {
+				if idx < len(vectors) {
+					vector := vectors[idx]
+					if err := i.repo.SaveEmbedding(ctx, c.ChunkID, i.embeddingSvc.ModelVersion(), len(vector), vector); err != nil {
+						status = entity.KnowledgeImportVectorUnavailable
+						break
+					}
+				}
+			}
+		}
+	}
+
+	job.Status = status
 	job.Processed = 1
 	job.Total = len(chunks)
 	job.UpdatedAt = time.Now()

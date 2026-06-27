@@ -2,9 +2,13 @@
 package repository
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/binary"
 	"fmt"
+	"math"
+	"sort"
 	"time"
 
 	"github.com/hzhan516/medmemo/internal/domain/entity"
@@ -183,6 +187,115 @@ func (r *KnowledgeRepoSQLite) GetChunkTokenCount(ctx context.Context, chunkID st
 		return 0, fmt.Errorf("failed to get chunk token count: %w", err)
 	}
 	return count, nil
+}
+
+// SearchKeyword 基于 BM25-like 评分检索。
+func (r *KnowledgeRepoSQLite) SearchKeyword(ctx context.Context, terms []string, limit int) ([]*repository.KnowledgeSearchResult, error) {
+	if len(terms) == 0 {
+		return nil, nil
+	}
+
+	N, err := r.CountChunks(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if N == 0 {
+		return nil, nil
+	}
+	avgChunkLen, err := r.AverageChunkTokenCount(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if avgChunkLen == 0 {
+		avgChunkLen = 1
+	}
+
+	const k1 = 1.5
+	const b = 0.75
+
+	scores := make(map[string]*repository.KnowledgeSearchResult)
+	for _, term := range terms {
+		df, err := r.CountTermDF(ctx, term)
+		if err != nil {
+			return nil, err
+		}
+		if df == 0 {
+			continue
+		}
+		idf := math.Log((float64(N)-float64(df)+0.5)/(float64(df)+0.5) + 1)
+
+		rows, err := r.db.QueryContext(ctx, `
+			SELECT t.chunk_id, t.document_id, c.content, c.token_count, t.tf
+			FROM knowledge_terms t
+			JOIN knowledge_chunks c ON t.chunk_id = c.chunk_id
+			WHERE t.term = ?
+		`, term)
+		if err != nil {
+			return nil, fmt.Errorf("failed to query term %s: %w", term, err)
+		}
+		for rows.Next() {
+			var chunkID, documentID, content string
+			var tokenCount, tf int
+			if err := rows.Scan(&chunkID, &documentID, &content, &tokenCount, &tf); err != nil {
+				rows.Close()
+				return nil, fmt.Errorf("failed to scan term row: %w", err)
+			}
+			tfWeight := (float64(tf) * (k1 + 1)) / (float64(tf) + k1*(1-b+b*float64(tokenCount)/avgChunkLen))
+			score := idf * tfWeight
+			if res, ok := scores[chunkID]; ok {
+				res.Score += score
+			} else {
+				scores[chunkID] = &repository.KnowledgeSearchResult{
+					ChunkID:    chunkID,
+					DocumentID: documentID,
+					Content:    content,
+					Score:      score,
+					SourceType: "keyword",
+				}
+			}
+		}
+		if err := rows.Err(); err != nil {
+			return nil, fmt.Errorf("failed to iterate term rows: %w", err)
+		}
+	}
+
+	result := make([]*repository.KnowledgeSearchResult, 0, len(scores))
+	for _, v := range scores {
+		result = append(result, v)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Score > result[j].Score })
+	if limit > 0 && limit < len(result) {
+		result = result[:limit]
+	}
+	return result, nil
+}
+
+// SaveEmbedding 保存片段向量。
+func (r *KnowledgeRepoSQLite) SaveEmbedding(ctx context.Context, chunkID, modelVersion string, dimension int, embedding []float32) error {
+	buf := new(bytes.Buffer)
+	for _, v := range embedding {
+		if err := binary.Write(buf, binary.LittleEndian, v); err != nil {
+			return fmt.Errorf("failed to serialize embedding: %w", err)
+		}
+	}
+	_, err := r.db.ExecContext(ctx, `
+		INSERT OR REPLACE INTO knowledge_embeddings (chunk_id, model_version, dimension, embedding, created_at)
+		VALUES (?, ?, ?, ?, ?)
+	`, chunkID, modelVersion, dimension, buf.Bytes(), time.Now().UnixMilli())
+	if err != nil {
+		return fmt.Errorf("failed to save embedding: %w", err)
+	}
+	return nil
+}
+
+// SearchVector 基于余弦相似度检索（无 embedding 服务时返回空）。
+func (r *KnowledgeRepoSQLite) SearchVector(ctx context.Context, embedding []float32, limit int) ([]*repository.KnowledgeSearchResult, error) {
+	if len(embedding) == 0 {
+		return nil, nil
+	}
+	// 本版本仅实现占位：实际生产环境需通过 sqlite-vec 或 ONNX 计算相似度。
+	// 为避免引入未测试的复杂向量运算，返回空结果让上层回退到 keyword-only。
+	return nil, nil
 }
 
 // SaveTerms 保存片段词项频率。
