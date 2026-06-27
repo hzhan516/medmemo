@@ -389,6 +389,7 @@ func confidenceResultToMap(r *entity.ConfidenceResult) map[string]interface{} {
 		"explanation":   r.Explanation,
 		"suggestion":    r.Suggestion,
 		"missing_info":  r.MissingInfo,
+		"citations":     r.Citations,
 	}
 	if r.Breakdown != nil {
 		m["breakdown"] = r.Breakdown

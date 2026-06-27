@@ -38,6 +38,8 @@ type ChatOrchestratorDeps struct {
 	IntentResolver       *IntentResolver
 	LocalAnswer          *LocalAnswerService
 	AccuracyService      *AccuracyService
+	KnowledgeSearch      *KnowledgeSearchService
+	CitationBuilder      *CitationBuilder
 }
 
 // ChatOrchestrator 对话流程编排器。
@@ -54,6 +56,8 @@ type ChatOrchestrator struct {
 	intentResolver       *IntentResolver
 	localAnswer          *LocalAnswerService
 	accuracyService      *AccuracyService
+	knowledgeSearch      *KnowledgeSearchService
+	citationBuilder      *CitationBuilder
 	// 全局事实提取限流器，跨调用共享速率限制
 	factExtractMu       sync.Mutex
 	factExtractLastCall time.Time
@@ -75,6 +79,8 @@ func NewChatOrchestrator(deps ChatOrchestratorDeps) *ChatOrchestrator {
 		intentResolver:       deps.IntentResolver,
 		localAnswer:          deps.LocalAnswer,
 		accuracyService:      deps.AccuracyService,
+		knowledgeSearch:      deps.KnowledgeSearch,
+		citationBuilder:      deps.CitationBuilder,
 		factExtractMinGap:    15 * time.Second,
 	}
 }
@@ -109,6 +115,25 @@ func findLastUserMessage(msgs []models.Message) int {
 	return -1
 }
 
+// injectSystemPrefix 将一段系统级上下文前缀注入到消息列表中。
+func injectSystemPrefix(msgs []models.Message, prefix string) []models.Message {
+	if prefix == "" {
+		return msgs
+	}
+	result := make([]models.Message, 0, len(msgs)+1)
+	if len(msgs) > 0 && msgs[0].Role == models.RoleSystem {
+		result = append(result, models.Message{
+			Role:    models.RoleSystem,
+			Content: prefix + "\n\n" + msgs[0].Content,
+		})
+		result = append(result, msgs[1:]...)
+	} else {
+		result = append(result, models.Message{Role: models.RoleSystem, Content: prefix})
+		result = append(result, msgs...)
+	}
+	return result
+}
+
 // injectMemories 将记忆片段注入为 system message 前缀。
 func injectMemories(msgs []models.Message, memories []*entity.HealthMemory) []models.Message {
 	if len(memories) == 0 {
@@ -123,26 +148,12 @@ func injectMemories(msgs []models.Message, memories []*entity.HealthMemory) []mo
 	if len(parts) == 0 {
 		return msgs
 	}
-
 	memCtx := "以下是与当前话题相关的历史记忆，供你参考（不对外展示）：\n" + strings.Join(parts, "\n")
-
-	result := make([]models.Message, 0, len(msgs)+1)
-	// 首条已是 system 则追加，否则插入新 system message
-	if len(msgs) > 0 && msgs[0].Role == models.RoleSystem {
-		result = append(result, models.Message{
-			Role:    models.RoleSystem,
-			Content: memCtx + "\n\n" + msgs[0].Content,
-		})
-		result = append(result, msgs[1:]...)
-	} else {
-		result = append(result, models.Message{Role: models.RoleSystem, Content: memCtx})
-		result = append(result, msgs...)
-	}
-	return result
+	return injectSystemPrefix(msgs, memCtx)
 }
 
-// prepareMessages 执行输入脱敏与记忆检索，返回处理后的消息和脱敏结果。
-func (c *ChatOrchestrator) prepareMessages(ctx context.Context, req ChatRequest) ([]models.Message, models.DeidentifyResult) {
+// prepareMessages 执行输入脱敏、记忆检索与知识库检索，返回处理后的消息、脱敏结果与引用。
+func (c *ChatOrchestrator) prepareMessages(ctx context.Context, req ChatRequest) ([]models.Message, models.DeidentifyResult, []entity.KnowledgeCitation) {
 	messages := req.Messages
 	var deidResult models.DeidentifyResult
 
@@ -172,7 +183,24 @@ func (c *ChatOrchestrator) prepareMessages(ctx context.Context, req ChatRequest)
 		}
 	}
 
-	return messages, deidResult
+	// 知识库检索与引用注入
+	var citations []entity.KnowledgeCitation
+	if c.knowledgeSearch != nil && c.citationBuilder != nil {
+		lastIdx := findLastUserMessage(messages)
+		if lastIdx >= 0 {
+			results, err := c.knowledgeSearch.Search(ctx, messages[lastIdx].Content, 10)
+			if err == nil && len(results) > 0 {
+				builtCitations, snippets, _ := c.citationBuilder.Build(ctx, results, 3)
+				citations = builtCitations
+				if len(snippets) > 0 {
+					knowledgeCtx := "以下是与当前问题相关的医学知识片段，供你参考（不对外展示）：\n" + strings.Join(snippets, "\n")
+					messages = injectSystemPrefix(messages, knowledgeCtx)
+				}
+			}
+		}
+	}
+
+	return messages, deidResult, citations
 }
 
 // calculateConfidenceWithRawScore 包装 ConfidenceAggregator.CalculateWithRawScore，带 nil 防护。
@@ -224,7 +252,7 @@ func (c *ChatOrchestrator) Execute(ctx context.Context, req ChatRequest) (*ChatR
 		}
 	}
 
-	messages, deidResult := c.prepareMessages(ctx, req)
+	messages, deidResult, citations := c.prepareMessages(ctx, req)
 
 	// 根据 ProviderID 动态创建 LLMClient
 	llmClient, err := c.resolveLLMClient(ctx, req.ProviderID)
@@ -278,8 +306,8 @@ func (c *ChatOrchestrator) Execute(ctx context.Context, req ChatRequest) (*ChatR
 		warnings = append(warnings, "RULE:"+compResult.MatchedRule)
 	}
 
-	// 计算回答置信度
-	confidence := c.calculateConfidence(ctx, reply, messages)
+	// 计算回答置信度，并附加知识库引用
+	confidence := c.calculateConfidence(ctx, reply, messages, citations)
 
 	return &ChatResponse{
 		Reply:            reply,
@@ -313,7 +341,7 @@ func (c *ChatOrchestrator) StreamExecute(ctx context.Context, req ChatRequest, o
 	// L1 规则引擎 <1ms，L2 NER 正常 <100ms，30s 足够覆盖异常场景
 	prepCtx, prepCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer prepCancel()
-	messages, deidResult := c.prepareMessages(prepCtx, req)
+	messages, deidResult, citations := c.prepareMessages(prepCtx, req)
 
 	// provider 查询使用独立 context，确保不受预处理耗时影响
 	resolveCtx, resolveCancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -353,8 +381,8 @@ func (c *ChatOrchestrator) StreamExecute(ctx context.Context, req ChatRequest, o
 		reply = compResult.SafeText
 	}
 
-	// 计算回答置信度
-	confidence := c.calculateConfidence(ctx, reply, messages)
+	// 计算回答置信度，并附加知识库引用
+	confidence := c.calculateConfidence(ctx, reply, messages, citations)
 
 	return usage, confidence, reply, nil
 }
@@ -383,9 +411,9 @@ func classifyAnswerType(reply string, messages []models.Message) entity.AnswerTy
 }
 
 // calculateConfidence 为 AI 回复计算置信度结果。
-// 默认来源为 llm_internal，从回复内容提取推理链，上下文分数基于用户消息长度，
-// 历史准确率从 AccuracyService 读取（冷启动默认 0.75）。
-func (c *ChatOrchestrator) calculateConfidence(ctx context.Context, reply string, messages []models.Message) *entity.ConfidenceResult {
+// 若存在知识库引用则将其作为来源，否则降级为 llm_internal；从回复内容提取推理链，
+// 上下文分数基于用户消息长度，历史准确率从 AccuracyService 读取（冷启动默认 0.75）。
+func (c *ChatOrchestrator) calculateConfidence(ctx context.Context, reply string, messages []models.Message, citations []entity.KnowledgeCitation) *entity.ConfidenceResult {
 	if c.confidenceAggregator == nil {
 		// 置信度引擎未注入时返回零值结果，避免 panic
 		return &entity.ConfidenceResult{
@@ -398,9 +426,16 @@ func (c *ChatOrchestrator) calculateConfidence(ctx context.Context, reply string
 		}
 	}
 
-	// 默认知识来源为 llm_internal（MVP 阶段无 RAG 实际集成）
-	sources := []entity.KnowledgeSource{
-		c.confidenceAggregator.tagger.Tag(entity.SourceLLMInternal, "LLM 内部推理"),
+	// 知识来源：优先使用检索到的知识库文档，否则降级为 LLM 内部推理
+	var sources []entity.KnowledgeSource
+	if len(citations) > 0 {
+		for _, ci := range citations {
+			sources = append(sources, c.confidenceAggregator.tagger.Tag(citationSourceType(ci), ci.Title))
+		}
+	} else {
+		sources = []entity.KnowledgeSource{
+			c.confidenceAggregator.tagger.Tag(entity.SourceLLMInternal, "LLM 内部推理"),
+		}
 	}
 
 	// 从回复内容提取推理链
@@ -440,13 +475,25 @@ func (c *ChatOrchestrator) calculateConfidence(ctx context.Context, reply string
 		uncertaintyScore = 85.0
 	}
 
-	return c.confidenceAggregator.Calculate(
+	result := c.confidenceAggregator.Calculate(
 		sources,
 		reasoning,
 		contextScore,
 		historyAccuracy,
 		uncertaintyScore,
 	)
+	result.Citations = citations
+	return result
+}
+
+// citationSourceType 根据引用标题/来源推断置信度来源类型。
+func citationSourceType(ci entity.KnowledgeCitation) entity.SourceType {
+	lower := strings.ToLower(ci.Title + " " + ci.Source)
+	if strings.Contains(lower, "指南") || strings.Contains(lower, "guideline") ||
+		strings.Contains(lower, "共识") || strings.Contains(lower, "consensus") {
+		return entity.SourceMedicalGuideline
+	}
+	return entity.SourceEvidenceDB
 }
 
 // resolveLLMClient 根据 ProviderID 从 store 查找配置并动态创建 LLMClient。
@@ -614,4 +661,9 @@ var ApplicationSet = wire.NewSet(
 	NewLocalAnswerService,
 	NewLocalAnswerConfig,
 	NewAccuracyService,
+	NewKnowledgeTokenizer,
+	NewDefaultKnowledgeChunker,
+	NewKnowledgeImporter,
+	NewKnowledgeSearchService,
+	NewCitationBuilder,
 )

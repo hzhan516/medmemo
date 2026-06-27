@@ -1,4 +1,4 @@
-import { type ConfidenceResult, type ConfidenceBarMode, type ConfidenceLevel, levelConfig, dimensionLabels } from './types'
+import { type ConfidenceResult, type ConfidenceBarMode, type ConfidenceLevel, type KnowledgeCitation, levelConfig, dimensionLabels } from './types'
 
 interface ConfidencePanelProps {
   result: ConfidenceResult
@@ -73,6 +73,18 @@ export function ConfidencePanel({ result, onSwitchMode, currentMode }: Confidenc
         </div>
       )}
 
+      {/* 知识库引用 */}
+      {result.citations && result.citations.length > 0 && (
+        <div className="mb-4 space-y-2">
+          <div className="text-xs font-medium text-gray-700 dark:text-gray-300">
+            📚 参考来源
+          </div>
+          {result.citations.map((citation) => (
+            <CitationItem key={citation.id} citation={citation} />
+          ))}
+        </div>
+      )}
+
       {/* 模式切换 */}
       <div className="flex items-center gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
         <span className="text-xs text-gray-400 dark:text-gray-500">展示模式:</span>
@@ -89,6 +101,38 @@ export function ConfidencePanel({ result, onSwitchMode, currentMode }: Confidenc
             {m === 'expanded' ? '展开' : m === 'compact' ? '紧凑' : '隐藏'}
           </button>
         ))}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * 单条引用展示组件。
+ */
+function CitationItem({ citation }: { citation: KnowledgeCitation }) {
+  const title = citation.title || citation.id
+  return (
+    <div className="p-2 bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 text-xs">
+      <div className="font-medium text-gray-800 dark:text-gray-200 truncate">
+        {citation.url ? (
+          <a
+            href={citation.url}
+            target="_blank"
+            rel="noreferrer"
+            className="text-blue-600 dark:text-blue-400 hover:underline"
+            title={title}
+          >
+            {title}
+          </a>
+        ) : (
+          title
+        )}
+      </div>
+      <div className="text-gray-500 dark:text-gray-400 line-clamp-2 mt-1">
+        {citation.snippet}
+      </div>
+      <div className="text-gray-400 dark:text-gray-500 mt-1">
+        source: {citation.source} · score: {citation.score.toFixed(2)}
       </div>
     </div>
   )

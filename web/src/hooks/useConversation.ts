@@ -5,13 +5,33 @@ import { useSettingsStore } from '@/stores/settingsStore'
 import { useProviderStore } from '@/stores/providerStore'
 import { useWails } from './useWails'
 import { EventsOn } from '@wails/runtime/runtime'
-import type { ConfidenceResult, ConfidenceLevel } from '@/components/confidence/types'
+import type { ConfidenceResult, ConfidenceLevel, KnowledgeCitation } from '@/components/confidence/types'
 
 // 合法置信度等级集合，用于数据校验
 const validConfidenceLevels: Set<ConfidenceLevel> = new Set(['A', 'B', 'C', 'D', 'E'])
 
 function normalizeConfidenceLevel(level: unknown): ConfidenceLevel {
   return level && validConfidenceLevels.has(level as ConfidenceLevel) ? (level as ConfidenceLevel) : 'E'
+}
+
+function parseCitations(raw: unknown): KnowledgeCitation[] | undefined {
+  if (!Array.isArray(raw)) {
+    return undefined
+  }
+  const citations = raw
+    .map((item) => {
+      const record = item as Record<string, unknown>
+      return {
+        id: String(record.id ?? ''),
+        title: String(record.title ?? ''),
+        source: String(record.source ?? ''),
+        url: record.url ? String(record.url) : undefined,
+        snippet: String(record.snippet ?? ''),
+        score: Number(record.score ?? 0),
+      }
+    })
+    .filter((c) => c.id || c.title)
+  return citations.length > 0 ? citations : undefined
 }
 
 /**
@@ -155,6 +175,7 @@ export function useConversation() {
           explanation: (raw.explanation as string) ?? '',
           suggestion: (raw.suggestion as string) ?? '',
           missingInfo: (raw.missing_info as string[]) ?? [],
+          citations: parseCitations(raw.citations),
         }
         setLastMessageConfidenceForConversation(convId, confidence)
       }
@@ -414,6 +435,7 @@ export function useConversation() {
                   explanation: (raw.explanation as string) ?? '',
                   suggestion: (raw.suggestion as string) ?? '',
                   missingInfo: (raw.missing_info as string[]) ?? [],
+                  citations: parseCitations(raw.citations),
                 } as ConfidenceResult
               })()
             : undefined,

@@ -33,6 +33,11 @@ func NewKnowledgeChunker(chunkSize, overlap int) *KnowledgeChunker {
 	}
 }
 
+// NewDefaultKnowledgeChunker 返回默认参数的片段切分器，供 Wire 注入。
+func NewDefaultKnowledgeChunker() *KnowledgeChunker {
+	return NewKnowledgeChunker(200, 20)
+}
+
 // defaultTokenEstimator 使用字符数粗略估计 token 数（中文约 1.5 字符/token）。
 func defaultTokenEstimator(s string) int {
 	length := len([]rune(s))

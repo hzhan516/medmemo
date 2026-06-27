@@ -167,4 +167,5 @@ var RepositorySet = wire.NewSet(
 	NewDisclaimerRepoSQLite,
 	NewProviderRepoSQLite,
 	NewAccuracyRepoSQLite,
+	NewKnowledgeRepoSQLite,
 )

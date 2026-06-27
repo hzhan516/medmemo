@@ -77,6 +77,10 @@ func InitializeApp() (*App, func(), error) {
 	localAnswerService := usecase.NewLocalAnswerService(localAnswerConfig)
 	accuracyRepoSQLite := repository.NewAccuracyRepoSQLite(sqlCipherConnector)
 	accuracyService := usecase.NewAccuracyService(accuracyRepoSQLite)
+	knowledgeRepoSQLite := repository.NewKnowledgeRepoSQLite(sqlCipherConnector)
+	knowledgeTokenizer := usecase.NewKnowledgeTokenizer()
+	knowledgeSearchService := usecase.NewKnowledgeSearchService(knowledgeRepoSQLite, knowledgeTokenizer, embeddingServiceAdapter)
+	citationBuilder := usecase.NewCitationBuilder(knowledgeRepoSQLite)
 	chatOrchestratorDeps := usecase.ChatOrchestratorDeps{
 		LLMFactory:           llmClientFactory,
 		ProviderStore:        providerRepoSQLite,
@@ -90,6 +94,8 @@ func InitializeApp() (*App, func(), error) {
 		IntentResolver:       intentResolver,
 		LocalAnswer:          localAnswerService,
 		AccuracyService:      accuracyService,
+		KnowledgeSearch:      knowledgeSearchService,
+		CitationBuilder:      citationBuilder,
 	}
 	chatOrchestrator := usecase.NewChatOrchestrator(chatOrchestratorDeps)
 	conversationRepoSQLite := repository.NewConversationRepoSQLite(sqlCipherConnector)

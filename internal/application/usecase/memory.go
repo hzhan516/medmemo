@@ -847,7 +847,7 @@ func (m *MemoryRetriever) mergeMemories(mentionMemories, semanticMemories []*ent
 
 	// 会话间隙触发时，额外召回该会话相关的记忆
 	if sessionGapTriggered && sessionID != "" {
-		_ = sessionID // TODO: 通过 raw_dialogues 关联实现会话间隙记忆召回
+		_ = sessionID // TODO(作者): 通过 raw_dialogues 关联实现会话间隙记忆召回 [Issue#035]
 	}
 
 	// 再加入语义搜索的结果
