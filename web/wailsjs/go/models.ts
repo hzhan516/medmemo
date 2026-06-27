@@ -551,6 +551,55 @@ export namespace main {
 	    }
 	}
 
+
+	export class KnowledgeDocumentDTO {
+	    id: string;
+	    title: string;
+	    source: string;
+	    citation: string;
+	    url: string;
+	    language: string;
+	    checksum: string;
+	    created_at: number;
+	    updated_at: number;
+
+	    static createFrom(source: any = {}) {
+	        return new KnowledgeDocumentDTO(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.source = source["source"];
+	        this.citation = source["citation"];
+	        this.url = source["url"];
+	        this.language = source["language"];
+	        this.checksum = source["checksum"];
+	        this.created_at = source["created_at"];
+	        this.updated_at = source["updated_at"];
+	    }
+	}
+	export class ImportKnowledgeResponse {
+	    job_id: string;
+	    status: string;
+	    total: number;
+	    processed: number;
+	    error?: string;
+
+	    static createFrom(source: any = {}) {
+	        return new ImportKnowledgeResponse(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.job_id = source["job_id"];
+	        this.status = source["status"];
+	        this.total = source["total"];
+	        this.processed = source["processed"];
+	        this.error = source["error"];
+	    }
+	}
 }
 
 export namespace models {

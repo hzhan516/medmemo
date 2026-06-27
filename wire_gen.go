@@ -114,7 +114,9 @@ func InitializeApp() (*App, func(), error) {
 	auditLogRepoSQLite := repository.NewAuditLogRepoSQLite(sqlCipherConnector)
 	dialogueRepoSQLite := repository.NewDialogueRepoSQLite(sqlCipherConnector)
 	embeddingMigrator := usecase.NewEmbeddingMigrator(factRepoSQLite, embeddingRepoSQLite, embeddingServiceAdapter, migrationState)
-	wailsApp := NewWailsApp(chatOrchestrator, memoryRetriever, appConfig, conversationRepoSQLite, messageRepoSQLite, disclaimerRepoSQLite, providerRepoSQLite, healthEngine, titleGenerator, service, keyringStore, tokenRefreshService, oAuthDeviceFlowService, factRepoSQLite, auditLogRepoSQLite, dialogueRepoSQLite, embeddingServiceAdapter, embeddingRepoSQLite, embeddingMigrator, migrationState, accuracyService)
+	knowledgeChunker := usecase.NewDefaultKnowledgeChunker()
+	knowledgeImporter := usecase.NewKnowledgeImporter(knowledgeRepoSQLite, knowledgeChunker, knowledgeTokenizer, embeddingServiceAdapter)
+	wailsApp := NewWailsApp(chatOrchestrator, memoryRetriever, appConfig, conversationRepoSQLite, messageRepoSQLite, disclaimerRepoSQLite, providerRepoSQLite, healthEngine, titleGenerator, service, keyringStore, tokenRefreshService, oAuthDeviceFlowService, factRepoSQLite, auditLogRepoSQLite, dialogueRepoSQLite, embeddingServiceAdapter, embeddingRepoSQLite, embeddingMigrator, migrationState, accuracyService, knowledgeRepoSQLite, knowledgeImporter)
 	app, cleanup, err := NewApp(wailsApp, sqlCipherConnector, deidentifyPipeline, healthEngine)
 	if err != nil {
 		return nil, nil, err

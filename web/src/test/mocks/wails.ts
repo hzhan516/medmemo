@@ -145,6 +145,24 @@ const defaultGetEmbeddingModelDirPath = async (): Promise<string> => {
 
 const defaultOpenEmbeddingModelDir = async (): Promise<void> => {}
 
+const defaultSelectKnowledgeFile = async (): Promise<string> => {
+  return '/tmp/mock-knowledge.md'
+}
+
+const defaultImportKnowledgeFile = async (_filePath: string): Promise<{ job_id: string; status: string; total: number; processed: number; error?: string }> => {
+  return { job_id: 'job_mock', status: 'indexed', total: 1, processed: 1 }
+}
+
+const defaultListKnowledgeDocuments = async (): Promise<Array<{ id: string; title: string; source: string; citation: string; url: string; language: string; checksum: string; created_at: string; updated_at: string }>> => {
+  return []
+}
+
+const defaultDeleteKnowledgeDocument = async (_id: string): Promise<void> => {}
+
+const defaultGetKnowledgeImportJob = async (_jobID: string): Promise<{ job_id: string; status: string; total: number; processed: number; error?: string }> => {
+  return { job_id: 'job_mock', status: 'indexed', total: 1, processed: 1 }
+}
+
 const defaultGetConversationMessages = async (convID: string): Promise<Array<{ id: string; role: string; content: string; timestamp: string; prompt_tokens?: number; completion_tokens?: number; total_tokens?: number; confidence?: Record<string, unknown> }>> => {
   return (mockMessages[convID] ?? []).map((msg, idx) => ({
     id: `msg_${convID}_${idx}`,
@@ -481,6 +499,11 @@ export const MockWailsApp = {
   GetEmbeddingStatus: () => resolveHandler('GetEmbeddingStatus', defaultGetEmbeddingStatus)(),
   GetEmbeddingModelDirPath: () => resolveHandler('GetEmbeddingModelDirPath', defaultGetEmbeddingModelDirPath)(),
   OpenEmbeddingModelDir: () => resolveHandler('OpenEmbeddingModelDir', defaultOpenEmbeddingModelDir)(),
+  SelectKnowledgeFile: () => resolveHandler('SelectKnowledgeFile', defaultSelectKnowledgeFile)(),
+  ImportKnowledgeFile: (filePath: string) => resolveHandler('ImportKnowledgeFile', defaultImportKnowledgeFile)(filePath),
+  ListKnowledgeDocuments: () => resolveHandler('ListKnowledgeDocuments', defaultListKnowledgeDocuments)(),
+  DeleteKnowledgeDocument: (id: string) => resolveHandler('DeleteKnowledgeDocument', defaultDeleteKnowledgeDocument)(id),
+  GetKnowledgeImportJob: (jobID: string) => resolveHandler('GetKnowledgeImportJob', defaultGetKnowledgeImportJob)(jobID),
 }
 
 // --- 辅助工具函数 ---

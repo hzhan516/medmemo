@@ -17,6 +17,8 @@ type SystemInfo = feedback.SystemInfo
 
 type AuthDetectResult = main.AuthDetectResult
 type MessageResponse = main.MessageResponse
+type KnowledgeDocumentDTO = main.KnowledgeDocumentDTO
+type ImportKnowledgeResponse = main.ImportKnowledgeResponse
 
 import { SaveAPIKey, HasAPIKey, GetVersion, GetVersionInfo, DetectAuthMethods } from '@wails/go/main/WailsApp'
 
@@ -240,6 +242,26 @@ export function useWails() {
     return await WailsApp.OpenEmbeddingModelDir()
   }, [])
 
+  const selectKnowledgeFile = useCallback(async (): Promise<string> => {
+    return await WailsApp.SelectKnowledgeFile()
+  }, [])
+
+  const importKnowledgeFile = useCallback(async (filePath: string): Promise<ImportKnowledgeResponse> => {
+    return await WailsApp.ImportKnowledgeFile(filePath)
+  }, [])
+
+  const listKnowledgeDocuments = useCallback(async (): Promise<KnowledgeDocumentDTO[]> => {
+    return await WailsApp.ListKnowledgeDocuments()
+  }, [])
+
+  const deleteKnowledgeDocument = useCallback(async (id: string): Promise<void> => {
+    return await WailsApp.DeleteKnowledgeDocument(id)
+  }, [])
+
+  const getKnowledgeImportJob = useCallback(async (jobID: string): Promise<ImportKnowledgeResponse> => {
+    return await WailsApp.GetKnowledgeImportJob(jobID)
+  }, [])
+
   return {
     sendMessage,
     sendMessageStream,
@@ -293,5 +315,10 @@ export function useWails() {
     getEmbeddingStatus,
     getEmbeddingModelDirPath,
     openEmbeddingModelDir,
+    selectKnowledgeFile,
+    importKnowledgeFile,
+    listKnowledgeDocuments,
+    deleteKnowledgeDocument,
+    getKnowledgeImportJob,
   }
 }

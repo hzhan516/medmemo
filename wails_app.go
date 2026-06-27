@@ -62,6 +62,10 @@ type WailsApp struct {
 
 	// v1.1.9: 回答准确率反馈服务
 	accuracyService *usecase.AccuracyService
+
+	// v1.1.9: 知识库管理
+	knowledgeRepo     repository.KnowledgeRepository
+	knowledgeImporter *usecase.KnowledgeImporter
 }
 
 // NewWailsApp 构造函数，供 Wire 调用。
@@ -87,6 +91,8 @@ func NewWailsApp(
 	migrator *usecase.EmbeddingMigrator,
 	migrationState *usecase.MigrationState,
 	accuracyService *usecase.AccuracyService,
+	knowledgeRepo repository.KnowledgeRepository,
+	knowledgeImporter *usecase.KnowledgeImporter,
 ) *WailsApp {
 	return &WailsApp{
 		chatOrchestrator: chat,
@@ -113,6 +119,8 @@ func NewWailsApp(
 		callbackServers:  make(map[string]*auth.LocalCallbackServer),
 		activeStreams:    make(map[string]context.CancelFunc),
 		accuracyService:  accuracyService,
+		knowledgeRepo:     knowledgeRepo,
+		knowledgeImporter: knowledgeImporter,
 	}
 }
 
