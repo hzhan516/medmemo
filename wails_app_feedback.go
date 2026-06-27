@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/hzhan516/medmemo/internal/application/feedback"
 	"github.com/hzhan516/medmemo/internal/domain/entity"
 	"github.com/hzhan516/medmemo/pkg/models"
@@ -65,6 +67,18 @@ func (a *WailsApp) OpenGitHubIssue(userDescription string, errorLog string) erro
 
 	issueURL := reporter.BuildIssueURL(info, userDescription, combinedLog)
 	runtime.BrowserOpenURL(a.ctx, issueURL)
+	return nil
+}
+
+// RecordAnswerFeedback 记录用户对某条 AI 回答的准确率反馈。
+// helpful=true 表示“有帮助”，helpful=false 表示“不准确”。
+func (a *WailsApp) RecordAnswerFeedback(messageID string, answerType string, helpful bool) error {
+	if a.accuracyService == nil {
+		return fmt.Errorf("accuracy service not initialized")
+	}
+	if err := a.accuracyService.RecordFeedback(a.ctx, messageID, answerType, helpful); err != nil {
+		return fmt.Errorf("failed to record answer feedback: %w", err)
+	}
 	return nil
 }
 

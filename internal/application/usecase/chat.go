@@ -37,6 +37,7 @@ type ChatOrchestratorDeps struct {
 	FactRepo             repository.FactRepository
 	IntentResolver       *IntentResolver
 	LocalAnswer          *LocalAnswerService
+	AccuracyService      *AccuracyService
 }
 
 // ChatOrchestrator 对话流程编排器。
@@ -52,6 +53,7 @@ type ChatOrchestrator struct {
 	factRepo             repository.FactRepository
 	intentResolver       *IntentResolver
 	localAnswer          *LocalAnswerService
+	accuracyService      *AccuracyService
 	// 全局事实提取限流器，跨调用共享速率限制
 	factExtractMu       sync.Mutex
 	factExtractLastCall time.Time
@@ -72,6 +74,7 @@ func NewChatOrchestrator(deps ChatOrchestratorDeps) *ChatOrchestrator {
 		factRepo:             deps.FactRepo,
 		intentResolver:       deps.IntentResolver,
 		localAnswer:          deps.LocalAnswer,
+		accuracyService:      deps.AccuracyService,
 		factExtractMinGap:    15 * time.Second,
 	}
 }
@@ -276,7 +279,7 @@ func (c *ChatOrchestrator) Execute(ctx context.Context, req ChatRequest) (*ChatR
 	}
 
 	// 计算回答置信度
-	confidence := c.calculateConfidence(reply, messages)
+	confidence := c.calculateConfidence(ctx, reply, messages)
 
 	return &ChatResponse{
 		Reply:            reply,
@@ -351,15 +354,38 @@ func (c *ChatOrchestrator) StreamExecute(ctx context.Context, req ChatRequest, o
 	}
 
 	// 计算回答置信度
-	confidence := c.calculateConfidence(reply, messages)
+	confidence := c.calculateConfidence(ctx, reply, messages)
 
 	return usage, confidence, reply, nil
 }
 
+// classifyAnswerType 根据用户问题和回复内容推断回答类型，用于历史准确率分类统计。
+func classifyAnswerType(reply string, messages []models.Message) entity.AnswerType {
+	lower := strings.ToLower(reply)
+	// 优先判断紧急症状
+	if strings.Contains(lower, "120") || strings.Contains(lower, "急诊") ||
+		strings.Contains(lower, "立即就医") || strings.Contains(lower, "必须就医") {
+		return entity.AnswerTypeEmergency
+	}
+	// 判断是否为症状分析类
+	hasSymptom := strings.Contains(lower, "症状") || strings.Contains(lower, "可能") ||
+		strings.Contains(lower, "考虑") || strings.Contains(lower, "鉴别")
+	// 判断建议/推荐类
+	hasRecommendation := strings.Contains(lower, "建议") || strings.Contains(lower, "推荐") ||
+		strings.Contains(lower, "科室") || strings.Contains(lower, "就医")
+	if hasRecommendation {
+		return entity.AnswerTypeRecommendation
+	}
+	if hasSymptom {
+		return entity.AnswerTypeSymptomAnalysis
+	}
+	return entity.AnswerTypeHealthInfo
+}
+
 // calculateConfidence 为 AI 回复计算置信度结果。
-// 当前 MVP 实现：默认来源为 llm_internal，从回复内容提取推理链，
-// 上下文分数基于用户消息长度，历史准确率使用冷启动默认值 0.75。
-func (c *ChatOrchestrator) calculateConfidence(reply string, messages []models.Message) *entity.ConfidenceResult {
+// 默认来源为 llm_internal，从回复内容提取推理链，上下文分数基于用户消息长度，
+// 历史准确率从 AccuracyService 读取（冷启动默认 0.75）。
+func (c *ChatOrchestrator) calculateConfidence(ctx context.Context, reply string, messages []models.Message) *entity.ConfidenceResult {
 	if c.confidenceAggregator == nil {
 		// 置信度引擎未注入时返回零值结果，避免 panic
 		return &entity.ConfidenceResult{
@@ -393,8 +419,17 @@ func (c *ChatOrchestrator) calculateConfidence(reply string, messages []models.M
 		}
 	}
 
-	// 历史准确率：冷启动默认值
+	// 历史准确率：从 AccuracyService 读取，无数据时返回冷启动默认值 0.75
+	answerType := classifyAnswerType(reply, messages)
 	historyAccuracy := 0.75
+	if c.accuracyService != nil {
+		acc, err := c.accuracyService.GetAccuracy(ctx, string(answerType))
+		if err == nil {
+			historyAccuracy = acc
+		} else {
+			fmt.Printf("[ChatOrchestrator] failed to get history accuracy: %v\n", err)
+		}
+	}
 
 	// 不确定性分数：检测回复中是否包含不确定性表达
 	uncertaintyScore := 50.0
@@ -578,4 +613,5 @@ var ApplicationSet = wire.NewSet(
 	NewIntentResolver,
 	NewLocalAnswerService,
 	NewLocalAnswerConfig,
+	NewAccuracyService,
 )

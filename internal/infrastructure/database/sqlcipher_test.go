@@ -247,11 +247,11 @@ func TestSQLCipherConnector_MigrateSchema(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, tableCount)
 
-	// 验证 user_version = 11（含 v1.1.4 embedding model_version 索引）
+	// 验证 user_version = 12（含 v1.1.9 answer_feedback / answer_accuracy_stats）
 	var version int
 	err = conn.DB().QueryRowContext(ctx, "PRAGMA user_version").Scan(&version)
 	require.NoError(t, err)
-	assert.Equal(t, 11, version)
+	assert.Equal(t, 12, version)
 }
 
 // TestSQLCipherConnector_PRAGMAForeignKeys 验证外键约束在加密数据库中正常工作。

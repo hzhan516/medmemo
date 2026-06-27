@@ -75,6 +75,8 @@ func InitializeApp() (*App, func(), error) {
 	confidenceAggregator := usecase.NewConfidenceAggregator()
 	localAnswerConfig := usecase.NewLocalAnswerConfig()
 	localAnswerService := usecase.NewLocalAnswerService(localAnswerConfig)
+	accuracyRepoSQLite := repository.NewAccuracyRepoSQLite(sqlCipherConnector)
+	accuracyService := usecase.NewAccuracyService(accuracyRepoSQLite)
 	chatOrchestratorDeps := usecase.ChatOrchestratorDeps{
 		LLMFactory:           llmClientFactory,
 		ProviderStore:        providerRepoSQLite,
@@ -87,6 +89,7 @@ func InitializeApp() (*App, func(), error) {
 		FactRepo:             factRepoSQLite,
 		IntentResolver:       intentResolver,
 		LocalAnswer:          localAnswerService,
+		AccuracyService:      accuracyService,
 	}
 	chatOrchestrator := usecase.NewChatOrchestrator(chatOrchestratorDeps)
 	conversationRepoSQLite := repository.NewConversationRepoSQLite(sqlCipherConnector)
@@ -105,7 +108,7 @@ func InitializeApp() (*App, func(), error) {
 	auditLogRepoSQLite := repository.NewAuditLogRepoSQLite(sqlCipherConnector)
 	dialogueRepoSQLite := repository.NewDialogueRepoSQLite(sqlCipherConnector)
 	embeddingMigrator := usecase.NewEmbeddingMigrator(factRepoSQLite, embeddingRepoSQLite, embeddingServiceAdapter, migrationState)
-	wailsApp := NewWailsApp(chatOrchestrator, memoryRetriever, appConfig, conversationRepoSQLite, messageRepoSQLite, disclaimerRepoSQLite, providerRepoSQLite, healthEngine, titleGenerator, service, keyringStore, tokenRefreshService, oAuthDeviceFlowService, factRepoSQLite, auditLogRepoSQLite, dialogueRepoSQLite, embeddingServiceAdapter, embeddingRepoSQLite, embeddingMigrator, migrationState)
+	wailsApp := NewWailsApp(chatOrchestrator, memoryRetriever, appConfig, conversationRepoSQLite, messageRepoSQLite, disclaimerRepoSQLite, providerRepoSQLite, healthEngine, titleGenerator, service, keyringStore, tokenRefreshService, oAuthDeviceFlowService, factRepoSQLite, auditLogRepoSQLite, dialogueRepoSQLite, embeddingServiceAdapter, embeddingRepoSQLite, embeddingMigrator, migrationState, accuracyService)
 	app, cleanup, err := NewApp(wailsApp, sqlCipherConnector, deidentifyPipeline, healthEngine)
 	if err != nil {
 		return nil, nil, err

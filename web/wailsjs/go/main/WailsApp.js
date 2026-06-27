@@ -210,6 +210,10 @@ export function RefreshToken(arg1) {
   return window['go']['main']['WailsApp']['RefreshToken'](arg1);
 }
 
+export function RecordAnswerFeedback(arg1, arg2, arg3) {
+  return window['go']['main']['WailsApp']['RecordAnswerFeedback'](arg1, arg2, arg3);
+}
+
 export function RejectFact(arg1) {
   return window['go']['main']['WailsApp']['RejectFact'](arg1);
 }

@@ -487,6 +487,26 @@ func migrateSQLiteSchema(ctx context.Context, db *sql.DB) error {
 			    ON semantic_embeddings(model_version);
 			`,
 		},
+		{
+			version: 12,
+			sql: `
+			-- v1.1.9: 回答准确率反馈持久化
+			CREATE TABLE IF NOT EXISTS answer_feedback (
+				message_id TEXT NOT NULL,
+				answer_type TEXT NOT NULL,
+				feedback TEXT NOT NULL CHECK(feedback IN ('helpful','inaccurate')),
+				created_at INTEGER NOT NULL,
+				PRIMARY KEY (message_id, answer_type)
+			);
+
+			CREATE TABLE IF NOT EXISTS answer_accuracy_stats (
+				answer_type TEXT PRIMARY KEY,
+				correct_count INTEGER NOT NULL DEFAULT 0,
+				total_count INTEGER NOT NULL DEFAULT 0,
+				updated_at INTEGER NOT NULL
+			);
+			`,
+		},
 	}
 
 	for _, m := range migrations {

@@ -721,7 +721,7 @@ func TestChatOrchestrator_calculateConfidence_nilAggregator(t *testing.T) {
 		LocalAnswer:    NewLocalAnswerService(NewLocalAnswerConfig()),
 	})
 
-	result := orch.calculateConfidence("测试回复", nil)
+	result := orch.calculateConfidence(context.Background(), "测试回复", nil)
 
 	require.NotNil(t, result)
 	assert.Equal(t, 0.0, result.OverallScore)

@@ -216,6 +216,8 @@ const defaultDeclineDisclaimer = async (): Promise<void> => {}
 
 const defaultReportComplianceFeedback = async (_ruleID: string, _originalText: string): Promise<void> => {}
 
+const defaultRecordAnswerFeedback = async (_messageID: string, _answerType: string, _helpful: boolean): Promise<void> => {}
+
 const defaultCheckUpdate = async (): Promise<UpdateInfoResponse | null> => {
   return null
 }
@@ -439,6 +441,7 @@ export const MockWailsApp = {
   AcceptDisclaimer: (version: string) => resolveHandler('AcceptDisclaimer', defaultAcceptDisclaimer)(version),
   DeclineDisclaimer: () => resolveHandler('DeclineDisclaimer', defaultDeclineDisclaimer)(),
   ReportComplianceFeedback: (ruleID: string, originalText: string) => resolveHandler('ReportComplianceFeedback', defaultReportComplianceFeedback)(ruleID, originalText),
+  RecordAnswerFeedback: (messageID: string, answerType: string, helpful: boolean) => resolveHandler('RecordAnswerFeedback', defaultRecordAnswerFeedback)(messageID, answerType, helpful),
   CheckUpdate: () => resolveHandler('CheckUpdate', defaultCheckUpdate)(),
   DownloadUpdate: (req: DownloadUpdateRequest) => resolveHandler('DownloadUpdate', defaultDownloadUpdate)(req),
   ApplyUpdate: (path: string) => resolveHandler('ApplyUpdate', defaultApplyUpdate)(path),

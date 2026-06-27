@@ -49,6 +49,7 @@ func InitializeApp() (*App, func(), error) {
 		wire.Bind(new(domainRepo.FactRepository), new(*repository.FactRepoSQLite)),
 		wire.Bind(new(domainRepo.EmbeddingRepository), new(*repository.EmbeddingRepoSQLite)),
 		wire.Bind(new(domainRepo.AuditLogRepository), new(*repository.AuditLogRepoSQLite)),
+		wire.Bind(new(domainRepo.AccuracyRepository), new(*repository.AccuracyRepoSQLite)),
 		wire.Bind(new(port.SensitiveDetector), new(*detector.RuleDetector)),
 		wire.Bind(new(usecase.ComplianceChecker), new(*usecase.RuleComplianceChecker)),
 		wire.Bind(new(port.ConversationRepository), new(*repository.ConversationRepoSQLite)),

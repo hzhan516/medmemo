@@ -91,6 +91,10 @@ export function useWails() {
     return await WailsApp.ReportComplianceFeedback(ruleID, originalText)
   }, [])
 
+  const recordAnswerFeedback = useCallback(async (messageID: string, answerType: string, helpful: boolean): Promise<void> => {
+    return await WailsApp.RecordAnswerFeedback(messageID, answerType, helpful)
+  }, [])
+
   const checkUpdate = useCallback(async (): Promise<UpdateInfoResponse | null> => {
     return await WailsApp.CheckUpdate()
   }, [])
@@ -252,6 +256,7 @@ export function useWails() {
     acceptDisclaimer,
     declineDisclaimer,
     reportComplianceFeedback,
+    recordAnswerFeedback,
     checkUpdate,
     downloadUpdate,
     applyUpdate,

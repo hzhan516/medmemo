@@ -110,6 +110,8 @@ export function PullOllamaModel(arg1:string):Promise<void>;
 
 export function RefreshToken(arg1:string):Promise<void>;
 
+export function RecordAnswerFeedback(arg1:string,arg2:string,arg3:boolean):Promise<void>;
+
 export function RejectFact(arg1:string):Promise<void>;
 
 export function ReportComplianceFeedback(arg1:string,arg2:string):Promise<void>;

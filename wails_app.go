@@ -59,6 +59,9 @@ type WailsApp struct {
 	migrationState *usecase.MigrationState
 	onnxReady      chan struct{}
 	onnxOnce       sync.Once
+
+	// v1.1.9: 回答准确率反馈服务
+	accuracyService *usecase.AccuracyService
 }
 
 // NewWailsApp 构造函数，供 Wire 调用。
@@ -83,6 +86,7 @@ func NewWailsApp(
 	embeddingRepo repository.EmbeddingRepository,
 	migrator *usecase.EmbeddingMigrator,
 	migrationState *usecase.MigrationState,
+	accuracyService *usecase.AccuracyService,
 ) *WailsApp {
 	return &WailsApp{
 		chatOrchestrator: chat,
@@ -108,6 +112,7 @@ func NewWailsApp(
 		onnxReady:        make(chan struct{}),
 		callbackServers:  make(map[string]*auth.LocalCallbackServer),
 		activeStreams:    make(map[string]context.CancelFunc),
+		accuracyService:  accuracyService,
 	}
 }
 
