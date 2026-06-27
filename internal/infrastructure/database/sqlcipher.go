@@ -507,6 +507,68 @@ func migrateSQLiteSchema(ctx context.Context, db *sql.DB) error {
 			);
 			`,
 		},
+		{
+			version: 13,
+			sql: `
+			-- v1.1.9: 知识库 RAG 表结构
+			CREATE TABLE IF NOT EXISTS knowledge_documents (
+				document_id TEXT PRIMARY KEY,
+				title TEXT NOT NULL DEFAULT '',
+				source_type TEXT NOT NULL,
+				citation TEXT NOT NULL DEFAULT '',
+				url TEXT NOT NULL DEFAULT '',
+				language TEXT NOT NULL DEFAULT '',
+				checksum TEXT NOT NULL UNIQUE,
+				metadata_json TEXT NOT NULL DEFAULT '{}',
+				created_at INTEGER NOT NULL,
+				updated_at INTEGER NOT NULL
+			);
+
+			CREATE TABLE IF NOT EXISTS knowledge_chunks (
+				chunk_id TEXT PRIMARY KEY,
+				document_id TEXT NOT NULL,
+				chunk_index INTEGER NOT NULL,
+				content TEXT NOT NULL,
+				token_count INTEGER NOT NULL DEFAULT 0,
+				metadata_json TEXT NOT NULL DEFAULT '{}',
+				created_at INTEGER NOT NULL,
+				FOREIGN KEY (document_id) REFERENCES knowledge_documents(document_id) ON DELETE CASCADE,
+				UNIQUE(document_id, chunk_index)
+			);
+			CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_document_id ON knowledge_chunks(document_id);
+
+			CREATE TABLE IF NOT EXISTS knowledge_terms (
+				term TEXT NOT NULL,
+				chunk_id TEXT NOT NULL,
+				tf INTEGER NOT NULL DEFAULT 0,
+				document_id TEXT NOT NULL,
+				PRIMARY KEY (term, chunk_id),
+				FOREIGN KEY (chunk_id) REFERENCES knowledge_chunks(chunk_id) ON DELETE CASCADE
+			);
+			CREATE INDEX IF NOT EXISTS idx_knowledge_terms_term ON knowledge_terms(term);
+			CREATE INDEX IF NOT EXISTS idx_knowledge_terms_chunk_id ON knowledge_terms(chunk_id);
+			CREATE INDEX IF NOT EXISTS idx_knowledge_terms_document_id ON knowledge_terms(document_id);
+
+			CREATE TABLE IF NOT EXISTS knowledge_embeddings (
+				chunk_id TEXT PRIMARY KEY,
+				model_version TEXT NOT NULL,
+				dimension INTEGER NOT NULL,
+				embedding BLOB NOT NULL,
+				created_at INTEGER NOT NULL,
+				FOREIGN KEY (chunk_id) REFERENCES knowledge_chunks(chunk_id) ON DELETE CASCADE
+			);
+
+			CREATE TABLE IF NOT EXISTS knowledge_import_jobs (
+				job_id TEXT PRIMARY KEY,
+				status TEXT NOT NULL,
+				total INTEGER NOT NULL DEFAULT 0,
+				processed INTEGER NOT NULL DEFAULT 0,
+				error_message TEXT NOT NULL DEFAULT '',
+				created_at INTEGER NOT NULL,
+				updated_at INTEGER NOT NULL
+			);
+			`,
+		},
 	}
 
 	for _, m := range migrations {
