@@ -11,6 +11,7 @@ interface ChatContainerProps {
   onStartNewConversation?: () => void
   onRetry?: (messageId: string) => void
   onReportCompliance?: (messageId: string, ruleID: string) => void
+  onFollowupClick?: (text: string) => void
 }
 
 const isTest = import.meta.env.VITEST === 'true'
@@ -20,7 +21,7 @@ const isTest = import.meta.env.VITEST === 'true'
  * 测试环境回退到普通 map 渲染（jsdom 不支持 ResizeObserver 布局计算）。
  * 自动滚动到底部（仅在用户已位于底部时）。
  */
-export function ChatContainer({ messages, isStreaming, onStartNewConversation, onRetry, onReportCompliance }: ChatContainerProps) {
+export function ChatContainer({ messages, isStreaming, onStartNewConversation, onRetry, onReportCompliance, onFollowupClick }: ChatContainerProps) {
   const virtuosoRef = useRef<VirtuosoHandle>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -73,6 +74,7 @@ export function ChatContainer({ messages, isStreaming, onStartNewConversation, o
                 message={msg}
                 onRetry={onRetry}
                 onReportCompliance={onReportCompliance}
+                onFollowupClick={onFollowupClick}
               />
             ))}
             {isStreaming && messages.length > 0 && messages[messages.length - 1]?.role !== 'assistant' && (
@@ -99,6 +101,7 @@ export function ChatContainer({ messages, isStreaming, onStartNewConversation, o
                 message={msg}
                 onRetry={onRetry}
                 onReportCompliance={onReportCompliance}
+                onFollowupClick={onFollowupClick}
               />
             )}
             components={{

@@ -6,6 +6,7 @@ import { AppLayout } from '@/components/layout/AppLayout'
 import { ChatPage } from '@/pages/ChatPage'
 import { AboutPage } from '@/pages/AboutPage'
 import { MemoryPage } from '@/pages/MemoryPage'
+import { KnowledgePage } from '@/pages/KnowledgePage'
 import { DisclaimerModal } from '@/components/DisclaimerModal'
 import { UpdateModal } from '@/components/UpdateModal'
 import { UpdateBanner } from '@/components/UpdateBanner'
@@ -59,6 +60,7 @@ function App() {
     updateInfo,
     downloadProgress,
     isDownloading,
+    isRestarting,
     downloadPath,
     error: updateError,
     doDownload,
@@ -337,6 +339,7 @@ function App() {
             <Route element={<AppLayout />}>
               <Route path="/chat" element={<ChatPage />} />
               <Route path="/memories" element={<MemoryPage />} />
+              <Route path="/knowledge" element={<KnowledgePage />} />
               <Route
                 path="/settings"
                 element={
@@ -371,6 +374,7 @@ function App() {
       <UpdateModal
         info={updateInfo}
         isDownloading={isDownloading}
+        isRestarting={isRestarting}
         downloadProgress={downloadProgress}
         downloadPath={downloadPath}
         error={updateError}

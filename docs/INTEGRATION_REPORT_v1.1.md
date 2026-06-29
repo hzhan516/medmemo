@@ -243,7 +243,9 @@
 
 | ID | Description | Planned Resolution |
 |:---|:---|:---|
-| Issue#004 | `ArchiveConversation` is `not implemented` | v1.2 memory consolidation sprint |
+| — | — | — |
+
+> **Update (v1.1.9)**: Issue#004 and Issue#035 have been resolved in the memory module. `ArchiveConversation` now archives approved facts as Tier-2 short-term memories, and session-gap recall reuses session-linked facts via `FindBySession`. Remaining open items (#002, #016, #019) are tracked in `medmemo/开发日志/issues.md` under M04.
 
 ---
 

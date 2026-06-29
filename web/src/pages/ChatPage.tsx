@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { ChatContainer } from '@/components/chat/ChatContainer'
-import { ChatInput } from '@/components/chat/ChatInput'
+import { ChatInput, type ChatInputHandle } from '@/components/chat/ChatInput'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Header } from '@/components/layout/Header'
 import { ComplianceBar } from '@/components/ComplianceBar'
@@ -38,6 +38,11 @@ export function ChatPage() {
   const selectConversation = useChatStore((s) => s.selectConversation)
   const [showUndo, setShowUndo] = useState(false)
   const isFirstRender = useRef(true)
+  const chatInputRef = useRef<ChatInputHandle>(null)
+
+  const handleFollowupClick = useCallback((text: string) => {
+    chatInputRef.current?.setValue(text)
+  }, [])
 
   // Provider 快捷键切换
   const activeProviderId = useSettingsStore((s) => s.activeProviderId)
@@ -152,6 +157,7 @@ export function ChatPage() {
           onStartNewConversation={handleNewConversation}
           onRetry={retryMessage}
           onReportCompliance={reportComplianceFeedback}
+          onFollowupClick={handleFollowupClick}
         />
 
         {/* B 级紧急症状警告横幅 */}
@@ -184,6 +190,7 @@ export function ChatPage() {
         )}
 
         <ChatInput
+          ref={chatInputRef}
           onSend={sendMessage}
           onStop={stopGeneration}
           onNewConversation={handleNewConversation}

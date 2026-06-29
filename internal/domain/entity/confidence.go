@@ -194,12 +194,13 @@ func (cl ConfidenceLevel) String() string {
 
 // ConfidenceResult 表示置信度聚合计算结果。
 type ConfidenceResult struct {
-	OverallScore float64            // 综合分数 0-100
-	Level        ConfidenceLevel    // 等级 A/B/C/D/E
-	Breakdown    map[string]float64 // 五维度细分分数
-	Explanation  string             // 解释文本
-	Suggestion   string             // 用户建议
-	MissingInfo  []string           // 缺失信息列表
+	OverallScore float64             // 综合分数 0-100
+	Level        ConfidenceLevel     // 等级 A/B/C/D/E
+	Breakdown    map[string]float64  // 五维度细分分数
+	Explanation  string              // 解释文本
+	Suggestion   string              // 用户建议
+	MissingInfo  []string            // 缺失信息列表
+	Citations    []KnowledgeCitation // 知识库引用条目（v1.1.9 临时存放在 confidence_json）
 }
 
 // =============================================================================

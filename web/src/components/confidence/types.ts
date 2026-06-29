@@ -13,6 +13,15 @@ export interface ConfidenceBreakdown {
   uncertainty: number
 }
 
+export interface KnowledgeCitation {
+  id: string
+  title: string
+  source: string
+  url?: string
+  snippet: string
+  score: number
+}
+
 export interface ConfidenceResult {
   overallScore: number
   level: ConfidenceLevel
@@ -20,6 +29,7 @@ export interface ConfidenceResult {
   explanation: string
   suggestion: string
   missingInfo: string[]
+  citations?: KnowledgeCitation[]
 }
 
 export type ConfidenceBarMode = 'expanded' | 'compact' | 'hidden'

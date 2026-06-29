@@ -143,26 +143,29 @@ func TestServiceDownloadUpdate(t *testing.T) {
 func TestServiceApplyUpdate(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name       string
-		installErr error
-		wantErr    bool
+		name        string
+		installPath string
+		installErr  error
+		wantErr     bool
 	}{
-		{"success", nil, false},
-		{"install failed", fmt.Errorf("permission denied"), true},
+		{"success", "/new/binary", nil, false},
+		{"install failed", "", fmt.Errorf("permission denied"), true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockU := &mockUpdater{}
-			mockI := &mockInstaller{installErr: tt.installErr}
+			mockI := &mockInstaller{installPath: tt.installPath, installErr: tt.installErr}
 			svc := NewService(mockU, mockI, models.ChannelStable)
 
-			err := svc.ApplyUpdate("/tmp/update.AppImage")
+			path, err := svc.ApplyUpdate("/tmp/update.AppImage")
 			if tt.wantErr {
 				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
+				assert.Empty(t, path)
+				return
 			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.installPath, path)
 		})
 	}
 }
@@ -253,8 +256,9 @@ func TestServiceApplyUpdate_RollbackError(t *testing.T) {
 	mockI := &mockInstaller{installErr: installErr, rollbackErr: rollbackErr}
 	svc := NewService(mockU, mockI, models.ChannelStable)
 
-	err := svc.ApplyUpdate("/tmp/update.AppImage")
+	path, err := svc.ApplyUpdate("/tmp/update.AppImage")
 	require.Error(t, err)
+	assert.Empty(t, path)
 	assert.ErrorIs(t, err, installErr)
 }
 

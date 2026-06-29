@@ -29,6 +29,7 @@ type MemoryRetriever struct {
 	embeddingSvc       port.EmbeddingService
 	embeddingRepo      repository.EmbeddingRepository
 	factRepo           repository.FactRepository
+	memoryRepo         port.MemoryRepository
 	decayScorer        *DecayScorer
 	migrationState     *MigrationState
 	intentResolver     *IntentResolver
@@ -45,6 +46,7 @@ func NewMemoryRetriever(
 	embeddingSvc port.EmbeddingService,
 	embeddingRepo repository.EmbeddingRepository,
 	factRepo repository.FactRepository,
+	memoryRepo port.MemoryRepository,
 	decayScorer *DecayScorer,
 	migrationState *MigrationState,
 	intentResolver *IntentResolver,
@@ -54,6 +56,7 @@ func NewMemoryRetriever(
 		embeddingSvc:       embeddingSvc,
 		embeddingRepo:      embeddingRepo,
 		factRepo:           factRepo,
+		memoryRepo:         memoryRepo,
 		decayScorer:        decayScorer,
 		migrationState:     migrationState,
 		intentResolver:     intentResolver,
@@ -171,19 +174,21 @@ func (m *MemoryRetriever) retrieveWithDiagnostics(ctx context.Context, query, se
 	diag.ExpandedQuery = req.ExpandedQuery
 
 	// 3. 会话间隙检测
-	_ = m.checkSessionGap(sessionID)
+	sessionGapTriggered := m.checkSessionGap(sessionID)
 	m.recordSessionAccess(sessionID)
 
 	// 4. 四路并行召回（每个 goroutine 只写独占局部变量，消除 data race）
 	var (
-		intentCandidates  []RetrievalCandidate
-		intentStatus      PathStatus
-		keywordCandidates []RetrievalCandidate
-		keywordStatus     PathStatus
-		vectorCandidates  []RetrievalCandidate
-		vectorStatus      PathStatus
-		recentCandidates  []RetrievalCandidate
-		recentStatus      PathStatus
+		intentCandidates     []RetrievalCandidate
+		intentStatus         PathStatus
+		keywordCandidates    []RetrievalCandidate
+		keywordStatus        PathStatus
+		vectorCandidates     []RetrievalCandidate
+		vectorStatus         PathStatus
+		recentCandidates     []RetrievalCandidate
+		recentStatus         PathStatus
+		sessionGapCandidates []RetrievalCandidate
+		sessionGapStatus     PathStatus
 	)
 
 	var wg sync.WaitGroup
@@ -232,6 +237,21 @@ func (m *MemoryRetriever) retrieveWithDiagnostics(ctx context.Context, query, se
 		recentStatus = ps
 	}()
 
+	// session-gap recall：会话间隔超过阈值时，主动召回本会话已审批事实
+	if sessionGapTriggered {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			start := time.Now()
+			candidates, ps := m.recallBySessionGap(ctx, sessionID)
+			ps.Latency = time.Since(start)
+			sessionGapCandidates = candidates
+			sessionGapStatus = ps
+		}()
+	} else {
+		sessionGapStatus = PathStatus{Path: PathSessionGap, Status: "skipped", Reason: "session gap not triggered"}
+	}
+
 	wg.Wait()
 
 	// wg.Wait() 后由主 goroutine 统一写入 diag，保证固定顺序和数量
@@ -239,7 +259,8 @@ func (m *MemoryRetriever) retrieveWithDiagnostics(ctx context.Context, query, se
 	diag.KeywordCandidates = keywordCandidates
 	diag.VectorCandidates = vectorCandidates
 	diag.RecentCandidates = recentCandidates
-	diag.PathStatuses = []PathStatus{intentStatus, keywordStatus, vectorStatus, recentStatus}
+	diag.SessionGapCandidates = sessionGapCandidates
+	diag.PathStatuses = []PathStatus{intentStatus, keywordStatus, vectorStatus, recentStatus, sessionGapStatus}
 
 	// 5. 合并去重
 	diag.MergedCandidates = mergeCandidates(
@@ -247,6 +268,7 @@ func (m *MemoryRetriever) retrieveWithDiagnostics(ctx context.Context, query, se
 		diag.KeywordCandidates,
 		diag.VectorCandidates,
 		diag.RecentCandidates,
+		diag.SessionGapCandidates,
 	)
 
 	// 6. 重排
@@ -530,6 +552,43 @@ func (m *MemoryRetriever) recallRecentSameIntent(ctx context.Context, req *Retri
 	return candidates, PathStatus{Path: PathRecent, Status: "success"}
 }
 
+// recallBySessionGap 会话间隙召回路径：当用户重新打开间隔超过 10 分钟的会话时，
+// 主动召回该会话关联的已审批事实，避免上下文断层。
+func (m *MemoryRetriever) recallBySessionGap(ctx context.Context, sessionID string) ([]RetrievalCandidate, PathStatus) {
+	if sessionID == "" {
+		return nil, PathStatus{Path: PathSessionGap, Status: "skipped", Reason: "empty session id"}
+	}
+	facts, err := m.factRepo.FindBySession(ctx, sessionID)
+	if err != nil {
+		return nil, PathStatus{Path: PathSessionGap, Status: "failure", Reason: fmt.Sprintf("query failed: %v", err)}
+	}
+
+	now := time.Now().UTC()
+	var candidates []RetrievalCandidate
+	for _, f := range facts {
+		if f.Status != entity.FactStatusApproved {
+			continue
+		}
+		content := fmt.Sprintf("%s %s %s", f.Subject, f.Predicate, f.Object)
+		candidates = append(candidates, RetrievalCandidate{
+			FactID:       f.FactID,
+			Content:      content,
+			Snippet:      truncateSnippet(content, 50),
+			CreatedAt:    f.CreatedAt,
+			Confidence:   f.Confidence,
+			MatchedPaths: []RetrievalPath{PathSessionGap},
+			RecencyScore: m.decayScorer.ScoreFromCreatedAt(1.0, f.CreatedAt, now),
+			Reasons:      []string{fmt.Sprintf("session gap recall: %s", sessionID)},
+		})
+	}
+
+	status := PathStatus{Path: PathSessionGap, Status: "success"}
+	if len(candidates) == 0 {
+		status.Reason = "no approved facts linked to session"
+	}
+	return candidates, status
+}
+
 // mergeCandidates 多路候选合并去重，以 fact_id 为主键。
 // 同一 fact 多路命中时合并 matched_paths、reasons 和评分。
 func mergeCandidates(paths ...[]RetrievalCandidate) []RetrievalCandidate {
@@ -652,10 +711,11 @@ func logDiagnostics(diag *RetrievalDiagnostics) {
 		intentStr = fmt.Sprintf("%s(conf=%d)", diag.DetectedIntent.Intent, diag.DetectedIntent.Confidence)
 	}
 
-	fmt.Printf("[MemoryRetriever] diag intent=%s expanded=%q intentC=%d keywordC=%d vectorC=%d recentC=%d merged=%d selected=%d rejected=%d\n",
+	fmt.Printf("[MemoryRetriever] diag intent=%s expanded=%q intentC=%d keywordC=%d vectorC=%d recentC=%d sessionGapC=%d merged=%d selected=%d rejected=%d\n",
 		intentStr, truncateSnippet(diag.ExpandedQuery, 80),
 		len(diag.IntentCandidates), len(diag.KeywordCandidates),
 		len(diag.VectorCandidates), len(diag.RecentCandidates),
+		len(diag.SessionGapCandidates),
 		len(diag.MergedCandidates), len(diag.SelectedMemories), len(diag.RejectedCandidates))
 
 	// 明细仅在 vector 失败或零召回时输出（debug 级别）
@@ -831,7 +891,8 @@ func (m *MemoryRetriever) semanticSearch(ctx context.Context, queryVector []floa
 }
 
 // mergeMemories 合并实体提及和语义搜索结果，去重并按优先级排序。
-// 实体提及的记忆优先级更高（排在前面）。
+// 实体提及的记忆优先级更高（排在前面）。会话间隙触发时，通过 factRepo.FindBySession
+// 召回该会话关联的已审批事实并插入到mentionMemories之后，减少上下文断层。
 func (m *MemoryRetriever) mergeMemories(mentionMemories, semanticMemories []*entity.HealthMemory, sessionGapTriggered bool, sessionID string) []*entity.HealthMemory {
 	seen := make(map[models.MemoryID]bool)
 	var merged []*entity.HealthMemory
@@ -845,9 +906,27 @@ func (m *MemoryRetriever) mergeMemories(mentionMemories, semanticMemories []*ent
 		merged = append(merged, mem)
 	}
 
-	// 会话间隙触发时，额外召回该会话相关的记忆
-	if sessionGapTriggered && sessionID != "" {
-		_ = sessionID // TODO: 通过 raw_dialogues 关联实现会话间隙记忆召回
+	// 会话间隙触发时，额外召回该会话相关的已审批事实
+	if sessionGapTriggered && sessionID != "" && m.factRepo != nil {
+		facts, err := m.factRepo.FindBySession(context.Background(), sessionID)
+		if err == nil {
+			for _, f := range facts {
+				if f.Status != entity.FactStatusApproved {
+					continue
+				}
+				mem := &entity.HealthMemory{
+					ID:         models.MemoryID(f.FactID),
+					Content:    fmt.Sprintf("%s %s %s", f.Subject, f.Predicate, f.Object),
+					Confidence: f.Confidence,
+					CreatedAt:  f.CreatedAt,
+				}
+				if seen[mem.ID] {
+					continue
+				}
+				seen[mem.ID] = true
+				merged = append(merged, mem)
+			}
+		}
 	}
 
 	// 再加入语义搜索的结果
@@ -862,10 +941,42 @@ func (m *MemoryRetriever) mergeMemories(mentionMemories, semanticMemories []*ent
 	return merged
 }
 
-// ArchiveConversation 将对话归档为长期记忆（L2/L3）。
+// ArchiveConversation 将对话归档为 L2 短期记忆。
+// 通过 factRepo.FindBySession 汇总本会话已审批事实，生成摘要文本后写入 memoryRepo。
+// 当前为 v1.1.9 最小实现：不依赖 LLM 生成摘要，不修改现有 conversation/message 表。
 func (m *MemoryRetriever) ArchiveConversation(ctx context.Context, convID models.ConversationID) error {
-	// TODO(作者): 实现对话摘要与实体提取后的记忆归档 [Issue#004]
-	return fmt.Errorf("not implemented")
+	if m.memoryRepo == nil {
+		return fmt.Errorf("memory repository not available")
+	}
+	if convID == "" {
+		return fmt.Errorf("empty conversation id")
+	}
+
+	facts, err := m.factRepo.FindBySession(ctx, string(convID))
+	if err != nil {
+		return fmt.Errorf("failed to list session facts for archive: %w", err)
+	}
+
+	var approved []string
+	for _, f := range facts {
+		if f.Status == entity.FactStatusApproved {
+			approved = append(approved, fmt.Sprintf("%s %s %s", f.Subject, f.Predicate, f.Object))
+		}
+	}
+
+	var summary string
+	if len(approved) == 0 {
+		summary = fmt.Sprintf("会话 %s 归档：未记录到可确认的健康信息。", convID)
+	} else {
+		summary = fmt.Sprintf("会话 %s 归档，共 %d 条已确认健康信息：%s", convID, len(approved), strings.Join(approved, "；"))
+	}
+
+	mem := entity.NewHealthMemory(entity.TierShortTerm, summary, convID)
+	mem.Confidence = 0.8
+	if err := m.memoryRepo.Save(ctx, mem); err != nil {
+		return fmt.Errorf("failed to save archived memory: %w", err)
+	}
+	return nil
 }
 
 // FormatMemoriesForInjection 将记忆列表格式化为系统提示注入文本。

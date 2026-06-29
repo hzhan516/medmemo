@@ -9,10 +9,11 @@ import (
 type RetrievalPath string
 
 const (
-	PathIntent  RetrievalPath = "intent"
-	PathKeyword RetrievalPath = "keyword"
-	PathVector  RetrievalPath = "vector"
-	PathRecent  RetrievalPath = "recent"
+	PathIntent     RetrievalPath = "intent"
+	PathKeyword    RetrievalPath = "keyword"
+	PathVector     RetrievalPath = "vector"
+	PathRecent     RetrievalPath = "recent"
+	PathSessionGap RetrievalPath = "session_gap"
 )
 
 // PathStatus 记录单条检索路径的完成状态与失败原因。
@@ -129,10 +130,11 @@ type RetrievalDiagnostics struct {
 	ExpandedQuery  string
 
 	// 各路候选
-	IntentCandidates  []RetrievalCandidate
-	KeywordCandidates []RetrievalCandidate
-	VectorCandidates  []RetrievalCandidate
-	RecentCandidates  []RetrievalCandidate
+	IntentCandidates     []RetrievalCandidate
+	KeywordCandidates    []RetrievalCandidate
+	VectorCandidates     []RetrievalCandidate
+	RecentCandidates     []RetrievalCandidate
+	SessionGapCandidates []RetrievalCandidate
 
 	// 最终结果
 	MergedCandidates   []RetrievalCandidate
