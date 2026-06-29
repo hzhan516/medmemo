@@ -1,5 +1,62 @@
 # 滚动更新追踪器
 
+### [2026-06-29 / v1.1.9] — Skill、LLM Wiki 知识库与顶层文档同步
+
+**[Modified Areas]**
+- `.skill/medmemo/SKILL.md` — 增加 `codebase-documenter` / `submission-checker` / `code-comment` Skill 触发要求；补充双语文档规则；更新脱敏管线为 L1→L2
+- `.skill/medmemo/reference-*.md` / `tracker.md` — 依赖版本、架构白名单、发布检查清单同步到 v1.1.9
+- `docs/kb/` — 新建项目 LLM Wiki 知识库（Home、Status Board、Feature Map、Architecture Wiki、Roadmap、Modules、Templates 等）
+- `README.md` / `docs/API.md` / `docs/ARCHITECTURE.md` / `docs/DEVELOPMENT.md` 及其中文翻译 — 修正版本、入口路径、存储栈、冻结 stub、API 实现列表
+
+**[Logic Evolution]**
+- 项目 Skill 与 AGENTS.md 最新约束对齐：文档/注释变更必须触发对应 Skill
+- 在仓库内建立可持续更新的 Markdown 知识库体系，避免个人笔记与项目源码分离
+- 顶层文档统一以 `wails.json` 的 v1.1.9 为基准，消除 DuckDB/Kùzǔ 作为活跃后端的描述
+
+**[Checklist Status]**
+- 分支 `feature/M01-M07-update-skill-and-knowledge-base`
+- ✅ `wails.json` → v1.1.9
+- ✅ `web/package.json` → v1.1.9
+- ✅ `docs/kb/` 知识库初始化
+- ✅ `README.md` + `docs/i18n/zh-Hans-CN/README.md` 同步
+- ✅ `medmemo/开发日志/v1.1/v1.1.9.md` → 创建
+- ✅ `go test ./...`、`go vet ./...`、`git diff --check` 通过
+
+**[Pending/Next Steps]**
+- `AGENTS.md` 与其中文翻译处于 `.gitignore`，本次修改为本地参考，不影响提交
+- 后续继续通过 `docs/kb/` 滚动更新知识库，定期回刷 `Source Index` 中的过时标记
+
+---
+
+### [2026-06-29 / v1.1.8] — 跨平台更新器热修复与版本通道统一
+
+**[Modified Areas]**
+- `internal/adapters/updater/github.go` / `internal/infrastructure/updater/` — 跨平台更新器下载、校验、安装路径修复
+- `wails_app.go` — 新增 `GetVersionInfo` 绑定，统一返回 productVersion / buildChannel / goVersion / commit
+- `web/src/components/UpdateModal.tsx` / `web/src/pages/SettingsPage.tsx` — 更新弹窗与 About 面板字段与后端元数据对齐
+- `scripts/build/wails-build.sh` / `.goreleaser.yml` / CI — `-ldflags` 注入版本、commit、channel
+- `go.mod` — `golang.org/x/sys` 升级至 v0.45.0
+
+**[Logic Evolution]**
+- 默认更新通道从 `stable` 收敛为 `release`，与 CI 产物命名一致
+- 版本号/通道/commit 改为构建时注入，避免开发包与发布包版本不一致
+- Linux AppImage 更新不再误替换 `/tmp/.mount_*` 运行时文件
+- macOS DMG 更新支持自动替换 `.app`，授权失败时回退手动安装
+- Windows 安装程序区分 per-user 与 all-users 升级路径
+
+**[Checklist Status]**
+- 分支 `hotfix/issue-137-cross-platform-update-v1.1.8`
+- ✅ `wails.json` → v1.1.8
+- ✅ `web/package.json` → v1.1.8
+- ✅ `internal/domain/entity/changelog/zh-Hans.json` → 末尾新增 v1.1.8
+- ✅ `go test ./...`、`go vet ./...`、`git diff --check` 通过
+
+**[Pending/Next Steps]**
+- `DuckDBConnector` / `FamilyRepoKuzu` 仍为冻结 stub
+- 后续可考虑将版本信息 API 暴露到设置页诊断导出
+
+---
+
 ### [2026-06-25 / v1.1.7 第二轮 cleanup] — PONYTAIL dead code 清理
 
 **[Modified Areas]**
