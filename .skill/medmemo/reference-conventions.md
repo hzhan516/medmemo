@@ -8,6 +8,18 @@
 4. Wire 是唯一 DI — 改 `wire.go`，运行 `wire .`，禁止手改 `wire_gen.go`
 5. 入口在仓库根目录，非 `cmd/health-assistant/`
 
+## 强制触发 Skill
+
+- 写/改文档时：先触发 `codebase-documenter`，完成后触发 `submission-checker`
+- 写/改/审/重构代码注释时：触发 `code-comment`
+
+## 文档与国际化
+
+- 顶层文档（`docs/`、根目录 `.md`）使用英文撰写
+- 每个英文主文档顶部须链接中文版本：`[中文版本](<relative-path>)`
+- 中文翻译位于 `docs/i18n/zh-Hans-CN/`，结构与英文原文镜像
+- 修改英文文档时须同步更新中文翻译（同 PR 或尽快跟进）
+
 ## 命名
 
 | 类别 | 规范 | 示例 |

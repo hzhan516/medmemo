@@ -17,7 +17,9 @@ description: >-
 1. 读 [reference-architecture.md](reference-architecture.md) 确认分层与数据流
 2. 改代码前对照 [reference-conventions.md](reference-conventions.md) 铁律
 3. 推进版本时执行 [reference-release.md](reference-release.md) 检查清单
-4. 实质性变更后更新 [tracker.md](tracker.md)
+4. 写/改文档前**必须**触发 `codebase-documenter` Skill，完成后触发 `submission-checker` Skill
+5. 写/改/审/重构代码注释时**必须**触发 `code-comment` Skill
+6. 实质性变更后更新 [tracker.md](tracker.md)
 
 ## 项目速览
 
@@ -41,7 +43,7 @@ description: >-
 ## 对话主路径（简图）
 
 ```
-用户输入 → CheckEmergency → [云端] DeidentifyPipeline → MemoryRetriever
+用户输入 → CheckEmergency → [云端] DeidentifyPipeline（L1 规则 → L2 NER）→ MemoryRetriever
          → IntentResolver / LocalAnswerService（高置信本地短路）
          → LLM StreamChat → ComplianceInterceptor 分句检测 → Events 推送前端
          → saveMessages + extractFactsAsync
@@ -90,6 +92,8 @@ description: >-
 | Wire | 只改 `wire.go`，禁止手改 `wire_gen.go` |
 | TODO | `// TODO(作者): 描述 [Issue#N]`，同步 `medmemo/开发日志/issues.md` |
 | 合规红线 | 禁止确诊/处方/治疗建议/"AI医生"；紧急症状必须提醒 |
+| Skill 触发 | 文档变更触发 `codebase-documenter` + `submission-checker`；注释变更触发 `code-comment` |
+| 双语文档 | 顶层文档英文撰写，`docs/i18n/zh-Hans-CN/` 同步中文翻译 |
 | 前端 | TS strict；Wails 调用走 `useWails()`；`@/` 别名 |
 
 完整约定见 [reference-conventions.md](reference-conventions.md)。

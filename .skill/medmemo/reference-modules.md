@@ -13,7 +13,7 @@
 | `internal/application/usecase/local_answer.go` | 高置信事实模板回答 |
 | `internal/application/usecase/local_answer_config.go` | 本地回答业务配置（模板 / 人称 / subject） |
 | `internal/application/usecase/embedding_migration.go` | Embedding 版本迁移 |
-| `internal/application/pipeline/deidentify.go` | 三级脱敏流水线 |
+| `internal/application/pipeline/deidentify.go` | 二级脱敏流水线（L1 规则 → L2 NER） |
 | `internal/application/compliance_interceptor.go` | L1~L4 合规拦截 |
 | `internal/application/emergency_detector.go` | A/B 级紧急症状 |
 | `internal/adapters/ai/` | OpenAI/Local Adapter、ProviderFactory、Embedding |
