@@ -25,13 +25,13 @@ export function DeleteConfirmDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div
-        className="w-full max-w-sm mx-4 rounded-xl border border-border bg-card shadow-xl"
+        className="w-full max-w-sm mx-4 rounded-xl border border-border/60 bg-background/95 backdrop-blur-xl shadow-xl"
         role="alertdialog"
         aria-modal="true"
         data-testid="delete-confirm-dialog"
       >
         {/* 头部 */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border/60">
           <h2 className="text-base font-semibold text-foreground">确认删除</h2>
           <button
             onClick={onClose}

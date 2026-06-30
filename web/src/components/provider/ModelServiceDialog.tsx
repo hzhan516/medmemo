@@ -349,9 +349,9 @@ export function ModelServiceDialog({
         </div>
       )}
 
-      <div className="w-full max-w-lg mx-4 rounded-xl border border-border bg-card shadow-xl max-h-[90vh] overflow-hidden flex flex-col" role="dialog" aria-modal="true" data-testid="model-service-dialog">
+      <div className="w-full max-w-lg mx-4 rounded-xl border border-border/60 bg-background/95 backdrop-blur-xl shadow-xl max-h-[90vh] overflow-hidden flex flex-col" role="dialog" aria-modal="true" data-testid="model-service-dialog">
         {/* 头部 */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border/60 shrink-0">
           <div className="flex items-center gap-2">
             <Icon className="w-4 h-4 text-primary" />
             <h2 className="text-base font-semibold text-foreground">{title}</h2>
