@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -62,6 +63,12 @@ func init() {
 // buildTime 由构建时通过 -ldflags -X main.buildTime={{.Date}} 注入。
 var buildTime = ""
 
+// useAppWindowControls 决定是否启用应用级窗口按钮（frameless 模式）。
+// 当前 MVP 仅 Linux 启用，macOS/Windows 使用系统原生窗口控制。
+func useAppWindowControls() bool {
+	return goruntime.GOOS == "linux"
+}
+
 func main() {
 	// 监听优雅关闭信号
 	sigCh := make(chan os.Signal, 1)
@@ -85,6 +92,9 @@ func main() {
 
 	fmt.Printf("MedMemo %s starting...\n", version)
 
+	// 平台策略：Linux 启用应用级窗口按钮（frameless）
+	appWindowControls := useAppWindowControls()
+
 	// 启动 Wails 桌面应用
 	err = wails.Run(&options.App{
 		Title:     "MedMemo",
@@ -96,6 +106,9 @@ func main() {
 			Assets: assets,
 		},
 		BackgroundColour: &options.RGBA{R: 255, G: 255, B: 255, A: 1},
+		Frameless:        appWindowControls,
+		CSSDragProperty:  "--wails-draggable",
+		CSSDragValue:     "drag",
 		OnStartup:        app.wailsApp.Startup,
 		Bind: []interface{}{
 			app.wailsApp,
