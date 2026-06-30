@@ -1,13 +1,16 @@
-import { User, Bot, AlertCircle, Copy, RotateCcw, ShieldAlert, Info, ThumbsDown, CheckCircle, AlertTriangle } from 'lucide-react'
+import { useState, useCallback } from 'react'
+import { User, Bot, AlertCircle, Copy, RotateCcw, ShieldAlert, Info, ThumbsDown, CheckCircle, AlertTriangle, ThumbsUp } from 'lucide-react'
 import type { ChatMessage } from '@/stores/chatStore'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { MarkdownRenderer } from '@/components/markdown/MarkdownRenderer'
 import { ConfidenceBar } from '@/components/confidence/ConfidenceBar'
+import { useWails } from '@/hooks/useWails'
 
 interface MessageBubbleProps {
   message: ChatMessage
   onRetry?: (messageId: string) => void
   onReportCompliance?: (messageId: string, ruleID: string) => void
+  onFollowupClick?: (text: string) => void
 }
 
 /**
@@ -36,11 +39,39 @@ function getFriendlyErrorMessage(error: string): string {
  * 系统提示：浅色背景，居中，13px 小字。
  * 合规标记：L2_WARNING 橙色警告框，L3_NOTICE 蓝色提示条。
  */
-export function MessageBubble({ message, onRetry, onReportCompliance }: MessageBubbleProps) {
+// 根据 AI 回复内容推断回答类型，与后端 classifyAnswerType 保持一致。
+function classifyAnswerTypeForFeedback(content: string): string {
+  const lower = content.toLowerCase()
+  if (lower.includes('120') || lower.includes('急诊') || lower.includes('立即就医') || lower.includes('必须就医')) {
+    return 'emergency'
+  }
+  if (lower.includes('建议') || lower.includes('推荐') || lower.includes('科室') || lower.includes('就医')) {
+    return 'recommendation'
+  }
+  if (lower.includes('症状') || lower.includes('可能') || lower.includes('考虑') || lower.includes('鉴别')) {
+    return 'symptom_analysis'
+  }
+  return 'health_info'
+}
+
+export function MessageBubble({ message, onRetry, onReportCompliance, onFollowupClick }: MessageBubbleProps) {
   const showConfidenceBar = useSettingsStore((s) => s.showConfidenceBar)
   const confidenceBarMode = useSettingsStore((s) => s.confidenceBarMode)
   const setConfidenceBarMode = useSettingsStore((s) => s.setConfidenceBarMode)
+  const { recordAnswerFeedback } = useWails()
+  const [answerFeedback, setAnswerFeedback] = useState<'helpful' | 'inaccurate' | null>(null)
   const { id, role, content, isStreaming, interrupted, error, warnings, replacedTerms, complianceFeedback, truncated } = message
+
+  const handleAnswerFeedback = useCallback(async (helpful: boolean) => {
+    if (answerFeedback !== null || isStreaming || error) return
+    const answerType = classifyAnswerTypeForFeedback(content)
+    try {
+      await recordAnswerFeedback(id, answerType, helpful)
+      setAnswerFeedback(helpful ? 'helpful' : 'inaccurate')
+    } catch {
+      // 反馈提交失败不阻断用户，静默忽略
+    }
+  }, [answerFeedback, content, error, id, isStreaming, recordAnswerFeedback])
 
   // 解析合规级别
   const hasL1Blocked = warnings?.some((w) => w === 'L1_BLOCKED')
@@ -232,6 +263,39 @@ export function MessageBubble({ message, onRetry, onReportCompliance }: MessageB
               </div>
             )}
 
+            {/* 回答准确率反馈 */}
+            {!isStreaming && !error && role === 'assistant' && (
+              <div className="flex items-center justify-end gap-2 mt-2 pt-2 border-t border-border/50">
+                {answerFeedback === null ? (
+                  <>
+                    <button
+                      onClick={() => handleAnswerFeedback(true)}
+                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      aria-label="有帮助"
+                      title="有帮助"
+                    >
+                      <ThumbsUp size={12} />
+                      有帮助
+                    </button>
+                    <button
+                      onClick={() => handleAnswerFeedback(false)}
+                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      aria-label="不准确"
+                      title="不准确"
+                    >
+                      <ThumbsDown size={12} />
+                      不准确
+                    </button>
+                  </>
+                ) : (
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <CheckCircle size={12} />
+                    {answerFeedback === 'helpful' ? '已评价：有帮助' : '已评价：不准确'}
+                  </span>
+                )}
+              </div>
+            )}
+
             {/* 置信度条 */}
             {showConfidenceBar && !isStreaming && !error && message.confidence && (
               <div className="mt-2">
@@ -239,6 +303,7 @@ export function MessageBubble({ message, onRetry, onReportCompliance }: MessageB
                   result={message.confidence}
                   mode={confidenceBarMode}
                   onModeChange={setConfidenceBarMode}
+                  onFollowupClick={onFollowupClick}
                 />
               </div>
             )}

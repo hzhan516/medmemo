@@ -21,6 +21,7 @@ type SendMessageRequest struct {
 	Messages       []models.Message `json:"messages"`
 	Model          string           `json:"model"`
 	ProviderID     string           `json:"provider_id"`
+	AIMessageID    string           `json:"ai_message_id"`
 }
 
 // SendMessageResponse 发送消息响应。
@@ -65,7 +66,7 @@ func (a *WailsApp) SendMessage(req SendMessageRequest) (*SendMessageResponse, er
 		}
 	}
 	// 保存 AI 回复
-	a.saveMessages(ctx, req.ConversationID, req.Messages, resp.Reply, nil, resp.ConfidenceResult, req.ProviderID)
+	a.saveMessages(ctx, req.ConversationID, req.Messages, resp.Reply, nil, resp.ConfidenceResult, req.ProviderID, req.AIMessageID)
 
 	return &SendMessageResponse{
 		Reply:            resp.Reply,
@@ -132,7 +133,7 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) (err error) {
 		if errors.Is(err, context.Canceled) {
 			broker.Error("生成已中断")
 			// 保存已生成的部分内容（无置信度，token 为 0）
-			a.saveMessages(ctx, req.ConversationID, req.Messages, fullReply.String(), nil, nil, req.ProviderID)
+			a.saveMessages(ctx, req.ConversationID, req.Messages, fullReply.String(), nil, nil, req.ProviderID, req.AIMessageID)
 			return nil
 		}
 		broker.Error(err.Error())
@@ -148,7 +149,7 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) (err error) {
 	}
 
 	// 保存用户消息和 AI 回复（携带 token 与置信度）
-	a.saveMessages(ctx, req.ConversationID, req.Messages, finalContent, usage, confidenceResult, req.ProviderID)
+	a.saveMessages(ctx, req.ConversationID, req.Messages, finalContent, usage, confidenceResult, req.ProviderID, req.AIMessageID)
 
 	// 流式结束后对完整内容做一次合规检测（MVP 简化策略）
 	compResult, compErr := a.chatOrchestrator.CheckCompliance(ctx, finalContent)
@@ -260,14 +261,19 @@ func (a *WailsApp) saveUserMessage(ctx context.Context, convID string, message m
 // saveMessages 保存 AI 回复消息到数据库，可选携带 token 用量与置信度。
 // 用户消息应由调用方通过 saveUserMessage 单独保存，避免重复。
 // providerID 用于异步事实提取时创建对应的 LLM client。
-func (a *WailsApp) saveMessages(ctx context.Context, convID string, messages []models.Message, aiReply string, usage *models.TokenUsage, confidence *entity.ConfidenceResult, providerID string) {
+// aiMessageID 由前端生成并传入，确保反馈统计与持久化消息使用同一 message_id。
+func (a *WailsApp) saveMessages(ctx context.Context, convID string, messages []models.Message, aiReply string, usage *models.TokenUsage, confidence *entity.ConfidenceResult, providerID string, aiMessageID string) {
 	if a.msgRepo == nil || convID == "" {
 		return
 	}
 	// 保存 AI 回复
 	if aiReply != "" {
+		msgID := aiMessageID
+		if msgID == "" {
+			msgID = fmt.Sprintf("msg_%d", time.Now().UnixNano())
+		}
 		msg := &entity.Message{
-			ID:        fmt.Sprintf("msg_%d", time.Now().UnixNano()),
+			ID:        msgID,
 			Role:      models.RoleAssistant,
 			Content:   aiReply,
 			Timestamp: time.Now(),
@@ -389,6 +395,7 @@ func confidenceResultToMap(r *entity.ConfidenceResult) map[string]interface{} {
 		"explanation":   r.Explanation,
 		"suggestion":    r.Suggestion,
 		"missing_info":  r.MissingInfo,
+		"citations":     r.Citations,
 	}
 	if r.Breakdown != nil {
 		m["breakdown"] = r.Breakdown

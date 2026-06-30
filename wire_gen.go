@@ -71,10 +71,17 @@ func InitializeApp() (*App, func(), error) {
 	migrationState := usecase.NewMigrationState()
 	queryExpansionService := usecase.NewQueryExpansionService()
 	intentResolver := usecase.NewIntentResolver(queryExpansionService)
-	memoryRetriever := usecase.NewMemoryRetriever(embeddingServiceAdapter, embeddingRepoSQLite, factRepoSQLite, decayScorer, migrationState, intentResolver, queryExpansionService)
+	memoryRetriever := usecase.NewMemoryRetriever(embeddingServiceAdapter, embeddingRepoSQLite, factRepoSQLite, memoryRepoSQLite, decayScorer, migrationState, intentResolver, queryExpansionService)
 	confidenceAggregator := usecase.NewConfidenceAggregator()
 	localAnswerConfig := usecase.NewLocalAnswerConfig()
 	localAnswerService := usecase.NewLocalAnswerService(localAnswerConfig)
+	accuracyRepoSQLite := repository.NewAccuracyRepoSQLite(sqlCipherConnector)
+	accuracyService := usecase.NewAccuracyService(accuracyRepoSQLite)
+	knowledgeRepoSQLite := repository.NewKnowledgeRepoSQLite(sqlCipherConnector)
+	knowledgeTokenizer := usecase.NewKnowledgeTokenizer()
+	knowledgeReranker := usecase.NewKnowledgeReranker()
+	knowledgeSearchService := usecase.NewKnowledgeSearchService(knowledgeRepoSQLite, knowledgeTokenizer, embeddingServiceAdapter, knowledgeReranker)
+	citationBuilder := usecase.NewCitationBuilder(knowledgeRepoSQLite)
 	chatOrchestratorDeps := usecase.ChatOrchestratorDeps{
 		LLMFactory:           llmClientFactory,
 		ProviderStore:        providerRepoSQLite,
@@ -87,6 +94,9 @@ func InitializeApp() (*App, func(), error) {
 		FactRepo:             factRepoSQLite,
 		IntentResolver:       intentResolver,
 		LocalAnswer:          localAnswerService,
+		AccuracyService:      accuracyService,
+		KnowledgeSearch:      knowledgeSearchService,
+		CitationBuilder:      citationBuilder,
 	}
 	chatOrchestrator := usecase.NewChatOrchestrator(chatOrchestratorDeps)
 	conversationRepoSQLite := repository.NewConversationRepoSQLite(sqlCipherConnector)
@@ -105,7 +115,9 @@ func InitializeApp() (*App, func(), error) {
 	auditLogRepoSQLite := repository.NewAuditLogRepoSQLite(sqlCipherConnector)
 	dialogueRepoSQLite := repository.NewDialogueRepoSQLite(sqlCipherConnector)
 	embeddingMigrator := usecase.NewEmbeddingMigrator(factRepoSQLite, embeddingRepoSQLite, embeddingServiceAdapter, migrationState)
-	wailsApp := NewWailsApp(chatOrchestrator, memoryRetriever, appConfig, conversationRepoSQLite, messageRepoSQLite, disclaimerRepoSQLite, providerRepoSQLite, healthEngine, titleGenerator, service, keyringStore, tokenRefreshService, oAuthDeviceFlowService, factRepoSQLite, auditLogRepoSQLite, dialogueRepoSQLite, embeddingServiceAdapter, embeddingRepoSQLite, embeddingMigrator, migrationState)
+	knowledgeChunker := usecase.NewDefaultKnowledgeChunker()
+	knowledgeImporter := usecase.NewKnowledgeImporter(knowledgeRepoSQLite, knowledgeChunker, knowledgeTokenizer, embeddingServiceAdapter)
+	wailsApp := NewWailsApp(chatOrchestrator, memoryRetriever, appConfig, conversationRepoSQLite, messageRepoSQLite, disclaimerRepoSQLite, providerRepoSQLite, healthEngine, titleGenerator, service, keyringStore, tokenRefreshService, oAuthDeviceFlowService, factRepoSQLite, auditLogRepoSQLite, dialogueRepoSQLite, embeddingServiceAdapter, embeddingRepoSQLite, embeddingMigrator, migrationState, accuracyService, knowledgeRepoSQLite, knowledgeImporter)
 	app, cleanup, err := NewApp(wailsApp, sqlCipherConnector, deidentifyPipeline, healthEngine)
 	if err != nil {
 		return nil, nil, err

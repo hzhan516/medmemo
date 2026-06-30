@@ -59,6 +59,13 @@ type WailsApp struct {
 	migrationState *usecase.MigrationState
 	onnxReady      chan struct{}
 	onnxOnce       sync.Once
+
+	// v1.1.9: 回答准确率反馈服务
+	accuracyService *usecase.AccuracyService
+
+	// v1.1.9: 知识库管理
+	knowledgeRepo     repository.KnowledgeRepository
+	knowledgeImporter *usecase.KnowledgeImporter
 }
 
 // NewWailsApp 构造函数，供 Wire 调用。
@@ -83,31 +90,37 @@ func NewWailsApp(
 	embeddingRepo repository.EmbeddingRepository,
 	migrator *usecase.EmbeddingMigrator,
 	migrationState *usecase.MigrationState,
+	accuracyService *usecase.AccuracyService,
+	knowledgeRepo repository.KnowledgeRepository,
+	knowledgeImporter *usecase.KnowledgeImporter,
 ) *WailsApp {
 	return &WailsApp{
-		chatOrchestrator: chat,
-		memoryRetriever:  mem,
-		config:           cfg,
-		convRepo:         convRepo,
-		msgRepo:          msgRepo,
-		disclaimerRepo:   disclaimerRepo,
-		providerStore:    providerStore,
-		healthChecker:    healthChecker,
-		titleGen:         titleGen,
-		updaterSvc:       updaterSvc,
-		secretStore:      secretStore,
-		tokenRefreshSvc:  tokenRefreshSvc,
-		deviceFlowSvc:    deviceFlowSvc,
-		factRepo:         factRepo,
-		auditLogRepo:     auditLogRepo,
-		dialogueRepo:     dialogueRepo,
-		embeddingSvc:     embeddingSvc,
-		embeddingRepo:    embeddingRepo,
-		migrator:         migrator,
-		migrationState:   migrationState,
-		onnxReady:        make(chan struct{}),
-		callbackServers:  make(map[string]*auth.LocalCallbackServer),
-		activeStreams:    make(map[string]context.CancelFunc),
+		chatOrchestrator:  chat,
+		memoryRetriever:   mem,
+		config:            cfg,
+		convRepo:          convRepo,
+		msgRepo:           msgRepo,
+		disclaimerRepo:    disclaimerRepo,
+		providerStore:     providerStore,
+		healthChecker:     healthChecker,
+		titleGen:          titleGen,
+		updaterSvc:        updaterSvc,
+		secretStore:       secretStore,
+		tokenRefreshSvc:   tokenRefreshSvc,
+		deviceFlowSvc:     deviceFlowSvc,
+		factRepo:          factRepo,
+		auditLogRepo:      auditLogRepo,
+		dialogueRepo:      dialogueRepo,
+		embeddingSvc:      embeddingSvc,
+		embeddingRepo:     embeddingRepo,
+		migrator:          migrator,
+		migrationState:    migrationState,
+		onnxReady:         make(chan struct{}),
+		callbackServers:   make(map[string]*auth.LocalCallbackServer),
+		activeStreams:     make(map[string]context.CancelFunc),
+		accuracyService:   accuracyService,
+		knowledgeRepo:     knowledgeRepo,
+		knowledgeImporter: knowledgeImporter,
 	}
 }
 

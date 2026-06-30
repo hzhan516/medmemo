@@ -1,8 +1,16 @@
 .PHONY: all dev build test lint wire clean install-tools
 
+# 强制使用项目要求的 Go 工具链，避免本地旧版本导致解析 go.mod 失败
+GOTOOLCHAIN ?= go1.26.4
+export GOTOOLCHAIN
+
 # 版本号从 wails.json 读取（单一来源，使用 JSON 解析器而非 grep/sed）
 VERSION ?= $(shell go run scripts/read-version.go wails.json)
 LDFLAGS := -ldflags "-s -w -X main.version=v$(VERSION)"
+
+# golangci-lint 固定 v1 版本，避免 v2 配置不兼容导致 CI 不可复现
+GOLANGCI_LINT_VERSION ?= v1.64.8
+GOLANGCI_LINT := $(shell go env GOPATH)/bin/golangci-lint
 
 # 平台检测（用于本地构建）
 UNAME_S := $(shell uname -s)
@@ -50,7 +58,7 @@ coverage: test
 
 # 代码检查
 lint:
-	golangci-lint run ./...
+	$(GOLANGCI_LINT) run --timeout=10m ./...
 
 # 生成 Wire 依赖注入代码
 wire:
@@ -59,7 +67,8 @@ wire:
 # 安装开发依赖工具
 install-tools:
 	go install github.com/google/wire/cmd/wire@latest
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@${GOLANGCI_LINT_VERSION}
+	$(GOLANGCI_LINT) version
 	go install github.com/vektra/mockery/v2@latest
 
 # 下载模型资源（开发环境）

@@ -19,7 +19,7 @@ domain/   adapters/
 entity    ai · auth · detector · repository · updater
 policy    │
 repo 接口  infrastructure/
-          sqlcipher · onnx · secret · config · network
+          sqlcipher · onnx · secret · config
 ```
 
 ## 包导入白名单（depguard 核心）
@@ -45,7 +45,7 @@ repo 接口  infrastructure/
 1. `WailsApp.SendMessageStream` 接收请求
 2. `EmergencyDetector` 检测用户输入（独立于 AI）
 3. `ChatOrchestrator.StreamExecute`：
-   - 云端：`DeidentifyPipeline`（L1 规则 → L2 NER → L3 关键词）
+   - 云端：`DeidentifyPipeline`（L1 规则 → L2 NER）
    - `MemoryRetriever.RetrieveForContext` 注入 system 前缀
    - `IntentResolver` → 高置信时 `LocalAnswerService` 本地短路
    - `LLMClientFactory.CreateClient` → `StreamChat`
@@ -60,7 +60,7 @@ repo 接口  infrastructure/
 | `port.LLMClientFactory` | `ai.llmClientFactory` |
 | `usecase.Deidentifier` | `*pipeline.DeidentifyPipeline` |
 | `port.NERDetector` | `*detector.ONNXNERDetector` |
-| `port.SensitiveDetector` | `*detector.RuleDetector`（仅 L1；完整三级在 Pipeline） |
+| `port.SensitiveDetector` | `*detector.RuleDetector`（仅 L1；完整两级在 Pipeline） |
 | `port.EmbeddingService` | `*ai.EmbeddingServiceAdapter` |
 | `database.DBConnector` | `*database.SQLCipherConnector` |
 | `secret.Store` | `*secret.KeyringStore` |
@@ -80,6 +80,22 @@ repo 接口  infrastructure/
 - 默认：`~/.medmemo/data`
 - 覆盖：`MEDMEMO_DATA_DIR` 环境变量
 - Embedding 模型：首次启动从 bundle 复制到 `{DataDir}/models/{EmbeddingModelName}/`
+
+## 关键依赖版本
+
+以 `go.mod`、`wails.json`、`web/package.json` 为准（当前 v1.1.9）：
+
+| 组件 | 版本 |
+|------|------|
+| Go | 1.26.4 |
+| Wails v2 | 2.12.0 |
+| Google Wire | 0.7.0 |
+| ONNX Runtime | 1.26.0 |
+| Hugot | 0.7.4 |
+| modernc.org/sqlite | 1.53.0 |
+| sqlite-vec | 0.3.0 |
+| React | 18.2.0 |
+| TypeScript | 5.9.3 |
 
 ## 已冻结组件
 

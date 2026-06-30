@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@/test/render'
+import { render, screen, act } from '@/test/render'
 import userEvent from '@testing-library/user-event'
-import { ChatInput } from './ChatInput'
+import { useRef } from 'react'
+import { ChatInput, type ChatInputHandle } from './ChatInput'
 
 /**
  * ChatInput 组件单元测试。
@@ -100,5 +101,36 @@ describe('ChatInput', () => {
     await user.keyboard('{Escape}')
 
     expect(textarea).toHaveValue('')
+  })
+
+  it('通过 ref.setValue 填充输入框且不会触发发送', async () => {
+    const onSend = vi.fn()
+
+    function Wrapper() {
+      const inputRef = useRef<ChatInputHandle>(null)
+      return (
+        <>
+          <ChatInput ref={inputRef} onSend={onSend} />
+          <button
+            onClick={() => inputRef.current?.setValue('症状持续多久了？')}
+            data-testid="fill-button"
+          >
+            填充
+          </button>
+        </>
+      )
+    }
+
+    render(<Wrapper />)
+
+    const textarea = screen.getByPlaceholderText(/输入你的健康问题/)
+    expect(textarea).toHaveValue('')
+
+    await act(async () => {
+      screen.getByTestId('fill-button').click()
+    })
+
+    expect(textarea).toHaveValue('症状持续多久了？')
+    expect(onSend).not.toHaveBeenCalled()
   })
 })

@@ -210,6 +210,10 @@ export function RefreshToken(arg1) {
   return window['go']['main']['WailsApp']['RefreshToken'](arg1);
 }
 
+export function RecordAnswerFeedback(arg1, arg2, arg3) {
+  return window['go']['main']['WailsApp']['RecordAnswerFeedback'](arg1, arg2, arg3);
+}
+
 export function RejectFact(arg1) {
   return window['go']['main']['WailsApp']['RejectFact'](arg1);
 }
@@ -280,4 +284,24 @@ export function TestAPIKey(arg1, arg2, arg3) {
 
 export function UpdateProvider(arg1) {
   return window['go']['main']['WailsApp']['UpdateProvider'](arg1);
+}
+
+export function SelectKnowledgeFile() {
+  return window['go']['main']['WailsApp']['SelectKnowledgeFile']();
+}
+
+export function ImportKnowledgeFile(arg1) {
+  return window['go']['main']['WailsApp']['ImportKnowledgeFile'](arg1);
+}
+
+export function ListKnowledgeDocuments() {
+  return window['go']['main']['WailsApp']['ListKnowledgeDocuments']();
+}
+
+export function DeleteKnowledgeDocument(arg1) {
+  return window['go']['main']['WailsApp']['DeleteKnowledgeDocument'](arg1);
+}
+
+export function GetKnowledgeImportJob(arg1) {
+  return window['go']['main']['WailsApp']['GetKnowledgeImportJob'](arg1);
 }

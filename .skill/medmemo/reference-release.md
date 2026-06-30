@@ -22,7 +22,7 @@
 
 ```json
 {
-  "version": "v1.1.5",
+  "version": "v1.1.9",
   "title": "简短版本标题",
   "features": ["功能 1", "功能 2"],
   "fixes": ["修复 1"]
@@ -38,6 +38,7 @@
 □ internal/domain/entity/changelog/zh-Hans.json → 末尾新增
 □ medmemo/开发日志/ → 版本日志
 □ .skill/medmemo/tracker.md → 滚动记录
+□ 若涉及顶层文档变更：同步更新 `docs/i18n/zh-Hans-CN/` 中文翻译
 
 大版本额外:
 □ README.md + docs/i18n/zh-Hans-CN/README.md
