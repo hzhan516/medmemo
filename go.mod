@@ -4,6 +4,7 @@ go 1.26.4
 
 require (
 	github.com/99designs/keyring v1.2.2
+	github.com/google/uuid v1.6.0
 	github.com/google/wire v0.7.0
 	github.com/knights-analytics/hugot v0.7.4
 	github.com/mutecomm/go-sqlcipher v0.0.0-20190227152316-55dbde17881f
@@ -35,7 +36,6 @@ require (
 	github.com/gomlx/go-xla v0.2.2 // indirect
 	github.com/gomlx/gomlx v0.27.3 // indirect
 	github.com/gomlx/onnx-gomlx v0.4.2 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/gsterjov/go-libsecret v0.0.0-20161001094733-a6f4afe4910c // indirect
 	github.com/jchv/go-winloader v0.0.0-20250406163304-c1995be93bd1 // indirect
