@@ -10,7 +10,7 @@ export function Header() {
   const { theme, setTheme } = useTheme()
 
   return (
-    <header className="h-14 flex items-center justify-between px-4 border-b border-border bg-background/95 backdrop-blur shrink-0">
+    <header className="h-14 flex items-center justify-between px-4 mac-toolbar border-b border-white/20 dark:border-white/5 shrink-0">
       <div className="flex items-center gap-2">
         <h1 className="text-lg font-semibold tracking-tight">MedMemo</h1>
         <span className="text-xs text-muted-foreground hidden sm:inline">
@@ -29,7 +29,7 @@ export function Header() {
             const idx = cycle.indexOf(theme)
             setTheme(cycle[(idx + 1) % cycle.length])
           }}
-          className="p-2 rounded-md hover:bg-accent transition-colors"
+          className="p-2 rounded-md hover:bg-white/50 dark:hover:bg-white/10 transition-colors"
           aria-label="切换主题"
           title={`当前主题: ${theme === 'light' ? '亮色' : theme === 'dark' ? '暗色' : '跟随系统'}`}
         >

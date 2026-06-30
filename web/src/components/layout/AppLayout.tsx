@@ -30,10 +30,10 @@ export function AppLayout() {
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-background text-foreground flex">
-      {/* 左侧导航栏 */}
-      <nav className="shrink-0 w-16 border-r border-border bg-background flex flex-col items-center py-4 gap-2 select-none">
-        {/* Logo */}
-        <div className="mb-4 w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+      {/* 左侧导航栏 — macOS translucent rail */}
+      <nav className="shrink-0 w-16 mac-vibrant-panel border-r border-white/20 dark:border-white/5 flex flex-col items-center py-4 gap-2 select-none">
+        {/* Logo — restrained app tile */}
+        <div className="mb-4 w-8 h-8 rounded-lg bg-primary/90 flex items-center justify-center shadow-sm">
           <span className="text-primary-foreground text-xs font-bold">M</span>
         </div>
 
@@ -48,8 +48,8 @@ export function AppLayout() {
               className={({ isActive }) =>
                 `group relative flex items-center justify-center w-11 h-11 rounded-xl transition-all duration-200 ${
                   isActive
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:bg-white/50 dark:hover:bg-white/10 hover:text-foreground'
                 }`
               }
               aria-label={item.label}
@@ -76,10 +76,10 @@ export function AppLayout() {
           </div>
         </main>
 
-        {/* 底部状态栏（24px） */}
-        <footer className="shrink-0 h-6 flex items-center justify-between px-3 border-t border-border bg-muted/30 text-[11px] text-muted-foreground select-none">
+        {/* 底部状态栏（24px）— lightweight transparent bar */}
+        <footer className="shrink-0 h-6 flex items-center justify-between px-3 border-t border-border/70 bg-background/60 backdrop-blur text-[11px] text-muted-foreground select-none">
           <div className="flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_4px_rgba(16,185,129,0.4)]" />
             <span>就绪</span>
           </div>
           <div className="flex items-center gap-3">
