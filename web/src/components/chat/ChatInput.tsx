@@ -1,5 +1,9 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react'
 import { Send, Square } from 'lucide-react'
+
+export interface ChatInputHandle {
+  setValue: (value: string) => void
+}
 
 interface ChatInputProps {
   onSend: (message: string) => void
@@ -17,18 +21,29 @@ interface ChatInputProps {
  * 快捷键：Enter 发送、Shift+Enter 换行、Escape 清空。
  * 支持 /new 命令新建会话。
  * 空输入框时按 Up Arrow 可编辑上一条消息 [Issue#032]。
+ * 通过 ref 暴露 setValue，供置信度追问等外部组件回填文案。
  */
-export function ChatInput({
-  onSend,
-  onStop,
-  onNewConversation,
-  isLoading = false,
-  placeholder,
-  blockedByEmergency = false,
-  lastUserMessage,
-}: ChatInputProps) {
+export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput(
+  {
+    onSend,
+    onStop,
+    onNewConversation,
+    isLoading = false,
+    placeholder,
+    blockedByEmergency = false,
+    lastUserMessage,
+  },
+  ref
+) {
   const [content, setContent] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  useImperativeHandle(ref, () => ({
+    setValue: (value: string) => {
+      setContent(value)
+      textareaRef.current?.focus()
+    },
+  }))
 
   // 自动调整高度
   useEffect(() => {
@@ -173,4 +188,4 @@ export function ChatInput({
       </div>
     </div>
   )
-}
+})

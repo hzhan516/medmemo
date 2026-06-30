@@ -76,3 +76,4 @@ coverage.html
 /build/package/AppDir/
 /.hermes/
 /.qoder/
+/.worktrees/

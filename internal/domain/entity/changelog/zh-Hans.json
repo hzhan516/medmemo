@@ -320,5 +320,17 @@
       "修复 macOS DMG 更新仅提示下载、无法自动替换 .app 的问题，授权失败时回退手动安装",
       "修复 Windows 安装程序 per-user 与 all-users 升级路径混淆的问题"
     ]
+  },
+  {
+    "version": "v1.1.9",
+    "title": "v1.1.9 封版质量加固",
+    "features": [],
+    "fixes": [
+      "固定 golangci-lint v1.64.8，避免 v2 配置不兼容导致 CI/本地 lint 失败",
+      "补齐 v1.1.8 新增的裸错误返回包装，统一使用 fmt.Errorf(...: %w)",
+      "修复 defer tx.Rollback() 返回值未处理导致的 errcheck 报错",
+      "知识库 keyword-only 召回路径同样经过 reranker 重排，保证 embedding 不可用时结果质量一致",
+      "补充知识库导入轮询终止与 ai_message_id 传递的前端回归测试"
+    ]
   }
 ]

@@ -10,6 +10,7 @@ on:
 jobs:
   qodana:
     name: Qodana
+    if: ${{ secrets.QODANA_TOKEN != '' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
