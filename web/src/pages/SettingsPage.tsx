@@ -275,8 +275,8 @@ export function SettingsPage() {
   ]
 
   return (
-    <div className="h-full flex flex-col bg-background">
-      <div className="h-14 flex items-center px-4 border-b border-border">
+    <div className="h-full flex flex-col bg-background/30">
+      <div className="h-14 flex items-center px-4 mac-toolbar border-b border-white/20 dark:border-white/5">
         <h1 className="text-lg font-semibold">设置</h1>
       </div>
 
