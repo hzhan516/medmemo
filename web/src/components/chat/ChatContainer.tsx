@@ -37,22 +37,22 @@ export function ChatContainer({ messages, isStreaming, onStartNewConversation, o
   if (messages.length === 0) {
     return (
       <div className="flex-1 overflow-y-auto px-4 py-2">
-        <div className="max-w-3xl mx-auto flex flex-col items-center justify-center h-full min-h-[300px] text-muted-foreground">
-          <div className="w-16 h-16 rounded-2xl bg-accent flex items-center justify-center mb-4">
-            <Bot size={32} className="text-accent-foreground" />
+        <div className="max-w-4xl mx-auto flex flex-col items-center justify-center h-full min-h-[300px] text-muted-foreground">
+          <div className="w-16 h-16 rounded-2xl bg-white/60 dark:bg-white/10 backdrop-blur border border-border/40 flex items-center justify-center mb-4 shadow-sm">
+            <Bot size={32} className="text-primary/70" />
           </div>
-          <h2 className="text-lg font-medium mb-2">MedMemo 健康助手</h2>
-          <p className="text-sm text-center max-w-sm mb-4">
-            我是你的私人健康记忆助手。我可以帮你了解症状、推荐科室、管理家族健康档案。
+          <h2 className="text-lg font-medium mb-2 text-foreground/80">健康信息助手</h2>
+          <p className="text-sm text-center max-w-sm mb-4 text-muted-foreground">
+            我是你的私人健康信息参考工具。我可以帮你了解症状相关信息、推荐就诊科室、管理家族健康档案。
             <br />
             <span className="text-xs opacity-70 mt-1 block">
-              请注意：我不提供医疗诊断或治疗建议。
+              请注意：我不提供医疗诊断或治疗建议。如有健康疑虑，请咨询专业医生。
             </span>
           </p>
           {onStartNewConversation && (
             <button
               onClick={onStartNewConversation}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity shadow-sm"
             >
               <Plus size={16} />
               新建对话
@@ -65,7 +65,7 @@ export function ChatContainer({ messages, isStreaming, onStartNewConversation, o
 
   return (
     <div className={`flex-1 px-4 py-2 ${isTest ? 'overflow-y-auto' : 'overflow-hidden'}`}>
-      <div className={`max-w-3xl mx-auto ${isTest ? '' : 'h-full'}`}>
+      <div className={`max-w-4xl mx-auto ${isTest ? '' : 'h-full'}`}>
         {isTest ? (
           <>
             {messages.map((msg) => (

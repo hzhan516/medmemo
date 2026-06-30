@@ -57,7 +57,7 @@ export function ResizableHandle({ onResize }: ResizableHandleProps) {
   return (
     <div
       ref={handleRef}
-      className="w-1 shrink-0 cursor-col-resize hover:bg-primary/20 active:bg-primary/40 transition-colors"
+      className="w-1 shrink-0 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors rounded-full"
       onMouseDown={handleMouseDown}
     />
   )

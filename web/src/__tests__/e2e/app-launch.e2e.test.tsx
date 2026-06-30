@@ -89,7 +89,7 @@ describe('E2E: 应用启动加载持久化对话', () => {
     tlRender(<App />)
 
     await waitFor(() => {
-      expect(screen.getByText('MedMemo 健康助手')).toBeInTheDocument()
+      expect(screen.getByText('健康信息助手')).toBeInTheDocument()
     })
   })
 })

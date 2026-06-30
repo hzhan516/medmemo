@@ -101,8 +101,8 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
   const displayPlaceholder = placeholder ?? (isLoading ? 'AI 正在生成回复...' : '输入你的健康问题，或输入 /new 新建会话')
 
   return (
-    <div className="shrink-0 border-t border-border bg-background px-4 py-3">
-      <div className="flex items-end gap-2 max-w-3xl mx-auto">
+    <div className="shrink-0 mac-toolbar border-t border-white/20 dark:border-white/5 px-4 py-3">
+      <div className="flex items-end gap-2 max-w-4xl mx-auto">
         <div className="flex-1 relative">
           <textarea
             ref={textareaRef}
@@ -113,7 +113,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
             rows={1}
             className="
               w-full min-h-[56px] max-h-[120px] resize-none
-              rounded-xl border border-input bg-background px-4 py-3 pr-10
+              rounded-xl border border-border/60 bg-white/60 dark:bg-white/5 px-4 py-3 pr-10
               text-sm placeholder:text-muted-foreground
               focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent
               transition-all

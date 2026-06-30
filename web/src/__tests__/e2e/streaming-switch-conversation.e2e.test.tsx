@@ -61,7 +61,7 @@ describe('E2E: 流式生成中切换会话', () => {
 
     // 验证会话 B 是空状态（欢迎页）
     await waitFor(() => {
-      expect(screen.getByText('MedMemo 健康助手')).toBeInTheDocument()
+      expect(screen.getByText('健康信息助手')).toBeInTheDocument()
     })
 
     // 验证会话 B 不在 streaming
