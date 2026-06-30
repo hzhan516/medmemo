@@ -332,5 +332,18 @@
       "知识库 keyword-only 召回路径同样经过 reranker 重排，保证 embedding 不可用时结果质量一致",
       "补充知识库导入轮询终止与 ai_message_id 传递的前端回归测试"
     ]
+  },
+  {
+    "version": "v1.1.10",
+    "title": "macOS 临床工作台 UI 改造",
+    "features": [
+      "全局 macOS 风格设计 Token（低饱和中性色、系统字体栈、自定义滚动条）",
+      "半透明侧栏与工具栏（毛玻璃 backdrop-blur 面板）",
+      "App shell 换肤：64px 半透明导航栏 + 毛玻璃 Header + 轻量状态栏",
+      "聊天页 macOS source list 风格：蓝色选中态、玻璃底座输入区",
+      "二级页面对齐 macOS shell（记忆页、知识库页、设置页、关于页）",
+      "弹窗与横幅统一 macOS 风格（Disclaimer/Update/Feedback/Provider/Onboarding）"
+    ],
+    "fixes": []
   }
 ]
