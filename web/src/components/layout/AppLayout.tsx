@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { MessageSquare, Settings, Info, Brain, BookOpen } from 'lucide-react'
+import { Environment } from '@wails/runtime/runtime'
 import { useWails } from '@/hooks/useWails'
+import { WindowTitleBar } from './WindowTitleBar'
 
 const navItems = [
   { to: '/chat', label: '对话', icon: MessageSquare },
@@ -12,13 +14,14 @@ const navItems = [
 ]
 
 /**
- * 应用全局布局：左侧 64px 图标导航栏 + 右侧主内容区 + 底部 24px 状态栏。
+ * 应用全局布局：应用级 titlebar (Linux) + 左侧 64px 图标导航栏 + 右侧主内容区 + 底部 24px 状态栏。
  * 使用 NavLink 实现当前路由高亮，页面切换带 200ms 淡入动画。
  */
 export function AppLayout() {
   const location = useLocation()
   const { getVersionInfo } = useWails()
   const [version, setVersion] = useState('')
+  const [showAppWindowControls, setShowAppWindowControls] = useState(false)
 
   useEffect(() => {
     getVersionInfo()
@@ -28,8 +31,16 @@ export function AppLayout() {
       .catch(() => setVersion(''))
   }, [getVersionInfo])
 
-  return (
-    <div className="h-screen w-screen overflow-hidden bg-background text-foreground flex">
+  // 平台检测：Linux 启用应用级窗口按钮
+  useEffect(() => {
+    Environment()
+      .then((env) => setShowAppWindowControls(env.platform === 'linux'))
+      .catch(() => setShowAppWindowControls(false))
+  }, [])
+
+  // 应用内容部分
+  const appContent = (
+    <div className="min-h-0 flex-1 flex overflow-hidden">
       {/* 左侧导航栏 — macOS translucent rail */}
       <nav className="shrink-0 w-16 mac-vibrant-panel border-r border-white/20 dark:border-white/5 flex flex-col items-center py-4 gap-2 select-none">
         {/* Logo — restrained app tile */}
@@ -87,6 +98,16 @@ export function AppLayout() {
           </div>
         </footer>
       </div>
+    </div>
+  )
+
+  return (
+    <div className="h-screen w-screen overflow-hidden bg-background text-foreground flex flex-col">
+      {/* 应用级 titlebar：仅 Linux frameless 模式 */}
+      {showAppWindowControls && (
+        <WindowTitleBar showControls={true} />
+      )}
+      {appContent}
     </div>
   )
 }

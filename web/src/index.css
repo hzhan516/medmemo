@@ -124,3 +124,17 @@
     background-color: rgb(255 255 255 / 0.1);
   }
 }
+
+@layer utilities {
+  /* Wails frameless 拖拽区域 */
+  .app-drag-region {
+    --wails-draggable: drag;
+    user-select: none;
+  }
+
+  /* 交互控件显式禁用拖拽 */
+  .app-no-drag,
+  .app-no-drag * {
+    --wails-draggable: no-drag;
+  }
+}

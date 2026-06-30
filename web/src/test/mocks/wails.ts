@@ -73,6 +73,12 @@ export function WindowSetSystemDefaultTheme(): void {}
 export function WindowSetTitle(_title: string): void {}
 export function BrowserOpenURL(_url: string): void {}
 export function Quit(): void {}
+export function WindowMinimise(): void {}
+export function WindowToggleMaximise(): void {}
+export async function WindowIsMaximised(): Promise<boolean> { return false }
+export async function Environment(): Promise<{ buildType: string; platform: string; arch: string }> {
+  return { buildType: 'dev', platform: 'linux', arch: 'amd64' }
+}
 
 // --- WailsApp 方法模拟 ---
 
