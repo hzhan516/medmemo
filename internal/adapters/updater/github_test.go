@@ -18,6 +18,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestMain 固定 Linux 安装方式为 appimage，避免测试二进制所在目录的 .install_kind 标记文件
+// 影响 FetchLatest 相关测试，同时保证资产匹配结果可预期。
+func TestMain(m *testing.M) {
+	getLinuxInstallKind = func() string { return "appimage" }
+	os.Exit(m.Run())
+}
+
 // mockTransport 用于模拟 GitHub API 响应。
 type mockTransport struct {
 	statusCode int
@@ -182,7 +189,7 @@ func TestFindTargetAsset_LinuxArchSpecific(t *testing.T) {
 	assets := []githubAsset{
 		{Name: "MedMemo-x86_64.AppImage", BrowserDownloadURL: "https://example.com/arch", Size: 100},
 	}
-	got := findTargetAsset(assets, "linux", "amd64")
+	got := findTargetAsset(assets, "linux", "amd64", "")
 	require.NotNil(t, got)
 	assert.Equal(t, "MedMemo-x86_64.AppImage", got.Name)
 }
@@ -191,7 +198,7 @@ func TestFindTargetAsset_LinuxFallbackGeneric(t *testing.T) {
 	assets := []githubAsset{
 		{Name: "MedMemo.AppImage", BrowserDownloadURL: "https://example.com/generic", Size: 100},
 	}
-	got := findTargetAsset(assets, "linux", "amd64")
+	got := findTargetAsset(assets, "linux", "amd64", "")
 	require.NotNil(t, got)
 	assert.Equal(t, "MedMemo.AppImage", got.Name)
 }
@@ -201,7 +208,7 @@ func TestFindTargetAsset_LinuxPrefersArchOverGeneric(t *testing.T) {
 		{Name: "MedMemo.AppImage", BrowserDownloadURL: "https://example.com/generic", Size: 100},
 		{Name: "MedMemo-x86_64.AppImage", BrowserDownloadURL: "https://example.com/arch", Size: 100},
 	}
-	got := findTargetAsset(assets, "linux", "amd64")
+	got := findTargetAsset(assets, "linux", "amd64", "")
 	require.NotNil(t, got)
 	assert.Equal(t, "MedMemo-x86_64.AppImage", got.Name)
 }
@@ -210,7 +217,7 @@ func TestFindTargetAsset_LinuxNoMatch(t *testing.T) {
 	assets := []githubAsset{
 		{Name: "wrong-platform.zip", BrowserDownloadURL: "https://example.com/wrong", Size: 100},
 	}
-	got := findTargetAsset(assets, "linux", "amd64")
+	got := findTargetAsset(assets, "linux", "amd64", "")
 	assert.Nil(t, got)
 }
 
@@ -220,7 +227,7 @@ func TestFindTargetAsset_Platforms(t *testing.T) {
 		assets := []githubAsset{
 			{Name: "MedMemo-1.0.0-windows-amd64-setup.exe", BrowserDownloadURL: "https://example.com/setup", Size: 100},
 		}
-		got := findTargetAsset(assets, "windows", "amd64")
+		got := findTargetAsset(assets, "windows", "amd64", "")
 		require.NotNil(t, got)
 		assert.Equal(t, "MedMemo-1.0.0-windows-amd64-setup.exe", got.Name)
 	})
@@ -229,7 +236,7 @@ func TestFindTargetAsset_Platforms(t *testing.T) {
 		assets := []githubAsset{
 			{Name: "MedMemo.exe", BrowserDownloadURL: "https://example.com/exe", Size: 100},
 		}
-		got := findTargetAsset(assets, "windows", "amd64")
+		got := findTargetAsset(assets, "windows", "amd64", "")
 		assert.Nil(t, got)
 	})
 
@@ -237,7 +244,7 @@ func TestFindTargetAsset_Platforms(t *testing.T) {
 		assets := []githubAsset{
 			{Name: "MedMemo.dmg", BrowserDownloadURL: "https://example.com/dmg", Size: 100},
 		}
-		got := findTargetAsset(assets, "darwin", "arm64")
+		got := findTargetAsset(assets, "darwin", "arm64", "")
 		require.NotNil(t, got)
 		assert.Equal(t, "MedMemo.dmg", got.Name)
 	})
@@ -248,7 +255,7 @@ func TestFindTargetAsset_WindowsInstaller(t *testing.T) {
 		{Name: "MedMemo-amd64-installer.exe", BrowserDownloadURL: "https://example.com/installer", Size: 100},
 		{Name: "MedMemo.exe", BrowserDownloadURL: "https://example.com/exe", Size: 100},
 	}
-	got := findTargetAsset(assets, "windows", "amd64")
+	got := findTargetAsset(assets, "windows", "amd64", "")
 	require.NotNil(t, got)
 	assert.Equal(t, "MedMemo-amd64-installer.exe", got.Name)
 }
@@ -257,7 +264,59 @@ func TestFindTargetAsset_WindowsRejectsBareExe(t *testing.T) {
 	assets := []githubAsset{
 		{Name: "MedMemo.exe", BrowserDownloadURL: "https://example.com/exe", Size: 100},
 	}
-	got := findTargetAsset(assets, "windows", "amd64")
+	got := findTargetAsset(assets, "windows", "amd64", "")
+	assert.Nil(t, got)
+}
+
+// TestFindTargetAsset_LinuxAppImagePrefersAppImage 验证 AppImage 安装方式优先匹配 AppImage 资产。
+func TestFindTargetAsset_LinuxAppImagePrefersAppImage(t *testing.T) {
+	assets := []githubAsset{
+		{Name: "MedMemo_1.1.10_amd64.deb", BrowserDownloadURL: "https://example.com/deb", Size: 100},
+		{Name: "MedMemo-x86_64.AppImage", BrowserDownloadURL: "https://example.com/appimage", Size: 100},
+	}
+	got := findTargetAsset(assets, "linux", "amd64", "appimage")
+	require.NotNil(t, got)
+	assert.Equal(t, "MedMemo-x86_64.AppImage", got.Name)
+}
+
+// TestFindTargetAsset_LinuxDebPrefersDeb 验证 DEB 安装方式优先匹配 .deb 资产。
+func TestFindTargetAsset_LinuxDebPrefersDeb(t *testing.T) {
+	assets := []githubAsset{
+		{Name: "MedMemo-x86_64.AppImage", BrowserDownloadURL: "https://example.com/appimage", Size: 100},
+		{Name: "MedMemo_1.1.10_amd64.deb", BrowserDownloadURL: "https://example.com/deb", Size: 100},
+	}
+	got := findTargetAsset(assets, "linux", "amd64", "deb")
+	require.NotNil(t, got)
+	assert.Equal(t, "MedMemo_1.1.10_amd64.deb", got.Name)
+}
+
+// TestFindTargetAsset_LinuxRPMPrefersRPM 验证 RPM 安装方式优先匹配 .rpm 资产。
+func TestFindTargetAsset_LinuxRPMPrefersRPM(t *testing.T) {
+	assets := []githubAsset{
+		{Name: "MedMemo-x86_64.AppImage", BrowserDownloadURL: "https://example.com/appimage", Size: 100},
+		{Name: "MedMemo-1.1.10-1.x86_64.rpm", BrowserDownloadURL: "https://example.com/rpm", Size: 100},
+	}
+	got := findTargetAsset(assets, "linux", "amd64", "rpm")
+	require.NotNil(t, got)
+	assert.Equal(t, "MedMemo-1.1.10-1.x86_64.rpm", got.Name)
+}
+
+// TestFindTargetAsset_LinuxUnknownFallbackAppImage 验证未知安装方式回退到 AppImage。
+func TestFindTargetAsset_LinuxUnknownFallbackAppImage(t *testing.T) {
+	assets := []githubAsset{
+		{Name: "MedMemo-x86_64.AppImage", BrowserDownloadURL: "https://example.com/appimage", Size: 100},
+	}
+	got := findTargetAsset(assets, "linux", "amd64", "unknown")
+	require.NotNil(t, got)
+	assert.Equal(t, "MedMemo-x86_64.AppImage", got.Name)
+}
+
+// TestFindTargetAsset_LinuxDebNoFallbackToAppImage 验证 DEB 安装方式在未找到 .deb 时不回退到 AppImage。
+func TestFindTargetAsset_LinuxDebNoFallbackToAppImage(t *testing.T) {
+	assets := []githubAsset{
+		{Name: "MedMemo-x86_64.AppImage", BrowserDownloadURL: "https://example.com/appimage", Size: 100},
+	}
+	got := findTargetAsset(assets, "linux", "amd64", "deb")
 	assert.Nil(t, got)
 }
 
@@ -267,7 +326,7 @@ func TestFindTargetAsset_DarwinAmd64PrefersX86_64DMG(t *testing.T) {
 		{Name: "MedMemo_arm64.dmg", BrowserDownloadURL: "https://example.com/arm64", Size: 100},
 		{Name: "MedMemo_x86_64.dmg", BrowserDownloadURL: "https://example.com/x86_64", Size: 100},
 	}
-	got := findTargetAsset(assets, "darwin", "amd64")
+	got := findTargetAsset(assets, "darwin", "amd64", "")
 	require.NotNil(t, got)
 	assert.Equal(t, "MedMemo_x86_64.dmg", got.Name)
 }
@@ -278,7 +337,7 @@ func TestFindTargetAsset_DarwinArm64PrefersArm64DMG(t *testing.T) {
 		{Name: "MedMemo_x86_64.dmg", BrowserDownloadURL: "https://example.com/x86_64", Size: 100},
 		{Name: "MedMemo_arm64.dmg", BrowserDownloadURL: "https://example.com/arm64", Size: 100},
 	}
-	got := findTargetAsset(assets, "darwin", "arm64")
+	got := findTargetAsset(assets, "darwin", "arm64", "")
 	require.NotNil(t, got)
 	assert.Equal(t, "MedMemo_arm64.dmg", got.Name)
 }
@@ -288,7 +347,7 @@ func TestFindTargetAsset_DarwinFallbackToGenericDMG(t *testing.T) {
 	assets := []githubAsset{
 		{Name: "MedMemo.dmg", BrowserDownloadURL: "https://example.com/generic", Size: 100},
 	}
-	got := findTargetAsset(assets, "darwin", "arm64")
+	got := findTargetAsset(assets, "darwin", "arm64", "")
 	require.NotNil(t, got)
 	assert.Equal(t, "MedMemo.dmg", got.Name)
 }
@@ -298,23 +357,23 @@ func TestFindTargetAsset_DarwinNoMatch(t *testing.T) {
 	assets := []githubAsset{
 		{Name: "MedMemo-x86_64.AppImage", BrowserDownloadURL: "https://example.com/linux", Size: 100},
 	}
-	got := findTargetAsset(assets, "darwin", "arm64")
+	got := findTargetAsset(assets, "darwin", "arm64", "")
 	assert.Nil(t, got)
 }
 
 // TestMatchesPlatform_DarwinArchX86_64 验证 x86_64 DMG 匹配 amd64 架构。
 func TestMatchesPlatform_DarwinArchX86_64(t *testing.T) {
-	assert.True(t, matchesPlatform("MedMemo_x86_64.dmg", "darwin", "amd64"))
+	assert.True(t, matchesPlatform("MedMemo_x86_64.dmg", "darwin", "amd64", ""))
 }
 
 // TestMatchesPlatform_DarwinArchArm64 验证 arm64 DMG 匹配 arm64 架构。
 func TestMatchesPlatform_DarwinArchArm64(t *testing.T) {
-	assert.True(t, matchesPlatform("MedMemo_arm64.dmg", "darwin", "arm64"))
+	assert.True(t, matchesPlatform("MedMemo_arm64.dmg", "darwin", "arm64", ""))
 }
 
 // TestMatchesPlatform_DarwinArchCrossMismatch 验证跨架构 DMG 不匹配。
 func TestMatchesPlatform_DarwinArchCrossMismatch(t *testing.T) {
-	assert.False(t, matchesPlatform("MedMemo_x86_64.dmg", "darwin", "arm64"))
+	assert.False(t, matchesPlatform("MedMemo_x86_64.dmg", "darwin", "arm64", ""))
 }
 
 // TestMatchArch 验证架构识别支持 amd64/x86_64 与 arm64/aarch64。
