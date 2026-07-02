@@ -18,6 +18,8 @@ release:
   name_template: "MedMemo {{ .Version }}"
   extra_files:
     - glob: build/bin/*.AppImage
+    - glob: build/bin/*.deb
+    - glob: build/bin/*.rpm
     - glob: build/bin/*.dmg
     - glob: build/bin/*-installer.exe
 
