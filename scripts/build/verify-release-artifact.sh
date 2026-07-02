@@ -36,6 +36,12 @@ case "$PLATFORM" in
     ;;
   windows)
     verify_binary "build/bin/MedMemo.exe"
+    INSTALLER="build/bin/MedMemo-amd64-installer.exe"
+    if [ ! -f "$INSTALLER" ]; then
+      echo "ERROR: Windows installer not found: $INSTALLER"
+      exit 1
+    fi
+    echo "OK: $INSTALLER exists"
     ;;
   darwin)
     ARCH="${2:-}"
