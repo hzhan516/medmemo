@@ -4,7 +4,7 @@
 set -euo pipefail
 
 OS="${1:-linux}"
-VERSION="${2:-dev}"
+export VERSION="${2:-dev}"
 
 ./scripts/build/build-frontend.sh
 
@@ -19,6 +19,13 @@ case "$OS" in
     wails build -s -clean -ldflags "-s -w -X main.version=${VERSION}" -tags "webkit2_41,ORT"
     echo "[TASK-027] Building AppImage..."
     ./build/package/build-appimage.sh
+    echo "[TASK-027] Building DEB/RPM packages..."
+    if ! command -v nfpm &>/dev/null; then
+      echo "[TASK-027] Error: nfpm is required to build DEB/RPM packages. Install it from https://nfpm.goreleaser.com/"
+      exit 1
+    fi
+    nfpm package -f build/package/nfpm.yaml -p deb -t "build/bin/MedMemo_${VERSION}_amd64.deb"
+    nfpm package -f build/package/nfpm.yaml -p rpm -t "build/bin/MedMemo-${VERSION}-1.x86_64.rpm"
     ;;
   windows)
     echo "[TASK-027] Building for Windows..."
@@ -56,15 +63,29 @@ case "$OS" in
     export MEDMEMO_TOKENIZERS_BASE_URL="https://github.com/hzhan516/medmemo/releases/download/tokenizers-v1.27.0"
     ./scripts/build/download-onnx.sh --platform=darwin
     ./scripts/build/download-tokenizers.sh --platform=darwin
-    DARWIN_PLATFORM="${MEDMEMO_DARWIN_PLATFORM:-darwin/arm64}"
+    case "$OS" in
+      darwin-amd64)
+        DARWIN_PLATFORM="darwin/amd64"
+        DMG_ARCH="x86_64"
+        ;;
+      darwin-arm64)
+        DARWIN_PLATFORM="darwin/arm64"
+        DMG_ARCH="arm64"
+        ;;
+      *)
+        DARWIN_PLATFORM="${MEDMEMO_DARWIN_PLATFORM:-darwin/arm64}"
+        DMG_ARCH="arm64"
+        ;;
+    esac
     REQUIRE_UNIVERSAL="false"
     if [ "$DARWIN_PLATFORM" = "darwin/universal" ]; then
       REQUIRE_UNIVERSAL="true"
+      DMG_ARCH="universal"
     fi
     wails build -s -clean -ldflags "-s -w -X main.version=${VERSION}" -tags "ORT" -platform "$DARWIN_PLATFORM"
     ./scripts/build/copy-runtime-resources.sh "build/bin/MedMemo.app/Contents/Resources" "darwin" "$REQUIRE_UNIVERSAL"
     echo "[TASK-027] Building dmg..."
-    ./build/package/build-dmg.sh
+    ./build/package/build-dmg.sh --arch "$DMG_ARCH"
     # GoReleaser prebuilt 期望 build/bin/MedMemo，而 Wails macOS 产物为 .app bundle
     # 复制二进制供 GoReleaser 归档，用户实际应使用 .dmg
     if [ -d build/bin/MedMemo.app ]; then
