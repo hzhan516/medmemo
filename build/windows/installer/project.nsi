@@ -33,7 +33,7 @@ ManifestDPIAware true
 
 Name "${INFO_PRODUCTNAME}"
 OutFile "..\..\bin\${INFO_PROJECTNAME}-${ARCH}-installer.exe"
-InstallDir "$PROGRAMFILES64\${INFO_COMPANYNAME}\${INFO_PRODUCTNAME}"
+InstallDir "$LOCALAPPDATA\Programs\MedMemo"
 ShowInstDetails show
 
 Function .onInit
@@ -49,6 +49,10 @@ Section
 
     !insertmacro wails.files
 
+    ; 安装 MinGW 运行时 DLL，避免用户系统缺少依赖
+    SetOutPath $INSTDIR
+    File "..\..\bin\*.dll"
+
     SetOutPath "$INSTDIR\resources\rules"
     File /r "..\..\..\resources\rules\*.*"
     SetOutPath "$INSTDIR\resources\models"
@@ -57,20 +61,15 @@ Section
     File "..\..\..\resources\lib\windows\*.dll"
     SetOutPath $INSTDIR
 
+    ; 创建数据目录并记录安装路径，供应用与自动更新器定位
+    CreateDirectory "$INSTDIR\data"
+    WriteRegStr HKCU "Software\MedMemo" "InstallPath" "$INSTDIR"
+
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
     CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
 
     !insertmacro wails.associateFiles
     !insertmacro wails.associateCustomProtocols
-
-    ; 记录安装路径到注册表，供自动更新器识别原安装目录
-    UserInfo::GetAccountType
-    Pop $0
-    ${If} $0 == "Admin"
-        WriteRegStr HKLM "Software\MedMemo" "InstallPath" $INSTDIR
-    ${Else}
-        WriteRegStr HKCU "Software\MedMemo" "InstallPath" $INSTDIR
-    ${EndIf}
 
     !insertmacro wails.writeUninstaller
 
@@ -83,7 +82,13 @@ Section "uninstall"
 
     RMDir /r "$AppData\${PRODUCT_EXECUTABLE}"
 
-    RMDir /r $INSTDIR
+    ; 显式删除安装文件，保留 $INSTDIR\data 用户数据
+    Delete "$INSTDIR\${PRODUCT_EXECUTABLE}"
+    Delete "$INSTDIR\*.dll"
+    RMDir /r "$INSTDIR\resources"
+    Delete "$INSTDIR\uninstall.exe"
+    RMDir "$INSTDIR\data"
+    RMDir "$INSTDIR"
 
     Delete "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk"
     Delete "$DESKTOP\${INFO_PRODUCTNAME}.lnk"
@@ -92,13 +97,7 @@ Section "uninstall"
     !insertmacro wails.unassociateCustomProtocols
 
     ; 清理安装路径注册表
-    UserInfo::GetAccountType
-    Pop $0
-    ${If} $0 == "Admin"
-        DeleteRegKey HKLM "Software\MedMemo"
-    ${Else}
-        DeleteRegKey HKCU "Software\MedMemo"
-    ${EndIf}
+    DeleteRegKey HKCU "Software\MedMemo"
 
     !insertmacro wails.deleteUninstaller
 SectionEnd
