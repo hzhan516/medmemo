@@ -22,6 +22,24 @@ func TestLoader_Load_Defaults(t *testing.T) {
 	assert.Equal(t, models.ChannelBeta, cfg.UpdateChannel)
 }
 
+func TestLoader_Load_EnvOverride_DataDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("MEDMEMO_DATA_DIR", tmpDir)
+
+	loader := NewLoader("", models.ChannelBeta)
+	cfg, err := loader.Load()
+	require.NoError(t, err)
+	assert.Equal(t, tmpDir, cfg.DataDir)
+}
+
+func TestDefaultDataDirPath_Unix(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	got := defaultDataDirPath()
+	assert.Equal(t, filepath.Join(home, ".medmemo", "data"), got)
+}
+
 func TestLoader_Load_FromYAML(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.yaml")

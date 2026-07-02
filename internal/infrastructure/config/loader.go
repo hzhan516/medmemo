@@ -14,7 +14,6 @@ import (
 )
 
 const (
-	defaultDataDir              = "~/.medmemo/data"
 	defaultModel                = "kimi-lite"
 	defaultLanguage             = "zh-CN"
 	defaultEnableCloud          = true
@@ -96,7 +95,7 @@ func (l *Loader) loadDefaults() *rawConfig {
 		updateChannel = string(models.ChannelBeta)
 	}
 	desensitizationLevel := defaultDesensitizationLevel
-	dataDir := ExpandTilde(defaultDataDir)
+	dataDir := defaultDataDirPath()
 	if dataDir == "" {
 		// 兜底：若无法解析主目录，使用当前工作目录下的 .medmemo/data
 		dataDir = ".medmemo/data"

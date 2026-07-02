@@ -65,15 +65,15 @@ func (s *Service) CheckUpdate(ctx context.Context, currentVersion string) (*enti
 }
 
 // DownloadUpdate 下载指定版本的更新包到本地。
-// 下载路径为 ~/.medmemo/updates/MedMemo-<version>-<os>-<arch>.<ext>
+// 下载路径按平台区分：非 Windows 为 ~/.medmemo/updates；Windows 为当前 exe 所在目录下的
+// data\updates，与安装目录保持一致。
+// 文件名格式：MedMemo-<version>-<os>-<arch>.<ext>
 // 下载过程中通过 progress 回调推送字节进度。
 func (s *Service) DownloadUpdate(ctx context.Context, info *entity.UpdateInfo, progress func(downloaded, total int64)) (string, error) {
-	home, err := os.UserHomeDir()
+	updateDir, err := updateDownloadDir()
 	if err != nil {
-		return "", fmt.Errorf("failed to get home directory: %w", err)
+		return "", fmt.Errorf("failed to resolve update directory: %w", err)
 	}
-
-	updateDir := filepath.Join(home, ".medmemo", "updates")
 	if err := os.MkdirAll(updateDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create update directory: %w", err)
 	}
@@ -93,6 +93,23 @@ func (s *Service) DownloadUpdate(ctx context.Context, info *entity.UpdateInfo, p
 	}
 
 	return destPath, nil
+}
+
+// updateDownloadDir 返回当前平台更新包下载目录。
+// Windows 下优先使用当前 exe 所在目录的 data\updates，便于安装版统一管理数据；
+// 若无法获取 exe 路径则回退到用户主目录。非 Windows 保持 ~/.medmemo/updates。
+func updateDownloadDir() (string, error) {
+	if runtime.GOOS == "windows" {
+		exe, err := os.Executable()
+		if err == nil {
+			return filepath.Join(filepath.Dir(exe), "data", "updates"), nil
+		}
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to get home directory: %w", err)
+	}
+	return filepath.Join(home, ".medmemo", "updates"), nil
 }
 
 // ApplyUpdate 应用已下载的更新包。
