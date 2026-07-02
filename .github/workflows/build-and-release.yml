@@ -45,8 +45,12 @@ jobs:
             platform: linux
           - os: windows-latest
             platform: windows
-          - os: macos-latest
-            platform: darwin
+          - os: macos-13
+            platform: darwin-amd64
+            arch: x86_64
+          - os: macos-14
+            platform: darwin-arm64
+            arch: arm64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
@@ -76,7 +80,7 @@ jobs:
           sudo apt-get install -y libsqlcipher-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev gcc
 
       - name: Install macOS dependencies
-        if: matrix.platform == 'darwin'
+        if: startsWith(matrix.platform, 'darwin')
         run: brew install sqlcipher create-dmg
 
       - name: Install dlfcn-win32 for ortgenai (Windows)
@@ -102,7 +106,7 @@ jobs:
         shell: bash
 
       - name: Verify release artifact
-        run: ./scripts/build/verify-release-artifact.sh ${{ matrix.platform }}
+        run: ./scripts/build/verify-release-artifact.sh ${{ matrix.platform }} ${{ matrix.arch }}
         shell: bash
 
       - name: Linux runtime smoke test
@@ -150,26 +154,44 @@ jobs:
           name: medmemo-windows-${{ needs.version.outputs.version }}
           path: artifacts/windows/
 
-      - name: Download macOS artifacts
+      - name: Download macOS Intel artifacts
         uses: actions/download-artifact@v8
         with:
-          name: medmemo-darwin-${{ needs.version.outputs.version }}
-          path: artifacts/darwin/
+          name: medmemo-darwin-amd64-${{ needs.version.outputs.version }}
+          path: artifacts/darwin-amd64/
+
+      - name: Download macOS Apple Silicon artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: medmemo-darwin-arm64-${{ needs.version.outputs.version }}
+          path: artifacts/darwin-arm64/
 
       - name: Prepare release assets
         run: |
           mkdir -p release-assets
 
-          # Windows：优先 NSIS installer，回退到裸二进制
+          # Windows：仅发布 NSIS installer，不再回退到裸二进制
           if [ -f "artifacts/windows/MedMemo-amd64-installer.exe" ]; then
               cp "artifacts/windows/MedMemo-amd64-installer.exe" "release-assets/MedMemoSetup.exe"
-          elif [ -f "artifacts/windows/MedMemo.exe" ]; then
-              cp "artifacts/windows/MedMemo.exe" "release-assets/MedMemoSetup.exe"
+          else
+              echo "ERROR: Windows installer not found"
+              exit 1
           fi
 
-          # macOS：只发布 .dmg
-          if [ -f "artifacts/darwin/MedMemo.dmg" ]; then
-              cp "artifacts/darwin/MedMemo.dmg" "release-assets/MedMemo.dmg"
+          # macOS Intel
+          if [ -f "artifacts/darwin-amd64/MedMemo_x86_64.dmg" ]; then
+              cp "artifacts/darwin-amd64/MedMemo_x86_64.dmg" "release-assets/MedMemo_x86_64.dmg"
+          else
+              echo "ERROR: macOS Intel DMG missing"
+              exit 1
+          fi
+
+          # macOS Apple Silicon
+          if [ -f "artifacts/darwin-arm64/MedMemo_arm64.dmg" ]; then
+              cp "artifacts/darwin-arm64/MedMemo_arm64.dmg" "release-assets/MedMemo_arm64.dmg"
+          else
+              echo "ERROR: macOS Apple Silicon DMG missing"
+              exit 1
           fi
 
           # Linux：只发布 .AppImage，保留架构后缀以便 updater 优先匹配

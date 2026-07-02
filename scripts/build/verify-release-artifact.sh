@@ -38,10 +38,17 @@ case "$PLATFORM" in
     verify_binary "build/bin/MedMemo.exe"
     ;;
   darwin)
-    verify_binary "build/bin/MedMemo.app/Contents/MacOS/MedMemo"
-    if [ -f "build/bin/MedMemo" ]; then
-      verify_binary "build/bin/MedMemo"
+    ARCH="${2:-}"
+    if [ -z "$ARCH" ]; then
+      echo "ERROR: architecture argument required for darwin verification"
+      exit 1
     fi
+    DMG_FILE="build/bin/MedMemo_${ARCH}.dmg"
+    if [ ! -f "$DMG_FILE" ]; then
+      echo "ERROR: $DMG_FILE not found"
+      exit 1
+    fi
+    verify_binary "build/bin/MedMemo.app/Contents/MacOS/MedMemo"
     ;;
   *)
     echo "Unsupported platform: $PLATFORM"

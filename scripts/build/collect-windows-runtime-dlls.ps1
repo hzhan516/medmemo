@@ -28,11 +28,6 @@ $requiredDlls = @(
     "libwinpthread-1.dll"
 )
 
-if (-not (Test-Path $BinaryPath)) {
-    Write-Error "Binary not found: $BinaryPath"
-    exit 1
-}
-
 if (-not (Test-Path $OutputDir)) {
     New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 }
@@ -40,6 +35,12 @@ if (-not (Test-Path $OutputDir)) {
 if (-not (Test-Path $MinGWBinDir)) {
     Write-Error "MinGW bin directory not found: $MinGWBinDir"
     exit 1
+}
+
+if (Test-Path $BinaryPath) {
+    Write-Host "Inspecting binary: $BinaryPath"
+} else {
+    Write-Warning "Binary not found: $BinaryPath (continuing with static DLL list)"
 }
 
 $missing = @()

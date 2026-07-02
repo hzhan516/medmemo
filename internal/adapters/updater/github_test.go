@@ -225,13 +225,12 @@ func TestFindTargetAsset_Platforms(t *testing.T) {
 		assert.Equal(t, "MedMemo-1.0.0-windows-amd64-setup.exe", got.Name)
 	})
 
-	t.Run("windows fallback exe", func(t *testing.T) {
+	t.Run("windows rejects bare exe", func(t *testing.T) {
 		assets := []githubAsset{
 			{Name: "MedMemo.exe", BrowserDownloadURL: "https://example.com/exe", Size: 100},
 		}
 		got := findTargetAsset(assets, "windows", "amd64")
-		require.NotNil(t, got)
-		assert.Equal(t, "MedMemo.exe", got.Name)
+		assert.Nil(t, got)
 	})
 
 	t.Run("darwin dmg", func(t *testing.T) {
@@ -242,6 +241,24 @@ func TestFindTargetAsset_Platforms(t *testing.T) {
 		require.NotNil(t, got)
 		assert.Equal(t, "MedMemo.dmg", got.Name)
 	})
+}
+
+func TestFindTargetAsset_WindowsInstaller(t *testing.T) {
+	assets := []githubAsset{
+		{Name: "MedMemo-amd64-installer.exe", BrowserDownloadURL: "https://example.com/installer", Size: 100},
+		{Name: "MedMemo.exe", BrowserDownloadURL: "https://example.com/exe", Size: 100},
+	}
+	got := findTargetAsset(assets, "windows", "amd64")
+	require.NotNil(t, got)
+	assert.Equal(t, "MedMemo-amd64-installer.exe", got.Name)
+}
+
+func TestFindTargetAsset_WindowsRejectsBareExe(t *testing.T) {
+	assets := []githubAsset{
+		{Name: "MedMemo.exe", BrowserDownloadURL: "https://example.com/exe", Size: 100},
+	}
+	got := findTargetAsset(assets, "windows", "amd64")
+	assert.Nil(t, got)
 }
 
 // TestFindTargetAsset_DarwinAmd64PrefersX86_64DMG 验证 Intel Mac 优先匹配 x86_64 DMG。

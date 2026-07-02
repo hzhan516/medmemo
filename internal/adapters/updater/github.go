@@ -252,10 +252,6 @@ func findTargetAsset(assets []githubAsset, goos, goarch string) *githubAsset {
 			return fallback
 		}
 	}
-	// Windows 回退：未匹配到 setup/installer 时取任意 exe
-	if goos == "windows" {
-		return findWindowsFallback(assets)
-	}
 	// Darwin 回退：未匹配到架构特定 DMG 时取任意 .dmg（向后兼容）
 	if goos == "darwin" {
 		for i := range assets {
@@ -286,16 +282,6 @@ func matchesPlatform(name, goos, goarch string) bool {
 func findLinuxFallback(assets []githubAsset) *githubAsset {
 	for i := range assets {
 		if strings.HasSuffix(strings.ToLower(assets[i].Name), ".appimage") {
-			return &assets[i]
-		}
-	}
-	return nil
-}
-
-// findWindowsFallback 在未匹配到 setup 安装程序时回退到任意 exe。
-func findWindowsFallback(assets []githubAsset) *githubAsset {
-	for i := range assets {
-		if strings.HasSuffix(strings.ToLower(assets[i].Name), ".exe") {
 			return &assets[i]
 		}
 	}

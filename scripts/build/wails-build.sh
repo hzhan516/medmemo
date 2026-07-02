@@ -42,6 +42,15 @@ case "$OS" in
       echo "[TASK-027] Warning: PowerShell not found. Skipping library download."
       echo "[TASK-027] Please manually download libraries to resources/lib/windows/"
     fi
+    # 收集 MinGW 运行时 DLL，确保 NSIS 打包进安装程序
+    if command -v pwsh &>/dev/null; then
+      pwsh -ExecutionPolicy Bypass -File scripts/build/collect-windows-runtime-dlls.ps1
+    elif command -v powershell &>/dev/null; then
+      powershell -ExecutionPolicy Bypass -File scripts/build/collect-windows-runtime-dlls.ps1
+    else
+      echo "[TASK-027] Warning: PowerShell not found. Skipping runtime DLL collection."
+      echo "[TASK-027] Please manually copy MinGW DLLs to build/bin/"
+    fi
     # MinGW-w64 官方 libntdll.a 不包含 Native API 符号，必须从 ntdll.dll 现场生成
     echo "[TASK-027] Generating libntdll.a from system ntdll.dll..."
     objdump -p /c/Windows/System32/ntdll.dll | \
