@@ -17,6 +17,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       prerelease: ${{ steps.version.outputs.prerelease }}
+      draft: ${{ steps.version.outputs.draft }}
     steps:
       - uses: actions/checkout@v6
 
@@ -24,15 +25,30 @@ jobs:
         id: version
         run: |
           BASE_VERSION=$(jq -r '.info.productVersion' wails.json)
-          RUN_NUMBER=${{ github.run_number }}
+          REF="${GITHUB_REF_NAME}"
 
-          # branch push（main/release）统一生成预发布版本，避免稳定用户收到 CI 构建版本
-          VERSION="v${BASE_VERSION}-Pre-release-build.${RUN_NUMBER}"
-          PRERELEASE="true"
+          if [[ "$REF" == release/* ]]; then
+            BRANCH_VER=$(echo "$REF" | sed 's|release/v||')
+            if [[ "$BRANCH_VER" != "$BASE_VERSION" ]]; then
+              echo "ERROR: Branch version ($BRANCH_VER) != wails.json productVersion ($BASE_VERSION)"
+              exit 1
+            fi
+            VERSION="v${BASE_VERSION}-Pre-release"
+            PRERELEASE="true"
+            DRAFT="true"
+          elif [[ "$REF" == "main" ]]; then
+            VERSION="v${BASE_VERSION}"
+            PRERELEASE="false"
+            DRAFT="false"
+          else
+            echo "Unsupported ref: $REF"
+            exit 1
+          fi
 
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "prerelease=$PRERELEASE" >> $GITHUB_OUTPUT
-          echo "Generated version: $VERSION (prerelease=$PRERELEASE)"
+          echo "draft=$DRAFT" >> $GITHUB_OUTPUT
+          echo "Generated version: $VERSION (prerelease=$PRERELEASE, draft=$DRAFT)"
 
   build:
     name: Build ${{ matrix.platform }}
@@ -169,8 +185,9 @@ jobs:
       - name: Prepare release assets
         run: |
           mkdir -p release-assets
+          VERSION="${{ needs.version.outputs.version }}"
 
-          # Windows：仅发布 NSIS installer，不再回退到裸二进制
+          # Windows: only ship the NSIS installer, never fall back to a bare exe.
           if [ -f "artifacts/windows/MedMemo-amd64-installer.exe" ]; then
               cp "artifacts/windows/MedMemo-amd64-installer.exe" "release-assets/MedMemoSetup.exe"
           else
@@ -194,30 +211,51 @@ jobs:
               exit 1
           fi
 
-          # Linux：只发布 .AppImage，保留架构后缀以便 updater 优先匹配
+          # Linux: AppImage, DEB and RPM packages.
           if [ -f "artifacts/linux/MedMemo-x86_64.AppImage" ]; then
               cp "artifacts/linux/MedMemo-x86_64.AppImage" "release-assets/MedMemo-x86_64.AppImage"
+          else
+              echo "ERROR: Linux AppImage missing"
+              exit 1
           fi
 
-          # 生成 checksums.txt 供 updater 校验使用
-          if [ "$(ls -A release-assets)" ]; then
-              cd release-assets
-              sha256sum * > checksums.txt
-              cd ..
+          DEB_FILE="artifacts/linux/MedMemo_${VERSION}_amd64.deb"
+          if [ -f "$DEB_FILE" ]; then
+              cp "$DEB_FILE" "release-assets/$(basename "$DEB_FILE")"
+          else
+              echo "ERROR: Linux DEB package missing: $DEB_FILE"
+              exit 1
+          fi
+
+          RPM_FILE="artifacts/linux/MedMemo-${VERSION}-1.x86_64.rpm"
+          if [ -f "$RPM_FILE" ]; then
+              cp "$RPM_FILE" "release-assets/$(basename "$RPM_FILE")"
+          else
+              echo "ERROR: Linux RPM package missing: $RPM_FILE"
+              exit 1
           fi
 
           echo "Release assets:"
           ls -la release-assets/
 
-      # 先以 draft 创建 release 并上传资产，避免 immutable release 仓库
-      # 在 prerelease 状态下拒绝后续资产上传的问题。
-      - name: Create Draft Release
+      - name: Generate checksums
+        run: |
+          cd release-assets
+          sha256sum * > checksums.txt
+          cd ..
+          echo "Generated checksums.txt:"
+          cat release-assets/checksums.txt
+
+      - name: Verify release asset whitelist
+        run: ./scripts/build/verify-release-assets.sh release-assets
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           name: MedMemo ${{ needs.version.outputs.version }}
           tag_name: ${{ needs.version.outputs.version }}
           prerelease: ${{ needs.version.outputs.prerelease == 'true' }}
-          draft: true
+          draft: ${{ needs.version.outputs.draft == 'true' }}
           files: release-assets/*
           generate_release_notes: true
           fail_on_unmatched_files: false
@@ -225,6 +263,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish Release
+        if: needs.version.outputs.prerelease == 'false'
         run: |
           TAG="${{ needs.version.outputs.version }}"
           REPO="${{ github.repository }}"
@@ -234,8 +273,7 @@ jobs:
           for i in $(seq 1 $MAX_RETRIES); do
             echo "Attempt $i/$MAX_RETRIES: Publishing release $TAG..."
 
-            # 幂等检查：若已被发布则直接成功
-            # stderr 保留到日志用于排查，通过 set +e 捕获退出码避免吞掉认证失败等真实错误
+            # Idempotency: succeed if the release is already published.
             set +e
             DRAFT_JSON=$(gh release view "$TAG" --repo "$REPO" --json isDraft 2>/tmp/gh_view_err)
             VIEW_EXIT=$?
