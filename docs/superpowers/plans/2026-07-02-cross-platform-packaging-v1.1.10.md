@@ -320,7 +320,7 @@ case "darwin":
 - Modify: `.github/workflows/release.yml`
 - Modify: `.github/workflows/ci.yml`
 
-- [ ] **Step 10.1:** Replace single `macos-latest` with matrix entries `macos-13` (darwin-amd64) and `macos-14` (darwin-arm64).
+- [ ] **Step 10.1:** Replace single `macos-latest` with matrix entries `macos-15-intel` (darwin-amd64) and `macos-14` (darwin-arm64).
 - [ ] **Step 10.2:** Ensure artifacts uploaded per platform key (`darwin-amd64`, `darwin-arm64`).
 - [ ] **Step 10.3:** Update release job to download both macOS artifacts and copy both DMGs.
 - [ ] **Step 10.4:** Commit.
