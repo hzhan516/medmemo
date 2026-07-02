@@ -244,6 +244,62 @@ func TestFindTargetAsset_Platforms(t *testing.T) {
 	})
 }
 
+// TestFindTargetAsset_DarwinAmd64PrefersX86_64DMG 验证 Intel Mac 优先匹配 x86_64 DMG。
+func TestFindTargetAsset_DarwinAmd64PrefersX86_64DMG(t *testing.T) {
+	assets := []githubAsset{
+		{Name: "MedMemo_arm64.dmg", BrowserDownloadURL: "https://example.com/arm64", Size: 100},
+		{Name: "MedMemo_x86_64.dmg", BrowserDownloadURL: "https://example.com/x86_64", Size: 100},
+	}
+	got := findTargetAsset(assets, "darwin", "amd64")
+	require.NotNil(t, got)
+	assert.Equal(t, "MedMemo_x86_64.dmg", got.Name)
+}
+
+// TestFindTargetAsset_DarwinArm64PrefersArm64DMG 验证 Apple Silicon Mac 优先匹配 arm64 DMG。
+func TestFindTargetAsset_DarwinArm64PrefersArm64DMG(t *testing.T) {
+	assets := []githubAsset{
+		{Name: "MedMemo_x86_64.dmg", BrowserDownloadURL: "https://example.com/x86_64", Size: 100},
+		{Name: "MedMemo_arm64.dmg", BrowserDownloadURL: "https://example.com/arm64", Size: 100},
+	}
+	got := findTargetAsset(assets, "darwin", "arm64")
+	require.NotNil(t, got)
+	assert.Equal(t, "MedMemo_arm64.dmg", got.Name)
+}
+
+// TestFindTargetAsset_DarwinFallbackToGenericDMG 验证无架构特定 DMG 时回退到通用 .dmg。
+func TestFindTargetAsset_DarwinFallbackToGenericDMG(t *testing.T) {
+	assets := []githubAsset{
+		{Name: "MedMemo.dmg", BrowserDownloadURL: "https://example.com/generic", Size: 100},
+	}
+	got := findTargetAsset(assets, "darwin", "arm64")
+	require.NotNil(t, got)
+	assert.Equal(t, "MedMemo.dmg", got.Name)
+}
+
+// TestFindTargetAsset_DarwinNoMatch 验证无 DMG 资产时返回 nil。
+func TestFindTargetAsset_DarwinNoMatch(t *testing.T) {
+	assets := []githubAsset{
+		{Name: "MedMemo-x86_64.AppImage", BrowserDownloadURL: "https://example.com/linux", Size: 100},
+	}
+	got := findTargetAsset(assets, "darwin", "arm64")
+	assert.Nil(t, got)
+}
+
+// TestMatchesPlatform_DarwinArchX86_64 验证 x86_64 DMG 匹配 amd64 架构。
+func TestMatchesPlatform_DarwinArchX86_64(t *testing.T) {
+	assert.True(t, matchesPlatform("MedMemo_x86_64.dmg", "darwin", "amd64"))
+}
+
+// TestMatchesPlatform_DarwinArchArm64 验证 arm64 DMG 匹配 arm64 架构。
+func TestMatchesPlatform_DarwinArchArm64(t *testing.T) {
+	assert.True(t, matchesPlatform("MedMemo_arm64.dmg", "darwin", "arm64"))
+}
+
+// TestMatchesPlatform_DarwinArchCrossMismatch 验证跨架构 DMG 不匹配。
+func TestMatchesPlatform_DarwinArchCrossMismatch(t *testing.T) {
+	assert.False(t, matchesPlatform("MedMemo_x86_64.dmg", "darwin", "arm64"))
+}
+
 // TestMatchArch 验证架构识别支持 amd64/x86_64 与 arm64/aarch64。
 func TestMatchArch(t *testing.T) {
 	tests := []struct {
