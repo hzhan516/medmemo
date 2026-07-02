@@ -8,18 +8,6 @@ before:
 builds:
   - skip: true
 
-archives:
-  - id: medmemo
-    meta: true
-    formats:
-      - tar.gz
-    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ if .Env.PLATFORM }}{{ .Env.PLATFORM }}{{ else }}local{{ end }}"
-    files:
-      - src: build/bin/*
-        dst: .
-      - src: resources/**/*
-        dst: resources/
-
 checksum:
   name_template: 'checksums.txt'
 

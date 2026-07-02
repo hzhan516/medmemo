@@ -20,8 +20,12 @@ jobs:
             platform: linux
           - os: windows-latest
             platform: windows
-          - os: macos-latest
-            platform: darwin
+          - os: macos-13
+            platform: darwin-amd64
+            arch: x86_64
+          - os: macos-14
+            platform: darwin-arm64
+            arch: arm64
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
@@ -54,7 +58,7 @@ jobs:
           sudo apt-get install -y libsqlcipher-dev libwebkit2gtk-4.1-dev gcc
 
       - name: Install macOS dependencies
-        if: matrix.platform == 'darwin'
+        if: startsWith(matrix.platform, 'darwin')
         run: |
           brew install sqlcipher create-dmg
 
@@ -81,7 +85,7 @@ jobs:
         shell: bash
 
       - name: Verify release artifact
-        run: ./scripts/build/verify-release-artifact.sh ${{ matrix.platform }}
+        run: ./scripts/build/verify-release-artifact.sh ${{ matrix.platform }} ${{ matrix.arch }}
         shell: bash
 
       - name: Linux runtime smoke test
