@@ -3,6 +3,7 @@ package updater
 import (
 	"context"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/hex"
 	"fmt"
 	"net/http"
@@ -23,6 +24,24 @@ import (
 func TestMain(m *testing.M) {
 	getLinuxInstallKind = func() string { return "appimage" }
 	os.Exit(m.Run())
+}
+
+// TestNewGitHubUpdater_NilClient 验证传入 nil 时构造默认 HTTP 客户端。
+func TestNewGitHubUpdater_NilClient(t *testing.T) {
+	g := NewGitHubUpdater(nil)
+	require.NotNil(t, g)
+	require.NotNil(t, g.client)
+	assert.Equal(t, defaultHTTPTimeout, g.client.Timeout)
+}
+
+// TestNewDefaultHTTPClient 验证默认 HTTP 客户端配置。
+func TestNewDefaultHTTPClient(t *testing.T) {
+	client := NewDefaultHTTPClient()
+	require.NotNil(t, client)
+	assert.Equal(t, defaultHTTPTimeout, client.Timeout)
+	transport, ok := client.Transport.(*http.Transport)
+	require.True(t, ok)
+	assert.Equal(t, uint16(tls.VersionTLS12), transport.TLSClientConfig.MinVersion)
 }
 
 // mockTransport 用于模拟 GitHub API 响应。
@@ -396,6 +415,75 @@ func TestMatchArch(t *testing.T) {
 			assert.Equal(t, tt.want, matchArch(strings.ToLower(tt.asset), tt.goarch))
 		})
 	}
+}
+
+// TestFindChecksum_ChecksumsAssetButExtractionFails 验证存在 checksums.txt 但内容提取失败时返回空。
+func TestFindChecksum_ChecksumsAssetButExtractionFails(t *testing.T) {
+	g := NewGitHubUpdater(nil)
+	assets := []githubAsset{
+		{Name: "MedMemo-x86_64.AppImage", BrowserDownloadURL: "https://example.com/appimage", Size: 100},
+		{Name: "checksums.txt", BrowserDownloadURL: "http://127.0.0.1:1/invalid", Size: 100},
+	}
+	got := g.findChecksum(context.Background(), assets, "MedMemo-x86_64.AppImage")
+	assert.Empty(t, got)
+}
+
+// TestMatchesPlatform_UnsupportedOS 验证非支持平台返回 false。
+func TestMatchesPlatform_UnsupportedOS(t *testing.T) {
+	assert.False(t, matchesPlatform("MedMemo.AppImage", "freebsd", "amd64", ""))
+}
+
+// TestFindChecksum_NoChecksumsAsset 验证无 checksums.txt 资产时返回空字符串。
+func TestFindChecksum_NoChecksumsAsset(t *testing.T) {
+	g := NewGitHubUpdater(nil)
+	assets := []githubAsset{
+		{Name: "MedMemo-x86_64.AppImage", BrowserDownloadURL: "https://example.com/appimage", Size: 100},
+	}
+	got := g.findChecksum(context.Background(), assets, "MedMemo-x86_64.AppImage")
+	assert.Empty(t, got)
+}
+
+// TestMatchArch_UnknownArch 验证自定义架构按原字符串匹配。
+func TestMatchArch_UnknownArch(t *testing.T) {
+	assert.True(t, matchArch("medmemo-ppc64le.appimage", "ppc64le"))
+	assert.False(t, matchArch("medmemo-amd64.appimage", "ppc64le"))
+}
+
+// TestExtractChecksum_RequestFails 验证 checksums.txt 请求失败时返回空。
+func TestExtractChecksum_RequestFails(t *testing.T) {
+	g := NewGitHubUpdater(nil)
+	got := g.extractChecksum(context.Background(), "http://127.0.0.1:1/invalid", "MedMemo.AppImage")
+	assert.Empty(t, got)
+}
+
+// TestExtractChecksum_NonOKStatus 验证非 200 响应返回空。
+func TestExtractChecksum_NonOKStatus(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	g := NewGitHubUpdater(server.Client())
+	got := g.extractChecksum(context.Background(), server.URL, "MedMemo.AppImage")
+	assert.Empty(t, got)
+}
+
+// TestExtractChecksum_ReadBodyFails 验证响应体读取失败时返回空。
+func TestExtractChecksum_ReadBodyFails(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		// 写入后立即关闭连接，模拟读取异常
+		hj, ok := w.(http.Hijacker)
+		if ok {
+			conn, _, _ := hj.Hijack()
+			_ = conn.Close()
+		}
+	}))
+	defer server.Close()
+
+	g := NewGitHubUpdater(server.Client())
+	got := g.extractChecksum(context.Background(), server.URL, "MedMemo.AppImage")
+	assert.Empty(t, got)
 }
 
 // TestIsMandatory 验证强制更新判断规则。
