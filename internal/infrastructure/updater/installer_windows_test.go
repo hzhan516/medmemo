@@ -23,21 +23,21 @@ func fakeReadInstallPath(values map[registry.Key]string) readInstallPathFunc {
 	}
 }
 
-func TestResolveInstallDir_PerUserHKCU(t *testing.T) {
-	currentExe := `C:\Users\Alice\AppData\Local\MedMemo\MedMemo.exe`
+func TestResolveInstallDir_PerUserHKCUDirectory(t *testing.T) {
+	currentExe := `C:\Users\Alice\AppData\Local\Programs\MedMemo\MedMemo.exe`
 	values := map[registry.Key]string{
-		registry.CURRENT_USER: `C:\Users\Alice\AppData\Local\MedMemo\MedMemo.exe`,
+		registry.CURRENT_USER: `C:\Users\Alice\AppData\Local\Programs\MedMemo`,
 	}
 
 	dir, err := resolveInstallDir(currentExe, fakeReadInstallPath(values))
 	require.NoError(t, err)
-	assert.Equal(t, `C:\Users\Alice\AppData\Local\MedMemo`, dir)
+	assert.Equal(t, `C:\Users\Alice\AppData\Local\Programs\MedMemo`, dir)
 }
 
-func TestResolveInstallDir_AllUsersHKLM(t *testing.T) {
+func TestResolveInstallDir_AllUsersHKLMDirectoryCompatibility(t *testing.T) {
 	currentExe := `C:\Program Files\MedMemo\MedMemo.exe`
 	values := map[registry.Key]string{
-		registry.LOCAL_MACHINE: `C:\Program Files\MedMemo\MedMemo.exe`,
+		registry.LOCAL_MACHINE: `C:\Program Files\MedMemo`,
 	}
 
 	dir, err := resolveInstallDir(currentExe, fakeReadInstallPath(values))
@@ -45,11 +45,22 @@ func TestResolveInstallDir_AllUsersHKLM(t *testing.T) {
 	assert.Equal(t, `C:\Program Files\MedMemo`, dir)
 }
 
+func TestResolveInstallDir_LegacyRegistryValueExecutablePath(t *testing.T) {
+	currentExe := `C:\Users\Alice\AppData\Local\Programs\MedMemo\MedMemo.exe`
+	values := map[registry.Key]string{
+		registry.CURRENT_USER: `C:\Users\Alice\AppData\Local\Programs\MedMemo\MedMemo.exe`,
+	}
+
+	dir, err := resolveInstallDir(currentExe, fakeReadInstallPath(values))
+	require.NoError(t, err)
+	assert.Equal(t, `C:\Users\Alice\AppData\Local\Programs\MedMemo`, dir)
+}
+
 func TestResolveInstallDir_BothPreferCurrentExecutablePath(t *testing.T) {
 	currentExe := `C:\Program Files\MedMemo\MedMemo.exe`
 	values := map[registry.Key]string{
-		registry.CURRENT_USER:  `C:\Users\Alice\AppData\Local\MedMemo\MedMemo.exe`,
-		registry.LOCAL_MACHINE: `C:\Program Files\MedMemo\MedMemo.exe`,
+		registry.CURRENT_USER:  `C:\Users\Alice\AppData\Local\Programs\MedMemo`,
+		registry.LOCAL_MACHINE: `C:\Program Files\MedMemo`,
 	}
 
 	dir, err := resolveInstallDir(currentExe, fakeReadInstallPath(values))

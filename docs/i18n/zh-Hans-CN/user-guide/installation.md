@@ -28,9 +28,12 @@
 
 | 平台 | 文件 | 说明 |
 |------|------|------|
-| Windows | `MedMemoSetup.exe` | NSIS 安装程序 |
-| macOS | `MedMemo.dmg` | 拖拽式安装包 |
-| Linux | `MedMemo.AppImage` | 便携版，无需安装 |
+| Windows | `MedMemoSetup.exe` | NSIS 单用户安装程序 |
+| macOS (Intel) | `MedMemo_x86_64.dmg` | Intel Mac 拖拽安装包 |
+| macOS (Apple Silicon) | `MedMemo_arm64.dmg` | M1/M2/M3 Mac 拖拽安装包 |
+| Linux (AppImage) | `MedMemo-x86_64.AppImage` | 便携版，无需安装 |
+| Linux (DEB) | `MedMemo_*.deb` | Debian/Ubuntu 安装包 |
+| Linux (RPM) | `MedMemo-*.rpm` | Fedora/openSUSE 安装包 |
 
 ---
 
@@ -75,7 +78,9 @@
 
 ### 第 1 步：打开 DMG
 
-1. 下载 `MedMemo.dmg`
+1. 根据你的 Mac 下载对应的 DMG：
+   - **Intel Mac：** `MedMemo_x86_64.dmg`
+   - **Apple Silicon Mac（M1/M2/M3）：** `MedMemo_arm64.dmg`
 2. 双击挂载磁盘镜像
 3. 将 **MedMemo.app** 拖拽到**应用程序**文件夹
 
@@ -108,20 +113,45 @@ xattr -d com.apple.quarantine /Applications/MedMemo.app
 
 ### AppImage（推荐）
 
-1. 下载 `MedMemo.AppImage`
+1. 下载 `MedMemo-x86_64.AppImage`
 2. 赋予执行权限：
    ```bash
-   chmod +x MedMemo.AppImage
+   chmod +x MedMemo-x86_64.AppImage
    ```
 3. 运行：
    ```bash
-   ./MedMemo.AppImage
+   ./MedMemo-x86_64.AppImage
    ```
 
 > **Fedora 43+ 用户**：如果遇到 WebKit 问题，请确保已安装 `webkit2gtk4.1`：
 > ```bash
 > sudo dnf install webkit2gtk4.1
 > ```
+
+### DEB 安装包（Debian/Ubuntu）
+
+1. 下载 `MedMemo_*.deb`
+2. 使用包管理器安装：
+   ```bash
+   sudo dpkg -i MedMemo_*.deb
+   sudo apt-get install -f  # 如有依赖缺失
+   ```
+3. 从应用菜单启动，或在终端运行 `medmemo`。
+
+### RPM 安装包（Fedora/openSUSE）
+
+1. 下载 `MedMemo-*.rpm`
+2. 使用包管理器安装：
+   ```bash
+   sudo dnf install MedMemo-*.rpm
+   # 或在 openSUSE 上：
+   sudo zypper install MedMemo-*.rpm
+   ```
+3. 从应用菜单启动，或在终端运行 `medmemo`。
+
+### DEB/RPM 更新
+
+MedMemo 检测到新版本时，会下载对应的 `.deb` 或 `.rpm` 安装包并提示文件路径。请使用与初次安装相同的命令手动安装更新。
 
 ### 从源码构建
 
@@ -149,8 +179,11 @@ make build
 
 ### 卸载
 
-1. 删除 AppImage 文件
-2. （可选）删除用户数据 `~/.medmemo/data`
+- **AppImage：** 删除 AppImage 文件。
+- **DEB：** `sudo dpkg -r medmemo`
+- **RPM：** `sudo dnf remove medmemo`
+
+（可选）卸载任意 Linux 安装包后，删除用户数据 `~/.medmemo/data`。
 
 ---
 
@@ -206,10 +239,13 @@ MedMemo 支持自动更新检测：
    - **稳定版** — 仅正式版本
    - **测试版** — 包含预发布版本，优先体验新功能
 
-有可用更新时，会弹出通知。你可以直接在应用内下载并安装。
+有可用更新时，会弹出通知。
+
+- **Windows / macOS / Linux AppImage：** 应用会在可能的情况下自动下载并安装更新。
+- **Linux DEB / RPM：** 应用会下载对应安装包并提示文件路径。请使用与初次安装相同的命令手动安装。
 
 > ⚠️ 安全更新可能被标记为**强制更新**，不安装将无法继续使用。
 
 ---
 
-*最后更新：2026-05-19*
+*最后更新：2026-07-02*

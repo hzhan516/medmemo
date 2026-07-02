@@ -28,9 +28,12 @@ Download the latest release from [GitHub Releases](https://github.com/hzhan516/m
 
 | Platform | File | Notes |
 |----------|------|-------|
-| Windows | `MedMemoSetup.exe` | NSIS installer |
-| macOS | `MedMemo.dmg` | Drag-and-drop installer |
-| Linux | `MedMemo.AppImage` | Portable, no installation needed |
+| Windows | `MedMemoSetup.exe` | NSIS per-user installer |
+| macOS (Intel) | `MedMemo_x86_64.dmg` | Drag-and-drop installer for Intel Macs |
+| macOS (Apple Silicon) | `MedMemo_arm64.dmg` | Drag-and-drop installer for M1/M2/M3 Macs |
+| Linux (AppImage) | `MedMemo-x86_64.AppImage` | Portable, no installation needed |
+| Linux (DEB) | `MedMemo_*.deb` | Debian/Ubuntu package |
+| Linux (RPM) | `MedMemo-*.rpm` | Fedora/openSUSE package |
 
 ---
 
@@ -75,7 +78,9 @@ The first launch will show the onboarding wizard. See [First-Time Setup](./READM
 
 ### Step 1: Open the DMG
 
-1. Download `MedMemo.dmg`
+1. Download the DMG matching your Mac:
+   - **Intel Mac:** `MedMemo_x86_64.dmg`
+   - **Apple Silicon Mac (M1/M2/M3):** `MedMemo_arm64.dmg`
 2. Double-click to mount the disk image
 3. Drag **MedMemo.app** into your **Applications** folder
 
@@ -108,20 +113,45 @@ See [First-Time Setup](./README.md#first-time-setup-3-steps).
 
 ### AppImage (Recommended)
 
-1. Download `MedMemo.AppImage`
+1. Download `MedMemo-x86_64.AppImage`
 2. Make it executable:
    ```bash
-   chmod +x MedMemo.AppImage
+   chmod +x MedMemo-x86_64.AppImage
    ```
 3. Run it:
    ```bash
-   ./MedMemo.AppImage
+   ./MedMemo-x86_64.AppImage
    ```
 
 > **Fedora 43+ users**: If you encounter WebKit issues, ensure `webkit2gtk4.1` is installed:
 > ```bash
 > sudo dnf install webkit2gtk4.1
 > ```
+
+### DEB Package (Debian/Ubuntu)
+
+1. Download `MedMemo_*.deb`
+2. Install with your package manager:
+   ```bash
+   sudo dpkg -i MedMemo_*.deb
+   sudo apt-get install -f  # if dependencies are missing
+   ```
+3. Launch MedMemo from the applications menu or run `medmemo` in a terminal.
+
+### RPM Package (Fedora/openSUSE)
+
+1. Download `MedMemo-*.rpm`
+2. Install with your package manager:
+   ```bash
+   sudo dnf install MedMemo-*.rpm
+   # or on openSUSE:
+   sudo zypper install MedMemo-*.rpm
+   ```
+3. Launch MedMemo from the applications menu or run `medmemo` in a terminal.
+
+### Updating DEB/RPM Installations
+
+When MedMemo detects a newer version, it downloads the matching `.deb` or `.rpm` package and shows the downloaded file path. Install the update manually with the same command used for the initial installation.
 
 ### Build from Source
 
@@ -149,8 +179,11 @@ The binary will be at `build/bin/medmemo`.
 
 ### Uninstall
 
-1. Delete the AppImage file
-2. (Optional) Remove user data at `~/.medmemo/data`
+- **AppImage:** Delete the AppImage file.
+- **DEB:** `sudo dpkg -r medmemo`
+- **RPM:** `sudo dnf remove medmemo`
+
+(Optional) Remove user data at `~/.medmemo/data` after uninstalling any Linux package.
 
 ---
 
@@ -206,10 +239,13 @@ MedMemo supports automatic update checks:
    - **Stable** — Official releases only
    - **Beta** — Includes pre-releases with new features
 
-When an update is available, a notification appears. You can download and install directly from the app.
+When an update is available, a notification appears.
+
+- **Windows / macOS / Linux AppImage:** The app downloads and installs the update automatically when possible.
+- **Linux DEB / RPM:** The app downloads the matching package and shows the file path. Install it manually with the same command used for the initial installation.
 
 > ⚠️ Security updates may be marked as **mandatory** and block usage until installed.
 
 ---
 
-*Last updated: 2026-05-19*
+*Last updated: 2026-07-02*
