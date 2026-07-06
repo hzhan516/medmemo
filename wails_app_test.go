@@ -200,14 +200,14 @@ type mockEmbeddingStatusService struct {
 	runtimePath   string
 }
 
-func (m *mockEmbeddingStatusService) Embed(ctx context.Context, texts []string) ([][]float32, error) {
+func (m *mockEmbeddingStatusService) Embed(_ context.Context, _ []string) ([][]float32, error) {
 	if !m.available {
 		return nil, assert.AnError
 	}
-	return make([][]float32, len(texts)), nil
+	return make([][]float32, 0), nil
 }
 
-func (m *mockEmbeddingStatusService) EmbedSingle(ctx context.Context, text string) ([]float32, error) {
+func (m *mockEmbeddingStatusService) EmbedSingle(_ context.Context, _ string) ([]float32, error) {
 	if !m.available {
 		return nil, assert.AnError
 	}
@@ -355,12 +355,12 @@ type wailsMockLLMClient struct {
 	lastMessages []models.Message
 }
 
-func (m *wailsMockLLMClient) Chat(ctx context.Context, messages []models.Message) (string, error) {
+func (m *wailsMockLLMClient) Chat(_ context.Context, messages []models.Message) (string, error) {
 	m.lastMessages = messages
 	return m.chatReply, m.chatErr
 }
 
-func (m *wailsMockLLMClient) StreamChat(ctx context.Context, messages []models.Message, callback func(chunk string)) (*models.TokenUsage, error) {
+func (m *wailsMockLLMClient) StreamChat(_ context.Context, messages []models.Message, callback func(chunk string)) (*models.TokenUsage, error) {
 	m.lastMessages = messages
 	for _, chunk := range m.streamChunks {
 		callback(chunk)
@@ -368,7 +368,7 @@ func (m *wailsMockLLMClient) StreamChat(ctx context.Context, messages []models.M
 	return nil, m.streamErr
 }
 
-func (m *wailsMockLLMClient) CheckAvailability(ctx context.Context) (bool, string) {
+func (m *wailsMockLLMClient) CheckAvailability(_ context.Context) (bool, string) {
 	return true, "available"
 }
 
@@ -379,7 +379,7 @@ type wailsMockLLMClientFactory struct {
 	client port.LLMClient
 }
 
-func (m *wailsMockLLMClientFactory) CreateClient(providerConfig *models.ProviderConfig) (port.LLMClient, error) {
+func (m *wailsMockLLMClientFactory) CreateClient(_ *models.ProviderConfig) (port.LLMClient, error) {
 	return m.client, nil
 }
 
@@ -388,50 +388,50 @@ var _ port.LLMClientFactory = (*wailsMockLLMClientFactory)(nil)
 // wailsMockFactRepository 实现 repository.FactRepository 接口。
 type wailsMockFactRepository struct{}
 
-func (m *wailsMockFactRepository) Save(ctx context.Context, f *entity.ExtractedFact) error {
+func (m *wailsMockFactRepository) Save(_ context.Context, _ *entity.ExtractedFact) error {
 	return nil
 }
-func (m *wailsMockFactRepository) GetByID(ctx context.Context, factID string) (*entity.ExtractedFact, error) {
+func (m *wailsMockFactRepository) GetByID(_ context.Context, _ string) (*entity.ExtractedFact, error) {
 	return nil, entity.ErrFactNotFound
 }
-func (m *wailsMockFactRepository) FindByIDs(ctx context.Context, factIDs []string) (map[string]*entity.ExtractedFact, error) {
+func (m *wailsMockFactRepository) FindByIDs(_ context.Context, _ []string) (map[string]*entity.ExtractedFact, error) {
 	return map[string]*entity.ExtractedFact{}, nil
 }
-func (m *wailsMockFactRepository) ListByStatus(ctx context.Context, status entity.FactStatus, offset, limit int) ([]*entity.ExtractedFact, error) {
+func (m *wailsMockFactRepository) ListByStatus(_ context.Context, _ entity.FactStatus, _, _ int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (m *wailsMockFactRepository) ListPending(ctx context.Context, offset, limit int) ([]*entity.ExtractedFact, error) {
+func (m *wailsMockFactRepository) ListPending(_ context.Context, _, _ int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (m *wailsMockFactRepository) UpdateStatus(ctx context.Context, factID string, status entity.FactStatus) error {
+func (m *wailsMockFactRepository) UpdateStatus(_ context.Context, _ string, _ entity.FactStatus) error {
 	return nil
 }
-func (m *wailsMockFactRepository) Delete(ctx context.Context, factID string) error { return nil }
-func (m *wailsMockFactRepository) GetStats(ctx context.Context) (total, approved, rejected, pending int64, err error) {
+func (m *wailsMockFactRepository) Delete(_ context.Context, _ string) error { return nil }
+func (m *wailsMockFactRepository) GetStats(_ context.Context) (total, approved, rejected, pending int64, err error) {
 	return 0, 0, 0, 0, nil
 }
-func (m *wailsMockFactRepository) ListAllSubjects(ctx context.Context) ([]string, error) {
+func (m *wailsMockFactRepository) ListAllSubjects(_ context.Context) ([]string, error) {
 	return nil, nil
 }
-func (m *wailsMockFactRepository) FindBySubject(ctx context.Context, subject string) ([]*entity.ExtractedFact, error) {
+func (m *wailsMockFactRepository) FindBySubject(_ context.Context, _ string) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (m *wailsMockFactRepository) FindBySession(ctx context.Context, sessionID string) ([]*entity.ExtractedFact, error) {
+func (m *wailsMockFactRepository) FindBySession(_ context.Context, _ string) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (m *wailsMockFactRepository) FindApprovedByPredicates(ctx context.Context, subject string, predicates []string, limit int) ([]*entity.ExtractedFact, error) {
+func (m *wailsMockFactRepository) FindApprovedByPredicates(_ context.Context, _ string, _ []string, _ int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (m *wailsMockFactRepository) FindLatestApprovedByPredicates(ctx context.Context, subject string, predicates []string) (*entity.ExtractedFact, error) {
+func (m *wailsMockFactRepository) FindLatestApprovedByPredicates(_ context.Context, _ string, _ []string) (*entity.ExtractedFact, error) {
 	return nil, entity.ErrFactNotFound
 }
-func (m *wailsMockFactRepository) CountApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string) (int64, error) {
+func (m *wailsMockFactRepository) CountApprovedFactsNeedingEmbedding(_ context.Context, _ string) (int64, error) {
 	return 0, nil
 }
-func (m *wailsMockFactRepository) ListApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string, lastCreatedAt time.Time, lastFactID string, limit int) ([]*entity.ExtractedFact, error) {
+func (m *wailsMockFactRepository) ListApprovedFactsNeedingEmbedding(_ context.Context, _ string, _ time.Time, _ string, _ int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (m *wailsMockFactRepository) SearchApproved(ctx context.Context, query string, limit int) ([]*entity.ExtractedFact, error) {
+func (m *wailsMockFactRepository) SearchApproved(_ context.Context, _ string, _ int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
 
@@ -447,7 +447,7 @@ func wailsMustEmptyRulesPath(t *testing.T) string {
 }
 
 // wailsNewTestComplianceChecker 从临时规则文件创建合规检查器。
-func wailsNewTestComplianceChecker(t *testing.T, path string) usecase.ComplianceChecker {
+func wailsNewTestComplianceChecker(t *testing.T, _ string) usecase.ComplianceChecker {
 	t.Helper()
 	// 使用一个简单的 pass-through compliance checker
 	return &wailsMockComplianceChecker{}
@@ -456,7 +456,7 @@ func wailsNewTestComplianceChecker(t *testing.T, path string) usecase.Compliance
 // wailsMockComplianceChecker 实现 usecase.ComplianceChecker 接口。
 type wailsMockComplianceChecker struct{}
 
-func (m *wailsMockComplianceChecker) Check(ctx context.Context, text string) (*usecase.ComplianceResult, error) {
+func (m *wailsMockComplianceChecker) Check(_ context.Context, text string) (*usecase.ComplianceResult, error) {
 	return &usecase.ComplianceResult{
 		Blocked:  false,
 		Level:    "L4_NORMAL",
@@ -584,14 +584,14 @@ func TestWailsApp_streamTimeout_EmptyProviderID(t *testing.T) {
 }
 
 // TestWailsApp_safeEventsEmit_NilContext 验证 nil context 时不 panic。
-func TestWailsApp_safeEventsEmit_NilContext(t *testing.T) {
+func TestWailsApp_safeEventsEmit_NilContext(_ *testing.T) {
 	app := &WailsApp{ctx: nil}
 	// 不应 panic
 	app.safeEventsEmit("test:event", "data")
 }
 
 // TestWailsApp_safeEventsEmit_BackgroundContext 验证 Background context 时不发送。
-func TestWailsApp_safeEventsEmit_BackgroundContext(t *testing.T) {
+func TestWailsApp_safeEventsEmit_BackgroundContext(_ *testing.T) {
 	app := &WailsApp{ctx: context.Background()}
 	// 不应 panic
 	app.safeEventsEmit("test:event", "data")
@@ -631,7 +631,7 @@ func TestStopGeneration_CancelsActiveStreams(t *testing.T) {
 }
 
 // TestStopGeneration_EmptyStreams 验证空 activeStreams 不 panic。
-func TestStopGeneration_EmptyStreams(t *testing.T) {
+func TestStopGeneration_EmptyStreams(_ *testing.T) {
 	app := &WailsApp{
 		ctx:           context.Background(),
 		activeStreams: make(map[string]context.CancelFunc),
@@ -650,9 +650,9 @@ type mockHealthChecker struct {
 	status      map[string]port.HealthResult
 }
 
-func (m *mockHealthChecker) Start(ctx context.Context) {}
-func (m *mockHealthChecker) Stop()                     {}
-func (m *mockHealthChecker) CheckNow(ctx context.Context, providerID string) (port.HealthResult, error) {
+func (m *mockHealthChecker) Start(_ context.Context) {}
+func (m *mockHealthChecker) Stop()                   {}
+func (m *mockHealthChecker) CheckNow(_ context.Context, _ string) (port.HealthResult, error) {
 	if m.checkErr != nil {
 		return port.HealthResult{}, m.checkErr
 	}
@@ -662,7 +662,7 @@ func (m *mockHealthChecker) GetStatus(providerID string) (port.HealthResult, boo
 	r, ok := m.status[providerID]
 	return r, ok
 }
-func (m *mockHealthChecker) SetOnChange(cb func(port.HealthResult)) {}
+func (m *mockHealthChecker) SetOnChange(_ func(port.HealthResult)) {}
 
 var _ port.HealthChecker = (*mockHealthChecker)(nil)
 

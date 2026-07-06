@@ -10,6 +10,8 @@ import (
 // ProviderType LLM 提供商类型。
 type ProviderType string
 
+// noinspection GoUnusedConst
+
 const (
 	ProviderKimi        ProviderType = "kimi"
 	ProviderOpenAI      ProviderType = "openai"
@@ -32,6 +34,8 @@ const (
 
 // AuthMethod Provider 认证方式。
 type AuthMethod string
+
+// noinspection GoUnusedConst
 
 const (
 	AuthMethodAPIToken       AuthMethod = "api_key"

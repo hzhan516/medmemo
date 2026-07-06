@@ -20,7 +20,7 @@ func (a *WailsApp) Startup(ctx context.Context) {
 
 	// 校验前端嵌入资源是否完整（编译时 embed，运行时读取）
 	if err := validateEmbeddedAssets(); err != nil {
-		fmt.Fprintf(os.Stderr, "failed to load frontend assets: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "failed to load frontend assets: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -141,7 +141,7 @@ func (a *WailsApp) checkUpdateAsync() {
 
 	info, err := a.updaterSvc.CheckUpdate(a.ctx, version)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to check update: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "failed to check update: %v\n", err)
 		return
 	}
 	if info == nil {
