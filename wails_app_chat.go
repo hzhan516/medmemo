@@ -49,6 +49,8 @@ func (a *WailsApp) SendMessage(req SendMessageRequest) (*SendMessageResponse, er
 		ProviderID:     req.ProviderID,
 	}
 
+	a.maybeAutoCompress(ctx, &chatReq)
+
 	resp, err := a.chatOrchestrator.Execute(ctx, chatReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send message: %w", err)
@@ -104,6 +106,8 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) (err error) {
 		Model:          models.ProviderType(req.Model),
 		ProviderID:     req.ProviderID,
 	}
+
+	a.maybeAutoCompress(ctx, &chatReq)
 
 	// 统一流式处理层：将原始 callback 包装为结构化 StreamChunk 序列
 	broker := stream.NewBroker(req.Model, "", func(chunk models.StreamChunk) {
@@ -186,6 +190,59 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) (err error) {
 
 	broker.Done(usage)
 	return nil
+}
+
+// maybeAutoCompress 在发送前估算上下文用量比例；若达到自动压缩阈值，
+// 则调用 compressionService 压缩会话消息并替换 chatReq.Messages。
+func (a *WailsApp) maybeAutoCompress(ctx context.Context, chatReq *usecase.ChatRequest) {
+	if a.compressionService == nil || a.contextEstimator == nil {
+		return
+	}
+
+	est, err := a.contextEstimator.Estimate(ctx, usecase.EstimatorInput{
+		Messages:   chatReq.Messages,
+		ProviderID: chatReq.ProviderID,
+		ModelID:    string(chatReq.Model),
+	})
+	if err != nil {
+		fmt.Printf("[auto-compress] estimate failed: %v\n", err)
+		return
+	}
+
+	if est.Ratio < models.AutoCompressionThreshold {
+		return
+	}
+
+	lastUserIdx := -1
+	for i := len(chatReq.Messages) - 1; i >= 0; i-- {
+		if chatReq.Messages[i].Role == models.RoleUser {
+			lastUserIdx = i
+			break
+		}
+	}
+
+	cfg := usecase.CompressionConfig{
+		Strategy:    usecase.StrategySummarizeAndReplace,
+		AnchorCount: 1,
+		RecentCount: 6,
+	}
+
+	res, err := a.compressionService.Compress(ctx, chatReq.ConversationID, chatReq.ProviderID, string(chatReq.Model), cfg)
+	if err != nil {
+		fmt.Printf("[auto-compress] failed, proceeding uncompressed: %v\n", err)
+		return
+	}
+
+	compressed := res.Messages
+	if lastUserIdx >= 0 {
+		compressed = append(compressed, chatReq.Messages[lastUserIdx])
+	}
+	chatReq.Messages = compressed
+	runtime.EventsEmit(a.ctx, "context:auto_compressed", map[string]any{
+		"conversation_id": string(chatReq.ConversationID),
+		"used_after":      res.UsedAfter,
+		"fallback":        res.FallbackOccurred,
+	})
 }
 
 func (a *WailsApp) streamTimeout(providerID string) time.Duration {
