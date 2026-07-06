@@ -149,7 +149,7 @@ func TestLinuxInstaller_Rollback(t *testing.T) {
 func TestLinuxInstaller_RollbackNoBackup(t *testing.T) {
 	installer := &LinuxInstaller{}
 	err := installer.Rollback()
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no backup available")
 }
 
@@ -226,7 +226,7 @@ func TestLinuxInstallerRollback_BackupNotFound(t *testing.T) {
 		backupPath:  filepath.Join(tmpDir, "nonexistent.backup"),
 	}
 	err := installer.Rollback()
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "backup file not found")
 }
 
@@ -242,7 +242,7 @@ func TestLinuxInstallerRollback_RenameFails(t *testing.T) {
 		backupPath:  backupPath,
 	}
 	err := installer.Rollback()
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to restore backup")
 }
 

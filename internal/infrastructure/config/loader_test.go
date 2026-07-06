@@ -269,7 +269,7 @@ func TestLoader_DefaultChannel(t *testing.T) {
 
 // TestLoader_Load_DefaultChannelEmptyFallback 验证构建版本为空时回退 beta。
 func TestLoader_Load_DefaultChannelEmptyFallback(t *testing.T) {
-	loader := NewLoader("", models.UpdateChannel(""))
+	loader := NewLoader("", "")
 	raw := loader.loadDefaults()
 	assert.Equal(t, string(models.ChannelBeta), raw.UpdateChannel)
 

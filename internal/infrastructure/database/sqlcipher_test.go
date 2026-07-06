@@ -140,7 +140,7 @@ func TestSQLCipherConnector_MigrateFromPlaintext(t *testing.T) {
 	require.NoError(t, err)
 	_, err = f.Read(header)
 	require.NoError(t, err)
-	f.Close()
+	_ = f.Close()
 	assert.NotEqual(t, "SQLite format 3\x00", string(header))
 
 	// 5. 验证 backup 文件存在且是明文
@@ -150,7 +150,7 @@ func TestSQLCipherConnector_MigrateFromPlaintext(t *testing.T) {
 	require.NoError(t, err)
 	_, err = f.Read(backupHeader)
 	require.NoError(t, err)
-	f.Close()
+	_ = f.Close()
 	assert.Equal(t, "SQLite format 3\x00", string(backupHeader))
 }
 
@@ -180,13 +180,13 @@ func TestSQLCipherConnector_MigrateDataIntegrity(t *testing.T) {
 	// 2. 迁移
 	conn, err := NewSQLCipherConnector(tmpDir, store)
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// 3. 验证 users
 	ctx := context.Background()
 	rows, err := conn.DB().QueryContext(ctx, "SELECT id, name FROM users ORDER BY id")
 	require.NoError(t, err)
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var users []struct{ id, name string }
 	for rows.Next() {
@@ -219,7 +219,7 @@ func TestSQLCipherConnector_MigrateSchema(t *testing.T) {
 
 	conn, err := NewSQLCipherConnector(tmpDir, store)
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -261,7 +261,7 @@ func TestSQLCipherConnector_PRAGMAForeignKeys(t *testing.T) {
 
 	conn, err := NewSQLCipherConnector(tmpDir, store)
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	ctx := context.Background()
 	_, err = conn.DB().ExecContext(ctx, `
