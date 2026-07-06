@@ -117,7 +117,10 @@ func InitializeApp() (*App, func(), error) {
 	embeddingMigrator := usecase.NewEmbeddingMigrator(factRepoSQLite, embeddingRepoSQLite, embeddingServiceAdapter, migrationState)
 	knowledgeChunker := usecase.NewDefaultKnowledgeChunker()
 	knowledgeImporter := usecase.NewKnowledgeImporter(knowledgeRepoSQLite, knowledgeChunker, knowledgeTokenizer, embeddingServiceAdapter)
-	wailsApp := NewWailsApp(chatOrchestrator, memoryRetriever, appConfig, conversationRepoSQLite, messageRepoSQLite, disclaimerRepoSQLite, providerRepoSQLite, healthEngine, titleGenerator, service, keyringStore, tokenRefreshService, oAuthDeviceFlowService, factRepoSQLite, auditLogRepoSQLite, dialogueRepoSQLite, embeddingServiceAdapter, embeddingRepoSQLite, embeddingMigrator, migrationState, accuracyService, knowledgeRepoSQLite, knowledgeImporter)
+	contextLengthResolver := usecase.NewContextLengthResolver(providerRepoSQLite)
+	hfTokenCounter := ai.NewHFTokenCounter()
+	contextEstimator := usecase.NewContextEstimator(hfTokenCounter, contextLengthResolver)
+	wailsApp := NewWailsApp(chatOrchestrator, memoryRetriever, appConfig, conversationRepoSQLite, messageRepoSQLite, disclaimerRepoSQLite, providerRepoSQLite, healthEngine, titleGenerator, service, keyringStore, tokenRefreshService, oAuthDeviceFlowService, factRepoSQLite, auditLogRepoSQLite, dialogueRepoSQLite, embeddingServiceAdapter, embeddingRepoSQLite, embeddingMigrator, migrationState, accuracyService, knowledgeRepoSQLite, knowledgeImporter, contextLengthResolver, contextEstimator)
 	app, cleanup, err := NewApp(wailsApp, sqlCipherConnector, deidentifyPipeline, healthEngine)
 	if err != nil {
 		return nil, nil, err

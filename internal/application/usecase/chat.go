@@ -667,4 +667,6 @@ var ApplicationSet = wire.NewSet(
 	NewKnowledgeSearchService,
 	NewKnowledgeReranker,
 	NewCitationBuilder,
+	NewContextLengthResolver,
+	NewContextEstimator,
 )
