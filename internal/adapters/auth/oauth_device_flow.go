@@ -139,6 +139,8 @@ type OAuthDeviceFlowService struct {
 }
 
 // NewOAuthDeviceFlowService 创建 Device Flow 服务。
+//
+//goland:noinspection GoUnusedExportedFunction
 func NewOAuthDeviceFlowService(store port.ProviderStore, refreshSvc *TokenRefreshService) *OAuthDeviceFlowService {
 	return NewOAuthDeviceFlowServiceWithClient(store, refreshSvc, &http.Client{Timeout: 15 * time.Second})
 }
@@ -313,7 +315,7 @@ func (s *OAuthDeviceFlowService) requestDeviceCode(deviceAuthURL, clientID, scop
 	if err != nil {
 		return nil, fmt.Errorf("device auth request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("device auth endpoint returned status %d", resp.StatusCode)
@@ -485,7 +487,7 @@ func (s *OAuthDeviceFlowService) pollTokenEndpoint(session *deviceFlowSession) (
 	if err != nil {
 		return nil, fmt.Errorf("token request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusOK {
 		var result DeviceTokenResponse

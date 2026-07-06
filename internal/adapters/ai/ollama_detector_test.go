@@ -101,7 +101,7 @@ func TestOllamaDetector_HasModel_Found(t *testing.T) {
 }
 
 func TestOllamaDetector_HasModel_NotFound(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		resp := tagsResponse{
 			Models: []tagModel{
 				{Name: "llama3.1:latest"},
@@ -118,7 +118,7 @@ func TestOllamaDetector_HasModel_NotFound(t *testing.T) {
 }
 
 func TestOllamaDetector_HasModel_EmptyList(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		resp := tagsResponse{Models: []tagModel{}}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
@@ -130,7 +130,7 @@ func TestOllamaDetector_HasModel_EmptyList(t *testing.T) {
 }
 
 func TestOllamaDetector_HasModel_ServerError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()
@@ -141,7 +141,7 @@ func TestOllamaDetector_HasModel_ServerError(t *testing.T) {
 
 func TestOllamaDetector_WaitForServer_Success(t *testing.T) {
 	callCount := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		callCount++
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -155,7 +155,7 @@ func TestOllamaDetector_WaitForServer_Success(t *testing.T) {
 
 func TestOllamaDetector_WaitForServer_Timeout(t *testing.T) {
 	// 服务器始终返回 500，模拟服务未就绪
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()
@@ -169,7 +169,7 @@ func TestOllamaDetector_WaitForServer_Timeout(t *testing.T) {
 func TestOllamaDetector_WaitForServer_EventuallyReady(t *testing.T) {
 	// 模拟服务延迟启动：前两次返回 500，之后返回 200
 	callCount := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		callCount++
 		if callCount <= 2 {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -238,7 +238,7 @@ func TestOllamaDetector_Detect_InstalledNotRunning(t *testing.T) {
 }
 
 func TestOllamaDetector_Detect_FullyReady(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		resp := tagsResponse{
 			Models: []tagModel{
 				{Name: "smollm2:135m"},
@@ -261,7 +261,7 @@ func TestOllamaDetector_Detect_FullyReady(t *testing.T) {
 }
 
 func TestOllamaDetector_Detect_ReadyWithoutModel(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		resp := tagsResponse{
 			Models: []tagModel{
 				{Name: "llama3.1:latest"},

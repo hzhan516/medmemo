@@ -289,7 +289,7 @@ func (a *OpenAIAdapter) Chat(ctx context.Context, messages []models.Message) (st
 	if err != nil {
 		return "", fmt.Errorf("failed to send chat request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -345,7 +345,7 @@ func (a *OpenAIAdapter) StreamChat(ctx context.Context, messages []models.Messag
 	if err != nil {
 		return nil, fmt.Errorf("failed to send stream request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -453,7 +453,7 @@ func (a *OpenAIAdapter) CheckAvailability(ctx context.Context) (bool, string) {
 	if err != nil {
 		return false, fmt.Sprintf("connection failed: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusOK {
 		return true, "available"
