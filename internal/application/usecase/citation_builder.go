@@ -63,15 +63,15 @@ func (b *CitationBuilder) Build(ctx context.Context, results []*repository.Knowl
 	return citations, snippets, nil
 }
 
-func truncateCitationSnippet(s string, max int) string {
-	if max <= 0 {
+func truncateCitationSnippet(s string, maxLen int) string {
+	if maxLen <= 0 {
 		return s
 	}
 	runes := []rune(s)
-	if len(runes) <= max {
+	if len(runes) <= maxLen {
 		return s
 	}
-	return string(runes[:max]) + "..."
+	return string(runes[:maxLen]) + "..."
 }
 
 func firstNonEmpty(values ...string) string {

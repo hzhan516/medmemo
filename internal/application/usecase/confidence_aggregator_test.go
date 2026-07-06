@@ -185,7 +185,7 @@ func TestConfidenceAggregator_Calculate_MissingInfoExplanation(t *testing.T) {
 func TestConfidenceAggregator_Calculate_EmptySources(t *testing.T) {
 	t.Parallel()
 	agg := NewConfidenceAggregator()
-	sources := []entity.KnowledgeSource{}
+	var sources []entity.KnowledgeSource
 	reasoning := entity.ReasoningChain{
 		HasSymptomAnalysis: true,
 		HasDifferentialDx:  true,

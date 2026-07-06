@@ -21,16 +21,16 @@ type DeidentifyPipeline struct {
 
 // DeidentifyStage 单个脱敏阶段接口。
 type DeidentifyStage interface {
-	Process(ctx context.Context, input PipelineInput) (PipelineOutput, error)
+	Process(ctx context.Context, input Input) (Output, error)
 }
 
-// PipelineInput / PipelineOutput 管道数据单元。
-type PipelineInput struct {
+// Input / Output 管道数据单元。
+type Input struct {
 	Text     string
 	Metadata map[string]any
 }
 
-type PipelineOutput struct {
+type Output struct {
 	Text     string
 	Metadata map[string]any
 }
@@ -43,7 +43,7 @@ func NewDeidentifyPipeline(stages ...DeidentifyStage) *DeidentifyPipeline {
 // Execute 顺序执行各阶段，任一阶段出错即短路返回。
 // 收集各阶段产生的实体和 P2 级占位符映射，供输出还原使用。
 func (p *DeidentifyPipeline) Execute(ctx context.Context, raw string) (models.DeidentifyResult, error) {
-	input := PipelineInput{Text: raw, Metadata: make(map[string]any)}
+	input := Input{Text: raw, Metadata: make(map[string]any)}
 	var allEntities []models.SensitiveEntity
 	allPlaceholders := make(map[string]string)
 
@@ -67,7 +67,7 @@ func (p *DeidentifyPipeline) Execute(ctx context.Context, raw string) (models.De
 			allEntities = append(allEntities, l2Entities...)
 		}
 
-		input = PipelineInput(output)
+		input = Input(output)
 	}
 	return models.DeidentifyResult{
 		OriginalText: raw,
@@ -88,10 +88,10 @@ func NewL1RuleStage() *L1RuleStage {
 	return &L1RuleStage{engine: desensitizer.NewRuleEngine()}
 }
 
-func (s *L1RuleStage) Process(ctx context.Context, input PipelineInput) (PipelineOutput, error) {
+func (s *L1RuleStage) Process(_ context.Context, input Input) (Output, error) {
 	result, err := s.engine.Process(input.Text)
 	if err != nil {
-		return PipelineOutput{}, fmt.Errorf("L1 rule deidentify failed: %w", err)
+		return Output{}, fmt.Errorf("l1 rule deidentify failed: %w", err)
 	}
 	if input.Metadata == nil {
 		input.Metadata = make(map[string]any)
@@ -100,7 +100,7 @@ func (s *L1RuleStage) Process(ctx context.Context, input PipelineInput) (Pipelin
 	input.Metadata["original_text"] = input.Text
 	input.Metadata["l1_entities"] = result.Entities
 	input.Metadata["l1_placeholders"] = result.Placeholder
-	return PipelineOutput{Text: result.SafeText, Metadata: input.Metadata}, nil
+	return Output{Text: result.SafeText, Metadata: input.Metadata}, nil
 }
 
 // L2NERStage 二级 NER 模型脱敏阶段。
@@ -114,10 +114,10 @@ func NewL2NERStage(det port.NERDetector) *L2NERStage {
 	return &L2NERStage{detector: det}
 }
 
-func (s *L2NERStage) Process(ctx context.Context, input PipelineInput) (PipelineOutput, error) {
+func (s *L2NERStage) Process(ctx context.Context, input Input) (Output, error) {
 	// 1. 可用性检查：NER 不可用时降级透传，不阻断流水线
 	if s.detector == nil || !s.detector.IsAvailable() {
-		return PipelineOutput(input), nil
+		return Output(input), nil
 	}
 
 	// 2. 获取原始文本（L1 存入 Metadata）
@@ -130,17 +130,17 @@ func (s *L2NERStage) Process(ctx context.Context, input PipelineInput) (Pipeline
 	entities, err := s.detector.Predict(ctx, originalText)
 	if err != nil {
 		// 降级：推理失败时不阻断流水线，直接透传 L1 结果
-		return PipelineOutput(input), nil
+		return Output(input), nil
 	}
 	if len(entities) == 0 {
-		return PipelineOutput(input), nil
+		return Output(input), nil
 	}
 
 	// 4. 获取 L1 实体，过滤与 L1 区域重叠的 NER 结果（L1 优先）
 	l1Entities, _ := input.Metadata["l1_entities"].([]models.SensitiveEntity)
 	entities = filterOverlappingEntities(entities, l1Entities)
 	if len(entities) == 0 {
-		return PipelineOutput(input), nil
+		return Output(input), nil
 	}
 
 	// 5. 偏移量映射：将原始文本中的 NER 位置映射到 L1 脱敏文本中的对应位置
@@ -169,7 +169,7 @@ func (s *L2NERStage) Process(ctx context.Context, input PipelineInput) (Pipeline
 
 	// 7. 将 L2 实体记录存入 Metadata，供后续阶段或日志使用
 	input.Metadata["l2_entities"] = entities
-	return PipelineOutput{Text: text, Metadata: input.Metadata}, nil
+	return Output{Text: text, Metadata: input.Metadata}, nil
 }
 
 // --- 辅助函数 ---
@@ -243,8 +243,8 @@ func NewDefaultDeidentifyPipeline(l1 *L1RuleStage, l2 *L2NERStage) *DeidentifyPi
 	return NewDeidentifyPipeline(l1, l2)
 }
 
-// PipelineSet 供 Wire 使用的 ProviderSet。
-var PipelineSet = wire.NewSet(
+// Set 供 Wire 使用的 ProviderSet。
+var Set = wire.NewSet(
 	NewDefaultDeidentifyPipeline,
 	NewL1RuleStage,
 	NewL2NERStage,

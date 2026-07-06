@@ -44,12 +44,12 @@ type mockLLMClient struct {
 	lastMessages    []models.Message
 }
 
-func (m *mockLLMClient) Chat(ctx context.Context, messages []models.Message) (string, error) {
+func (m *mockLLMClient) Chat(_ context.Context, messages []models.Message) (string, error) {
 	m.lastMessages = messages
 	return m.chatReply, m.chatErr
 }
 
-func (m *mockLLMClient) StreamChat(ctx context.Context, messages []models.Message, callback func(chunk string)) (*models.TokenUsage, error) {
+func (m *mockLLMClient) StreamChat(_ context.Context, messages []models.Message, callback func(chunk string)) (*models.TokenUsage, error) {
 	m.lastMessages = messages
 	for _, chunk := range m.streamChunks {
 		callback(chunk)
@@ -58,7 +58,7 @@ func (m *mockLLMClient) StreamChat(ctx context.Context, messages []models.Messag
 	return nil, m.streamErr
 }
 
-func (m *mockLLMClient) CheckAvailability(ctx context.Context) (bool, string) {
+func (m *mockLLMClient) CheckAvailability(_ context.Context) (bool, string) {
 	return true, "available"
 }
 
@@ -69,7 +69,7 @@ type mockLLMClientFactory struct {
 	client port.LLMClient
 }
 
-func (m *mockLLMClientFactory) CreateClient(providerConfig *models.ProviderConfig) (port.LLMClient, error) {
+func (m *mockLLMClientFactory) CreateClient(_ *models.ProviderConfig) (port.LLMClient, error) {
 	return m.client, nil
 }
 
@@ -80,22 +80,22 @@ type mockProviderStore struct {
 	provider *models.ProviderConfig
 }
 
-func (m *mockProviderStore) Create(ctx context.Context, provider *models.ProviderConfig) error {
+func (m *mockProviderStore) Create(_ context.Context, _ *models.ProviderConfig) error {
 	return nil
 }
-func (m *mockProviderStore) Update(ctx context.Context, provider *models.ProviderConfig) error {
+func (m *mockProviderStore) Update(_ context.Context, _ *models.ProviderConfig) error {
 	return nil
 }
-func (m *mockProviderStore) Delete(ctx context.Context, id string) error {
+func (m *mockProviderStore) Delete(_ context.Context, _ string) error {
 	return nil
 }
-func (m *mockProviderStore) Get(ctx context.Context, id string) (*models.ProviderConfig, error) {
+func (m *mockProviderStore) Get(_ context.Context, id string) (*models.ProviderConfig, error) {
 	if m.provider == nil {
 		return &models.ProviderConfig{ID: id, APIHost: "https://api.example.com", ModelID: "test-model"}, nil
 	}
 	return m.provider, nil
 }
-func (m *mockProviderStore) List(ctx context.Context) ([]*models.ProviderConfig, error) {
+func (m *mockProviderStore) List(_ context.Context) ([]*models.ProviderConfig, error) {
 	return []*models.ProviderConfig{}, nil
 }
 
@@ -107,7 +107,7 @@ type mockDeidentifier struct {
 	err    error
 }
 
-func (m *mockDeidentifier) Execute(ctx context.Context, raw string) (models.DeidentifyResult, error) {
+func (m *mockDeidentifier) Execute(_ context.Context, _ string) (models.DeidentifyResult, error) {
 	return m.result, m.err
 }
 
@@ -119,7 +119,7 @@ type mockMemoryQuerier struct {
 	err      error
 }
 
-func (m *mockMemoryQuerier) RetrieveForContext(ctx context.Context, query, sessionID string, limit int) ([]*entity.HealthMemory, error) {
+func (m *mockMemoryQuerier) RetrieveForContext(_ context.Context, _, _ string, _ int) ([]*entity.HealthMemory, error) {
 	return m.memories, m.err
 }
 
@@ -132,15 +132,15 @@ type mockFactRepository struct {
 	err         error
 }
 
-func (m *mockFactRepository) Save(ctx context.Context, f *entity.ExtractedFact) error { return nil }
-func (m *mockFactRepository) GetByID(ctx context.Context, factID string) (*entity.ExtractedFact, error) {
+func (m *mockFactRepository) Save(_ context.Context, _ *entity.ExtractedFact) error { return nil }
+func (m *mockFactRepository) GetByID(_ context.Context, factID string) (*entity.ExtractedFact, error) {
 	f, ok := m.facts[factID]
 	if !ok {
 		return nil, entity.ErrFactNotFound
 	}
 	return f, nil
 }
-func (m *mockFactRepository) FindByIDs(ctx context.Context, factIDs []string) (map[string]*entity.ExtractedFact, error) {
+func (m *mockFactRepository) FindByIDs(_ context.Context, factIDs []string) (map[string]*entity.ExtractedFact, error) {
 	result := make(map[string]*entity.ExtractedFact, len(factIDs))
 	for _, id := range factIDs {
 		if f, ok := m.facts[id]; ok {
@@ -149,32 +149,32 @@ func (m *mockFactRepository) FindByIDs(ctx context.Context, factIDs []string) (m
 	}
 	return result, nil
 }
-func (m *mockFactRepository) ListByStatus(ctx context.Context, status entity.FactStatus, offset, limit int) ([]*entity.ExtractedFact, error) {
+func (m *mockFactRepository) ListByStatus(_ context.Context, _ entity.FactStatus, _, _ int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (m *mockFactRepository) ListPending(ctx context.Context, offset, limit int) ([]*entity.ExtractedFact, error) {
+func (m *mockFactRepository) ListPending(_ context.Context, _, _ int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (m *mockFactRepository) UpdateStatus(ctx context.Context, factID string, status entity.FactStatus) error {
+func (m *mockFactRepository) UpdateStatus(_ context.Context, _ string, _ entity.FactStatus) error {
 	return nil
 }
-func (m *mockFactRepository) Delete(ctx context.Context, factID string) error { return nil }
-func (m *mockFactRepository) GetStats(ctx context.Context) (total, approved, rejected, pending int64, err error) {
+func (m *mockFactRepository) Delete(_ context.Context, _ string) error { return nil }
+func (m *mockFactRepository) GetStats(_ context.Context) (total, approved, rejected, pending int64, err error) {
 	return 0, 0, 0, 0, nil
 }
-func (m *mockFactRepository) ListAllSubjects(ctx context.Context) ([]string, error) {
+func (m *mockFactRepository) ListAllSubjects(_ context.Context) ([]string, error) {
 	return nil, nil
 }
-func (m *mockFactRepository) FindBySubject(ctx context.Context, subject string) ([]*entity.ExtractedFact, error) {
+func (m *mockFactRepository) FindBySubject(_ context.Context, _ string) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (m *mockFactRepository) FindBySession(ctx context.Context, sessionID string) ([]*entity.ExtractedFact, error) {
+func (m *mockFactRepository) FindBySession(_ context.Context, _ string) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (m *mockFactRepository) FindApprovedByPredicates(ctx context.Context, subject string, predicates []string, limit int) ([]*entity.ExtractedFact, error) {
+func (m *mockFactRepository) FindApprovedByPredicates(_ context.Context, _ string, _ []string, _ int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (m *mockFactRepository) FindLatestApprovedByPredicates(ctx context.Context, subject string, predicates []string) (*entity.ExtractedFact, error) {
+func (m *mockFactRepository) FindLatestApprovedByPredicates(_ context.Context, _ string, predicates []string) (*entity.ExtractedFact, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -186,15 +186,15 @@ func (m *mockFactRepository) FindLatestApprovedByPredicates(ctx context.Context,
 	return nil, entity.ErrFactNotFound
 }
 
-func (m *mockFactRepository) SearchApproved(ctx context.Context, query string, limit int) ([]*entity.ExtractedFact, error) {
+func (m *mockFactRepository) SearchApproved(_ context.Context, _ string, _ int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
 
-func (m *mockFactRepository) CountApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string) (int64, error) {
+func (m *mockFactRepository) CountApprovedFactsNeedingEmbedding(_ context.Context, _ string) (int64, error) {
 	return 0, nil
 }
 
-func (m *mockFactRepository) ListApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string, lastCreatedAt time.Time, lastFactID string, limit int) ([]*entity.ExtractedFact, error) {
+func (m *mockFactRepository) ListApprovedFactsNeedingEmbedding(_ context.Context, _ string, _ time.Time, _ string, _ int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
 
@@ -449,7 +449,7 @@ type countingMockLLMClient struct {
 	chatCount int
 }
 
-func (m *countingMockLLMClient) Chat(ctx context.Context, messages []models.Message) (string, error) {
+func (m *countingMockLLMClient) Chat(_ context.Context, messages []models.Message) (string, error) {
 	m.chatCount++
 	m.lastMessages = messages
 	return m.chatReply, m.chatErr
@@ -587,7 +587,7 @@ func TestChatOrchestrator_StreamExecute_Error(t *testing.T) {
 		ProviderID: "test-provider",
 	}
 
-	_, _, _, err := orch.StreamExecute(context.Background(), req, func(chunk string) {})
+	_, _, _, err := orch.StreamExecute(context.Background(), req, func(_ string) {})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "stream execution failed")
 }
@@ -685,20 +685,20 @@ func TestIsLocalModel(t *testing.T) {
 // mockProviderStoreCtxErr 是一个在 context 已取消时返回 context 错误的 ProviderStore Mock。
 type mockProviderStoreCtxErr struct{}
 
-func (m *mockProviderStoreCtxErr) Create(ctx context.Context, provider *models.ProviderConfig) error {
+func (m *mockProviderStoreCtxErr) Create(_ context.Context, _ *models.ProviderConfig) error {
 	return nil
 }
-func (m *mockProviderStoreCtxErr) Update(ctx context.Context, provider *models.ProviderConfig) error {
+func (m *mockProviderStoreCtxErr) Update(_ context.Context, _ *models.ProviderConfig) error {
 	return nil
 }
-func (m *mockProviderStoreCtxErr) Delete(ctx context.Context, id string) error { return nil }
+func (m *mockProviderStoreCtxErr) Delete(_ context.Context, _ string) error { return nil }
 func (m *mockProviderStoreCtxErr) Get(ctx context.Context, id string) (*models.ProviderConfig, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	return &models.ProviderConfig{ID: id, APIHost: "https://api.example.com", ModelID: "test-model"}, nil
 }
-func (m *mockProviderStoreCtxErr) List(ctx context.Context) ([]*models.ProviderConfig, error) {
+func (m *mockProviderStoreCtxErr) List(_ context.Context) ([]*models.ProviderConfig, error) {
 	return []*models.ProviderConfig{}, nil
 }
 
@@ -834,20 +834,20 @@ type multiProviderStore struct {
 	providers map[string]*models.ProviderConfig
 }
 
-func (m *multiProviderStore) Create(ctx context.Context, provider *models.ProviderConfig) error {
+func (m *multiProviderStore) Create(_ context.Context, _ *models.ProviderConfig) error {
 	return nil
 }
-func (m *multiProviderStore) Update(ctx context.Context, provider *models.ProviderConfig) error {
+func (m *multiProviderStore) Update(_ context.Context, _ *models.ProviderConfig) error {
 	return nil
 }
-func (m *multiProviderStore) Delete(ctx context.Context, id string) error { return nil }
-func (m *multiProviderStore) Get(ctx context.Context, id string) (*models.ProviderConfig, error) {
+func (m *multiProviderStore) Delete(_ context.Context, _ string) error { return nil }
+func (m *multiProviderStore) Get(_ context.Context, id string) (*models.ProviderConfig, error) {
 	if p, ok := m.providers[id]; ok {
 		return p, nil
 	}
 	return nil, fmt.Errorf("provider not found: %s", id)
 }
-func (m *multiProviderStore) List(ctx context.Context) ([]*models.ProviderConfig, error) {
+func (m *multiProviderStore) List(_ context.Context) ([]*models.ProviderConfig, error) {
 	var result []*models.ProviderConfig
 	for _, p := range m.providers {
 		result = append(result, p)

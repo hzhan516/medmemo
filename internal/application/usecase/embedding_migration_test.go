@@ -31,7 +31,7 @@ type migratorEmbeddingService struct {
 	embedSingleFn func(ctx context.Context, text string) ([]float32, error)
 }
 
-func (s *migratorEmbeddingService) Embed(ctx context.Context, texts []string) ([][]float32, error) {
+func (s *migratorEmbeddingService) Embed(_ context.Context, texts []string) ([][]float32, error) {
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -69,7 +69,7 @@ type migratorEmbeddingRepo struct {
 	searchFn   func(ctx context.Context, queryVector []float32, topK int) ([]*entity.ScoredEmbedding, error)
 }
 
-func (r *migratorEmbeddingRepo) Save(ctx context.Context, e *entity.SemanticEmbedding) error {
+func (r *migratorEmbeddingRepo) Save(_ context.Context, e *entity.SemanticEmbedding) error {
 	if r.embeddings == nil {
 		r.embeddings = make(map[string]*entity.SemanticEmbedding)
 	}
@@ -77,14 +77,14 @@ func (r *migratorEmbeddingRepo) Save(ctx context.Context, e *entity.SemanticEmbe
 	return nil
 }
 
-func (r *migratorEmbeddingRepo) GetByFactID(ctx context.Context, factID string) (*entity.SemanticEmbedding, error) {
+func (r *migratorEmbeddingRepo) GetByFactID(_ context.Context, factID string) (*entity.SemanticEmbedding, error) {
 	if e, ok := r.embeddings[factID]; ok {
 		return e, nil
 	}
 	return nil, entity.ErrEmbeddingNotFound
 }
 
-func (r *migratorEmbeddingRepo) DeleteByFactID(ctx context.Context, factID string) error { return nil }
+func (r *migratorEmbeddingRepo) DeleteByFactID(_ context.Context, _ string) error { return nil }
 
 func (r *migratorEmbeddingRepo) SearchSimilar(ctx context.Context, queryVector []float32, topK int) ([]*entity.ScoredEmbedding, error) {
 	if r.searchFn != nil {
@@ -93,11 +93,11 @@ func (r *migratorEmbeddingRepo) SearchSimilar(ctx context.Context, queryVector [
 	return nil, nil
 }
 
-func (r *migratorEmbeddingRepo) SearchSimilarFiltered(ctx context.Context, queryVector []float32, topK int, modelVersion string) ([]*entity.ScoredEmbedding, error) {
+func (r *migratorEmbeddingRepo) SearchSimilarFiltered(ctx context.Context, queryVector []float32, topK int, _ string) ([]*entity.ScoredEmbedding, error) {
 	return r.SearchSimilar(ctx, queryVector, topK)
 }
 
-func (r *migratorEmbeddingRepo) CountByVersionNot(ctx context.Context, version string) (int64, error) {
+func (r *migratorEmbeddingRepo) CountByVersionNot(_ context.Context, version string) (int64, error) {
 	var count int64
 	for _, e := range r.embeddings {
 		if e.ModelVersion != version {
@@ -107,7 +107,7 @@ func (r *migratorEmbeddingRepo) CountByVersionNot(ctx context.Context, version s
 	return count, nil
 }
 
-func (r *migratorEmbeddingRepo) UpdateEmbedding(ctx context.Context, e *entity.SemanticEmbedding) error {
+func (r *migratorEmbeddingRepo) UpdateEmbedding(_ context.Context, e *entity.SemanticEmbedding) error {
 	if r.embeddings == nil {
 		r.embeddings = make(map[string]*entity.SemanticEmbedding)
 	}
@@ -119,44 +119,44 @@ type migratorFactRepo struct {
 	facts []*entity.ExtractedFact
 }
 
-func (r *migratorFactRepo) Save(ctx context.Context, f *entity.ExtractedFact) error { return nil }
-func (r *migratorFactRepo) GetByID(ctx context.Context, factID string) (*entity.ExtractedFact, error) {
+func (r *migratorFactRepo) Save(_ context.Context, _ *entity.ExtractedFact) error { return nil }
+func (r *migratorFactRepo) GetByID(_ context.Context, _ string) (*entity.ExtractedFact, error) {
 	return nil, entity.ErrFactNotFound
 }
-func (r *migratorFactRepo) FindByIDs(ctx context.Context, factIDs []string) (map[string]*entity.ExtractedFact, error) {
+func (r *migratorFactRepo) FindByIDs(_ context.Context, _ []string) (map[string]*entity.ExtractedFact, error) {
 	return map[string]*entity.ExtractedFact{}, nil
 }
-func (r *migratorFactRepo) ListByStatus(ctx context.Context, status entity.FactStatus, offset, limit int) ([]*entity.ExtractedFact, error) {
+func (r *migratorFactRepo) ListByStatus(_ context.Context, _ entity.FactStatus, _, _ int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (r *migratorFactRepo) ListPending(ctx context.Context, offset, limit int) ([]*entity.ExtractedFact, error) {
+func (r *migratorFactRepo) ListPending(_ context.Context, _, _ int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (r *migratorFactRepo) UpdateStatus(ctx context.Context, factID string, status entity.FactStatus) error {
+func (r *migratorFactRepo) UpdateStatus(_ context.Context, _ string, _ entity.FactStatus) error {
 	return nil
 }
-func (r *migratorFactRepo) Delete(ctx context.Context, factID string) error { return nil }
-func (r *migratorFactRepo) GetStats(ctx context.Context) (total, approved, rejected, pending int64, err error) {
+func (r *migratorFactRepo) Delete(_ context.Context, _ string) error { return nil }
+func (r *migratorFactRepo) GetStats(_ context.Context) (total, approved, rejected, pending int64, err error) {
 	return 0, 0, 0, 0, nil
 }
-func (r *migratorFactRepo) ListAllSubjects(ctx context.Context) ([]string, error) { return nil, nil }
-func (r *migratorFactRepo) FindBySubject(ctx context.Context, subject string) ([]*entity.ExtractedFact, error) {
+func (r *migratorFactRepo) ListAllSubjects(_ context.Context) ([]string, error) { return nil, nil }
+func (r *migratorFactRepo) FindBySubject(_ context.Context, _ string) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (r *migratorFactRepo) FindBySession(ctx context.Context, sessionID string) ([]*entity.ExtractedFact, error) {
+func (r *migratorFactRepo) FindBySession(_ context.Context, _ string) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (r *migratorFactRepo) FindApprovedByPredicates(ctx context.Context, subject string, predicates []string, limit int) ([]*entity.ExtractedFact, error) {
+func (r *migratorFactRepo) FindApprovedByPredicates(_ context.Context, _ string, _ []string, _ int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (r *migratorFactRepo) FindLatestApprovedByPredicates(ctx context.Context, subject string, predicates []string) (*entity.ExtractedFact, error) {
+func (r *migratorFactRepo) FindLatestApprovedByPredicates(_ context.Context, _ string, _ []string) (*entity.ExtractedFact, error) {
 	return nil, entity.ErrFactNotFound
 }
-func (r *migratorFactRepo) SearchApproved(ctx context.Context, query string, limit int) ([]*entity.ExtractedFact, error) {
+func (r *migratorFactRepo) SearchApproved(_ context.Context, _ string, _ int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
 
-func (r *migratorFactRepo) CountApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string) (int64, error) {
+func (r *migratorFactRepo) CountApprovedFactsNeedingEmbedding(_ context.Context, _ string) (int64, error) {
 	var count int64
 	for _, f := range r.facts {
 		if f.Status == entity.FactStatusApproved {
@@ -166,7 +166,7 @@ func (r *migratorFactRepo) CountApprovedFactsNeedingEmbedding(ctx context.Contex
 	return count, nil
 }
 
-func (r *migratorFactRepo) ListApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string, lastCreatedAt time.Time, lastFactID string, limit int) ([]*entity.ExtractedFact, error) {
+func (r *migratorFactRepo) ListApprovedFactsNeedingEmbedding(_ context.Context, _ string, _ time.Time, lastFactID string, limit int) ([]*entity.ExtractedFact, error) {
 	var result []*entity.ExtractedFact
 	var started bool
 	if lastFactID == "" {
@@ -238,7 +238,7 @@ func TestEmbeddingMigrator_RunMigration_Success(t *testing.T) {
 	migrator.batchPause = 0
 
 	var progressCalls []int
-	processed, failed, err := migrator.RunMigration(context.Background(), func(p, total int) {
+	processed, failed, err := migrator.RunMigration(context.Background(), func(p, _ int) {
 		progressCalls = append(progressCalls, p)
 	})
 
@@ -299,7 +299,7 @@ func TestEmbeddingMigrator_RunMigration_PartialFailure(t *testing.T) {
 	svc := &migratorEmbeddingService{
 		modelVersion: models.CurrentEmbeddingVersion,
 		isAvailable:  true,
-		embedSingleFn: func(ctx context.Context, text string) ([]float32, error) {
+		embedSingleFn: func(_ context.Context, _ string) ([]float32, error) {
 			callCount++
 			if callCount == 2 {
 				return nil, errors.New("mock embed error")
@@ -338,7 +338,7 @@ func TestEmbeddingMigrator_RunMigration_FailureButRecheckZero(t *testing.T) {
 	migrator.batchPause = 0
 
 	// 让 processFact 人为失败但候选计数在重试时归 0
-	svc.embedSingleFn = func(ctx context.Context, text string) ([]float32, error) {
+	svc.embedSingleFn = func(_ context.Context, _ string) ([]float32, error) {
 		return nil, errors.New("forced error")
 	}
 

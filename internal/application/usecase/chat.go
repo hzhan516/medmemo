@@ -388,7 +388,7 @@ func (c *ChatOrchestrator) StreamExecute(ctx context.Context, req ChatRequest, o
 }
 
 // classifyAnswerType 根据用户问题和回复内容推断回答类型，用于历史准确率分类统计。
-func classifyAnswerType(reply string, messages []models.Message) entity.AnswerType {
+func classifyAnswerType(reply string, _ []models.Message) entity.AnswerType {
 	lower := strings.ToLower(reply)
 	// 优先判断紧急症状
 	if strings.Contains(lower, "120") || strings.Contains(lower, "急诊") ||
@@ -540,7 +540,7 @@ func (a *llmClientAdapter) Chat(ctx context.Context, messages []string) (string,
 // ExtractFactsFromReply 从完整对话轮次（用户消息 + AI 回复）中提取结构化事实三元组。
 // 使用当前会话的 Provider 创建 LLM client，异步调用时不阻塞主流程。
 // 全局限流：确保事实提取与主对话、其他事实提取之间有足够间隔，避免触发 429。
-func (c *ChatOrchestrator) ExtractFactsFromReply(ctx context.Context, userContent, aiReply, providerID string) ([]*entity.ExtractedFact, error) {
+func (c *ChatOrchestrator) ExtractFactsFromReply(ctx context.Context, userContent, _, providerID string) ([]*entity.ExtractedFact, error) {
 	if providerID == "" {
 		return nil, nil
 	}
