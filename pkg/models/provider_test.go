@@ -48,7 +48,7 @@ func TestProviderConfig_Validate_APIKey_MissingKey(t *testing.T) {
 	p.AuthMethod = AuthMethodAPIToken
 	p.APIKey = ""
 	err := p.Validate()
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "api_key is required")
 }
 
@@ -70,7 +70,7 @@ func TestProviderConfig_Validate_CLIToken_MissingCredentialPath(t *testing.T) {
 	p.APIKey = ""
 	p.AuthParams = AuthParams{}
 	err := p.Validate()
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cli_credential_path is required")
 }
 
@@ -95,7 +95,7 @@ func TestProviderConfig_Validate_OAuthDevice_MissingClientID(t *testing.T) {
 	p.APIKey = ""
 	p.AuthParams = AuthParams{OAuthTokenURL: "https://auth.example.com/token"}
 	err := p.Validate()
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "oauth_client_id is required")
 }
 
@@ -107,7 +107,7 @@ func TestProviderConfig_Validate_OAuthDevice_MissingTokenURL(t *testing.T) {
 	p.APIKey = ""
 	p.AuthParams = AuthParams{OAuthClientID: "client-123"}
 	err := p.Validate()
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "oauth_token_url is required")
 }
 
@@ -132,7 +132,7 @@ func TestProviderConfig_Validate_ServiceAccount_MissingProjectID(t *testing.T) {
 	p.APIKey = ""
 	p.AuthParams = AuthParams{SAJSON: `{"type":"service_account"}`}
 	err := p.Validate()
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "gcp_project_id is required")
 }
 
@@ -144,7 +144,7 @@ func TestProviderConfig_Validate_ServiceAccount_MissingSAJSON(t *testing.T) {
 	p.APIKey = ""
 	p.AuthParams = AuthParams{GCPProjectID: "my-project-123"}
 	err := p.Validate()
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "sa_json is required")
 }
 
@@ -183,7 +183,7 @@ func TestProviderConfig_Validate_UnknownAuthMethod(t *testing.T) {
 	p := newValidProviderConfig()
 	p.AuthMethod = "unknown_method"
 	err := p.Validate()
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown auth method")
 }
 

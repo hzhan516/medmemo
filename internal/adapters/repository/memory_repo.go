@@ -5,6 +5,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -50,7 +51,7 @@ func (r *MemoryRepoSQLite) GetByID(ctx context.Context, id models.MemoryID) (*en
 	var tags string
 	var createdAt, accessedAt int64
 	if err := row.Scan(&mem.ID, &mem.Tier, &mem.Content, &tags, &mem.SourceConv, &mem.Confidence, &createdAt, &accessedAt); err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("memory %s not found: %w", id, entity.ErrNotFound)
 		}
 		return nil, fmt.Errorf("failed to get memory: %w", err)
@@ -64,6 +65,7 @@ func (r *MemoryRepoSQLite) GetByID(ctx context.Context, id models.MemoryID) (*en
 // Search 关键词搜索记忆（简单 LIKE 匹配）。
 func (r *MemoryRepoSQLite) Search(ctx context.Context, query string, limit int) ([]*entity.HealthMemory, error) {
 	pattern := "%" + query + "%"
+	//goland:noinspection GoResourceLeak
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, tier, content, tags, source_conv, confidence, created_at, accessed_at
 		FROM memories WHERE content LIKE ? OR tags LIKE ?
@@ -73,19 +75,19 @@ func (r *MemoryRepoSQLite) Search(ctx context.Context, query string, limit int) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to search memories: %w", err)
 	}
-	defer rows.Close()
 	return scanMemories(rows)
 }
 
 // SemanticSearch 语义向量检索。
 // 当前 SQLite 降级实现不支持向量索引，直接返回错误。
 // 注：项目已迁移至 sqlite-vec 方案，SemanticSearch 在此降级实现中保留为占位。
-func (r *MemoryRepoSQLite) SemanticSearch(ctx context.Context, embedding []float32, topK int) ([]*entity.HealthMemory, error) {
+func (r *MemoryRepoSQLite) SemanticSearch(_ context.Context, _ []float32, _ int) ([]*entity.HealthMemory, error) {
 	return nil, fmt.Errorf("semantic search not available in SQLite fallback, use sqlite-vec via EmbeddingRepository instead: %w", entity.ErrNotFound)
 }
 
 // ListByTier 按记忆层级查询。
 func (r *MemoryRepoSQLite) ListByTier(ctx context.Context, tier entity.MemoryTier, limit int) ([]*entity.HealthMemory, error) {
+	//goland:noinspection GoResourceLeak
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, tier, content, tags, source_conv, confidence, created_at, accessed_at
 		FROM memories WHERE tier = ?
@@ -95,7 +97,6 @@ func (r *MemoryRepoSQLite) ListByTier(ctx context.Context, tier entity.MemoryTie
 	if err != nil {
 		return nil, fmt.Errorf("failed to list memories by tier: %w", err)
 	}
-	defer rows.Close()
 	return scanMemories(rows)
 }
 
@@ -131,8 +132,12 @@ func EnsureMemorySchema(db *sql.DB) error {
 }
 
 // scanMemories 扫描查询结果为记忆列表。
-func scanMemories(rows *sql.Rows) ([]*entity.HealthMemory, error) {
-	var result []*entity.HealthMemory
+func scanMemories(rows *sql.Rows) (result []*entity.HealthMemory, err error) {
+	defer func() {
+		if cerr := rows.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("failed to close memory rows: %w", cerr)
+		}
+	}()
 	for rows.Next() {
 		var mem entity.HealthMemory
 		var tags string
@@ -158,9 +163,9 @@ func splitTags(s string) []string {
 	return strings.Split(s, ",")
 }
 
-// RepositorySet 供 Wire 使用的 ProviderSet。
+// RepoSet 供 Wire 使用的 ProviderSet。
 // 当前使用 SQLite 降级实现 MemoryRepo。
-var RepositorySet = wire.NewSet(
+var RepoSet = wire.NewSet(
 	NewMemoryRepoSQLite,
 	NewConversationRepoSQLite,
 	NewMessageRepoSQLite,

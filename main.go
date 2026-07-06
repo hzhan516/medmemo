@@ -85,7 +85,7 @@ func main() {
 	// 初始化应用（通过 Wire 生成的 InitializeApp）
 	app, cleanup, err := InitializeApp()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to initialize app: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "failed to initialize app: %v\n", err)
 		os.Exit(1)
 	}
 	defer cleanup()
@@ -115,7 +115,7 @@ func main() {
 		},
 	})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "app run error: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "app run error: %v\n", err)
 		return
 	}
 }
@@ -213,7 +213,7 @@ func NewApp(wa *WailsApp, sqlite *database.SQLCipherConnector, _ *pipeline.Deide
 			healthChecker.Stop()
 		}
 		if err := sqlite.Close(); err != nil {
-			fmt.Fprintf(os.Stderr, "failed to close database: %v\n", err)
+			_, _ = fmt.Fprintf(os.Stderr, "failed to close database: %v\n", err)
 		}
 	}
 	return &App{wailsApp: wa}, cleanup, nil

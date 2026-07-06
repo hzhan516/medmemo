@@ -7,6 +7,7 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -152,7 +153,7 @@ func (r *ProviderRepoSQLite) List(ctx context.Context) ([]*models.ProviderConfig
 	if err != nil {
 		return nil, fmt.Errorf("failed to list providers: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var result []*models.ProviderConfig
 	for rows.Next() {
@@ -180,7 +181,7 @@ func (r *ProviderRepoSQLite) scanProvider(scanner interface {
 
 	if err := scanner.Scan(&p.ID, &p.Name, &p.APIHost, &encryptedKey, &p.ModelID, &p.Temperature,
 		&timeoutMs, &p.MaxRetries, &p.GroupName, &enabledInt, &p.SortOrder, &createdAt, &updatedAt, &authMethodStr, &authParamsJSON); err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("provider not found: %w", entity.ErrNotFound)
 		}
 		return nil, fmt.Errorf("failed to scan provider row: %w", err)

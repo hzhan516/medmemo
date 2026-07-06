@@ -17,7 +17,7 @@ type mockNERDetector struct {
 	err       error
 }
 
-func (m *mockNERDetector) Predict(ctx context.Context, text string) ([]models.SensitiveEntity, error) {
+func (m *mockNERDetector) Predict(_ context.Context, _ string) ([]models.SensitiveEntity, error) {
 	return m.entities, m.err
 }
 
@@ -43,7 +43,7 @@ func TestL2NERStage_Process_NoNER(t *testing.T) {
 	stage := NewL2NERStage(&mockNERDetector{available: false})
 	ctx := context.Background()
 
-	input := PipelineInput{
+	input := Input{
 		Text:     "张三住北京",
 		Metadata: map[string]any{"original_text": "张三住北京"},
 	}
@@ -58,7 +58,7 @@ func TestL2NERStage_Process_EmptyNER(t *testing.T) {
 	stage := NewL2NERStage(&mockNERDetector{available: true, entities: nil})
 	ctx := context.Background()
 
-	input := PipelineInput{
+	input := Input{
 		Text:     "张三住北京",
 		Metadata: map[string]any{"original_text": "张三住北京"},
 	}
@@ -80,7 +80,7 @@ func TestL2NERStage_Process_WithMockNER(t *testing.T) {
 	stage := NewL2NERStage(&mockNERDetector{available: true, entities: entities})
 	ctx := context.Background()
 
-	input := PipelineInput{
+	input := Input{
 		Text:     "张三住北京",
 		Metadata: map[string]any{"original_text": "张三住北京"},
 	}
@@ -114,7 +114,7 @@ func TestL2NERStage_Process_FilterOverlap(t *testing.T) {
 	stage := NewL2NERStage(&mockNERDetector{available: true, entities: nerEntities})
 	ctx := context.Background()
 
-	input := PipelineInput{
+	input := Input{
 		Text: "张三电话{{phone_a3f7b2d1}}",
 		Metadata: map[string]any{
 			"original_text":   "张三电话13800138000",
@@ -148,7 +148,7 @@ func TestL2NERStage_Process_PositionMapping(t *testing.T) {
 	stage := NewL2NERStage(&mockNERDetector{available: true, entities: nerEntities})
 	ctx := context.Background()
 
-	input := PipelineInput{
+	input := Input{
 		Text: "张三电话{{phone_a3f7b2d1}}住北京",
 		Metadata: map[string]any{
 			"original_text": "张三电话13800138000住北京",
@@ -183,7 +183,7 @@ func TestL2NERStage_Process_EndToEnd(t *testing.T) {
 	stage := NewL2NERStage(&mockNERDetector{available: true, entities: nerEntities})
 	ctx := context.Background()
 
-	input := PipelineInput{
+	input := Input{
 		Text: "张三住北京市朝阳区，电话{{phone_a3f7b2d1}}",
 		Metadata: map[string]any{
 			"original_text": "张三住北京市朝阳区，电话13800138000",
@@ -213,7 +213,7 @@ func TestL2NERStage_Process_NERError(t *testing.T) {
 	stage := NewL2NERStage(&mockNERDetector{available: true, err: assert.AnError})
 	ctx := context.Background()
 
-	input := PipelineInput{
+	input := Input{
 		Text:     "张三住北京",
 		Metadata: map[string]any{"original_text": "张三住北京"},
 	}

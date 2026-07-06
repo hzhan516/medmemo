@@ -174,7 +174,7 @@ func TestKeyringStore_FallbackToFileStore(t *testing.T) {
 func TestKeyringStore_SetFallsBackOnRuntimeKeyringError(t *testing.T) {
 	useTempHome(t)
 	store := &KeyringStore{
-		ring: &stubKeyring{setErr: errors.New("User interaction is not allowed. (-25308)")},
+		ring: &stubKeyring{setErr: errors.New("user interaction is not allowed")},
 	}
 
 	value := []byte("database-key")
@@ -210,7 +210,7 @@ func TestKeyringStore_GetFallsBackOnRuntimeKeyringError(t *testing.T) {
 	require.NoError(t, fs.Set("api_key", value))
 
 	store := &KeyringStore{
-		ring: &stubKeyring{getErr: errors.New("User interaction is not allowed. (-25308)")},
+		ring: &stubKeyring{getErr: errors.New("user interaction is not allowed")},
 	}
 
 	got, err := store.Get("api_key")
@@ -228,8 +228,8 @@ func TestNewFileStore_MkdirAllFailure(t *testing.T) {
 	// 使用一个文件路径作为 home，使 MkdirAll 失败
 	tmpFile, err := os.CreateTemp("", "secret-test-*")
 	require.NoError(t, err)
-	defer os.Remove(tmpFile.Name())
-	tmpFile.Close()
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
+	require.NoError(t, tmpFile.Close())
 
 	t.Setenv("HOME", tmpFile.Name())
 	_, err = NewFileStore()
@@ -253,7 +253,7 @@ func TestFileStore_Set_WriteFails(t *testing.T) {
 	fs := &FileStore{baseDir: secretsDir, key: make([]byte, 32)}
 	// 将目录改为只读，使写入失败
 	require.NoError(t, os.Chmod(secretsDir, 0555))
-	defer os.Chmod(secretsDir, 0755)
+	defer func() { _ = os.Chmod(secretsDir, 0755) }()
 
 	err := fs.Set("test-key", []byte("value"))
 	assert.Error(t, err)
@@ -300,7 +300,7 @@ func TestFileStore_Get_OldKeyMigrationFail(t *testing.T) {
 	// 更简单：修改文件权限使 os.WriteFile 失败
 	path := fsNew.filePath("migration-fail-key")
 	require.NoError(t, os.Chmod(path, 0444))
-	defer os.Chmod(path, 0644)
+	defer func() { _ = os.Chmod(path, 0644) }()
 
 	got, err := fsNew.Get("migration-fail-key")
 	require.NoError(t, err) // 迁移失败不影响读取

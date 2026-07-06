@@ -62,7 +62,7 @@ func NewComplianceLogger(logDir string) *ComplianceLogger {
 
 // Log 记录一次合规拦截事件。
 // 原始文本仅计算长度和哈希，不保存内容。
-func (l *ComplianceLogger) Log(ctx context.Context, ruleID string, originalText, replacedText, level string) error {
+func (l *ComplianceLogger) Log(_ context.Context, ruleID string, originalText, replacedText, level string) error {
 	entry := ComplianceLogEntry{
 		Timestamp:   time.Now().Format(time.RFC3339),
 		RuleID:      ruleID,
@@ -75,7 +75,7 @@ func (l *ComplianceLogger) Log(ctx context.Context, ruleID string, originalText,
 }
 
 // LogFeedback 记录一次用户申诉反馈。
-func (l *ComplianceLogger) LogFeedback(ctx context.Context, ruleID, originalText, feedbackType string) error {
+func (l *ComplianceLogger) LogFeedback(_ context.Context, ruleID, originalText, feedbackType string) error {
 	entry := ComplianceFeedbackEntry{
 		Timestamp: time.Now().Format(time.RFC3339),
 		RuleID:    ruleID,
@@ -112,7 +112,7 @@ func (l *ComplianceLogger) appendLog(path string, entry any) error {
 	if err != nil {
 		return fmt.Errorf("failed to open log file %s: %w", path, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	if _, err := f.Write(append(data, '\n')); err != nil {
 		return fmt.Errorf("failed to write log entry: %w", err)

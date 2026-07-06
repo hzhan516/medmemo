@@ -95,7 +95,7 @@ func (g *GitHubUpdater) FetchLatest(ctx context.Context, channel models.UpdateCh
 	if err != nil {
 		return nil, fmt.Errorf("github api request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -181,7 +181,7 @@ func (g *GitHubUpdater) Download(ctx context.Context, url, destPath string, prog
 	if err != nil {
 		return fmt.Errorf("download request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download returned %d", resp.StatusCode)
@@ -196,7 +196,7 @@ func (g *GitHubUpdater) Download(ctx context.Context, url, destPath string, prog
 	if err != nil {
 		return fmt.Errorf("failed to create file: %w", err)
 	}
-	defer out.Close()
+	defer func() { _ = out.Close() }()
 
 	total := resp.ContentLength
 	reader := &port.ProgressReader{
@@ -224,7 +224,7 @@ func (g *GitHubUpdater) VerifyChecksum(path, expectedSHA256 string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open file for checksum: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	h := sha256.New()
 	if _, err := io.Copy(h, f); err != nil {
@@ -343,7 +343,7 @@ func (g *GitHubUpdater) extractChecksum(ctx context.Context, checksumsURL, asset
 	if err != nil {
 		return ""
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return ""
 	}

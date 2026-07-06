@@ -49,7 +49,7 @@ func (r *DialogueRepoSQLite) InsertBatch(ctx context.Context, dialogues []*entit
 	if err != nil {
 		return fmt.Errorf("failed to prepare batch insert statement: %w", err)
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }()
 
 	for _, d := range dialogues {
 		if _, err := stmt.ExecContext(ctx, d.MessageID, d.SessionID, d.Role, d.Content, d.ModelName, d.Timestamp.UnixMilli(), d.ExtractionStatus, d.CreatedAt.UnixMilli()); err != nil {
@@ -78,7 +78,7 @@ func (r *DialogueRepoSQLite) GetBySession(ctx context.Context, sessionID string,
 	if err != nil {
 		return nil, fmt.Errorf("failed to query dialogues by session: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	return scanDialogues(rows)
 }
 
@@ -94,7 +94,7 @@ func (r *DialogueRepoSQLite) GetRecent(ctx context.Context, sessionID string, mi
 	if err != nil {
 		return nil, fmt.Errorf("failed to query recent dialogues: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	return scanDialogues(rows)
 }
 
@@ -113,7 +113,7 @@ func (r *DialogueRepoSQLite) GetUnprocessed(ctx context.Context, limit int) ([]*
 	if err != nil {
 		return nil, fmt.Errorf("failed to query unprocessed dialogues: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	return scanDialogues(rows)
 }
 

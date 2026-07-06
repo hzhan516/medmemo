@@ -19,32 +19,32 @@ func NewFamilyRepoKuzu() *FamilyRepoKuzu {
 }
 
 // SaveMember 实现 port.FamilyRepository。
-func (r *FamilyRepoKuzu) SaveMember(ctx context.Context, member *entity.FamilyMember) error {
+func (r *FamilyRepoKuzu) SaveMember(_ context.Context, _ *entity.FamilyMember) error {
 	return fmt.Errorf("FamilyRepoKuzu.SaveMember not implemented")
 }
 
 // GetMemberByID 实现 port.FamilyRepository。
-func (r *FamilyRepoKuzu) GetMemberByID(ctx context.Context, id models.MemberID) (*entity.FamilyMember, error) {
+func (r *FamilyRepoKuzu) GetMemberByID(_ context.Context, _ models.MemberID) (*entity.FamilyMember, error) {
 	return nil, fmt.Errorf("FamilyRepoKuzu.GetMemberByID not implemented")
 }
 
 // ListAllMembers 实现 port.FamilyRepository。
-func (r *FamilyRepoKuzu) ListAllMembers(ctx context.Context) ([]*entity.FamilyMember, error) {
+func (r *FamilyRepoKuzu) ListAllMembers(_ context.Context) ([]*entity.FamilyMember, error) {
 	return nil, fmt.Errorf("FamilyRepoKuzu.ListAllMembers not implemented")
 }
 
 // DeleteMember 实现 port.FamilyRepository。
-func (r *FamilyRepoKuzu) DeleteMember(ctx context.Context, id models.MemberID) error {
+func (r *FamilyRepoKuzu) DeleteMember(_ context.Context, _ models.MemberID) error {
 	return fmt.Errorf("FamilyRepoKuzu.DeleteMember not implemented")
 }
 
 // FindRelations 实现 port.FamilyRepository。
-func (r *FamilyRepoKuzu) FindRelations(ctx context.Context, id models.MemberID) ([]entity.FamilyRelation, error) {
+func (r *FamilyRepoKuzu) FindRelations(_ context.Context, _ models.MemberID) ([]entity.FamilyRelation, error) {
 	return nil, fmt.Errorf("FamilyRepoKuzu.FindRelations not implemented")
 }
 
 // FindByDisease 实现 port.FamilyRepository。
-func (r *FamilyRepoKuzu) FindByDisease(ctx context.Context, diseaseName string) ([]*entity.FamilyMember, error) {
+func (r *FamilyRepoKuzu) FindByDisease(_ context.Context, _ string) ([]*entity.FamilyMember, error) {
 	// TODO(作者): Cypher 查询实现 [Issue#019]
 	return nil, fmt.Errorf("FamilyRepoKuzu.FindByDisease not implemented")
 }

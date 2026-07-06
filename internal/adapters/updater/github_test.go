@@ -50,10 +50,10 @@ type mockTransport struct {
 	body       string
 }
 
-func (m *mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+func (m *mockTransport) RoundTrip(_ *http.Request) (*http.Response, error) {
 	rec := httptest.NewRecorder()
 	rec.WriteHeader(m.statusCode)
-	rec.WriteString(m.body)
+	_, _ = rec.WriteString(m.body)
 	return rec.Result(), nil
 }
 
@@ -458,7 +458,7 @@ func TestExtractChecksum_RequestFails(t *testing.T) {
 
 // TestExtractChecksum_NonOKStatus 验证非 200 响应返回空。
 func TestExtractChecksum_NonOKStatus(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 	defer server.Close()
@@ -470,7 +470,7 @@ func TestExtractChecksum_NonOKStatus(t *testing.T) {
 
 // TestExtractChecksum_ReadBodyFails 验证响应体读取失败时返回空。
 func TestExtractChecksum_ReadBodyFails(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		// 写入后立即关闭连接，模拟读取异常
 		hj, ok := w.(http.Hijacker)
@@ -539,7 +539,7 @@ func TestExtractChecksum(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusOK)
 				_, _ = w.Write([]byte(tt.body))
 			}))
@@ -591,7 +591,7 @@ func TestVerifyChecksum(t *testing.T) {
 // TestDownload 验证更新包下载与路径安全校验。
 func TestDownload(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte("update payload"))
 		}))
@@ -608,7 +608,7 @@ func TestDownload(t *testing.T) {
 	})
 
 	t.Run("server error", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 		}))
 		defer server.Close()
@@ -621,7 +621,7 @@ func TestDownload(t *testing.T) {
 	})
 
 	t.Run("destination is directory", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}))
 		defer server.Close()

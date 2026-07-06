@@ -148,13 +148,15 @@ func (f *ExtractedFact) Validate() error {
 func (f *ExtractedFact) SetStatus(status FactStatus) {
 	now := time.Now().UTC()
 	f.Status = status
-	f.ReviewedAt = &now
+	f.ReviewedAt = new(time.Time)
+	*f.ReviewedAt = now
 }
 
 // SetScoredAt 记录评分时间。
 func (f *ExtractedFact) SetScoredAt() {
 	now := time.Now().UTC()
-	f.ScoredAt = &now
+	f.ScoredAt = new(time.Time)
+	*f.ScoredAt = now
 }
 
 // =============================================================================

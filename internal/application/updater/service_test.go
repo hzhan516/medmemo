@@ -22,16 +22,16 @@ type mockUpdater struct {
 	verifyErr   error
 }
 
-func (m *mockUpdater) FetchLatest(ctx context.Context, channel models.UpdateChannel) (*entity.UpdateInfo, error) {
+func (m *mockUpdater) FetchLatest(_ context.Context, _ models.UpdateChannel) (*entity.UpdateInfo, error) {
 	return m.latestInfo, m.fetchErr
 }
 
-func (m *mockUpdater) Download(ctx context.Context, url, destPath string, progress func(downloaded, total int64)) error {
+func (m *mockUpdater) Download(_ context.Context, _, destPath string, _ func(downloaded, total int64)) error {
 	m.downloadTo = destPath
 	return m.downloadErr
 }
 
-func (m *mockUpdater) VerifyChecksum(path, expectedSHA256 string) error {
+func (m *mockUpdater) VerifyChecksum(_, _ string) error {
 	return m.verifyErr
 }
 
@@ -43,7 +43,7 @@ type mockInstaller struct {
 	currentPath string
 }
 
-func (m *mockInstaller) Install(assetPath string) (string, error) {
+func (m *mockInstaller) Install(_ string) (string, error) {
 	return m.installPath, m.installErr
 }
 

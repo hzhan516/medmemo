@@ -4,6 +4,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -62,7 +63,7 @@ func (r *ConversationRepoSQLite) GetByID(ctx context.Context, id models.Conversa
 	var conv entity.Conversation
 	var createdAt, updatedAt int64
 	if err := row.Scan(&conv.ID, &conv.Title, &conv.Model, &createdAt, &updatedAt); err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("conversation %s not found: %w", id, entity.ErrNotFound)
 		}
 		return nil, fmt.Errorf("failed to get conversation: %w", err)
@@ -85,7 +86,7 @@ func (r *ConversationRepoSQLite) ListRecent(ctx context.Context, limit int) ([]*
 	if err != nil {
 		return nil, fmt.Errorf("failed to list conversations: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var result []*entity.Conversation
 	for rows.Next() {
@@ -117,7 +118,7 @@ func (r *ConversationRepoSQLite) ListDeleted(ctx context.Context, limit int) ([]
 	if err != nil {
 		return nil, fmt.Errorf("failed to list deleted conversations: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var result []*entity.Conversation
 	for rows.Next() {
@@ -129,7 +130,8 @@ func (r *ConversationRepoSQLite) ListDeleted(ctx context.Context, limit int) ([]
 		conv.CreatedAt = time.UnixMilli(createdAt)
 		conv.UpdatedAt = time.UnixMilli(updatedAt)
 		dt := time.UnixMilli(deletedAt)
-		conv.DeletedAt = &dt
+		conv.DeletedAt = new(time.Time)
+		*conv.DeletedAt = dt
 		conv.Messages = make([]entity.Message, 0)
 		result = append(result, &conv)
 	}

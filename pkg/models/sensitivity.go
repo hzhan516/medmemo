@@ -3,6 +3,8 @@ package models
 // SensitivityLevel 表示信息敏感度分级。
 type SensitivityLevel int
 
+// noinspection GoUnusedConst
+
 const (
 	P1Public       SensitivityLevel = iota // 公开信息，无需处理
 	P2Internal                             // 内部信息，软替换（可恢复）
