@@ -135,10 +135,10 @@ type staticEmbeddingSvc struct {
 
 func (s *staticEmbeddingSvc) IsAvailable() bool    { return true }
 func (s *staticEmbeddingSvc) ModelVersion() string { return "test-model" }
-func (s *staticEmbeddingSvc) EmbedSingle(ctx context.Context, text string) ([]float32, error) {
+func (s *staticEmbeddingSvc) EmbedSingle(_ context.Context, _ string) ([]float32, error) {
 	return s.vec, nil
 }
-func (s *staticEmbeddingSvc) Embed(ctx context.Context, texts []string) ([][]float32, error) {
+func (s *staticEmbeddingSvc) Embed(_ context.Context, texts []string) ([][]float32, error) {
 	out := make([][]float32, len(texts))
 	for i := range out {
 		out[i] = s.vec

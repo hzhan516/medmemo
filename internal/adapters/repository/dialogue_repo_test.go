@@ -23,7 +23,7 @@ func setupDialogueTestDB(t *testing.T) (*DialogueRepoSQLite, func()) {
 
 	repo := NewDialogueRepoSQLite(connector)
 	cleanup := func() {
-		connector.Close()
+		_ = connector.Close()
 	}
 	return repo, cleanup
 }

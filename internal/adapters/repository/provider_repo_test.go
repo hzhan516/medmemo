@@ -459,16 +459,16 @@ func TestProviderRepo_Delete_ExecError(t *testing.T) {
 // failingSecretStore 是一个在 Set 时总是返回错误的 store，用于测试错误路径。
 type failingSecretStore struct{}
 
-func (f *failingSecretStore) Set(key string, value []byte) error { return errors.New("set failed") }
-func (f *failingSecretStore) Get(key string) ([]byte, error)     { return nil, errors.New("get failed") }
-func (f *failingSecretStore) Delete(key string) error            { return nil }
+func (f *failingSecretStore) Set(_ string, _ []byte) error { return errors.New("set failed") }
+func (f *failingSecretStore) Get(_ string) ([]byte, error) { return nil, errors.New("get failed") }
+func (f *failingSecretStore) Delete(_ string) error        { return nil }
 
 // TestNewProviderRepoSQLite_KeyError 验证主密钥初始化失败时返回错误。
 func TestNewProviderRepoSQLite_KeyError(t *testing.T) {
 	tmpDir := t.TempDir()
 	conn, err := database.NewSQLiteConnector(tmpDir)
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	_, err = NewProviderRepoSQLite(conn, &failingSecretStore{})
 	require.Error(t, err)

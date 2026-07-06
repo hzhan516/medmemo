@@ -76,7 +76,9 @@ func (r *MessageRepoSQLite) ListByConversation(ctx context.Context, convID model
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to list messages: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var result []*entity.Message
 	for rows.Next() {

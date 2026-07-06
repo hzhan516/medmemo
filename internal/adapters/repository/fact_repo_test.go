@@ -23,7 +23,7 @@ func setupFactTestDB(t *testing.T) (*FactRepoSQLite, func()) {
 
 	repo := NewFactRepoSQLite(connector)
 	cleanup := func() {
-		connector.Close()
+		_ = connector.Close()
 	}
 	return repo, cleanup
 }
@@ -229,7 +229,7 @@ func TestFactRepo_FindBySession_WithData(t *testing.T) {
 	tmpDir := t.TempDir()
 	connector, err := database.NewSQLiteConnector(tmpDir)
 	require.NoError(t, err)
-	defer connector.Close()
+	defer func() { _ = connector.Close() }()
 
 	ctx := context.Background()
 	err = connector.Migrate(ctx)
@@ -315,7 +315,7 @@ func TestFactRepo_Delete_DeletesEmbedding(t *testing.T) {
 	tmpDir := t.TempDir()
 	connector, err := database.NewSQLiteConnector(tmpDir)
 	require.NoError(t, err)
-	defer connector.Close()
+	defer func() { _ = connector.Close() }()
 
 	ctx := context.Background()
 	err = connector.Migrate(ctx)
@@ -358,7 +358,7 @@ func TestFactRepo_FindLatestApprovedByPredicates(t *testing.T) {
 	tmpDir := t.TempDir()
 	connector, err := database.NewSQLiteConnector(tmpDir)
 	require.NoError(t, err)
-	defer connector.Close()
+	defer func() { _ = connector.Close() }()
 
 	ctx := context.Background()
 	err = connector.Migrate(ctx)
@@ -405,7 +405,7 @@ func TestFactRepo_FindLatestApprovedByPredicates_MultiPredicate(t *testing.T) {
 	tmpDir := t.TempDir()
 	connector, err := database.NewSQLiteConnector(tmpDir)
 	require.NoError(t, err)
-	defer connector.Close()
+	defer func() { _ = connector.Close() }()
 
 	ctx := context.Background()
 	err = connector.Migrate(ctx)
