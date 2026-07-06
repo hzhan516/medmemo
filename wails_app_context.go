@@ -70,3 +70,17 @@ func (a *WailsApp) EstimateContextUsage(req EstimateContextUsageRequest) (*Conte
 		Approximate: result.Approximate,
 	}, nil
 }
+
+// CompressSessionRequest 前端触发会话压缩的请求。
+type CompressSessionRequest struct {
+	ConversationID string `json:"conversationId"`
+	ProviderID     string `json:"providerId"`
+	ModelID        string `json:"modelId"`
+}
+
+// CompressSession 触发当前会话的上下文压缩。
+// 当前为前端调用占位，完整压缩策略在后续任务中实现。
+func (a *WailsApp) CompressSession(req CompressSessionRequest) error {
+	_ = req
+	return nil
+}
