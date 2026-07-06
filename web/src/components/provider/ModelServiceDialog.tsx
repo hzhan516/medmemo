@@ -277,6 +277,21 @@ export function ModelServiceDialog({
     setModels((prev) => prev.filter((m) => m.id !== id))
   }, [])
 
+  const parseMaxContextLength = (value: string): number | undefined => {
+    if (value === '') return undefined
+    const num = Number(value)
+    if (!Number.isFinite(num) || !Number.isInteger(num)) return NaN
+    return num
+  }
+
+  const isInvalidMaxContextLength = (value?: number) =>
+    value !== undefined && (Number.isNaN(value) || value < 256 || value > 2000000)
+
+  const updateModelMaxContextLength = useCallback((id: string, value: string) => {
+    const num = parseMaxContextLength(value)
+    setModels((prev) => prev.map((m) => (m.id === id ? { ...m, maxContextLength: num } : m)))
+  }, [])
+
   const handleGroupChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
       const val = e.target.value
@@ -305,6 +320,10 @@ export function ModelServiceDialog({
 
   const onSubmit = useCallback(
     (data: ServiceFormData) => {
+      if (models.some((m) => isInvalidMaxContextLength(m.maxContextLength))) {
+        setActiveTab('models')
+        return
+      }
       if (mode === 'edit' && provider) {
         onSave({ ...data, id: provider.id, createdAt: provider.createdAt, authMethod, authParams, models })
       } else {
@@ -613,13 +632,30 @@ export function ModelServiceDialog({
                   </div>
                 ) : (
                   models.map((m) => (
-                    <div key={m.id} className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border/60 hover:bg-accent/30 transition-colors">
-                      <input type="checkbox" checked={m.enabled} onChange={() => toggleModelEnabled(m.id)} className="shrink-0 w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary" data-testid={`ms-model-check-${m.id}`} />
-                      <div className="flex-1 min-w-0">
+                    <div key={m.id} className="flex items-start gap-3 px-3 py-2 rounded-lg border border-border/60 hover:bg-accent/30 transition-colors">
+                      <input type="checkbox" checked={m.enabled} onChange={() => toggleModelEnabled(m.id)} className="shrink-0 w-4 h-4 mt-2 rounded border-gray-300 text-primary focus:ring-primary" data-testid={`ms-model-check-${m.id}`} />
+                      <div className="flex-1 min-w-0 py-0.5">
                         <div className={`text-sm font-medium truncate ${m.enabled ? 'text-foreground' : 'text-muted-foreground line-through'}`}>{m.name}</div>
                         <div className="text-[11px] text-muted-foreground font-mono truncate">{m.id}</div>
                       </div>
-                      <button type="button" onClick={() => removeModel(m.id)} className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title="删除">
+                      <div className="w-28 shrink-0 space-y-1">
+                        <label htmlFor={`ms-max-ctx-${m.id}`} className="block text-[10px] text-muted-foreground">最大上下文长度</label>
+                        <Input
+                          id={`ms-max-ctx-${m.id}`}
+                          type="number"
+                          min={256}
+                          max={2000000}
+                          value={m.maxContextLength ?? ''}
+                          onChange={(e) => updateModelMaxContextLength(m.id, e.target.value)}
+                          className="h-7 text-xs"
+                          placeholder="默认"
+                          data-testid={`ms-max-ctx-input-${m.id}`}
+                        />
+                        {isInvalidMaxContextLength(m.maxContextLength) && (
+                          <p className="text-[10px] text-destructive">请输入 256–2000000 之间的数值</p>
+                        )}
+                      </div>
+                      <button type="button" onClick={() => removeModel(m.id)} className="p-1 mt-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title="删除">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
