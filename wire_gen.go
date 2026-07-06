@@ -120,7 +120,8 @@ func InitializeApp() (*App, func(), error) {
 	contextLengthResolver := usecase.NewContextLengthResolver(providerRepoSQLite)
 	hfTokenCounter := ai.NewHFTokenCounter()
 	contextEstimator := usecase.NewContextEstimator(hfTokenCounter, contextLengthResolver)
-	wailsApp := NewWailsApp(chatOrchestrator, memoryRetriever, appConfig, conversationRepoSQLite, messageRepoSQLite, disclaimerRepoSQLite, providerRepoSQLite, healthEngine, titleGenerator, service, keyringStore, tokenRefreshService, oAuthDeviceFlowService, factRepoSQLite, auditLogRepoSQLite, dialogueRepoSQLite, embeddingServiceAdapter, embeddingRepoSQLite, embeddingMigrator, migrationState, accuracyService, knowledgeRepoSQLite, knowledgeImporter, contextLengthResolver, contextEstimator)
+	compressionService := usecase.NewCompressionService(contextEstimator, llmClientFactory, providerRepoSQLite, messageRepoSQLite)
+	wailsApp := NewWailsApp(chatOrchestrator, memoryRetriever, appConfig, conversationRepoSQLite, messageRepoSQLite, disclaimerRepoSQLite, providerRepoSQLite, healthEngine, titleGenerator, service, keyringStore, tokenRefreshService, oAuthDeviceFlowService, factRepoSQLite, auditLogRepoSQLite, dialogueRepoSQLite, embeddingServiceAdapter, embeddingRepoSQLite, embeddingMigrator, migrationState, accuracyService, knowledgeRepoSQLite, knowledgeImporter, contextLengthResolver, contextEstimator, compressionService)
 	app, cleanup, err := NewApp(wailsApp, sqlCipherConnector, deidentifyPipeline, healthEngine)
 	if err != nil {
 		return nil, nil, err

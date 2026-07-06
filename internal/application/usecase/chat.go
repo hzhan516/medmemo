@@ -669,4 +669,5 @@ var ApplicationSet = wire.NewSet(
 	NewCitationBuilder,
 	NewContextLengthResolver,
 	NewContextEstimator,
+	NewCompressionService,
 )

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/wailsapp/wails/v2/pkg/runtime"
+
 	"github.com/hzhan516/medmemo/internal/application/usecase"
 	"github.com/hzhan516/medmemo/pkg/models"
 )
@@ -29,6 +31,7 @@ type ContextUsageResponse struct {
 const (
 	defaultResolveMaxContextLengthTimeout = 5 * time.Second
 	defaultEstimateContextUsageTimeout    = 10 * time.Second
+	defaultCompressSessionTimeout         = 30 * time.Second
 )
 
 // ResolveMaxContextLength 解析指定 provider 与 model 的最大上下文长度。
@@ -78,9 +81,28 @@ type CompressSessionRequest struct {
 	ModelID        string `json:"modelId"`
 }
 
-// CompressSession 触发当前会话的上下文压缩。
-// 当前为前端调用占位，完整压缩策略在后续任务中实现。
+// CompressSession 触发当前会话的上下文压缩，并在完成后通知前端刷新用量。
 func (a *WailsApp) CompressSession(req CompressSessionRequest) error {
-	_ = req
+	if a.compressionService == nil {
+		return fmt.Errorf("compression service not initialized")
+	}
+
+	ctx, cancel := context.WithTimeout(a.ctx, defaultCompressSessionTimeout)
+	defer cancel()
+
+	cfg := usecase.CompressionConfig{
+		Strategy:    usecase.StrategySummarizeAndReplace, // 默认使用确定性摘要替换策略
+		AnchorCount: 1,
+		RecentCount: 6,
+	}
+
+	_, err := a.compressionService.Compress(ctx, models.ConversationID(req.ConversationID), req.ProviderID, req.ModelID, cfg)
+	if err != nil {
+		return fmt.Errorf("failed to compress session: %w", err)
+	}
+
+	runtime.EventsEmit(a.ctx, "context:usage_refresh", map[string]any{
+		"conversation_id": req.ConversationID,
+	})
 	return nil
 }

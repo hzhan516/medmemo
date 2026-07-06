@@ -70,6 +70,9 @@ type WailsApp struct {
 	// 上下文长度解析与用量估算（M01-会话压缩）
 	contextLengthResolver *usecase.ContextLengthResolver
 	contextEstimator      *usecase.ContextEstimator
+
+	// 会话压缩服务（M01-会话压缩）
+	compressionService *usecase.CompressionService
 }
 
 // NewWailsApp 构造函数，供 Wire 调用。
@@ -99,6 +102,7 @@ func NewWailsApp(
 	knowledgeImporter *usecase.KnowledgeImporter,
 	contextLengthResolver *usecase.ContextLengthResolver,
 	contextEstimator *usecase.ContextEstimator,
+	compressionService *usecase.CompressionService,
 ) *WailsApp {
 	return &WailsApp{
 		chatOrchestrator:      chat,
@@ -129,6 +133,7 @@ func NewWailsApp(
 		knowledgeImporter:     knowledgeImporter,
 		contextLengthResolver: contextLengthResolver,
 		contextEstimator:      contextEstimator,
+		compressionService:    compressionService,
 	}
 }
 
