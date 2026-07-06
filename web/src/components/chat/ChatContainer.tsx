@@ -2,7 +2,12 @@ import { useEffect, useRef } from 'react'
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso'
 import { MessageBubble } from './MessageBubble'
 import { TypingIndicator } from './TypingIndicator'
+import { ContextUsageBar } from './ContextUsageBar'
+import { CompressSessionButton } from './CompressSessionButton'
 import type { ChatMessage } from '@/stores/chatStore'
+import { useChatStore } from '@/stores/chatStore'
+import { useSettingsStore } from '@/stores/settingsStore'
+import { registerContextUsageListeners } from '@/services/contextUsageService'
 import { Bot, Plus } from 'lucide-react'
 
 interface ChatContainerProps {
@@ -12,6 +17,9 @@ interface ChatContainerProps {
   onRetry?: (messageId: string) => void
   onReportCompliance?: (messageId: string, ruleID: string) => void
   onFollowupClick?: (text: string) => void
+  conversationId?: string
+  providerId?: string
+  modelId?: string
 }
 
 const isTest = import.meta.env.VITEST === 'true'
@@ -21,9 +29,23 @@ const isTest = import.meta.env.VITEST === 'true'
  * 测试环境回退到普通 map 渲染（jsdom 不支持 ResizeObserver 布局计算）。
  * 自动滚动到底部（仅在用户已位于底部时）。
  */
-export function ChatContainer({ messages, isStreaming, onStartNewConversation, onRetry, onReportCompliance, onFollowupClick }: ChatContainerProps) {
+export function ChatContainer({ messages, isStreaming, onStartNewConversation, onRetry, onReportCompliance, onFollowupClick, conversationId: conversationIdProp, providerId: providerIdProp, modelId: modelIdProp }: ChatContainerProps) {
   const virtuosoRef = useRef<VirtuosoHandle>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+
+  const storeConversationId = useChatStore((s) => s.currentConversationId)
+  const storeProviderId = useSettingsStore((s) => s.activeProviderId)
+  const storeModelId = useSettingsStore((s) => s.activeModelId)
+
+  const conversationId = conversationIdProp ?? storeConversationId ?? undefined
+  const providerId = providerIdProp ?? storeProviderId ?? undefined
+  const modelId = modelIdProp ?? storeModelId ?? undefined
+
+  // 注册上下文用量相关事件监听
+  useEffect(() => {
+    const cleanup = registerContextUsageListeners()
+    return cleanup
+  }, [])
 
   // 新消息到达或流式输出时自动滚底
   useEffect(() => {
@@ -64,8 +86,8 @@ export function ChatContainer({ messages, isStreaming, onStartNewConversation, o
   }
 
   return (
-    <div className={`flex-1 px-4 py-2 ${isTest ? 'overflow-y-auto' : 'overflow-hidden'}`}>
-      <div className={`max-w-4xl mx-auto ${isTest ? '' : 'h-full'}`}>
+    <div className={`flex flex-col flex-1 px-4 py-2 ${isTest ? 'overflow-y-auto' : 'overflow-hidden'}`}>
+      <div className={`max-w-4xl mx-auto w-full ${isTest ? '' : 'flex-1 min-h-0'}`}>
         {isTest ? (
           <>
             {messages.map((msg) => (
@@ -120,6 +142,13 @@ export function ChatContainer({ messages, isStreaming, onStartNewConversation, o
           />
         )}
       </div>
+
+      {conversationId && providerId && modelId && (
+        <div className="max-w-4xl mx-auto w-full flex items-center gap-3 px-1 pt-2">
+          <ContextUsageBar conversationId={conversationId} />
+          <CompressSessionButton conversationId={conversationId} providerId={providerId} modelId={modelId} />
+        </div>
+      )}
     </div>
   )
 }
