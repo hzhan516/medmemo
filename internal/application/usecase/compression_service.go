@@ -79,21 +79,8 @@ func reverseEntities(entities []*entity.Message) {
 	}
 }
 
-// Compress 根据配置对指定会话执行压缩，并持久化变更。
-func (s *CompressionService) Compress(ctx context.Context, conversationID models.ConversationID, providerID, modelID string, cfg CompressionConfig) (CompressionResult, error) {
-	// 1. 加载当前会话消息。
-	entities, _, err := s.msgRepo.ListByConversation(ctx, conversationID, "", math.MaxInt32)
-	if err != nil {
-		return CompressionResult{}, fmt.Errorf("failed to list messages for conversation %s: %w", conversationID, err)
-	}
-
-	// ListByConversation 返回最新优先的消息；策略需要按时间顺序处理，因此反转。
-	reverseEntities(entities)
-
-	// 2. 转换为 LLM 估算使用的消息模型。
-	history := toModelMessages(entities)
-
-	// 3. 估算压缩前的上下文用量。
+// CompressMessages 对给定历史消息做纯内存压缩，不触碰 DB。
+func (s *CompressionService) CompressMessages(ctx context.Context, history []models.Message, providerID, modelID string, cfg CompressionConfig) (CompressionResult, error) {
 	beforeResult, err := s.estimator.Estimate(ctx, EstimatorInput{
 		Messages:   history,
 		ProviderID: providerID,
@@ -104,13 +91,11 @@ func (s *CompressionService) Compress(ctx context.Context, conversationID models
 	}
 	usedBefore := beforeResult.UsedTokens
 
-	// 4. 根据策略执行压缩。
 	compressed, strategy, fallback, err := s.applyStrategy(ctx, history, providerID, cfg)
 	if err != nil {
 		return CompressionResult{}, fmt.Errorf("failed to apply compression strategy %s: %w", cfg.Strategy, err)
 	}
 
-	// 5. 估算压缩后的上下文用量。
 	afterResult, err := s.estimator.Estimate(ctx, EstimatorInput{
 		Messages:   compressed,
 		ProviderID: providerID,
@@ -121,7 +106,7 @@ func (s *CompressionService) Compress(ctx context.Context, conversationID models
 	}
 	usedAfter := afterResult.UsedTokens
 
-	// 6. 压缩减量保护：若压缩后未减少 token，则回退到 drop 策略；仍不减少则报错且不做持久化。
+	// 压缩未减少 token 时回退到 drop 策略；仍不减少则报错且不返回变更。
 	if usedAfter >= usedBefore {
 		if strategy != StrategyDropEarliestN {
 			compressed = applyDropEarliestN(history, cfg.DropN, cfg.RecentCount)
@@ -145,11 +130,6 @@ func (s *CompressionService) Compress(ctx context.Context, conversationID models
 		}
 	}
 
-	// 7. 持久化变更。
-	if err := s.persist(ctx, conversationID, entities, history, compressed, strategy); err != nil {
-		return CompressionResult{}, fmt.Errorf("failed to persist compression result: %w", err)
-	}
-
 	return CompressionResult{
 		Messages:         compressed,
 		UsedBefore:       usedBefore,
@@ -157,6 +137,28 @@ func (s *CompressionService) Compress(ctx context.Context, conversationID models
 		FallbackOccurred: fallback,
 		Strategy:         strategy,
 	}, nil
+}
+
+// Compress 从 DB 加载会话、压缩并持久化。
+func (s *CompressionService) Compress(ctx context.Context, conversationID models.ConversationID, providerID, modelID string, cfg CompressionConfig) (CompressionResult, error) {
+	entities, _, err := s.msgRepo.ListByConversation(ctx, conversationID, "", math.MaxInt32)
+	if err != nil {
+		return CompressionResult{}, fmt.Errorf("failed to list messages for conversation %s: %w", conversationID, err)
+	}
+
+	reverseEntities(entities)
+	history := toModelMessages(entities)
+
+	res, err := s.CompressMessages(ctx, history, providerID, modelID, cfg)
+	if err != nil {
+		return CompressionResult{}, err
+	}
+
+	if err := s.persist(ctx, conversationID, entities, history, res.Messages, res.Strategy); err != nil {
+		return CompressionResult{}, fmt.Errorf("failed to persist compression result: %w", err)
+	}
+
+	return res, nil
 }
 
 // applyStrategy 根据配置分发到具体压缩策略。
