@@ -13,7 +13,18 @@ const (
 	WarningThreshold = 0.75
 	// AutoCompressionThreshold 是自动压缩触发阈值（90%）。
 	AutoCompressionThreshold = 0.90
+	// DefaultCompressionModel 是推荐的本地压缩模型占位提示。
+	DefaultCompressionModel = "qwen3.5:2b"
 )
+
+// CompressionSettings 会话压缩相关的用户配置。
+type CompressionSettings struct {
+	UseModel    bool   `json:"useModel"`
+	ProviderID  string `json:"providerId,omitempty"`
+	ModelID     string `json:"modelId,omitempty"`
+	AnchorCount int    `json:"anchorCount,omitempty"`
+	RecentCount int    `json:"recentCount,omitempty"`
+}
 
 // ContextUsage 表示会话上下文用量状态，供前端进度条展示。
 type ContextUsage struct {
