@@ -215,13 +215,9 @@ func (a *WailsApp) maybeAutoCompress(ctx context.Context, chatReq *usecase.ChatR
 		return
 	}
 
-	cfg := usecase.CompressionConfig{
-		Strategy:    usecase.StrategySummarizeAndReplace,
-		AnchorCount: 1,
-		RecentCount: 6,
-	}
+	cfg, providerID, modelID := a.buildCompressionConfig(chatReq.ProviderID, string(chatReq.Model))
 
-	res, err := a.compressionService.CompressMessages(ctx, chatReq.Messages, chatReq.ProviderID, string(chatReq.Model), cfg)
+	res, err := a.compressionService.CompressMessages(ctx, chatReq.Messages, providerID, modelID, cfg)
 	if err != nil {
 		fmt.Printf("[auto-compress] failed, proceeding uncompressed: %v\n", err)
 		return

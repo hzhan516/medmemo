@@ -8,6 +8,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/hzhan516/medmemo/internal/application/usecase"
+	"github.com/hzhan516/medmemo/internal/infrastructure/config"
 	"github.com/hzhan516/medmemo/pkg/models"
 )
 
@@ -86,6 +87,53 @@ type CompressSessionRequest struct {
 	ConversationID string `json:"conversationId"`
 	ProviderID     string `json:"providerId"`
 	ModelID        string `json:"modelId"`
+	Strategy       string `json:"strategy,omitempty"`
+	AnchorCount    int    `json:"anchorCount,omitempty"`
+	RecentCount    int    `json:"recentCount,omitempty"`
+}
+
+// resolveStrategy 将字符串策略解析为合法策略，非法值回退默认。
+func resolveStrategy(s string) usecase.CompressionStrategyKind {
+	switch usecase.CompressionStrategyKind(s) {
+	case usecase.StrategyDropEarliestN,
+		usecase.StrategySummarizeAndReplace,
+		usecase.StrategyLLMSelfSummarize:
+		return usecase.CompressionStrategyKind(s)
+	default:
+		return usecase.StrategySummarizeAndReplace
+	}
+}
+
+// buildCompressionConfig 依据应用配置返回压缩配置与用于压缩的 provider/model。
+func (a *WailsApp) buildCompressionConfig(activeProviderID, activeModelID string) (usecase.CompressionConfig, string, string) {
+	s := a.config.CompressionSettings
+	anchor, recent := 1, 6
+	if s.AnchorCount > 0 {
+		anchor = s.AnchorCount
+	}
+	if s.RecentCount > 0 {
+		recent = s.RecentCount
+	}
+
+	if s.UseModel {
+		providerID, modelID := s.ProviderID, s.ModelID
+		if providerID == "" {
+			providerID = activeProviderID
+		}
+		if modelID == "" {
+			modelID = activeModelID
+		}
+		return usecase.CompressionConfig{
+			Strategy:    usecase.StrategyLLMSelfSummarize,
+			AnchorCount: anchor,
+			RecentCount: recent,
+		}, providerID, modelID
+	}
+	return usecase.CompressionConfig{
+		Strategy:    usecase.StrategySummarizeAndReplace,
+		AnchorCount: anchor,
+		RecentCount: recent,
+	}, activeProviderID, activeModelID
 }
 
 // CompressSession 触发当前会话的上下文压缩，并在完成后通知前端刷新用量。
@@ -97,13 +145,18 @@ func (a *WailsApp) CompressSession(req CompressSessionRequest) error {
 	ctx, cancel := context.WithTimeout(a.ctx, defaultCompressSessionTimeout)
 	defer cancel()
 
-	cfg := usecase.CompressionConfig{
-		Strategy:    usecase.StrategySummarizeAndReplace, // 默认使用确定性摘要替换策略
-		AnchorCount: 1,
-		RecentCount: 6,
+	cfg, providerID, modelID := a.buildCompressionConfig(req.ProviderID, req.ModelID)
+	if req.Strategy != "" {
+		cfg.Strategy = resolveStrategy(req.Strategy)
+	}
+	if req.AnchorCount > 0 {
+		cfg.AnchorCount = req.AnchorCount
+	}
+	if req.RecentCount > 0 {
+		cfg.RecentCount = req.RecentCount
 	}
 
-	_, err := a.compressionService.Compress(ctx, models.ConversationID(req.ConversationID), req.ProviderID, req.ModelID, cfg)
+	_, err := a.compressionService.Compress(ctx, models.ConversationID(req.ConversationID), providerID, modelID, cfg)
 	if err != nil {
 		return fmt.Errorf("failed to compress session: %w", err)
 	}
@@ -112,4 +165,35 @@ func (a *WailsApp) CompressSession(req CompressSessionRequest) error {
 		"conversation_id": req.ConversationID,
 	})
 	return nil
+}
+
+// GetCompressionSettings 返回当前会话压缩设置。
+func (a *WailsApp) GetCompressionSettings() models.CompressionSettings {
+	return a.config.CompressionSettings
+}
+
+// SetCompressionSettings 保存会话压缩设置。
+func (a *WailsApp) SetCompressionSettings(s models.CompressionSettings) error {
+	a.config.CompressionSettings = s
+	if err := config.SaveCompressionSettings(s); err != nil {
+		return fmt.Errorf("failed to save compression settings: %w", err)
+	}
+	return nil
+}
+
+// TestCompressionModel 测试选定的压缩模型是否可用。
+func (a *WailsApp) TestCompressionModel(providerID, modelID string) (bool, error) {
+	_ = modelID
+	if a.compressionService == nil {
+		return false, fmt.Errorf("compression service not initialized")
+	}
+
+	ctx, cancel := context.WithTimeout(a.ctx, defaultResolveMaxContextLengthTimeout)
+	defer cancel()
+
+	available, err := a.compressionService.TestModelAvailability(ctx, providerID)
+	if err != nil {
+		return false, fmt.Errorf("failed to check availability: %w", err)
+	}
+	return available, nil
 }
