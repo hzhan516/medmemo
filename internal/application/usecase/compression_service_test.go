@@ -10,6 +10,7 @@ import (
 	"github.com/hzhan516/medmemo/internal/application/port"
 	"github.com/hzhan516/medmemo/internal/domain/entity"
 	"github.com/hzhan516/medmemo/pkg/models"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -612,4 +613,27 @@ func TestFirstSentence_NoDelimiterTruncatesWithEllipsis(t *testing.T) {
 	got := firstSentence([]rune(text), 10)
 	require.Equal(t, strings.Repeat("a", 10)+"…", got)
 }
+
+// TestIsLoopbackProvider 验证本地回环 host 判断。
+func TestIsLoopbackProvider(t *testing.T) {
+	cases := []struct {
+		apiHost string
+		want    bool
+	}{
+		{"http://localhost:11434", true},
+		{"http://127.0.0.1:11434", true},
+		{"http://[::1]:11434", true},
+		{"https://api.moonshot.cn", false},
+		{"", false},
+		{"not-a-url", false},
+	}
+
+	for _, tt := range cases {
+		p := &models.ProviderConfig{APIHost: tt.apiHost}
+		assert.Equal(t, tt.want, isLoopbackProvider(p), "apiHost=%q", tt.apiHost)
+	}
+
+	require.False(t, isLoopbackProvider(nil))
+}
+
 

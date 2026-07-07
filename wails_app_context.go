@@ -104,9 +104,8 @@ func resolveStrategy(s string) usecase.CompressionStrategyKind {
 	}
 }
 
-// buildCompressionConfig 依据应用配置返回压缩配置与用于压缩的 provider/model。
-func (a *WailsApp) buildCompressionConfig(activeProviderID, activeModelID string) (usecase.CompressionConfig, string, string) {
-	s := a.config.CompressionSettings
+// buildCompressionConfigFrom 依据应用配置返回压缩配置与用于压缩的 provider/model。
+func buildCompressionConfigFrom(s models.CompressionSettings, activeProviderID, activeModelID string) (usecase.CompressionConfig, string, string) {
 	anchor, recent := 1, 6
 	if s.AnchorCount > 0 {
 		anchor = s.AnchorCount
@@ -134,6 +133,11 @@ func (a *WailsApp) buildCompressionConfig(activeProviderID, activeModelID string
 		AnchorCount: anchor,
 		RecentCount: recent,
 	}, activeProviderID, activeModelID
+}
+
+// buildCompressionConfig 依据应用配置返回压缩配置与用于压缩的 provider/model。
+func (a *WailsApp) buildCompressionConfig(activeProviderID, activeModelID string) (usecase.CompressionConfig, string, string) {
+	return buildCompressionConfigFrom(a.config.CompressionSettings, activeProviderID, activeModelID)
 }
 
 // CompressSession 触发当前会话的上下文压缩，并在完成后通知前端刷新用量。
