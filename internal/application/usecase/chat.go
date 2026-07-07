@@ -91,6 +91,17 @@ type ChatRequest struct {
 	Messages       []models.Message
 	Model          models.ProviderType
 	ProviderID     string
+	// Prepared 为可选的预组装结果。非 nil 时 prepareMessages 直接复用，
+	// 跳过记忆/知识检索与脱敏，避免发送路径中重复组装（见 maybeAutoCompress）。
+	Prepared *PreparedPrompt
+}
+
+// PreparedPrompt 是 prepareMessages 的完整产物，用于跨调用复用，
+// 避免同一次发送中重复执行记忆/知识检索与脱敏。
+type PreparedPrompt struct {
+	Messages  []models.Message
+	Deid      models.DeidentifyResult
+	Citations []entity.KnowledgeCitation
 }
 
 // ChatResponse 对话响应 DTO。
@@ -152,8 +163,26 @@ func injectMemories(msgs []models.Message, memories []*entity.HealthMemory) []mo
 	return injectSystemPrefix(msgs, memCtx)
 }
 
+// AssemblePromptForEstimate 复用 prepareMessages 的只读组装逻辑，用于估算真实 prompt。
+// 内部仅做检索/脱敏，不写库、不调用 LLM，可安全用于用量估算。
+func (c *ChatOrchestrator) AssemblePromptForEstimate(ctx context.Context, req ChatRequest) []models.Message {
+	return c.PreparePrompt(ctx, req).Messages
+}
+
+// PreparePrompt 返回完整预组装结果（消息 + 脱敏映射 + 知识引用），供估算与发送路径复用。
+// 内部仅做检索/脱敏，不写库、不调用 LLM。
+func (c *ChatOrchestrator) PreparePrompt(ctx context.Context, req ChatRequest) PreparedPrompt {
+	messages, deid, citations := c.prepareMessages(ctx, req)
+	return PreparedPrompt{Messages: messages, Deid: deid, Citations: citations}
+}
+
 // prepareMessages 执行输入脱敏、记忆检索与知识库检索，返回处理后的消息、脱敏结果与引用。
 func (c *ChatOrchestrator) prepareMessages(ctx context.Context, req ChatRequest) ([]models.Message, models.DeidentifyResult, []entity.KnowledgeCitation) {
+	// 若已有预组装结果（发送路径中 maybeAutoCompress 已组装过），直接复用，避免重复检索/脱敏。
+	if req.Prepared != nil {
+		return req.Prepared.Messages, req.Prepared.Deid, req.Prepared.Citations
+	}
+
 	messages := req.Messages
 	var deidResult models.DeidentifyResult
 
@@ -667,4 +696,7 @@ var ApplicationSet = wire.NewSet(
 	NewKnowledgeSearchService,
 	NewKnowledgeReranker,
 	NewCitationBuilder,
+	NewContextLengthResolver,
+	NewContextEstimator,
+	NewCompressionService,
 )

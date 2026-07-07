@@ -66,9 +66,10 @@ type AuthParams struct {
 
 // ProviderModel 表示某个服务商下的单个模型配置。
 type ProviderModel struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Enabled bool   `json:"enabled"`
+	ID               string `json:"id"`
+	Name             string `json:"name"`
+	Enabled          bool   `json:"enabled"`
+	MaxContextLength int    `json:"maxContextLength,omitempty"`
 }
 
 // ProviderConfig LLM Provider 完整配置。

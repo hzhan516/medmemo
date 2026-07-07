@@ -43,3 +43,10 @@ type SensitiveDetector interface {
 	// Detect 检测文本中的敏感实体，返回分级标记结果。
 	Detect(ctx context.Context, text string) ([]models.SensitiveEntity, error)
 }
+
+// TokenCounter 估算文本的 token 数量。实现优先使用 daulet/tokenizers（HF/ONNX 工具链），
+// 在分词器不可用时返回 (heuristic, false)。
+type TokenCounter interface {
+	// Count 返回 token 数与一个布尔值：true 表示使用了真实分词器，false 表示使用了字符启发式回退。
+	Count(ctx context.Context, modelID, text string) (int, bool)
+}

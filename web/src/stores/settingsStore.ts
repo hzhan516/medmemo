@@ -9,6 +9,14 @@ type UpdateChannel = 'stable' | 'beta'
 type DesensitizationLevel = 'standard' | 'strict' | 'off'
 export type ProviderHealthStatus = 'green' | 'yellow' | 'red' | 'unknown'
 
+export type CompressionSettings = {
+  useModel: boolean
+  providerId: string
+  modelId: string
+  anchorCount: number
+  recentCount: number
+}
+
 interface SettingsState {
   theme: Theme
   selectedModel: string
@@ -24,6 +32,7 @@ interface SettingsState {
   providerHealthStatus: Record<string, ProviderHealthStatus>
   lastSelectedProviderId: string | null
   lastSeenVersionNotes: string
+  compressionSettings: CompressionSettings
 
   setTheme: (theme: Theme) => void
   setSelectedModel: (model: string) => void
@@ -39,6 +48,7 @@ interface SettingsState {
   setProviderHealthStatus: (id: string, status: ProviderHealthStatus) => void
   setLastSelectedProviderId: (id: string | null) => void
   setLastSeenVersionNotes: (version: string) => void
+  setCompressionSettings: (settings: Partial<CompressionSettings>) => void
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -58,6 +68,13 @@ export const useSettingsStore = create<SettingsState>()(
       providerHealthStatus: {},
       lastSelectedProviderId: null,
       lastSeenVersionNotes: '',
+      compressionSettings: {
+        useModel: false,
+        providerId: '',
+        modelId: '',
+        anchorCount: 1,
+        recentCount: 6,
+      },
 
       setTheme: (theme) => set({ theme }),
       setSelectedModel: (model) => set({ selectedModel: model }),
@@ -82,6 +99,10 @@ export const useSettingsStore = create<SettingsState>()(
         })),
       setLastSelectedProviderId: (id) => set({ lastSelectedProviderId: id }),
       setLastSeenVersionNotes: (version) => set({ lastSeenVersionNotes: version }),
+      setCompressionSettings: (updates) =>
+        set((state) => ({
+          compressionSettings: { ...state.compressionSettings, ...updates },
+        })),
     }),
     {
       name: 'medmemo-settings',
@@ -99,6 +120,7 @@ export const useSettingsStore = create<SettingsState>()(
         activeModelId: state.activeModelId,
         lastSelectedProviderId: state.lastSelectedProviderId,
         lastSeenVersionNotes: state.lastSeenVersionNotes,
+        compressionSettings: state.compressionSettings,
         // providerHealthStatus 不持久化（运行时状态）
       }),
       merge: (persistedState, currentState) => {
@@ -109,6 +131,10 @@ export const useSettingsStore = create<SettingsState>()(
           // 新字段兜底：旧 localStorage 中缺少时恢复默认值
           confidenceBarMode: persisted.confidenceBarMode ?? currentState.confidenceBarMode,
           showConfidenceBar: persisted.showConfidenceBar ?? currentState.showConfidenceBar,
+          compressionSettings: {
+            ...currentState.compressionSettings,
+            ...persisted.compressionSettings,
+          },
         }
       },
     }
