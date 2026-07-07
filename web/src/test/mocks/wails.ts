@@ -143,6 +143,10 @@ const defaultTestCompressionModel = async (_providerID: string, _modelID: string
 
 const defaultCompressSession = async (_req: Record<string, unknown>): Promise<void> => {}
 
+const defaultEstimateContextUsage = async (_req: Record<string, unknown>): Promise<Record<string, unknown>> => {
+  return { usedTokens: 0, maxTokens: 1, ratio: 0, approximate: false }
+}
+
 const defaultGetEmbeddingStatus = async (): Promise<Record<string, unknown>> => {
   return {
     available: false,
@@ -471,6 +475,7 @@ export const MockWailsApp = {
   SetCompressionSettings: (settings: Record<string, unknown>) => resolveHandler('SetCompressionSettings', defaultSetCompressionSettings)(settings),
   TestCompressionModel: (providerID: string, modelID: string) => resolveHandler('TestCompressionModel', defaultTestCompressionModel)(providerID, modelID),
   CompressSession: (req: Record<string, unknown>) => resolveHandler('CompressSession', defaultCompressSession)(req),
+  EstimateContextUsage: (req: Record<string, unknown>) => resolveHandler('EstimateContextUsage', defaultEstimateContextUsage)(req),
   GetConversationMessages: (convID: string) => resolveHandler('GetConversationMessages', defaultGetConversationMessages)(convID),
   CreateConversation: () => resolveHandler('CreateConversation', defaultCreateConversation)(),
   GetModels: () => resolveHandler('GetModels', defaultGetModels)(),
