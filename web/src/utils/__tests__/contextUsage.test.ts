@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { colorState, abbrevK, formatContextLabel } from '@/utils/contextUsage'
+import {
+  colorState,
+  abbrevK,
+  formatContextLabel,
+  WARNING_THRESHOLD,
+  AUTO_COMPRESSION_THRESHOLD,
+} from '@/utils/contextUsage'
 
 describe('contextUsage', () => {
   describe('colorState', () => {
@@ -16,6 +22,13 @@ describe('contextUsage', () => {
     it('returns critical for ratios at or above auto-compression threshold', () => {
       expect(colorState(0.9)).toBe('critical')
       expect(colorState(1.0)).toBe('critical')
+    })
+  })
+
+  describe('thresholds', () => {
+    it('matches backend pkg/models/context_usage.go constants', () => {
+      expect(WARNING_THRESHOLD).toBe(0.75)
+      expect(AUTO_COMPRESSION_THRESHOLD).toBe(0.90)
     })
   })
 

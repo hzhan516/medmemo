@@ -9,9 +9,9 @@ const (
 	MaxContextLengthCap = 2000000
 	// DefaultMaxContextLen 是默认最大上下文长度。
 	DefaultMaxContextLen = 8192
-	// WarningThreshold 是上下文用量警告阈值（75%）。
+	// WarningThreshold 是上下文用量警告阈值（75%）。WARN: 与前端 web/src/utils/contextUsage.ts 保持一致。
 	WarningThreshold = 0.75
-	// AutoCompressionThreshold 是自动压缩触发阈值（90%）。
+	// AutoCompressionThreshold 是自动压缩触发阈值（90%）。WARN: 与前端 web/src/utils/contextUsage.ts 保持一致。
 	AutoCompressionThreshold = 0.90
 	// DefaultCompressionModel 是推荐的本地压缩模型占位提示。
 	DefaultCompressionModel = "qwen3.5:2b"

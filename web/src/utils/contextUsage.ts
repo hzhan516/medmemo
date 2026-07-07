@@ -1,5 +1,5 @@
-export const WARNING_THRESHOLD = 0.75
-export const AUTO_COMPRESSION_THRESHOLD = 0.90
+export const WARNING_THRESHOLD = 0.75 // WARN: 与后端 pkg/models/context_usage.go WarningThreshold 保持一致
+export const AUTO_COMPRESSION_THRESHOLD = 0.90 // WARN: 与后端 pkg/models/context_usage.go AutoCompressionThreshold 保持一致
 
 export type ColorState = 'normal' | 'warning' | 'critical'
 
