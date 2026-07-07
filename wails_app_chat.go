@@ -194,15 +194,19 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) (err error) {
 
 // maybeAutoCompress 在发送前估算上下文用量比例；若达到自动压缩阈值，
 // 则调用 compressionService 压缩会话消息并替换 chatReq.Messages。
+// 组装（记忆/知识检索 + 脱敏）在此只做一次，未触发压缩时透传给 Execute/StreamExecute 复用，
+// 避免发送路径重复组装（C5-3）。
 func (a *WailsApp) maybeAutoCompress(ctx context.Context, chatReq *usecase.ChatRequest) {
 	if a.compressionService == nil || a.contextEstimator == nil || a.chatOrchestrator == nil {
 		return
 	}
 
-	assembled := a.chatOrchestrator.AssemblePromptForEstimate(ctx, *chatReq)
+	// 组装一次真实 prompt（记忆/知识检索 + 脱敏），供估算与发送复用。
+	prepared := a.chatOrchestrator.PreparePrompt(ctx, *chatReq)
+
 	est, err := a.contextEstimator.Estimate(ctx, usecase.EstimatorInput{
 		Messages:        chatReq.Messages,
-		AssembledPrompt: assembled,
+		AssembledPrompt: prepared.Messages,
 		ProviderID:      chatReq.ProviderID,
 		ModelID:         string(chatReq.Model),
 	})
@@ -212,6 +216,9 @@ func (a *WailsApp) maybeAutoCompress(ctx context.Context, chatReq *usecase.ChatR
 	}
 
 	if est.Ratio < models.AutoCompressionThreshold {
+		// 未触发压缩：消息未变，复用已组装结果，避免 Execute/StreamExecute 二次组装。
+		p := prepared
+		chatReq.Prepared = &p
 		return
 	}
 
@@ -220,10 +227,15 @@ func (a *WailsApp) maybeAutoCompress(ctx context.Context, chatReq *usecase.ChatR
 	res, err := a.compressionService.CompressMessages(ctx, chatReq.Messages, providerID, modelID, cfg)
 	if err != nil {
 		fmt.Printf("[auto-compress] failed, proceeding uncompressed: %v\n", err)
+		// 压缩失败：消息未变，仍可复用已组装结果。
+		p := prepared
+		chatReq.Prepared = &p
 		return
 	}
 
+	// 压缩改变了消息集合 -> 已组装结果失效，Execute/StreamExecute 需基于压缩后消息重新组装。
 	chatReq.Messages = res.Messages
+	chatReq.Prepared = nil
 	runtime.EventsEmit(a.ctx, "context:auto_compressed", map[string]any{
 		"conversation_id": string(chatReq.ConversationID),
 		"used_after":      res.UsedAfter,

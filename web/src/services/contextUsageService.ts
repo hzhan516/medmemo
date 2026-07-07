@@ -162,6 +162,9 @@ export function registerContextUsageListeners(): () => void {
   const { setAuthoritativeUsed } = useChatStore.getState()
   let activeConvId: string | null = useChatStore.getState().currentConversationId
   let prevMessages: ChatMessage[] | null = null
+  let prevStreaming = activeConvId
+    ? useChatStore.getState().streamingIds.has(activeConvId)
+    : false
 
   const unsubCurrent = useChatStore.subscribe((state) => {
     const id = state.currentConversationId
@@ -169,16 +172,26 @@ export function registerContextUsageListeners(): () => void {
     activeConvId = id
     if (id) {
       prevMessages = state.messagesMap[id] ?? null
+      prevStreaming = state.streamingIds.has(id)
       void recomputeUsage(id)
     }
   })
 
   const unsubMessages = useChatStore.subscribe((state) => {
     if (!activeConvId) return
+    const streaming = state.streamingIds.has(activeConvId)
     const msgs = state.messagesMap[activeConvId] ?? null
-    if (msgs === prevMessages) return
+    const msgsChanged = msgs !== prevMessages
+    const streamingEnded = prevStreaming && !streaming
     prevMessages = msgs
-    void recomputeUsage(activeConvId)
+    prevStreaming = streaming
+
+    // 流式进行中：prompt 侧基本不变、authoritative 会在结束后到达，
+    // 跳过重估以避免逐 chunk 触发的组装风暴（C5-3 B-a）。
+    if (streaming) return
+    if (msgsChanged || streamingEnded) {
+      void recomputeUsage(activeConvId)
+    }
   })
 
   const removeConfidence = EventsOn(

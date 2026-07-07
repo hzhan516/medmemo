@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
+	"sync"
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -35,6 +37,68 @@ const (
 	defaultCompressSessionTimeout         = 30 * time.Second
 )
 
+// --- 上下文用量估算短 TTL 缓存 (C5-3 B-b) ---
+// 估算涉及记忆/知识检索，成本较高。对相同 (provider+model+messages) 的快速重复估算做短期缓存，
+// 合并会话切换/订阅并发触发的重复请求。TTL 很短，容忍记忆库轻微变化。
+const contextUsageCacheTTL = 5 * time.Second
+
+type contextUsageCacheEntry struct {
+	resp      ContextUsageResponse
+	expiresAt time.Time
+}
+
+var (
+	contextUsageCacheMu sync.Mutex
+	contextUsageCache   = make(map[string]contextUsageCacheEntry)
+)
+
+// contextUsageCacheKey 基于 provider/model 与消息内容生成缓存 key。
+func contextUsageCacheKey(providerID, modelID string, messages []models.Message) string {
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(providerID))
+	_, _ = h.Write([]byte{0})
+	_, _ = h.Write([]byte(modelID))
+	for _, m := range messages {
+		_, _ = h.Write([]byte{0})
+		_, _ = h.Write([]byte(string(m.Role)))
+		_, _ = h.Write([]byte{1})
+		_, _ = h.Write([]byte(m.Content))
+	}
+	return fmt.Sprintf("%x", h.Sum64())
+}
+
+func contextUsageCacheGet(key string) (ContextUsageResponse, bool) {
+	contextUsageCacheMu.Lock()
+	defer contextUsageCacheMu.Unlock()
+	entry, ok := contextUsageCache[key]
+	if !ok {
+		return ContextUsageResponse{}, false
+	}
+	if time.Now().After(entry.expiresAt) {
+		delete(contextUsageCache, key)
+		return ContextUsageResponse{}, false
+	}
+	return entry.resp, true
+}
+
+func contextUsageCacheSet(key string, resp ContextUsageResponse) {
+	contextUsageCacheMu.Lock()
+	defer contextUsageCacheMu.Unlock()
+	// 简单容量控制：条目过多时先清理已过期项，避免无界增长。
+	if len(contextUsageCache) > 128 {
+		now := time.Now()
+		for k, v := range contextUsageCache {
+			if now.After(v.expiresAt) {
+				delete(contextUsageCache, k)
+			}
+		}
+	}
+	contextUsageCache[key] = contextUsageCacheEntry{
+		resp:      resp,
+		expiresAt: time.Now().Add(contextUsageCacheTTL),
+	}
+}
+
 // ResolveMaxContextLength 解析指定 provider 与 model 的最大上下文长度。
 func (a *WailsApp) ResolveMaxContextLength(providerID, modelID string) (int, error) {
 	if a.contextLengthResolver == nil {
@@ -52,6 +116,17 @@ func (a *WailsApp) ResolveMaxContextLength(providerID, modelID string) (int, err
 func (a *WailsApp) EstimateContextUsage(req EstimateContextUsageRequest) (*ContextUsageResponse, error) {
 	if a.contextEstimator == nil {
 		return nil, fmt.Errorf("context estimator not initialized")
+	}
+
+	// C5-3 B-b: 短 TTL 缓存，合并快速重复估算，避免重复记忆/知识检索。
+	// 仅对常规估算路径（前端不传 AssembledPrompt）缓存。
+	cacheKey := ""
+	if len(req.AssembledPrompt) == 0 {
+		cacheKey = contextUsageCacheKey(req.ProviderID, req.ModelID, req.Messages)
+		if cached, ok := contextUsageCacheGet(cacheKey); ok {
+			respCopy := cached
+			return &respCopy, nil
+		}
 	}
 
 	ctx, cancel := context.WithTimeout(a.ctx, defaultEstimateContextUsageTimeout)
@@ -74,12 +149,17 @@ func (a *WailsApp) EstimateContextUsage(req EstimateContextUsageRequest) (*Conte
 		return nil, fmt.Errorf("failed to estimate context usage: %w", err)
 	}
 
-	return &ContextUsageResponse{
+	resp := ContextUsageResponse{
 		UsedTokens:  result.UsedTokens,
 		MaxTokens:   result.MaxTokens,
 		Ratio:       result.Ratio,
 		Approximate: result.Approximate,
-	}, nil
+	}
+	if cacheKey != "" {
+		contextUsageCacheSet(cacheKey, resp)
+	}
+	respCopy := resp
+	return &respCopy, nil
 }
 
 // CompressSessionRequest 前端触发会话压缩的请求。
