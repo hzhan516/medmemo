@@ -636,4 +636,71 @@ func TestIsLoopbackProvider(t *testing.T) {
 	require.False(t, isLoopbackProvider(nil))
 }
 
+// modelProviderStore 返回携带指定模型列表的 provider。
+type modelProviderStore struct {
+	models []models.ProviderModel
+}
+
+func (m *modelProviderStore) Create(_ context.Context, _ *models.ProviderConfig) error { return nil }
+func (m *modelProviderStore) Update(_ context.Context, _ *models.ProviderConfig) error { return nil }
+func (m *modelProviderStore) Delete(_ context.Context, _ string) error                  { return nil }
+func (m *modelProviderStore) List(_ context.Context) ([]*models.ProviderConfig, error)   { return nil, nil }
+func (m *modelProviderStore) Get(_ context.Context, id string) (*models.ProviderConfig, error) {
+	return &models.ProviderConfig{
+		ID:      id,
+		APIHost: "https://api.example.com",
+		ModelID: "default-model",
+		Models:  m.models,
+	}, nil
+}
+
+var _ port.ProviderStore = (*modelProviderStore)(nil)
+
+// TestTestModelAvailability_ModelNotFound 验证指定模型不存在时返回失败。
+func TestTestModelAvailability_ModelNotFound(t *testing.T) {
+	client := &recordingMockLLMClient{available: true}
+	svc := newTestCompressionService(t, client, &modelProviderStore{
+		models: []models.ProviderModel{{ID: "other-model"}},
+	}, &mockDeidentifier{})
+
+	available, err := svc.TestModelAvailability(context.Background(), "test-provider", "missing-model")
+	require.Error(t, err)
+	require.False(t, available)
+	require.Contains(t, err.Error(), "not found")
+}
+
+// TestTestModelAvailability_Available 验证模型存在且可用时返回成功。
+func TestTestModelAvailability_Available(t *testing.T) {
+	client := &recordingMockLLMClient{available: true}
+	svc := newTestCompressionService(t, client, &modelProviderStore{
+		models: []models.ProviderModel{{ID: "target-model"}},
+	}, &mockDeidentifier{})
+
+	available, err := svc.TestModelAvailability(context.Background(), "test-provider", "target-model")
+	require.NoError(t, err)
+	require.True(t, available)
+}
+
+// TestTestModelAvailability_Unavailable 验证模型存在但服务不可用时返回失败。
+func TestTestModelAvailability_Unavailable(t *testing.T) {
+	client := &recordingMockLLMClient{available: false}
+	svc := newTestCompressionService(t, client, &modelProviderStore{
+		models: []models.ProviderModel{{ID: "target-model"}},
+	}, &mockDeidentifier{})
+
+	available, err := svc.TestModelAvailability(context.Background(), "test-provider", "target-model")
+	require.NoError(t, err)
+	require.False(t, available)
+}
+
+// TestModelExists 验证模型存在性判断覆盖 provider.ModelID 与 Models 列表。
+func TestModelExists(t *testing.T) {
+	assert.True(t, modelExists(&models.ProviderConfig{ModelID: "m1"}, "m1"))
+	assert.True(t, modelExists(&models.ProviderConfig{Models: []models.ProviderModel{{ID: "m2"}}}, "m2"))
+	assert.False(t, modelExists(&models.ProviderConfig{ModelID: "m1"}, "m2"))
+	assert.False(t, modelExists(nil, "m1"))
+	assert.False(t, modelExists(&models.ProviderConfig{ModelID: "m1"}, ""))
+}
+
+
 

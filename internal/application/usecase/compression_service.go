@@ -233,18 +233,43 @@ func sliceMiddle(history []models.Message, anchorCount, recentCount int) []model
 	return history[middleStart:middleEnd]
 }
 
-// TestModelAvailability 检查指定 provider 是否可用于压缩摘要。
-func (s *CompressionService) TestModelAvailability(ctx context.Context, providerID string) (bool, error) {
+// TestModelAvailability 检查指定 provider 与 model 是否可用于压缩摘要。
+func (s *CompressionService) TestModelAvailability(ctx context.Context, providerID, modelID string) (bool, error) {
 	provider, err := s.providers.Get(ctx, providerID)
 	if err != nil || provider == nil {
 		return false, fmt.Errorf("failed to get provider %s: %w", providerID, err)
 	}
+	if !modelExists(provider, modelID) {
+		return false, fmt.Errorf("model %s not found in provider %s", modelID, providerID)
+	}
+
+	// 临时切换 provider 的模型 ID 以校验目标模型
+	originalModelID := provider.ModelID
+	provider.ModelID = modelID
+	defer func() { provider.ModelID = originalModelID }()
+
 	client, err := s.llmFactory.CreateClient(provider)
 	if err != nil {
 		return false, fmt.Errorf("failed to create client: %w", err)
 	}
 	available, _ := client.CheckAvailability(ctx)
 	return available, nil
+}
+
+// modelExists 判断 provider 配置中是否包含指定模型。
+func modelExists(provider *models.ProviderConfig, modelID string) bool {
+	if provider == nil || modelID == "" {
+		return false
+	}
+	if provider.ModelID == modelID {
+		return true
+	}
+	for _, m := range provider.Models {
+		if m.ID == modelID {
+			return true
+		}
+	}
+	return false
 }
 
 // 任何失败都回退到 summarize_and_replace，避免阻塞发送。

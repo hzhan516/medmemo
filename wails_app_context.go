@@ -187,7 +187,6 @@ func (a *WailsApp) SetCompressionSettings(s models.CompressionSettings) error {
 
 // TestCompressionModel 测试选定的压缩模型是否可用。
 func (a *WailsApp) TestCompressionModel(providerID, modelID string) (bool, error) {
-	_ = modelID
 	if a.compressionService == nil {
 		return false, fmt.Errorf("compression service not initialized")
 	}
@@ -195,7 +194,7 @@ func (a *WailsApp) TestCompressionModel(providerID, modelID string) (bool, error
 	ctx, cancel := context.WithTimeout(a.ctx, defaultResolveMaxContextLengthTimeout)
 	defer cancel()
 
-	available, err := a.compressionService.TestModelAvailability(ctx, providerID)
+	available, err := a.compressionService.TestModelAvailability(ctx, providerID, modelID)
 	if err != nil {
 		return false, fmt.Errorf("failed to check availability: %w", err)
 	}
