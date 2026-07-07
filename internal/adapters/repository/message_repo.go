@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/hzhan516/medmemo/internal/application/port"
 	"github.com/hzhan516/medmemo/internal/domain/entity"
 	"github.com/hzhan516/medmemo/internal/infrastructure/database"
 	"github.com/hzhan516/medmemo/pkg/models"
@@ -129,6 +130,82 @@ func (r *MessageRepoSQLite) SoftDelete(ctx context.Context, msgID string) error 
 		return fmt.Errorf("failed to soft delete message: %w", err)
 	}
 	return nil
+}
+
+// WithTx 在事务内执行 fn，任一操作失败则整体回滚。
+func (r *MessageRepoSQLite) WithTx(ctx context.Context, fn func(tx port.MessageRepository) error) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	txRepo := &messageRepoTx{tx: tx}
+	if err := fn(txRepo); err != nil {
+		if rbErr := tx.Rollback(); rbErr != nil {
+			return fmt.Errorf("transaction failed: %w; rollback failed: %w", err, rbErr)
+		}
+		return fmt.Errorf("transaction failed: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+	return nil
+}
+
+// messageRepoTx 是事务内的 MessageRepository 实现。
+type messageRepoTx struct {
+	tx *sql.Tx
+}
+
+func (r *messageRepoTx) Save(ctx context.Context, convID models.ConversationID, msg *entity.Message) error {
+	_, err := r.tx.ExecContext(ctx, `
+		INSERT INTO messages (
+			id, conversation_id, role, content, tokens,
+			prompt_tokens, completion_tokens,
+			confidence_score, confidence_level, confidence_json,
+			created_at
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`,
+		msg.ID, convID, msg.Role, msg.Content,
+		msg.PromptTokens+msg.CompletionTokens,
+		msg.PromptTokens, msg.CompletionTokens,
+		msg.ConfidenceScore, msg.ConfidenceLevel, msg.ConfidenceJSON,
+		msg.Timestamp.UnixMilli(),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to save message: %w", err)
+	}
+	return nil
+}
+
+func (r *messageRepoTx) ListByConversation(ctx context.Context, convID models.ConversationID, cursor string, limit int) ([]*entity.Message, string, error) {
+	return nil, "", fmt.Errorf("ListByConversation not supported inside transaction")
+}
+
+func (r *messageRepoTx) SoftDelete(ctx context.Context, msgID string) error {
+	_, err := r.tx.ExecContext(ctx, `
+		UPDATE messages SET deleted_at = ? WHERE id = ?
+	`, time.Now().UnixMilli(), msgID)
+	if err != nil {
+		return fmt.Errorf("failed to soft delete message: %w", err)
+	}
+	return nil
+}
+
+func (r *messageRepoTx) Restore(ctx context.Context, msgID string) error {
+	_, err := r.tx.ExecContext(ctx, `
+		UPDATE messages SET deleted_at = NULL WHERE id = ?
+	`, msgID)
+	if err != nil {
+		return fmt.Errorf("failed to restore message: %w", err)
+	}
+	return nil
+}
+
+func (r *messageRepoTx) WithTx(ctx context.Context, fn func(tx port.MessageRepository) error) error {
+	return fn(r)
 }
 
 // Restore 恢复软删除的消息。

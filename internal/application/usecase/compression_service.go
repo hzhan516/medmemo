@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/hzhan516/medmemo/internal/application/port"
 	"github.com/hzhan516/medmemo/internal/domain/entity"
+	"github.com/hzhan516/medmemo/pkg/desensitizer"
 	"github.com/hzhan516/medmemo/pkg/models"
 )
 
@@ -44,10 +46,11 @@ type CompressionResult struct {
 
 // CompressionService 提供会话上下文压缩能力。
 type CompressionService struct {
-	estimator  *ContextEstimator
-	llmFactory port.LLMClientFactory
-	providers  port.ProviderStore
-	msgRepo    port.MessageRepository
+	estimator    *ContextEstimator
+	llmFactory   port.LLMClientFactory
+	providers    port.ProviderStore
+	msgRepo      port.MessageRepository
+	deidentifier Deidentifier
 }
 
 // NewCompressionService 创建一个新的压缩服务实例。
@@ -56,12 +59,14 @@ func NewCompressionService(
 	llmFactory port.LLMClientFactory,
 	providers port.ProviderStore,
 	msgRepo port.MessageRepository,
+	deidentifier Deidentifier,
 ) *CompressionService {
 	return &CompressionService{
-		estimator:  estimator,
-		llmFactory: llmFactory,
-		providers:  providers,
-		msgRepo:    msgRepo,
+		estimator:    estimator,
+		llmFactory:   llmFactory,
+		providers:    providers,
+		msgRepo:      msgRepo,
+		deidentifier: deidentifier,
 	}
 }
 
@@ -179,51 +184,125 @@ func (s *CompressionService) applyStrategy(ctx context.Context, history []models
 	}
 }
 
-// applyLLMSelfSummarize 调用 LLM 生成中间消息摘要；若 LLM 不可用则回退到 drop。
-func (s *CompressionService) applyLLMSelfSummarize(ctx context.Context, history []models.Message, providerID string, cfg CompressionConfig) ([]models.Message, bool, error) {
-	provider, err := s.providers.Get(ctx, providerID)
+// isLoopbackProvider 判断 provider 端点是否为本地回环，决定是否需要脱敏。
+func isLoopbackProvider(p *models.ProviderConfig) bool {
+	if p == nil {
+		return false
+	}
+	u, err := url.Parse(p.APIHost)
 	if err != nil {
-		// LLM 不可用时回退到 drop 策略。
-		return applyDropEarliestN(history, cfg.DropN, cfg.RecentCount), true, nil
+		return false
 	}
-
-	client, err := s.llmFactory.CreateClient(provider)
-	if err != nil {
-		return applyDropEarliestN(history, cfg.DropN, cfg.RecentCount), true, nil
+	switch u.Hostname() {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	default:
+		return false
 	}
+}
 
-	available, _ := client.CheckAvailability(ctx)
-	if !available {
-		return applyDropEarliestN(history, cfg.DropN, cfg.RecentCount), true, nil
+// sliceMiddle 提取 anchor 与 recent 之间的中间消息块。
+func sliceMiddle(history []models.Message, anchorCount, recentCount int) []models.Message {
+	if anchorCount < 0 {
+		anchorCount = 0
 	}
-
-	middleStart := cfg.AnchorCount
-	middleEnd := len(history) - cfg.RecentCount
-	if middleStart < 0 {
-		middleStart = 0
+	if recentCount < 0 {
+		recentCount = 0
+	}
+	middleStart := anchorCount
+	middleEnd := len(history) - recentCount
+	if middleStart > len(history) {
+		middleStart = len(history)
 	}
 	if middleEnd < middleStart {
 		middleEnd = middleStart
 	}
-	middle := history[middleStart:middleEnd]
+	if middleEnd > len(history) {
+		middleEnd = len(history)
+	}
+	return history[middleStart:middleEnd]
+}
+
+// TestModelAvailability 检查指定 provider 是否可用于压缩摘要。
+func (s *CompressionService) TestModelAvailability(ctx context.Context, providerID string) (bool, error) {
+	provider, err := s.providers.Get(ctx, providerID)
+	if err != nil || provider == nil {
+		return false, fmt.Errorf("failed to get provider %s: %w", providerID, err)
+	}
+	client, err := s.llmFactory.CreateClient(provider)
+	if err != nil {
+		return false, fmt.Errorf("failed to create client: %w", err)
+	}
+	available, _ := client.CheckAvailability(ctx)
+	return available, nil
+}
+
+// 任何失败都回退到 summarize_and_replace，避免阻塞发送。
+func (s *CompressionService) applyLLMSelfSummarize(ctx context.Context, history []models.Message, providerID string, cfg CompressionConfig) ([]models.Message, bool, error) {
+	fallback := func() ([]models.Message, bool, error) {
+		return applySummarizeAndReplace(history, cfg.AnchorCount, cfg.RecentCount, summarizeDeterministic), true, nil
+	}
+
+	provider, err := s.providers.Get(ctx, providerID)
+	if err != nil || provider == nil {
+		return fallback()
+	}
+
+	client, err := s.llmFactory.CreateClient(provider)
+	if err != nil {
+		return fallback()
+	}
+
+	if available, _ := client.CheckAvailability(ctx); !available {
+		return fallback()
+	}
+
+	middle := sliceMiddle(history, cfg.AnchorCount, cfg.RecentCount)
 	if len(middle) == 0 {
 		return history, false, nil
 	}
 
-	prompt := "请用一段话简要总结以下对话，保留关键信息：\n\n" + concatMessages(middle)
-	summary, err := client.Chat(ctx, []models.Message{{Role: models.RoleUser, Content: prompt}})
-	if err != nil {
-		return applyDropEarliestN(history, cfg.DropN, cfg.RecentCount), true, nil
+	safeMiddle := middle
+	placeholders := map[string]string{}
+	if !isLoopbackProvider(provider) {
+		var ok bool
+		safeMiddle, placeholders, ok = s.deidentifyMessages(ctx, middle)
+		if !ok {
+			return fallback()
+		}
 	}
 
+	prompt := "请用一段话简要总结以下对话，保留关键信息（不要输出诊断、用药或治疗结论）：\n\n" + concatMessages(safeMiddle)
+	summary, err := client.Chat(ctx, []models.Message{{Role: models.RoleUser, Content: prompt}})
+	if err != nil || strings.TrimSpace(summary) == "" {
+		return fallback()
+	}
 	summary = strings.TrimSpace(summary)
-	if summary == "" {
-		return applyDropEarliestN(history, cfg.DropN, cfg.RecentCount), true, nil
+
+	if len(placeholders) > 0 {
+		summary = desensitizer.Restore(models.DeidentifyResult{SafeText: summary, Placeholder: placeholders})
 	}
 
 	return applySummarizeAndReplace(history, cfg.AnchorCount, cfg.RecentCount, func([]models.Message) string {
 		return summary
 	}), false, nil
+}
+
+// deidentifyMessages 逐条脱敏并合并占位符映射；任一条失败返回 ok=false。
+func (s *CompressionService) deidentifyMessages(ctx context.Context, msgs []models.Message) ([]models.Message, map[string]string, bool) {
+	out := make([]models.Message, len(msgs))
+	merged := map[string]string{}
+	for i, m := range msgs {
+		res, err := s.deidentifier.Execute(ctx, m.Content)
+		if err != nil {
+			return nil, nil, false
+		}
+		out[i] = models.Message{Role: m.Role, Content: res.SafeText}
+		for k, v := range res.Placeholder {
+			merged[k] = v
+		}
+	}
+	return out, merged, true
 }
 
 // applyDropEarliestN 删除最早 N 条消息，但始终保留最近 recentCount 条。
@@ -292,18 +371,51 @@ func summarizeDeterministic(msgs []models.Message) string {
 	}
 
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("[历史摘要] 共 %d 条消息：", len(msgs)))
-	for i, m := range msgs {
-		if i > 0 {
-			b.WriteString(" | ")
+	b.WriteString(fmt.Sprintf("[历史摘要] 以下为较早的 %d 条对话要点：\n", len(msgs)))
+	for _, m := range msgs {
+		first := firstSentence([]rune(m.Content), 60)
+		if strings.TrimSpace(first) == "" {
+			continue
 		}
-		content := m.Content
-		if len(content) > 80 {
-			content = content[:80] + "…"
+		if m.Role == models.RoleUser {
+			b.WriteString("· 用户: " + first + "\n")
+		} else {
+			b.WriteString("· 助手: " + first + "\n")
 		}
-		b.WriteString(fmt.Sprintf("%s: %s", m.Role, content))
 	}
-	return b.String()
+	return strings.TrimRight(b.String(), "\n")
+}
+
+// firstSentence 按 rune 截取文本首句，避免中文截断乱码。
+func firstSentence(runes []rune, max int) string {
+	if max <= 0 {
+		max = 60
+	}
+	delimiters := []rune{'。', '！', '？', '；', '\n'}
+	end := len(runes)
+	for i, r := range runes {
+		for _, d := range delimiters {
+			if r == d {
+				end = i + 1
+				break
+			}
+		}
+		if end != len(runes) {
+			break
+		}
+		if i >= max {
+			end = max
+			break
+		}
+	}
+	if end > max {
+		end = max
+	}
+	s := string(runes[:end])
+	if end == len(runes) && len(runes) > max {
+		s = string(runes[:max]) + "…"
+	}
+	return strings.TrimSpace(s)
 }
 
 // concatMessages 将多条消息拼接为用于 LLM 摘要的文本。
@@ -315,72 +427,57 @@ func concatMessages(msgs []models.Message) string {
 	return strings.Join(parts, "\n\n")
 }
 
-// persist 将压缩后的消息结构持久化到仓库。
-//
-// 注意：当前实现先保存摘要再软删除被替换消息。若在软删除阶段失败，会尝试软删除已保存的摘要以回滚，
-// 使会话尽量接近压缩前状态。真正的多语句原子性需要仓库层提供事务支持。
+// persist 将压缩后的消息结构持久化到仓库，使用事务保证原子性。
 func (s *CompressionService) persist(ctx context.Context, conversationID models.ConversationID, entities []*entity.Message, before, after []models.Message, strategy CompressionStrategyKind) error {
-	droppedIDs := make([]string, 0)
-	var summaryID string
+	return s.msgRepo.WithTx(ctx, func(tx port.MessageRepository) error {
+		droppedIDs := make([]string, 0)
 
-	switch strategy {
-	case StrategyDropEarliestN:
-		// 被删除的是前 len(before)-len(after) 条（按时间顺序）。
-		dropCount := len(before) - len(after)
-		if dropCount > len(entities) {
-			dropCount = len(entities)
-		}
-		for i := 0; i < dropCount; i++ {
-			droppedIDs = append(droppedIDs, entities[i].ID)
-		}
-	case StrategySummarizeAndReplace, StrategyLLMSelfSummarize:
-		anchorCount := len(after) - 1 - cfgRecentCount(after)
-		if anchorCount < 0 {
-			anchorCount = 0
-		}
-		recentCount := len(after) - anchorCount - 1
-		if recentCount < 0 {
-			recentCount = 0
-		}
-		// 删除中间块对应的消息。
-		for i := anchorCount; i < len(entities)-recentCount; i++ {
-			droppedIDs = append(droppedIDs, entities[i].ID)
-		}
-
-		// 插入新的系统摘要消息。
-		summaryIndex := anchorCount
-		if summaryIndex >= len(after) {
-			summaryIndex = len(after) - 1
-		}
-
-		// 摘要时间戳取最后一条锚点消息的时间，使其在按时间倒序加载时位于锚点之后、最近消息之前。
-		// 若没有保留锚点，则使用当前时间。
-		var summaryTimestamp time.Time
-		if anchorCount > 0 {
-			summaryTimestamp = entities[anchorCount-1].Timestamp
-		} else {
-			summaryTimestamp = time.Now().UTC()
-		}
-		summaryMsg := fromModelMessage(after[summaryIndex], summaryTimestamp)
-		if err := s.msgRepo.Save(ctx, conversationID, &summaryMsg); err != nil {
-			return fmt.Errorf("failed to save summary message: %w", err)
-		}
-		summaryID = summaryMsg.ID
-	}
-
-	for _, id := range droppedIDs {
-		if err := s.msgRepo.SoftDelete(ctx, id); err != nil {
-			// 若已插入摘要，先尝试回滚删除摘要，尽量恢复压缩前状态。
-			if summaryID != "" {
-				if rbErr := s.msgRepo.SoftDelete(ctx, summaryID); rbErr != nil {
-					return fmt.Errorf("failed to soft delete message %s: %w; also failed to rollback summary %s: %w", id, err, summaryID, rbErr)
-				}
+		switch strategy {
+		case StrategyDropEarliestN:
+			dropCount := len(before) - len(after)
+			if dropCount > len(entities) {
+				dropCount = len(entities)
 			}
-			return fmt.Errorf("failed to soft delete message %s: %w", id, err)
-		}
-	}
+			for i := 0; i < dropCount; i++ {
+				droppedIDs = append(droppedIDs, entities[i].ID)
+			}
+		case StrategySummarizeAndReplace, StrategyLLMSelfSummarize:
+			anchorCount := len(after) - 1 - cfgRecentCount(after)
+			if anchorCount < 0 {
+				anchorCount = 0
+			}
+			recentCount := len(after) - anchorCount - 1
+			if recentCount < 0 {
+				recentCount = 0
+			}
+			for i := anchorCount; i < len(entities)-recentCount; i++ {
+				droppedIDs = append(droppedIDs, entities[i].ID)
+			}
 
-	return nil
+			summaryIndex := anchorCount
+			if summaryIndex >= len(after) {
+				summaryIndex = len(after) - 1
+			}
+
+			var summaryTimestamp time.Time
+			if anchorCount > 0 {
+				summaryTimestamp = entities[anchorCount-1].Timestamp
+			} else {
+				summaryTimestamp = time.Now().UTC()
+			}
+			summaryMsg := fromModelMessage(after[summaryIndex], summaryTimestamp)
+			if err := tx.Save(ctx, conversationID, &summaryMsg); err != nil {
+				return fmt.Errorf("failed to save summary message: %w", err)
+			}
+		}
+
+		for _, id := range droppedIDs {
+			if err := tx.SoftDelete(ctx, id); err != nil {
+				return fmt.Errorf("failed to soft delete message %s: %w", id, err)
+			}
+		}
+		return nil
+	})
 }
 
 // cfgRecentCount 从压缩结果中推断最近保留的消息数量。

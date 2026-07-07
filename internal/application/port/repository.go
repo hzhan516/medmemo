@@ -79,4 +79,6 @@ type MessageRepository interface {
 	SoftDelete(ctx context.Context, msgID string) error
 	// Restore 恢复软删除的消息。
 	Restore(ctx context.Context, msgID string) error
+	// WithTx 在事务内执行 fn；fn 失败时整体回滚。
+	WithTx(ctx context.Context, fn func(tx MessageRepository) error) error
 }
