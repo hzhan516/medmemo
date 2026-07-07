@@ -103,6 +103,12 @@ function tokensFrom(raw: string, unit: CtxUnit): number | undefined {
   return Math.round(n * CTX_MULT[unit])
 }
 
+// inRangeOr 保留区间内的合法数值，否则回退默认值（自愈历史越界/缺失数据，如 timeoutMs=0）。
+function inRangeOr(v: unknown, min: number, max: number, fallback: number): number {
+  const n = Number(v)
+  return Number.isFinite(n) && n >= min && n <= max ? n : fallback
+}
+
 /**
  * CherryStudio 风格的模型服务配置弹窗。
  * 双标签页：服务设置 + 模型管理。
@@ -142,9 +148,8 @@ export function ModelServiceDialog({
     watch,
     setValue,
     reset,
-    trigger,
     getValues,
-    formState: { errors, isDirty, isValid },
+    formState: { errors, isDirty },
   } = useForm<ServiceFormData>({
     resolver: zodResolver(serviceFormSchema),
     defaultValues,
@@ -170,10 +175,10 @@ export function ModelServiceDialog({
         name: provider.name,
         apiHost: provider.apiHost,
         apiKey: provider.apiKey ?? '',
-        temperature: provider.temperature,
-        timeoutMs: provider.timeoutMs,
-        maxRetries: provider.maxRetries,
-        maxTokens: provider.maxTokens ?? 4096,
+        temperature: inRangeOr(provider.temperature, 0, 2, 0.7),
+        timeoutMs: inRangeOr(provider.timeoutMs, 1000, 300000, 30000),
+        maxRetries: inRangeOr(provider.maxRetries, 0, 10, 3),
+        maxTokens: inRangeOr(provider.maxTokens, 256, 32768, 4096),
         group: provider.group,
         enabled: provider.enabled,
       })
@@ -201,9 +206,7 @@ export function ModelServiceDialog({
       setAuthParams({})
       setModels([])
     }
-    // 依据刚加载的合法值重算校验状态，确保编辑模式下保存按钮可用。
-    void trigger()
-  }, [open, mode, provider, template, reset, trigger])
+  }, [open, mode, provider, template, reset])
 
   // 保持 ctxInputs 的最新引用，供事件处理读取当前单位/数值而无需嵌套 setState。
   useEffect(() => {
@@ -377,6 +380,11 @@ export function ModelServiceDialog({
     [mode, provider, onSave, onClose, authMethod, authParams, models]
   )
 
+  // 校验失败时跳到「服务设置」页，让用户看到具体出错字段（而非按钮神秘禁用）。
+  const handleInvalid = useCallback(() => {
+    setActiveTab('service')
+  }, [])
+
   const title = mode === 'edit' ? '编辑模型服务' : template ? `添加 ${template.name}` : '添加模型服务'
   const Icon = mode === 'edit' ? Pencil : Plus
 
@@ -451,7 +459,7 @@ export function ModelServiceDialog({
         </div>
 
         {/* 内容区 */}
-        <form onSubmit={handleSubmit(onSubmit)} className="flex-1 overflow-y-auto">
+        <form onSubmit={handleSubmit(onSubmit, handleInvalid)} className="flex-1 overflow-y-auto">
           {activeTab === 'service' && (
             <div className="px-5 py-4 space-y-4">
               {/* 名称 */}
@@ -603,14 +611,17 @@ export function ModelServiceDialog({
                 <div className="space-y-1.5">
                   <Label htmlFor="ms-timeout">超时时间（毫秒）</Label>
                   <Input id="ms-timeout" type="number" {...register('timeoutMs', { valueAsNumber: true })} data-testid="ms-timeout-input" />
+                  {errors.timeoutMs && <p className="text-xs text-destructive">1000–300000 之间</p>}
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="ms-retries">重试次数</Label>
                   <Input id="ms-retries" type="number" {...register('maxRetries', { valueAsNumber: true })} data-testid="ms-retries-input" />
+                  {errors.maxRetries && <p className="text-xs text-destructive">0–10 之间</p>}
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="ms-max-tokens">最大输出 Token</Label>
                   <Input id="ms-max-tokens" type="number" {...register('maxTokens', { valueAsNumber: true })} data-testid="ms-max-tokens-input" />
+                  {errors.maxTokens && <p className="text-xs text-destructive">256–32768 之间</p>}
                 </div>
               </div>
 
@@ -746,7 +757,7 @@ export function ModelServiceDialog({
             <button type="button" onClick={handleClose} className="px-4 py-2 rounded-lg border border-border text-sm font-medium text-foreground hover:bg-accent transition-colors">
               取消
             </button>
-            <button type="submit" disabled={!isValid} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" data-testid="ms-save-btn">
+            <button type="submit" className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors" data-testid="ms-save-btn">
               保存
             </button>
           </div>

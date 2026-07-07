@@ -79,12 +79,14 @@ describe('E2E: Provider 自定义表单', () => {
 
     await user.click(screen.getByTestId('ms-name-input'))
 
-    const saveBtn = screen.getByTestId('ms-save-btn')
-    expect(saveBtn).toBeDisabled()
+    // 点击保存：无效 API Host 应阻止提交并显示错误（不再依赖按钮禁用）
+    await user.click(screen.getByTestId('ms-save-btn'))
 
     await waitFor(() => {
       expect(screen.getByText('必须以 http:// 或 https:// 开头')).toBeInTheDocument()
     })
+    // 校验失败时弹窗保持打开（未保存）
+    expect(screen.getByTestId('model-service-dialog')).toBeInTheDocument()
   })
 
   it('表单验证：空必填字段提示错误', async () => {
@@ -98,7 +100,15 @@ describe('E2E: Provider 自定义表单', () => {
     })
 
     const saveBtn = screen.getByTestId('ms-save-btn')
-    expect(saveBtn).toBeDisabled()
+    // 点击保存：空必填字段应阻止提交并提示错误（不再依赖按钮禁用）
+    await user.click(saveBtn)
+
+    await waitFor(() => {
+      expect(screen.getByText('名称不能为空')).toBeInTheDocument()
+    })
+    expect(screen.getByText('必须以 http:// 或 https:// 开头')).toBeInTheDocument()
+    // 弹窗保持打开（未保存）
+    expect(screen.getByTestId('model-service-dialog')).toBeInTheDocument()
   })
 
   it('编辑模式：点击编辑 → 表单预填 → 修改保存', async () => {
