@@ -7,7 +7,7 @@ import { CompressSessionButton } from './CompressSessionButton'
 import type { ChatMessage } from '@/stores/chatStore'
 import { useChatStore } from '@/stores/chatStore'
 import { useSettingsStore } from '@/stores/settingsStore'
-import { registerContextUsageListeners } from '@/services/contextUsageService'
+import { registerContextUsageListeners, recomputeUsage } from '@/services/contextUsageService'
 import { Bot, Plus } from 'lucide-react'
 
 interface ChatContainerProps {
@@ -46,6 +46,13 @@ export function ChatContainer({ messages, isStreaming, onStartNewConversation, o
     const cleanup = registerContextUsageListeners()
     return cleanup
   }, [])
+
+  // 进入会话时立即估算一次，保证首屏有值
+  useEffect(() => {
+    if (conversationId) {
+      void recomputeUsage(conversationId)
+    }
+  }, [conversationId])
 
   // 新消息到达或流式输出时自动滚底
   useEffect(() => {

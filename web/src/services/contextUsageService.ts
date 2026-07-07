@@ -1,7 +1,7 @@
 import * as WailsApp from '@wails/go/main/WailsApp'
 import { EventsOn } from '@wails/runtime/runtime'
 import { main, models } from '@wails/go/models'
-import { useChatStore } from '@/stores/chatStore'
+import { useChatStore, type ChatMessage } from '@/stores/chatStore'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useProviderStore } from '@/stores/providerStore'
 import { logger } from '@/lib/logger'
@@ -124,7 +124,23 @@ export async function compressSession(args: {
     setCompressing(args.conversationId, false)
   }
 
+  await refreshMessagesAfterCompression(args.conversationId)
   await recomputeUsage(args.conversationId)
+}
+
+async function refreshMessagesAfterCompression(convId: string): Promise<void> {
+  try {
+    const raw = await WailsApp.GetConversationMessages(convId)
+    const messages: ChatMessage[] = raw.map((m) => ({
+      id: m.id,
+      role: m.role as ChatMessage['role'],
+      content: m.content,
+      timestamp: Number(m.timestamp),
+    }))
+    useChatStore.getState().setMessagesForConversation(convId, messages)
+  } catch (err) {
+    logger.warn('[contextUsage] failed to refresh messages after compression:', err)
+  }
 }
 
 /**
@@ -133,6 +149,26 @@ export async function compressSession(args: {
  */
 export function registerContextUsageListeners(): () => void {
   const { setAuthoritativeUsed } = useChatStore.getState()
+  let activeConvId: string | null = useChatStore.getState().currentConversationId
+  let prevMessages: ChatMessage[] | null = null
+
+  const unsubCurrent = useChatStore.subscribe((state) => {
+    const id = state.currentConversationId
+    if (id === activeConvId) return
+    activeConvId = id
+    if (id) {
+      prevMessages = state.messagesMap[id] ?? null
+      void recomputeUsage(id)
+    }
+  })
+
+  const unsubMessages = useChatStore.subscribe((state) => {
+    if (!activeConvId) return
+    const msgs = state.messagesMap[activeConvId] ?? null
+    if (msgs === prevMessages) return
+    prevMessages = msgs
+    void recomputeUsage(activeConvId)
+  })
 
   const removeConfidence = EventsOn(
     'chat:stream:confidence',
@@ -169,6 +205,8 @@ export function registerContextUsageListeners(): () => void {
   )
 
   return () => {
+    unsubCurrent()
+    unsubMessages()
     removeConfidence()
     removeAutoCompressed()
     removeUsageRefresh()

@@ -93,6 +93,7 @@ interface ChatState {
   setLastMessageTruncatedForConversation: (convId: string, truncated: boolean) => void
   replaceLastMessageForConversation: (convId: string, content: string) => void
   setMessages: (messages: ChatMessage[]) => void
+  setMessagesForConversation: (convId: string, messages: ChatMessage[]) => void
 
   setConversations: (conversations: Conversation[]) => void
   setDeletedConversations: (deletedConversations: Conversation[]) => void
@@ -493,6 +494,15 @@ export const useChatStore = create<ChatState>((set) => ({
         messages,
         messagesMap: { ...state.messagesMap, [convId]: messages },
       }
+    }),
+
+  setMessagesForConversation: (convId, messages) =>
+    set((state) => {
+      const newMap = { ...state.messagesMap, [convId]: messages }
+      if (state.currentConversationId === convId) {
+        return { messages, messagesMap: newMap }
+      }
+      return { messagesMap: newMap }
     }),
 
   setConversations: (conversations) => set({ conversations }),
