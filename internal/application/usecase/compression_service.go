@@ -341,8 +341,8 @@ func (s *CompressionService) deidentifyMessages(ctx context.Context, msgs []mode
 }
 
 // applyDropEarliestN 删除最早 N 条消息，但始终保留最近 recentCount 条。
-func applyDropEarliestN(history []models.Message, N, recentCount int) []models.Message {
-	if N <= 0 && recentCount <= 0 {
+func applyDropEarliestN(history []models.Message, n, recentCount int) []models.Message {
+	if n <= 0 && recentCount <= 0 {
 		return history
 	}
 	if recentCount < 0 {
@@ -353,15 +353,15 @@ func applyDropEarliestN(history []models.Message, N, recentCount int) []models.M
 	}
 
 	maxDrop := len(history) - recentCount
-	if N <= 0 {
-		N = maxDrop
+	if n <= 0 {
+		n = maxDrop
 	}
-	if N > maxDrop {
-		N = maxDrop
+	if n > maxDrop {
+		n = maxDrop
 	}
 
-	result := make([]models.Message, 0, len(history)-N)
-	result = append(result, history[N:]...)
+	result := make([]models.Message, 0, len(history)-n)
+	result = append(result, history[n:]...)
 	return result
 }
 

@@ -146,10 +146,12 @@ type cloudProviderStore struct {
 	apiHost string
 }
 
-func (m *cloudProviderStore) Create(_ context.Context, _ *models.ProviderConfig) error  { return nil }
-func (m *cloudProviderStore) Update(_ context.Context, _ *models.ProviderConfig) error  { return nil }
-func (m *cloudProviderStore) Delete(_ context.Context, _ string) error                  { return nil }
-func (m *cloudProviderStore) List(_ context.Context) ([]*models.ProviderConfig, error)   { return nil, nil }
+func (m *cloudProviderStore) Create(_ context.Context, _ *models.ProviderConfig) error { return nil }
+func (m *cloudProviderStore) Update(_ context.Context, _ *models.ProviderConfig) error { return nil }
+func (m *cloudProviderStore) Delete(_ context.Context, _ string) error                 { return nil }
+func (m *cloudProviderStore) List(_ context.Context) ([]*models.ProviderConfig, error) {
+	return nil, nil
+}
 func (m *cloudProviderStore) Get(_ context.Context, id string) (*models.ProviderConfig, error) {
 	return &models.ProviderConfig{ID: id, APIHost: m.apiHost, ModelID: "test-model"}, nil
 }
@@ -643,8 +645,10 @@ type modelProviderStore struct {
 
 func (m *modelProviderStore) Create(_ context.Context, _ *models.ProviderConfig) error { return nil }
 func (m *modelProviderStore) Update(_ context.Context, _ *models.ProviderConfig) error { return nil }
-func (m *modelProviderStore) Delete(_ context.Context, _ string) error                  { return nil }
-func (m *modelProviderStore) List(_ context.Context) ([]*models.ProviderConfig, error)   { return nil, nil }
+func (m *modelProviderStore) Delete(_ context.Context, _ string) error                 { return nil }
+func (m *modelProviderStore) List(_ context.Context) ([]*models.ProviderConfig, error) {
+	return nil, nil
+}
 func (m *modelProviderStore) Get(_ context.Context, id string) (*models.ProviderConfig, error) {
 	return &models.ProviderConfig{
 		ID:      id,
@@ -701,6 +705,3 @@ func TestModelExists(t *testing.T) {
 	assert.False(t, modelExists(nil, "m1"))
 	assert.False(t, modelExists(&models.ProviderConfig{ModelID: "m1"}, ""))
 }
-
-
-
