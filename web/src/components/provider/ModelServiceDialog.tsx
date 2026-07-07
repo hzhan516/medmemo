@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -83,6 +83,26 @@ function formatRelativeTime(ts: number): string {
   return `${Math.floor(diff / 3600)} 小时前`
 }
 
+// 最大上下文长度单位：存储始终以 token 计，UI 可用 K（千）/ M（百万）便捷输入。
+type CtxUnit = 'token' | 'K' | 'M'
+const CTX_MULT: Record<CtxUnit, number> = { token: 1, K: 1000, M: 1_000_000 }
+
+// deriveCtxInput 依据存储的 token 数选择最合适的展示单位与数值。
+function deriveCtxInput(tokens?: number): { raw: string; unit: CtxUnit } {
+  if (tokens == null) return { raw: '', unit: 'K' }
+  if (tokens % 1_000_000 === 0) return { raw: String(tokens / 1_000_000), unit: 'M' }
+  if (tokens % 1000 === 0) return { raw: String(tokens / 1000), unit: 'K' }
+  return { raw: String(tokens), unit: 'token' }
+}
+
+// tokensFrom 将「数值 + 单位」换算为 token 数；空 => undefined（用默认值），非法 => NaN。
+function tokensFrom(raw: string, unit: CtxUnit): number | undefined {
+  if (raw.trim() === '') return undefined
+  const n = Number(raw)
+  if (!Number.isFinite(n)) return NaN
+  return Math.round(n * CTX_MULT[unit])
+}
+
 /**
  * CherryStudio 风格的模型服务配置弹窗。
  * 双标签页：服务设置 + 模型管理。
@@ -113,6 +133,8 @@ export function ModelServiceDialog({
   const [models, setModels] = useState<ProviderModel[]>([])
   const [newModelId, setNewModelId] = useState('')
   const [newModelName, setNewModelName] = useState('')
+  const [ctxInputs, setCtxInputs] = useState<Record<string, { raw: string; unit: CtxUnit }>>({})
+  const ctxInputsRef = useRef(ctxInputs)
 
   const {
     register,
@@ -120,6 +142,7 @@ export function ModelServiceDialog({
     watch,
     setValue,
     reset,
+    trigger,
     getValues,
     formState: { errors, isDirty, isValid },
   } = useForm<ServiceFormData>({
@@ -140,12 +163,13 @@ export function ModelServiceDialog({
     setTestHistory([])
     setNewModelId('')
     setNewModelName('')
+    setCtxInputs({})
 
     if (mode === 'edit' && provider) {
       reset({
         name: provider.name,
         apiHost: provider.apiHost,
-        apiKey: provider.apiKey,
+        apiKey: provider.apiKey ?? '',
         temperature: provider.temperature,
         timeoutMs: provider.timeoutMs,
         maxRetries: provider.maxRetries,
@@ -177,7 +201,25 @@ export function ModelServiceDialog({
       setAuthParams({})
       setModels([])
     }
-  }, [open, mode, provider, template, reset])
+    // 依据刚加载的合法值重算校验状态，确保编辑模式下保存按钮可用。
+    void trigger()
+  }, [open, mode, provider, template, reset, trigger])
+
+  // 保持 ctxInputs 的最新引用，供事件处理读取当前单位/数值而无需嵌套 setState。
+  useEffect(() => {
+    ctxInputsRef.current = ctxInputs
+  }, [ctxInputs])
+
+  // 让 ctxInputs 跟随 models：新模型派生初值，删除的模型自动清理。
+  useEffect(() => {
+    setCtxInputs((prev) => {
+      const next: Record<string, { raw: string; unit: CtxUnit }> = {}
+      for (const m of models) {
+        next[m.id] = prev[m.id] ?? deriveCtxInput(m.maxContextLength)
+      }
+      return next
+    })
+  }, [models])
 
   const temperature = watch('temperature')
   const group = watch('group')
@@ -249,6 +291,7 @@ export function ModelServiceDialog({
     setTestError(finalError)
     if (finalModels.length > 0) {
       setModels(finalModels)
+      setCtxInputs({})
     }
     setTestHistory((prev) =>
       [{ status: finalStatus, latencyMs: finalLatency, error: finalError || undefined, checkedAt: Date.now() }, ...prev].slice(0, 3)
@@ -277,19 +320,19 @@ export function ModelServiceDialog({
     setModels((prev) => prev.filter((m) => m.id !== id))
   }, [])
 
-  const parseMaxContextLength = (value: string): number | undefined => {
-    if (value === '') return undefined
-    const num = Number(value)
-    if (!Number.isFinite(num) || !Number.isInteger(num)) return NaN
-    return num
-  }
-
   const isInvalidMaxContextLength = (value?: number) =>
     value !== undefined && (Number.isNaN(value) || value < 256 || value > 2000000)
 
-  const updateModelMaxContextLength = useCallback((id: string, value: string) => {
-    const num = parseMaxContextLength(value)
-    setModels((prev) => prev.map((m) => (m.id === id ? { ...m, maxContextLength: num } : m)))
+  const updateCtxRaw = useCallback((id: string, raw: string) => {
+    const unit = ctxInputsRef.current[id]?.unit ?? 'K'
+    setCtxInputs((prev) => ({ ...prev, [id]: { raw, unit } }))
+    setModels((prev) => prev.map((m) => (m.id === id ? { ...m, maxContextLength: tokensFrom(raw, unit) } : m)))
+  }, [])
+
+  const updateCtxUnit = useCallback((id: string, unit: CtxUnit) => {
+    const raw = ctxInputsRef.current[id]?.raw ?? ''
+    setCtxInputs((prev) => ({ ...prev, [id]: { raw, unit } }))
+    setModels((prev) => prev.map((m) => (m.id === id ? { ...m, maxContextLength: tokensFrom(raw, unit) } : m)))
   }, [])
 
   const handleGroupChange = useCallback(
@@ -624,6 +667,11 @@ export function ModelServiceDialog({
                 </button>
               </div>
 
+              {/* 单位说明 */}
+              <p className="text-[11px] text-muted-foreground -mt-1">
+                最大上下文长度以 token 计，可选 K（千）/ M（百万）单位；留空则使用默认值 8192 token。
+              </p>
+
               {/* 模型列表 */}
               <div className="space-y-1.5 max-h-[320px] overflow-y-auto">
                 {models.length === 0 ? (
@@ -638,21 +686,34 @@ export function ModelServiceDialog({
                         <div className={`text-sm font-medium truncate ${m.enabled ? 'text-foreground' : 'text-muted-foreground line-through'}`}>{m.name}</div>
                         <div className="text-[11px] text-muted-foreground font-mono truncate">{m.id}</div>
                       </div>
-                      <div className="w-28 shrink-0 space-y-1">
+                      <div className="w-44 shrink-0 space-y-1">
                         <label htmlFor={`ms-max-ctx-${m.id}`} className="block text-[10px] text-muted-foreground">最大上下文长度</label>
-                        <Input
-                          id={`ms-max-ctx-${m.id}`}
-                          type="number"
-                          min={256}
-                          max={2000000}
-                          value={m.maxContextLength ?? ''}
-                          onChange={(e) => updateModelMaxContextLength(m.id, e.target.value)}
-                          className="h-7 text-xs"
-                          placeholder="默认"
-                          data-testid={`ms-max-ctx-input-${m.id}`}
-                        />
+                        <div className="flex gap-1">
+                          <Input
+                            id={`ms-max-ctx-${m.id}`}
+                            type="number"
+                            min={0}
+                            step="any"
+                            value={ctxInputs[m.id]?.raw ?? ''}
+                            onChange={(e) => updateCtxRaw(m.id, e.target.value)}
+                            className="h-7 text-xs flex-1 min-w-0"
+                            placeholder="默认"
+                            data-testid={`ms-max-ctx-input-${m.id}`}
+                          />
+                          <select
+                            value={ctxInputs[m.id]?.unit ?? 'K'}
+                            onChange={(e) => updateCtxUnit(m.id, e.target.value as CtxUnit)}
+                            className="h-7 shrink-0 rounded-md border border-input bg-background px-1 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+                            aria-label="上下文长度单位"
+                            data-testid={`ms-max-ctx-unit-${m.id}`}
+                          >
+                            <option value="token">token</option>
+                            <option value="K">K</option>
+                            <option value="M">M</option>
+                          </select>
+                        </div>
                         {isInvalidMaxContextLength(m.maxContextLength) && (
-                          <p className="text-[10px] text-destructive">请输入 256–2000000 之间的数值</p>
+                          <p className="text-[10px] text-destructive">请输入 256–2000000 token（约 0.256K–2M）</p>
                         )}
                       </div>
                       <button type="button" onClick={() => removeModel(m.id)} className="p-1 mt-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title="删除">
