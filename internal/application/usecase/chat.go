@@ -152,6 +152,13 @@ func injectMemories(msgs []models.Message, memories []*entity.HealthMemory) []mo
 	return injectSystemPrefix(msgs, memCtx)
 }
 
+// AssemblePromptForEstimate 复用 prepareMessages 的只读组装逻辑，用于估算真实 prompt。
+// 内部仅做检索/脱敏，不写库、不调用 LLM，可安全用于用量估算。
+func (c *ChatOrchestrator) AssemblePromptForEstimate(ctx context.Context, req ChatRequest) []models.Message {
+	messages, _, _ := c.prepareMessages(ctx, req)
+	return messages
+}
+
 // prepareMessages 执行输入脱敏、记忆检索与知识库检索，返回处理后的消息、脱敏结果与引用。
 func (c *ChatOrchestrator) prepareMessages(ctx context.Context, req ChatRequest) ([]models.Message, models.DeidentifyResult, []entity.KnowledgeCitation) {
 	messages := req.Messages
