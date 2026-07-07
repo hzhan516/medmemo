@@ -33,6 +33,7 @@ export interface ContextUsage {
   approximate: boolean
   authoritative: boolean
   isCompressing: boolean
+  lastError?: string
   updatedAt: number
 }
 
@@ -44,6 +45,8 @@ export interface Conversation {
   unread: number
   isPinned?: boolean
   deletedAt?: number
+  providerId?: string
+  modelId?: string
 }
 
 interface ChatState {

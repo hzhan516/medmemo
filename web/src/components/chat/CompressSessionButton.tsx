@@ -19,26 +19,36 @@ export function CompressSessionButton({ conversationId, providerId, modelId }: P
   const isCompressing = useChatStore(
     (s) => s.contextUsageMap[conversationId]?.isCompressing ?? false
   )
+  const lastError = useChatStore(
+    (s) => s.contextUsageMap[conversationId]?.lastError
+  )
 
   async function handleClick() {
     try {
       await compressSession({ conversationId, providerId, modelId })
+      useChatStore.getState().setContextUsage(conversationId, { lastError: undefined })
     } catch (e) {
-      // 当前项目未提供全局 toast，先通过控制台输出错误；后续可替换为统一通知机制
-      console.error('压缩会话失败:', e)
+      useChatStore.getState().setContextUsage(conversationId, {
+        lastError: e instanceof Error ? e.message : '压缩失败，请稍后重试',
+      })
     }
   }
 
   return (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      onClick={handleClick}
-      disabled={isCompressing}
-      aria-busy={isCompressing}
-    >
-      {isCompressing ? '压缩中…' : '压缩当前会话'}
-    </Button>
+    <div className="flex flex-col items-end gap-1">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={handleClick}
+        disabled={isCompressing}
+        aria-busy={isCompressing}
+      >
+        {isCompressing ? '压缩中…' : '压缩当前会话'}
+      </Button>
+      {lastError && (
+        <span className="text-red-500 text-xs max-w-[200px] text-right">{lastError}</span>
+      )}
+    </div>
   )
 }

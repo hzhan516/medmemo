@@ -59,14 +59,15 @@ export function recomputeUsage(convId: string): Promise<void> {
 }
 
 async function doRecomputeUsage(convId: string): Promise<void> {
-  const { messagesMap, setContextUsage } = useChatStore.getState()
+  const { messagesMap, setContextUsage, conversations } = useChatStore.getState()
   const { activeProviderId, activeModelId } = useSettingsStore.getState()
   const { providers, getEnabledProviders } = useProviderStore.getState()
 
   const messages = messagesMap[convId] ?? []
+  const conv = conversations.find((c) => c.id === convId)
 
-  let providerId = activeProviderId ?? ''
-  let modelId = activeModelId ?? ''
+  let providerId = conv?.providerId ?? activeProviderId ?? ''
+  let modelId = conv?.modelId ?? activeModelId ?? ''
 
   if (!providerId || !modelId) {
     const enabledProviders = getEnabledProviders()
@@ -114,12 +115,22 @@ export async function compressSession(args: {
   conversationId: string
   providerId: string
   modelId: string
+  strategy?: string
+  anchorCount?: number
+  recentCount?: number
 }): Promise<void> {
   const { setCompressing } = useChatStore.getState()
   setCompressing(args.conversationId, true)
 
   try {
-    await WailsApp.CompressSession(args)
+    await WailsApp.CompressSession({
+      conversationId: args.conversationId,
+      providerId: args.providerId,
+      modelId: args.modelId,
+      strategy: args.strategy ?? '',
+      anchorCount: args.anchorCount ?? 0,
+      recentCount: args.recentCount ?? 0,
+    })
   } finally {
     setCompressing(args.conversationId, false)
   }

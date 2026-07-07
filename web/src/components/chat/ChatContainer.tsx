@@ -36,10 +36,16 @@ export function ChatContainer({ messages, isStreaming, onStartNewConversation, o
   const storeConversationId = useChatStore((s) => s.currentConversationId)
   const storeProviderId = useSettingsStore((s) => s.activeProviderId)
   const storeModelId = useSettingsStore((s) => s.activeModelId)
+  const conversationProviderId = useChatStore(
+    (s) => s.conversations.find((c) => c.id === (conversationIdProp ?? s.currentConversationId))?.providerId
+  )
+  const conversationModelId = useChatStore(
+    (s) => s.conversations.find((c) => c.id === (conversationIdProp ?? s.currentConversationId))?.modelId
+  )
 
   const conversationId = conversationIdProp ?? storeConversationId ?? undefined
-  const providerId = providerIdProp ?? storeProviderId ?? undefined
-  const modelId = modelIdProp ?? storeModelId ?? undefined
+  const providerId = conversationProviderId ?? providerIdProp ?? storeProviderId ?? undefined
+  const modelId = conversationModelId ?? modelIdProp ?? storeModelId ?? undefined
 
   // 注册上下文用量相关事件监听
   useEffect(() => {

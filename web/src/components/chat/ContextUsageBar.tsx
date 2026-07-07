@@ -15,7 +15,16 @@ interface Props {
  */
 export function ContextUsageBar({ conversationId }: Props) {
   const usage = useChatStore((s) => s.contextUsageMap[conversationId])
-  if (!usage) return null
+  if (!usage) {
+    return (
+      <div className="flex items-center gap-2 text-xs" aria-hidden="true">
+        <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
+          <div className="h-full w-full animate-pulse bg-muted-foreground/20" />
+        </div>
+        <span className="w-16 h-3 rounded bg-muted-foreground/20 animate-pulse" />
+      </div>
+    )
+  }
 
   const pct = Math.min(Math.max(usage.ratio, 0), 1) * 100
   const state = colorState(usage.ratio)
