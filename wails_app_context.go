@@ -56,11 +56,18 @@ func (a *WailsApp) EstimateContextUsage(req EstimateContextUsageRequest) (*Conte
 	ctx, cancel := context.WithTimeout(a.ctx, defaultEstimateContextUsageTimeout)
 	defer cancel()
 
+	assembled := a.chatOrchestrator.AssemblePromptForEstimate(ctx, usecase.ChatRequest{
+		ConversationID: models.ConversationID(req.ConversationID),
+		Messages:       req.Messages,
+		Model:          models.ProviderType(req.ModelID),
+		ProviderID:     req.ProviderID,
+	})
+
 	result, err := a.contextEstimator.Estimate(ctx, usecase.EstimatorInput{
 		Messages:        req.Messages,
 		ProviderID:      req.ProviderID,
 		ModelID:         req.ModelID,
-		AssembledPrompt: req.AssembledPrompt,
+		AssembledPrompt: assembled,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to estimate context usage: %w", err)
