@@ -705,3 +705,175 @@ func TestModelExists(t *testing.T) {
 	assert.False(t, modelExists(nil, "m1"))
 	assert.False(t, modelExists(&models.ProviderConfig{ModelID: "m1"}, ""))
 }
+
+// seededMessageRepo 在 mockMessageRepo 基础上让 ListByConversation 返回预置实体，
+// 用于覆盖 Compress 的完整 DB 加载 + 压缩 + 持久化路径。
+type seededMessageRepo struct {
+	*mockMessageRepo
+	entities []*entity.Message
+	listErr  error
+}
+
+func (r *seededMessageRepo) ListByConversation(_ context.Context, _ models.ConversationID, _ string, _ int) ([]*entity.Message, string, error) {
+	if r.listErr != nil {
+		return nil, "", r.listErr
+	}
+	// 返回副本，避免 reverseEntities 原地反转污染测试预置数据。
+	out := make([]*entity.Message, len(r.entities))
+	copy(out, r.entities)
+	return out, "", nil
+}
+
+var _ port.MessageRepository = (*seededMessageRepo)(nil)
+
+// newSeededCompressionService 构建带预置消息仓库的压缩服务。
+func newSeededCompressionService(t *testing.T, repo port.MessageRepository) *CompressionService {
+	t.Helper()
+	estimator, _ := newTestContextEstimator(true)
+	factory := &mockLLMClientFactory{client: &recordingMockLLMClient{available: true}}
+	return NewCompressionService(estimator, factory, &cloudProviderStore{apiHost: "https://api.example.com"}, repo, &mockDeidentifier{})
+}
+
+// TestCompress_FullPath_Persists 验证 Compress 从 DB 加载、压缩并落库摘要与软删。
+func TestCompress_FullPath_Persists(t *testing.T) {
+	// ListByConversation 返回最新在前（倒序），Compress 内部会 reverse 为时间正序。
+	entities := make([]*entity.Message, 0, 10)
+	for i := 9; i >= 0; i-- {
+		entities = append(entities, &entity.Message{
+			ID:      fmt.Sprintf("m%d", i),
+			Role:    models.RoleUser,
+			Content: strings.Repeat("x", 100),
+		})
+	}
+	repo := &seededMessageRepo{mockMessageRepo: &mockMessageRepo{}, entities: entities}
+	svc := newSeededCompressionService(t, repo)
+
+	res, err := svc.Compress(context.Background(), "conv-1", "test-provider", "test-model", CompressionConfig{
+		Strategy:    StrategySummarizeAndReplace,
+		AnchorCount: 1,
+		RecentCount: 2,
+		DropN:       5,
+	})
+	require.NoError(t, err)
+	require.Equal(t, StrategySummarizeAndReplace, res.Strategy)
+	require.Less(t, res.UsedAfter, res.UsedBefore)
+
+	// 应保存一条摘要并软删中间消息（10 条中除去 1 anchor + 2 recent = 7 条被删）。
+	require.Len(t, repo.committedSaved, 1)
+	require.Equal(t, models.RoleSystem, repo.committedSaved[0].Role)
+	require.Len(t, repo.committedDeleted, 7)
+}
+
+// TestCompress_ListError 验证 DB 加载失败时返回包装错误。
+func TestCompress_ListError(t *testing.T) {
+	repo := &seededMessageRepo{mockMessageRepo: &mockMessageRepo{}, listErr: fmt.Errorf("db down")}
+	svc := newSeededCompressionService(t, repo)
+
+	_, err := svc.Compress(context.Background(), "conv-1", "p", "m", CompressionConfig{
+		Strategy:    StrategySummarizeAndReplace,
+		AnchorCount: 1,
+		RecentCount: 2,
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "failed to list messages")
+}
+
+// TestApplyStrategy 覆盖策略分发的各分支与非法策略错误。
+func TestApplyStrategy(t *testing.T) {
+	svc := newTestCompressionService(t, &recordingMockLLMClient{available: true}, &cloudProviderStore{apiHost: "https://api.example.com"}, &mockDeidentifier{})
+	history := []models.Message{
+		{Role: models.RoleUser, Content: "a"},
+		{Role: models.RoleAssistant, Content: "b"},
+		{Role: models.RoleUser, Content: "c"},
+		{Role: models.RoleAssistant, Content: "d"},
+	}
+
+	t.Run("drop earliest n", func(t *testing.T) {
+		got, kind, fallback, err := svc.applyStrategy(context.Background(), history, "p", CompressionConfig{
+			Strategy: StrategyDropEarliestN, DropN: 2, RecentCount: 1,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, StrategyDropEarliestN, kind)
+		assert.False(t, fallback)
+		assert.Len(t, got, 2)
+	})
+
+	t.Run("summarize and replace", func(t *testing.T) {
+		got, kind, fallback, err := svc.applyStrategy(context.Background(), history, "p", CompressionConfig{
+			Strategy: StrategySummarizeAndReplace, AnchorCount: 1, RecentCount: 1,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, StrategySummarizeAndReplace, kind)
+		assert.False(t, fallback)
+		assert.Equal(t, models.RoleSystem, got[1].Role)
+	})
+
+	t.Run("llm self summarize dispatches", func(t *testing.T) {
+		client := &recordingMockLLMClient{available: true, chatReply: "摘要内容"}
+		llmSvc := newTestCompressionService(t, client, &cloudProviderStore{apiHost: "https://api.example.com"}, &mockDeidentifier{})
+		got, kind, fallback, err := llmSvc.applyStrategy(context.Background(), history, "p", CompressionConfig{
+			Strategy: StrategyLLMSelfSummarize, AnchorCount: 1, RecentCount: 1,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, StrategyLLMSelfSummarize, kind)
+		assert.False(t, fallback)
+		assert.Equal(t, models.RoleSystem, got[1].Role)
+		assert.Contains(t, got[1].Content, "摘要内容")
+	})
+
+	t.Run("unsupported strategy errors", func(t *testing.T) {
+		_, _, _, err := svc.applyStrategy(context.Background(), history, "p", CompressionConfig{
+			Strategy: CompressionStrategyKind("bogus"),
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "unsupported compression strategy")
+	})
+}
+
+// TestSliceMiddle 覆盖中间块切片的边界钳制逻辑。
+func TestSliceMiddle(t *testing.T) {
+	history := []models.Message{
+		{Content: "0"}, {Content: "1"}, {Content: "2"}, {Content: "3"}, {Content: "4"},
+	}
+
+	t.Run("normal middle", func(t *testing.T) {
+		mid := sliceMiddle(history, 1, 2)
+		require.Len(t, mid, 2)
+		assert.Equal(t, "1", mid[0].Content)
+		assert.Equal(t, "2", mid[1].Content)
+	})
+
+	t.Run("negative counts clamp to zero", func(t *testing.T) {
+		mid := sliceMiddle(history, -1, -1)
+		assert.Len(t, mid, len(history))
+	})
+
+	t.Run("anchor exceeds length yields empty", func(t *testing.T) {
+		mid := sliceMiddle(history, 100, 0)
+		assert.Empty(t, mid)
+	})
+
+	t.Run("recent exceeds length yields empty", func(t *testing.T) {
+		mid := sliceMiddle(history, 0, 100)
+		assert.Empty(t, mid)
+	})
+}
+
+// TestApplyLLMSelfSummarize_EmptyMiddle 验证中间块为空时原样返回、不调用模型。
+func TestApplyLLMSelfSummarize_EmptyMiddle(t *testing.T) {
+	client := &recordingMockLLMClient{available: true, chatReply: "unused"}
+	svc := newTestCompressionService(t, client, &cloudProviderStore{apiHost: "https://api.example.com"}, &mockDeidentifier{})
+
+	history := []models.Message{
+		{Role: models.RoleUser, Content: "a"},
+		{Role: models.RoleAssistant, Content: "b"},
+	}
+	// anchor=1, recent=1 => 中间块为空
+	compressed, fallback, err := svc.applyLLMSelfSummarize(context.Background(), history, "cloud", CompressionConfig{
+		Strategy: StrategyLLMSelfSummarize, AnchorCount: 1, RecentCount: 1,
+	})
+	require.NoError(t, err)
+	assert.False(t, fallback)
+	assert.Equal(t, history, compressed)
+	assert.Empty(t, client.lastMessages, "空中间块不应调用模型")
+}
