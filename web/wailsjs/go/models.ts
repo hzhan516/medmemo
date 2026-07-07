@@ -136,6 +136,9 @@ export namespace main {
 	    conversationId: string;
 	    providerId: string;
 	    modelId: string;
+	    strategy: string;
+	    anchorCount: number;
+	    recentCount: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new CompressSessionRequest(source);
@@ -146,6 +149,29 @@ export namespace main {
 	        this.conversationId = source["conversationId"];
 	        this.providerId = source["providerId"];
 	        this.modelId = source["modelId"];
+	        this.strategy = source["strategy"];
+	        this.anchorCount = source["anchorCount"];
+	        this.recentCount = source["recentCount"];
+	    }
+	}
+	export class CompressionSettings {
+	    useModel: boolean;
+	    providerId: string;
+	    modelId: string;
+	    anchorCount: number;
+	    recentCount: number;
+
+	    static createFrom(source: any = {}) {
+	        return new CompressionSettings(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.useModel = source["useModel"];
+	        this.providerId = source["providerId"];
+	        this.modelId = source["modelId"];
+	        this.anchorCount = source["anchorCount"];
+	        this.recentCount = source["recentCount"];
 	    }
 	}
 	export class ContextUsageResponse {

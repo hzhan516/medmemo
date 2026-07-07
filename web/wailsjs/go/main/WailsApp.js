@@ -110,6 +110,10 @@ export function GenerateTitle(arg1, arg2) {
   return window['go']['main']['WailsApp']['GenerateTitle'](arg1, arg2);
 }
 
+export function GetCompressionSettings() {
+  return window['go']['main']['WailsApp']['GetCompressionSettings']();
+}
+
 export function GetConversationMessages(arg1) {
   return window['go']['main']['WailsApp']['GetConversationMessages'](arg1);
 }
@@ -274,6 +278,10 @@ export function SendMessageStream(arg1) {
   return window['go']['main']['WailsApp']['SendMessageStream'](arg1);
 }
 
+export function SetCompressionSettings(arg1) {
+  return window['go']['main']['WailsApp']['SetCompressionSettings'](arg1);
+}
+
 export function SetDataRetentionDays(arg1) {
   return window['go']['main']['WailsApp']['SetDataRetentionDays'](arg1);
 }
@@ -312,6 +320,10 @@ export function StopGeneration() {
 
 export function TestAPIKey(arg1, arg2, arg3) {
   return window['go']['main']['WailsApp']['TestAPIKey'](arg1, arg2, arg3);
+}
+
+export function TestCompressionModel(arg1, arg2) {
+  return window['go']['main']['WailsApp']['TestCompressionModel'](arg1, arg2);
 }
 
 export function UpdateProvider(arg1) {

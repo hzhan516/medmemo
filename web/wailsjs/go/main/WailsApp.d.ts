@@ -60,6 +60,8 @@ export function EstimateContextUsage(arg1:main.EstimateContextUsageRequest):Prom
 
 export function GenerateTitle(arg1:string,arg2:string):Promise<void>;
 
+export function GetCompressionSettings():Promise<main.CompressionSettings>;
+
 export function GetConversationMessages(arg1:string):Promise<Array<main.MessageResponse>>;
 
 export function GetConversations():Promise<Array<main.ConversationSummary>>;
@@ -142,6 +144,8 @@ export function SendMessage(arg1:main.SendMessageRequest):Promise<main.SendMessa
 
 export function SendMessageStream(arg1:main.SendMessageRequest):Promise<void>;
 
+export function SetCompressionSettings(arg1:main.CompressionSettings):Promise<void>;
+
 export function SetDataRetentionDays(arg1:number):Promise<void>;
 
 export function SetMemoryInjectionEnabled(arg1:boolean):Promise<void>;
@@ -161,5 +165,7 @@ export function StartOllamaServer():Promise<void>;
 export function StopGeneration():Promise<void>;
 
 export function TestAPIKey(arg1:string,arg2:string,arg3:string):Promise<main.TestAPIKeyResult>;
+
+export function TestCompressionModel(arg1:string,arg2:string):Promise<boolean>;
 
 export function UpdateProvider(arg1:models.ProviderConfig):Promise<void>;

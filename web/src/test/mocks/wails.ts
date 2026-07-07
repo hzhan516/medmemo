@@ -131,6 +131,18 @@ const defaultGetDeletedConversations = async (): Promise<ConversationSummary[]> 
 
 const defaultSetDataRetentionDays = async (_days: number): Promise<void> => {}
 
+const defaultGetCompressionSettings = async (): Promise<Record<string, unknown>> => {
+  return { useModel: false, providerId: '', modelId: '', anchorCount: 1, recentCount: 6 }
+}
+
+const defaultSetCompressionSettings = async (_settings: Record<string, unknown>): Promise<void> => {}
+
+const defaultTestCompressionModel = async (_providerID: string, _modelID: string): Promise<boolean> => {
+  return false
+}
+
+const defaultCompressSession = async (_req: Record<string, unknown>): Promise<void> => {}
+
 const defaultGetEmbeddingStatus = async (): Promise<Record<string, unknown>> => {
   return {
     available: false,
@@ -455,6 +467,10 @@ export const MockWailsApp = {
   GetConversations: () => resolveHandler('GetConversations', defaultGetConversations)(),
   GetDeletedConversations: () => resolveHandler('GetDeletedConversations', defaultGetDeletedConversations)(),
   SetDataRetentionDays: (days: number) => resolveHandler('SetDataRetentionDays', defaultSetDataRetentionDays)(days),
+  GetCompressionSettings: () => resolveHandler('GetCompressionSettings', defaultGetCompressionSettings)(),
+  SetCompressionSettings: (settings: Record<string, unknown>) => resolveHandler('SetCompressionSettings', defaultSetCompressionSettings)(settings),
+  TestCompressionModel: (providerID: string, modelID: string) => resolveHandler('TestCompressionModel', defaultTestCompressionModel)(providerID, modelID),
+  CompressSession: (req: Record<string, unknown>) => resolveHandler('CompressSession', defaultCompressSession)(req),
   GetConversationMessages: (convID: string) => resolveHandler('GetConversationMessages', defaultGetConversationMessages)(convID),
   CreateConversation: () => resolveHandler('CreateConversation', defaultCreateConversation)(),
   GetModels: () => resolveHandler('GetModels', defaultGetModels)(),
