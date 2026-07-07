@@ -96,6 +96,16 @@ func (s *CompressionService) CompressMessages(ctx context.Context, history []mod
 	}
 	usedBefore := beforeResult.UsedTokens
 
+	// 历史过短时直接返回，避免无意义的删除或摘要
+	if len(history) <= cfg.AnchorCount+cfg.RecentCount {
+		return CompressionResult{
+			Messages:   history,
+			UsedBefore: usedBefore,
+			UsedAfter:  usedBefore,
+			Strategy:   cfg.Strategy,
+		}, nil
+	}
+
 	compressed, strategy, fallback, err := s.applyStrategy(ctx, history, providerID, cfg)
 	if err != nil {
 		return CompressionResult{}, fmt.Errorf("failed to apply compression strategy %s: %w", cfg.Strategy, err)
@@ -412,8 +422,9 @@ func firstSentence(runes []rune, max int) string {
 		end = max
 	}
 	s := string(runes[:end])
-	if end == len(runes) && len(runes) > max {
-		s = string(runes[:max]) + "…"
+	// 按 max 截断且原文更长时追加省略号，明确提示存在后续内容
+	if end == max && len(runes) > max {
+		s += "…"
 	}
 	return strings.TrimSpace(s)
 }
