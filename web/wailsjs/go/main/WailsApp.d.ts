@@ -24,8 +24,6 @@ export function CheckUpdate():Promise<main.UpdateInfoResponse>;
 
 export function CollectSystemInfo():Promise<feedback.SystemInfo>;
 
-export function CompressSession(arg1:main.CompressSessionRequest):Promise<void>;
-
 export function CreateConversation():Promise<string>;
 
 export function CreateOllamaProvider():Promise<models.ProviderConfig>;
@@ -35,8 +33,6 @@ export function CreateProvider(arg1:models.ProviderConfig):Promise<void>;
 export function DeclineDisclaimer():Promise<void>;
 
 export function DeleteConversation(arg1:string):Promise<void>;
-
-export function DeleteKnowledgeDocument(arg1:string):Promise<void>;
 
 export function DeleteMemory(arg1:string):Promise<void>;
 
@@ -56,11 +52,7 @@ export function EnableAutoRefresh(arg1:string):Promise<void>;
 
 export function EnsureOllamaAndSmolLM2():Promise<main.OllamaDetectResult>;
 
-export function EstimateContextUsage(arg1:main.EstimateContextUsageRequest):Promise<main.ContextUsageResponse>;
-
 export function GenerateTitle(arg1:string,arg2:string):Promise<void>;
-
-export function GetCompressionSettings():Promise<main.CompressionSettings>;
 
 export function GetConversationMessages(arg1:string):Promise<Array<main.MessageResponse>>;
 
@@ -73,8 +65,6 @@ export function GetDisclaimerStatus():Promise<main.DisclaimerStatus>;
 export function GetEmbeddingModelDirPath():Promise<string>;
 
 export function GetEmbeddingStatus():Promise<main.EmbeddingStatusResponse>;
-
-export function GetKnowledgeImportJob(arg1:string):Promise<main.ImportKnowledgeResponse>;
 
 export function GetMemories(arg1:number,arg2:number):Promise<Array<main.MemoryItem>>;
 
@@ -106,10 +96,6 @@ export function HardDeleteConversation(arg1:string):Promise<void>;
 
 export function HasAPIKey(arg1:string):Promise<boolean>;
 
-export function ImportKnowledgeFile(arg1:string):Promise<main.ImportKnowledgeResponse>;
-
-export function ListKnowledgeDocuments():Promise<Array<main.KnowledgeDocumentDTO>>;
-
 export function ListProviders():Promise<Array<models.ProviderConfig>>;
 
 export function OpenDownloadURL(arg1:string):Promise<void>;
@@ -122,15 +108,13 @@ export function ParseServiceAccountJSON(arg1:string):Promise<Record<string, stri
 
 export function PullOllamaModel(arg1:string):Promise<void>;
 
-export function RecordAnswerFeedback(arg1:string,arg2:string,arg3:boolean):Promise<void>;
-
 export function RefreshToken(arg1:string):Promise<void>;
+
+export function RecordAnswerFeedback(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 
 export function RejectFact(arg1:string):Promise<void>;
 
 export function ReportComplianceFeedback(arg1:string,arg2:string):Promise<void>;
-
-export function ResolveMaxContextLength(arg1:string,arg2:string):Promise<number>;
 
 export function RestoreConversation(arg1:string):Promise<void>;
 
@@ -138,13 +122,9 @@ export function SaveAPIKey(arg1:string,arg2:string):Promise<void>;
 
 export function SearchMemories(arg1:string):Promise<Array<main.MemoryItem>>;
 
-export function SelectKnowledgeFile():Promise<string>;
-
 export function SendMessage(arg1:main.SendMessageRequest):Promise<main.SendMessageResponse>;
 
 export function SendMessageStream(arg1:main.SendMessageRequest):Promise<void>;
-
-export function SetCompressionSettings(arg1:main.CompressionSettings):Promise<void>;
 
 export function SetDataRetentionDays(arg1:number):Promise<void>;
 
@@ -166,6 +146,14 @@ export function StopGeneration():Promise<void>;
 
 export function TestAPIKey(arg1:string,arg2:string,arg3:string):Promise<main.TestAPIKeyResult>;
 
-export function TestCompressionModel(arg1:string,arg2:string):Promise<boolean>;
-
 export function UpdateProvider(arg1:models.ProviderConfig):Promise<void>;
+
+export function SelectKnowledgeFile():Promise<string>;
+
+export function ImportKnowledgeFile(arg1:string):Promise<main.ImportKnowledgeResponse>;
+
+export function ListKnowledgeDocuments():Promise<Array<main.KnowledgeDocumentDTO>>;
+
+export function DeleteKnowledgeDocument(arg1:string):Promise<void>;
+
+export function GetKnowledgeImportJob(arg1:string):Promise<main.ImportKnowledgeResponse>;

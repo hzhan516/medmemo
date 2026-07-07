@@ -81,7 +81,6 @@ func InitializeApp() (*App, func(), error) {
 		wire.Bind(new(port.EmbeddingService), new(*ai.EmbeddingServiceAdapter)),
 		wire.Bind(new(ai.EmbeddingEngine), new(*onnx.Engine)),
 		wire.Bind(new(port.NERDetector), new(*detector.ONNXNERDetector)),
-		wire.Bind(new(port.TokenCounter), new(*ai.HFTokenCounter)),
 		wire.Bind(new(secret.Store), new(*secret.KeyringStore)),
 		wire.Bind(new(database.DBConnector), new(*database.SQLCipherConnector)),
 		wire.Bind(new(usecase.Deidentifier), new(*pipeline.DeidentifyPipeline)),

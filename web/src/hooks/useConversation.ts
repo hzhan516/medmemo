@@ -299,14 +299,6 @@ export function useConversation() {
       }
 
       try {
-        // 记录本会话实际使用的 provider/model，用于上下文用量隔离
-        if (targetProvider) {
-          updateConversation(convId, {
-            providerId: targetProvider.id,
-            modelId: targetModelId || targetProvider.modelId,
-          })
-        }
-
         // 使用已快照的历史消息 + 当前用户消息构造请求，不重复读取 store
         // ai_message_id 由前端生成，确保反馈统计与持久化消息使用同一 id
         await wails.sendMessageStream({

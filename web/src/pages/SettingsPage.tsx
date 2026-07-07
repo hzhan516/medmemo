@@ -1,12 +1,11 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
 import { logger } from '@/lib/logger'
-import { useSettingsStore, type CompressionSettings } from '@/stores/settingsStore'
+import { useSettingsStore } from '@/stores/settingsStore'
 import { useOnboardingStore } from '@/stores/onboardingStore'
 import { useProviderStore } from '@/stores/providerStore'
 import { useTheme } from '@/hooks/useTheme'
 import { useWails } from '@/hooks/useWails'
 import { Card, CardContent } from '@/components/ui/card'
-import { CompressionSettingsForm } from '@/components/settings/CompressionSettingsForm'
 import {
   ProviderTemplateList,
   ModelServiceDialog,
@@ -49,7 +48,6 @@ export function SettingsPage() {
     desensitizationLevel, setDesensitizationLevel,
     dataRetentionDays, setDataRetentionDays,
     activeProviderId, setActiveProviderId,
-    compressionSettings, setCompressionSettings,
   } = useSettingsStore()
   const onboardingCompleted = useOnboardingStore((s) => s.completed)
   const analytics = useOnboardingStore((s) => s.analytics)
@@ -75,12 +73,11 @@ export function SettingsPage() {
   const updateProvider = useProviderStore((s) => s.updateProvider)
   const removeProvider = useProviderStore((s) => s.removeProvider)
   const hasProvider = useProviderStore((s) => s.hasProvider)
-  const { saveAPIKey, createProvider, updateProvider: updateProviderApi, deleteProvider: deleteProviderApi, setUpdateSettings, getEmbeddingStatus, getEmbeddingModelDirPath, openEmbeddingModelDir, openDownloadURL, getCompressionSettings, setCompressionSettings: setBackendCompressionSettings, testCompressionModel } = useWails()
+  const { saveAPIKey, createProvider, updateProvider: updateProviderApi, deleteProvider: deleteProviderApi, setUpdateSettings, getEmbeddingStatus, getEmbeddingModelDirPath, openEmbeddingModelDir, openDownloadURL } = useWails()
 
   const [embeddingStatus, setEmbeddingStatus] = useState<EmbeddingStatus | null>(null)
   const [modelDirPath, setModelDirPath] = useState<string>('')
   const [toastMsg, setToastMsg] = useState<string | null>(null)
-  const [compressionTestStatus, setCompressionTestStatus] = useState<'idle' | 'testing' | 'ok' | 'error'>('idle')
 
   useEffect(() => {
     getEmbeddingStatus()
@@ -90,12 +87,6 @@ export function SettingsPage() {
       .then((path) => setModelDirPath(path))
       .catch((err) => logger.error('Failed to get model dir path:', err))
   }, [getEmbeddingStatus, getEmbeddingModelDirPath])
-
-  useEffect(() => {
-    getCompressionSettings()
-      .then((settings) => setCompressionSettings(settings))
-      .catch((err) => logger.error('Failed to get compression settings:', err))
-  }, [getCompressionSettings, setCompressionSettings])
 
   const showToast = useCallback((message: string) => {
     setToastMsg(message)
@@ -120,31 +111,6 @@ export function SettingsPage() {
     },
     [setUpdateChannelStore, setUpdateSettings, autoCheckUpdate]
   )
-
-  const handleCompressionChange = useCallback(
-    async (next: CompressionSettings) => {
-      const updated = { ...compressionSettings, ...next }
-      setCompressionSettings(updated)
-      try {
-        await setBackendCompressionSettings(updated)
-      } catch (err) {
-        logger.error('Failed to save compression settings:', err)
-        showToast('压缩设置保存失败')
-      }
-    },
-    [compressionSettings, setCompressionSettings, setBackendCompressionSettings, showToast]
-  )
-
-  const handleCompressionTest = useCallback(async () => {
-    setCompressionTestStatus('testing')
-    try {
-      const ok = await testCompressionModel(compressionSettings.providerId ?? '', compressionSettings.modelId ?? '')
-      setCompressionTestStatus(ok ? 'ok' : 'error')
-    } catch (err) {
-      logger.error('Failed to test compression model:', err)
-      setCompressionTestStatus('error')
-    }
-  }, [compressionSettings.providerId, compressionSettings.modelId, testCompressionModel])
 
   // 已有分组列表
   const existingGroups = useMemo(() => {
@@ -544,22 +510,6 @@ export function SettingsPage() {
                 ))}
               </div>
             </div>
-          </div>
-        </section>
-
-        {/* 会话压缩 */}
-        <section>
-          <h2 className="text-sm font-medium text-muted-foreground mb-3 uppercase tracking-wider">
-            会话压缩
-          </h2>
-          <div className="p-4 rounded-lg border border-border bg-card">
-            <CompressionSettingsForm
-              value={compressionSettings}
-              providers={providers}
-              onChange={handleCompressionChange}
-              onTest={handleCompressionTest}
-              testStatus={compressionTestStatus}
-            />
           </div>
         </section>
 

@@ -281,10 +281,6 @@ func (m *mockMessageRepo) Restore(_ context.Context, _ string) error {
 	return nil
 }
 
-func (m *mockMessageRepo) WithTx(_ context.Context, fn func(tx port.MessageRepository) error) error {
-	return fn(m)
-}
-
 // TestStreamTimeout_DefaultWhenProviderStoreNil 验证当 providerStore 为 nil 时，streamTimeout 返回默认的 5 分钟。
 func TestStreamTimeout_DefaultWhenProviderStoreNil(t *testing.T) {
 	app := &WailsApp{ctx: t.Context()}

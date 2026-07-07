@@ -26,17 +26,6 @@ export interface EmergencyAlert {
   action: string
 }
 
-export interface ContextUsage {
-  usedTokens: number
-  maxTokens: number
-  ratio: number
-  approximate: boolean
-  authoritative: boolean
-  isCompressing: boolean
-  lastError?: string
-  updatedAt: number
-}
-
 export interface Conversation {
   id: string
   title: string
@@ -45,8 +34,6 @@ export interface Conversation {
   unread: number
   isPinned?: boolean
   deletedAt?: number
-  providerId?: string
-  modelId?: string
 }
 
 interface ChatState {
@@ -69,9 +56,6 @@ interface ChatState {
   // 紧急症状检测状态
   emergencyAlert: EmergencyAlert | null
   emergencyWarningAcknowledged: boolean // B 级警告是否已点击「我已了解」
-
-  // 会话上下文用量
-  contextUsageMap: Record<string, ContextUsage>
 
   setConversationId: (id: string | null) => void
   addMessage: (message: ChatMessage, convId?: string) => void
@@ -96,7 +80,6 @@ interface ChatState {
   setLastMessageTruncatedForConversation: (convId: string, truncated: boolean) => void
   replaceLastMessageForConversation: (convId: string, content: string) => void
   setMessages: (messages: ChatMessage[]) => void
-  setMessagesForConversation: (convId: string, messages: ChatMessage[]) => void
 
   setConversations: (conversations: Conversation[]) => void
   setDeletedConversations: (deletedConversations: Conversation[]) => void
@@ -119,26 +102,10 @@ interface ChatState {
   // 紧急症状状态管理
   setEmergencyAlert: (alert: EmergencyAlert | null) => void
   acknowledgeEmergencyWarning: () => void
-
-  // 上下文用量管理
-  setContextUsage: (convId: string, usage: Partial<ContextUsage>) => void
-  setAuthoritativeUsed: (convId: string, usedTokens: number) => void
-  setCompressing: (convId: string, isCompressing: boolean) => void
-  clearContextUsage: (convId: string) => void
 }
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000
 const MAX_CONVERSATIONS = 500
-
-const DEFAULT_CONTEXT_USAGE: ContextUsage = {
-  usedTokens: 0,
-  maxTokens: 0,
-  ratio: 0,
-  approximate: false,
-  authoritative: false,
-  isCompressing: false,
-  updatedAt: Date.now(),
-}
 
 // 辅助函数：更新 messagesMap 中指定会话的最后一条 assistant 消息
 function updateLastAssistantInMap(
@@ -170,7 +137,6 @@ export const useChatStore = create<ChatState>((set) => ({
   dismissedBarSessions: [],
   emergencyAlert: null,
   emergencyWarningAcknowledged: false,
-  contextUsageMap: {},
 
   setConversationId: (id) => set({ currentConversationId: id }),
 
@@ -499,15 +465,6 @@ export const useChatStore = create<ChatState>((set) => ({
       }
     }),
 
-  setMessagesForConversation: (convId, messages) =>
-    set((state) => {
-      const newMap = { ...state.messagesMap, [convId]: messages }
-      if (state.currentConversationId === convId) {
-        return { messages, messagesMap: newMap }
-      }
-      return { messagesMap: newMap }
-    }),
-
   setConversations: (conversations) => set({ conversations }),
   setDeletedConversations: (deletedConversations) => set({ deletedConversations }),
 
@@ -661,62 +618,4 @@ export const useChatStore = create<ChatState>((set) => ({
 
   acknowledgeEmergencyWarning: () =>
     set({ emergencyWarningAcknowledged: true }),
-
-  setContextUsage: (convId, usage) =>
-    set((state) => ({
-      contextUsageMap: {
-        ...state.contextUsageMap,
-        [convId]: {
-          ...DEFAULT_CONTEXT_USAGE,
-          ...state.contextUsageMap[convId],
-          ...usage,
-          updatedAt: Date.now(),
-        },
-      },
-    })),
-
-  setAuthoritativeUsed: (convId, usedTokens) =>
-    set((state) => {
-      const existing = state.contextUsageMap[convId]
-      const maxTokens = existing?.maxTokens ?? 0
-      const ratio =
-        maxTokens > 0
-          ? Math.min(Math.max(usedTokens / maxTokens, 0), 1)
-          : 0
-      return {
-        contextUsageMap: {
-          ...state.contextUsageMap,
-          [convId]: {
-            ...existing,
-            usedTokens,
-            maxTokens,
-            ratio,
-            authoritative: true,
-            approximate: false,
-            updatedAt: Date.now(),
-          },
-        },
-      }
-    }),
-
-  setCompressing: (convId, isCompressing) =>
-    set((state) => {
-      const existing = state.contextUsageMap[convId]
-      return {
-        contextUsageMap: {
-          ...state.contextUsageMap,
-          [convId]: {
-            ...existing,
-            isCompressing,
-            updatedAt: Date.now(),
-          },
-        },
-      }
-    }),
-
-  clearContextUsage: (convId) =>
-    set((state) => {
-      const { [convId]: _removed, ...rest } = state.contextUsageMap
-      return { contextUsageMap: rest }
-    }),
 }))

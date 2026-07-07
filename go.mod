@@ -4,7 +4,6 @@ go 1.26.4
 
 require (
 	github.com/99designs/keyring v1.2.2
-	github.com/daulet/tokenizers v1.27.0
 	github.com/google/uuid v1.6.0
 	github.com/google/wire v0.7.0
 	github.com/knights-analytics/hugot v0.7.4
@@ -22,6 +21,7 @@ require (
 	github.com/99designs/go-keychain v0.0.0-20191008050251-8e49817e8af4 // indirect
 	github.com/bep/debounce v1.2.1 // indirect
 	github.com/danieljoos/wincred v1.2.3 // indirect
+	github.com/daulet/tokenizers v1.27.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/dvsekhvalnov/jose2go v1.8.0 // indirect

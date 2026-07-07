@@ -1,30 +1,6 @@
 # 滚动更新追踪器
 
-### [2026-07-06 / v1.1.10] — M01 会话压缩服务接入与 CompressSession 绑定实现
-
-**[Modified Areas]**
-- `internal/application/usecase/chat.go` — `ApplicationSet` 增加 `NewCompressionService`
-- `wails_app.go` — `WailsApp` 新增 `compressionService` 字段与构造函数注入
-- `wails_app_context.go` — `CompressSession` 从占位实现改为真实调用 `CompressionService.Compress`
-- `wire.go` / `wire_gen.go` — 通过 `wire .` 重新生成依赖注入代码
-
-**[Logic Evolution]**
-- 前端触发压缩后，后端使用默认策略 `StrategySummarizeAndReplace`（anchor=1, recent=6）压缩指定会话
-- 压缩成功后通过 `context:usage_refresh` 事件通知前端刷新上下文用量显示
-- 复用已有的 `ContextEstimator`、`LLMClientFactory`、`ProviderStore`、`MessageRepository` 依赖，未引入新基础设施
-
-**[Checklist Status]**
-- 分支 `feature/M01-context-usage-session-compression`
-- ✅ `wire .` 重新生成 `wire_gen.go`
-- ✅ `gofmt -w` 已执行
-- ✅ `GOTOOLCHAIN=auto CGO_LDFLAGS="..." go build -tags "webkit2_41,ORT" -o /tmp/medmemo .` 通过
-- ✅ Wails JS 绑定已包含 `CompressSession`，无需重新生成
-
-**[Pending/Next Steps]**
-- 前端可在压缩按钮调用 `CompressSession` 并监听 `context:usage_refresh` 刷新用量
-- 后续可考虑将压缩策略、anchor/recent 数量外置为配置或请求参数
-
----
+### [2026-06-29 / v1.1.9] — Skill、LLM Wiki 知识库与顶层文档同步
 
 **[Modified Areas]**
 - `.skill/medmemo/SKILL.md` — 增加 `codebase-documenter` / `submission-checker` / `code-comment` Skill 触发要求；补充双语文档规则；更新脱敏管线为 L1→L2

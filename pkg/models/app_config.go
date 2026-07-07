@@ -20,7 +20,6 @@ type AppConfig struct {
 	DesensitizationLevel      DesensitizationLevel // 脱敏级别（standard / strict / off）
 	DataRetentionDays         int                  // 本地数据留存天数，0 表示永久保留
 	EmbeddingModelDownloadURL string               // Embedding 模型下载页面 URL（可选）
-	CompressionSettings       CompressionSettings  // 会话压缩设置
 }
 
 // Validate 校验配置合法性。

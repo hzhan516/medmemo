@@ -193,8 +193,6 @@ export interface ProviderModel {
   name: string
   /** 是否启用 */
   enabled: boolean
-  /** 最大上下文长度（可选，256-2000000） */
-  maxContextLength?: number
 }
 
 /**
