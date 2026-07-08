@@ -113,6 +113,67 @@ func (m *mockDeidentifier) Execute(_ context.Context, _ string) (models.Deidenti
 
 var _ Deidentifier = (*mockDeidentifier)(nil)
 
+// countingProviderStore 记录 Get 调用次数，用于验证还原路径不再重复查询 provider。
+type countingProviderStore struct {
+	provider *models.ProviderConfig
+	getCount int
+}
+
+func (m *countingProviderStore) Create(_ context.Context, _ *models.ProviderConfig) error { return nil }
+func (m *countingProviderStore) Update(_ context.Context, _ *models.ProviderConfig) error { return nil }
+func (m *countingProviderStore) Delete(_ context.Context, _ string) error                 { return nil }
+func (m *countingProviderStore) Get(_ context.Context, id string) (*models.ProviderConfig, error) {
+	m.getCount++
+	if m.provider == nil {
+		return &models.ProviderConfig{ID: id, APIHost: "https://api.example.com", ModelID: "test-model"}, nil
+	}
+	return m.provider, nil
+}
+func (m *countingProviderStore) List(_ context.Context) ([]*models.ProviderConfig, error) {
+	return []*models.ProviderConfig{}, nil
+}
+
+var _ port.ProviderStore = (*countingProviderStore)(nil)
+
+// TestChatOrchestrator_Execute_Restore_NoRedundantProviderLookup 验证还原路径不再调用 providerStore.Get。
+// Execute 中仅 prepareMessages 与 resolveLLMClient 各查询一次 provider（共 2 次），
+// 还原分支已改为仅依据占位符存在与否，不再触发第 3 次查询。
+func TestChatOrchestrator_Execute_Restore_NoRedundantProviderLookup(t *testing.T) {
+	t.Parallel()
+	mock := &mockLLMClient{chatReply: "已发送至 {{EMAIL_abc12345}}"}
+	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
+	deid := &mockDeidentifier{
+		result: models.DeidentifyResult{
+			OriginalText: "联系我 test@example.com",
+			SafeText:     "联系我 {{EMAIL_abc12345}}",
+			Placeholder:  map[string]string{"{{EMAIL_abc12345}}": "test@example.com"},
+		},
+	}
+	factory := &mockLLMClientFactory{client: mock}
+	store := &countingProviderStore{provider: &models.ProviderConfig{ID: "cloud", APIHost: "https://api.moonshot.cn", ModelID: "kimi-v1", Type: models.ProviderKimi}}
+	orch := NewChatOrchestrator(ChatOrchestratorDeps{
+		LLMFactory:           factory,
+		ProviderStore:        store,
+		Compliance:           comp,
+		DeidPipeline:         deid,
+		ConfidenceAggregator: NewConfidenceAggregator(),
+		FactRepo:             &mockFactRepository{},
+		IntentResolver:       NewIntentResolver(NewQueryExpansionService()),
+		LocalAnswer:          NewLocalAnswerService(NewLocalAnswerConfig()),
+	})
+
+	req := ChatRequest{
+		Messages:   []models.Message{{Role: models.RoleUser, Content: "联系我 test@example.com"}},
+		Model:      models.ProviderKimi,
+		ProviderID: "cloud",
+	}
+
+	resp, err := orch.Execute(context.Background(), req)
+	require.NoError(t, err)
+	assert.Equal(t, "已发送至 test@example.com", resp.Reply, "云端占位符应被还原")
+	assert.Equal(t, 2, store.getCount, "还原路径不应再触发额外的 provider 查询")
+}
+
 // mockMemoryQuerier 实现 MemoryQuerier 接口。
 type mockMemoryQuerier struct {
 	memories []*entity.HealthMemory

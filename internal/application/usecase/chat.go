@@ -308,9 +308,10 @@ func (c *ChatOrchestrator) Execute(ctx context.Context, req ChatRequest) (*ChatR
 		return nil, fmt.Errorf("chat execution failed: %w", err)
 	}
 
-	// 输出还原（仅云端模型且有 P2 占位符时）
-	provider, _ := c.providerStore.Get(ctx, req.ProviderID)
-	if !isLocalProvider(provider) && len(deidResult.Placeholder) > 0 {
+	// 输出还原（仅当存在 P2 占位符时）。
+	// 占位符只在云端脱敏路径产生：本地/回环 provider 与 off 级别均跳过脱敏，deidResult.Placeholder 为空，
+	// 因此"是否存在占位符"已足以判定，无需再次查询 provider 判断本地/云端（消除冗余 Get 与不一致风险）。
+	if len(deidResult.Placeholder) > 0 {
 		reply = desensitizer.Restore(models.DeidentifyResult{
 			SafeText:    reply,
 			Placeholder: deidResult.Placeholder,
@@ -404,10 +405,11 @@ func (c *ChatOrchestrator) StreamExecute(ctx context.Context, req ChatRequest, o
 		return nil, nil, "", fmt.Errorf("stream execution failed: %w", err)
 	}
 
-	// 输出还原
+	// 输出还原（仅当存在 P2 占位符时）。
+	// 占位符只在云端脱敏路径产生，本地/回环与 off 级别不会有占位符，
+	// 故无需再次查询 provider 判断本地/云端。
 	reply := fullReply.String()
-	provider, _ := c.providerStore.Get(ctx, req.ProviderID)
-	if !isLocalProvider(provider) && len(deidResult.Placeholder) > 0 {
+	if len(deidResult.Placeholder) > 0 {
 		reply = desensitizer.Restore(models.DeidentifyResult{
 			SafeText:    reply,
 			Placeholder: deidResult.Placeholder,
