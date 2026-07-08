@@ -874,6 +874,49 @@ func TestRetrieveWithDiagnostics_IntentPath(t *testing.T) {
 	_ = memories
 }
 
+func TestRetrieveWithDiagnostics_PureSemanticPath(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+
+	facts := map[string]*entity.ExtractedFact{
+		"fact_allergy": {
+			FactID: "fact_allergy", Subject: "用户", Predicate: "对...过敏", Object: "青霉素",
+			Confidence: 0.95, Status: entity.FactStatusApproved, CreatedAt: now,
+		},
+	}
+
+	embeddings := []*entity.ScoredEmbedding{
+		{SemanticEmbedding: &entity.SemanticEmbedding{FactID: "fact_allergy"}, Similarity: 0.9},
+	}
+
+	factRepo := &stubFactRepositoryWithSubjects{
+		stubFactRepository: stubFactRepository{facts: facts},
+		facts:              []*entity.ExtractedFact{facts["fact_allergy"]},
+	}
+	retriever := NewMemoryRetriever(
+		&stubEmbeddingService{},
+		&stubEmbeddingRepository{results: embeddings},
+		factRepo, nil,
+		NewDecayScorer(),
+		nil,
+		nil,
+		nil,
+	)
+
+	diag, memories, err := retriever.retrieveWithDiagnostics(context.Background(), "注射前需要提醒医生哪些个人情况", "session_semantic", 3)
+	require.NoError(t, err)
+
+	assert.Nil(t, diag.DetectedIntent)
+	assert.Empty(t, diag.IntentCandidates)
+	assert.Empty(t, diag.KeywordCandidates)
+	require.NotEmpty(t, diag.VectorCandidates)
+	assert.Equal(t, "fact_allergy", diag.VectorCandidates[0].FactID)
+	require.NotEmpty(t, diag.SelectedMemories)
+	assert.Equal(t, "fact_allergy", diag.SelectedMemories[0].FactID)
+	require.NotEmpty(t, memories)
+	assert.Equal(t, models.MemoryID("fact_allergy"), memories[0].ID)
+}
+
 func TestRetrieveWithDiagnostics_AllPathsFailGracefully(t *testing.T) {
 	t.Parallel()
 	// 无 embedding 结果、无 fact、无 intent → 各路径全部空，应优雅返回空
