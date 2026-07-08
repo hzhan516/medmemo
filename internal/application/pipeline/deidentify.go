@@ -246,10 +246,13 @@ func mapTypeToPlaceholderPrefix(entityType string) string {
 	}
 }
 
-// NewDefaultDeidentifyPipeline 创建默认的二级脱敏流水线（L1→L2），
+// NewDefaultDeidentifyPipeline 创建默认的脱敏流水线，
+// 顺序为 L1 规则 → L2 NER → L1.5 严格兜底（仅严格级激活），
 // 供 Wire 注入使用，避免变参接口带来的多绑定问题。
-func NewDefaultDeidentifyPipeline(l1 *L1RuleStage, l2 *L2NERStage) *DeidentifyPipeline {
-	return NewDeidentifyPipeline(l1, l2)
+// L1.5 置于最后：运行在 L1+L2 已处理的文本上，对残留可标识信息做兜底遮蔽，
+// 从而不干扰 L2 基于原始文本的偏移映射逻辑。
+func NewDefaultDeidentifyPipeline(l1 *L1RuleStage, l2 *L2NERStage, l1ext *L1ExtendedRuleStage) *DeidentifyPipeline {
+	return NewDeidentifyPipeline(l1, l2, l1ext)
 }
 
 // Set 供 Wire 使用的 ProviderSet。
@@ -257,4 +260,5 @@ var Set = wire.NewSet(
 	NewDefaultDeidentifyPipeline,
 	NewL1RuleStage,
 	NewL2NERStage,
+	NewL1ExtendedRuleStage,
 )

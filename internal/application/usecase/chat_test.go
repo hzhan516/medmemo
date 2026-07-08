@@ -113,6 +113,16 @@ func (m *mockDeidentifier) Execute(_ context.Context, _ string, _ models.Desensi
 
 var _ Deidentifier = (*mockDeidentifier)(nil)
 
+// maskingMockDeidentifier 将输入内容替换为可识别的遮蔽标记，用于验证
+// 严格级对所有用户消息脱敏、标准级仅脱敏最后一条的行为差异。
+type maskingMockDeidentifier struct{}
+
+func (m *maskingMockDeidentifier) Execute(_ context.Context, raw string, _ models.DesensitizationLevel) (models.DeidentifyResult, error) {
+	return models.DeidentifyResult{OriginalText: raw, SafeText: "[MASKED]"}, nil
+}
+
+var _ Deidentifier = (*maskingMockDeidentifier)(nil)
+
 // countingProviderStore 记录 Get 调用次数，用于验证还原路径不再重复查询 provider。
 type countingProviderStore struct {
 	provider *models.ProviderConfig
@@ -1318,4 +1328,55 @@ func TestExecute_ComplianceCheck_L3Notice(t *testing.T) {
 	assert.Equal(t, mock.chatReply, resp.Reply)
 	assert.Contains(t, resp.Warnings, application.L3Notice.String())
 	assert.Contains(t, resp.Warnings, "NOTICE:以上内容仅供参考")
+}
+
+// TestChatOrchestrator_Strict_MasksAllUserMessages 验证严格级对所有用户消息脱敏。
+func TestChatOrchestrator_Strict_MasksAllUserMessages(t *testing.T) {
+	t.Parallel()
+	mock := &mockLLMClient{chatReply: "收到"}
+	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
+	orch := newTestOrchestrator(mock, comp, &maskingMockDeidentifier{}, nil, nil)
+
+	req := ChatRequest{
+		Messages: []models.Message{
+			{Role: models.RoleUser, Content: "第一条含隐私"},
+			{Role: models.RoleAssistant, Content: "助手回复"},
+			{Role: models.RoleUser, Content: "第二条含隐私"},
+		},
+		Model:                models.ProviderKimi,
+		ProviderID:           "test-provider",
+		DesensitizationLevel: models.DesensitizationStrict,
+	}
+
+	_, err := orch.Execute(context.Background(), req)
+	require.NoError(t, err)
+	require.Len(t, mock.lastMessages, 3)
+	assert.Equal(t, "[MASKED]", mock.lastMessages[0].Content, "严格级应脱敏首条用户消息")
+	assert.Equal(t, "助手回复", mock.lastMessages[1].Content, "助手消息不脱敏")
+	assert.Equal(t, "[MASKED]", mock.lastMessages[2].Content, "严格级应脱敏末条用户消息")
+}
+
+// TestChatOrchestrator_Standard_MasksLastUserMessageOnly 验证标准级仅脱敏最后一条用户消息。
+func TestChatOrchestrator_Standard_MasksLastUserMessageOnly(t *testing.T) {
+	t.Parallel()
+	mock := &mockLLMClient{chatReply: "收到"}
+	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
+	orch := newTestOrchestrator(mock, comp, &maskingMockDeidentifier{}, nil, nil)
+
+	req := ChatRequest{
+		Messages: []models.Message{
+			{Role: models.RoleUser, Content: "第一条含隐私"},
+			{Role: models.RoleAssistant, Content: "助手回复"},
+			{Role: models.RoleUser, Content: "第二条含隐私"},
+		},
+		Model:                models.ProviderKimi,
+		ProviderID:           "test-provider",
+		DesensitizationLevel: models.DesensitizationStandard,
+	}
+
+	_, err := orch.Execute(context.Background(), req)
+	require.NoError(t, err)
+	require.Len(t, mock.lastMessages, 3)
+	assert.Equal(t, "第一条含隐私", mock.lastMessages[0].Content, "标准级不脱敏首条用户消息")
+	assert.Equal(t, "[MASKED]", mock.lastMessages[2].Content, "标准级仅脱敏末条用户消息")
 }

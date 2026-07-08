@@ -185,6 +185,32 @@ func (c *ChatOrchestrator) PreparePrompt(ctx context.Context, req ChatRequest) P
 	return PreparedPrompt{Messages: messages, Deid: deid, Citations: citations}
 }
 
+// deidentifyAllUserMessages 在严格级下对所有用户消息逐条脱敏，合并占位符映射，
+// 返回脱敏后的消息副本与聚合脱敏结果。单条脱敏失败时降级保留该条原文
+// （Phase 2 将改为 fail-closed，见 #036）。
+func (c *ChatOrchestrator) deidentifyAllUserMessages(ctx context.Context, msgs []models.Message, level models.DesensitizationLevel) ([]models.Message, models.DeidentifyResult) {
+	out := make([]models.Message, len(msgs))
+	copy(out, msgs)
+	merged := make(map[string]string)
+	var entities []models.SensitiveEntity
+	for i := range out {
+		if out[i].Role != models.RoleUser {
+			continue
+		}
+		r, err := c.deidPipeline.Execute(ctx, out[i].Content, level)
+		if err != nil {
+			// 降级：保留原文继续（Phase 1 行为）
+			continue
+		}
+		out[i].Content = r.SafeText
+		for k, v := range r.Placeholder {
+			merged[k] = v
+		}
+		entities = append(entities, r.Entities...)
+	}
+	return out, models.DeidentifyResult{Placeholder: merged, Entities: entities}
+}
+
 // prepareMessages 执行输入脱敏、记忆检索与知识库检索，返回处理后的消息、脱敏结果与引用。
 func (c *ChatOrchestrator) prepareMessages(ctx context.Context, req ChatRequest) ([]models.Message, models.DeidentifyResult, []entity.KnowledgeCitation) {
 	// 若已有预组装结果（发送路径中 maybeAutoCompress 已组装过），直接复用，避免重复检索/脱敏。
@@ -201,16 +227,22 @@ func (c *ChatOrchestrator) prepareMessages(ctx context.Context, req ChatRequest)
 
 	// 输入脱敏（仅云端模型且级别非 off）
 	if !local && c.deidPipeline != nil && req.DesensitizationLevel != models.DesensitizationOff {
-		lastIdx := findLastUserMessage(req.Messages)
-		if lastIdx >= 0 {
-			r, err := c.deidPipeline.Execute(ctx, req.Messages[lastIdx].Content, req.DesensitizationLevel)
-			if err == nil {
-				deidResult = r
-				messages = make([]models.Message, len(req.Messages))
-				copy(messages, req.Messages)
-				messages[lastIdx].Content = r.SafeText
+		if req.DesensitizationLevel == models.DesensitizationStrict {
+			// 严格级：对所有用户消息脱敏，最大化降低出网 PII。
+			messages, deidResult = c.deidentifyAllUserMessages(ctx, req.Messages, req.DesensitizationLevel)
+		} else {
+			// 标准级：仅脱敏最后一条用户消息（当前发送的问题）。
+			lastIdx := findLastUserMessage(req.Messages)
+			if lastIdx >= 0 {
+				r, err := c.deidPipeline.Execute(ctx, req.Messages[lastIdx].Content, req.DesensitizationLevel)
+				if err == nil {
+					deidResult = r
+					messages = make([]models.Message, len(req.Messages))
+					copy(messages, req.Messages)
+					messages[lastIdx].Content = r.SafeText
+				}
+				// 脱敏失败降级，继续使用原始文本
 			}
-			// 脱敏失败降级，继续使用原始文本
 		}
 	}
 
