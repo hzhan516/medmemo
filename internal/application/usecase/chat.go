@@ -160,7 +160,7 @@ func injectSystemPrefix(msgs []models.Message, prefix string) []models.Message {
 	return result
 }
 
-// injectMemories 以权威档案事实注入，避免模型反复追问已确认信息。
+// injectMemories 以权威档案事实注入，避免模型反复追问已确认信息
 func injectMemories(msgs []models.Message, memories []*entity.HealthMemory) []models.Message {
 	if len(memories) == 0 {
 		return msgs
