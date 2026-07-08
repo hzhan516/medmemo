@@ -107,11 +107,82 @@ type mockDeidentifier struct {
 	err    error
 }
 
-func (m *mockDeidentifier) Execute(_ context.Context, _ string) (models.DeidentifyResult, error) {
+func (m *mockDeidentifier) Execute(_ context.Context, _ string, _ models.DesensitizationLevel) (models.DeidentifyResult, error) {
 	return m.result, m.err
 }
 
 var _ Deidentifier = (*mockDeidentifier)(nil)
+
+// maskingMockDeidentifier 将输入内容替换为可识别的遮蔽标记，用于验证
+// 严格级对所有用户消息脱敏、标准级仅脱敏最后一条的行为差异。
+type maskingMockDeidentifier struct{}
+
+func (m *maskingMockDeidentifier) Execute(_ context.Context, raw string, _ models.DesensitizationLevel) (models.DeidentifyResult, error) {
+	return models.DeidentifyResult{OriginalText: raw, SafeText: "[MASKED]"}, nil
+}
+
+var _ Deidentifier = (*maskingMockDeidentifier)(nil)
+
+// countingProviderStore 记录 Get 调用次数，用于验证还原路径不再重复查询 provider。
+type countingProviderStore struct {
+	provider *models.ProviderConfig
+	getCount int
+}
+
+func (m *countingProviderStore) Create(_ context.Context, _ *models.ProviderConfig) error { return nil }
+func (m *countingProviderStore) Update(_ context.Context, _ *models.ProviderConfig) error { return nil }
+func (m *countingProviderStore) Delete(_ context.Context, _ string) error                 { return nil }
+func (m *countingProviderStore) Get(_ context.Context, id string) (*models.ProviderConfig, error) {
+	m.getCount++
+	if m.provider == nil {
+		return &models.ProviderConfig{ID: id, APIHost: "https://api.example.com", ModelID: "test-model"}, nil
+	}
+	return m.provider, nil
+}
+func (m *countingProviderStore) List(_ context.Context) ([]*models.ProviderConfig, error) {
+	return []*models.ProviderConfig{}, nil
+}
+
+var _ port.ProviderStore = (*countingProviderStore)(nil)
+
+// TestChatOrchestrator_Execute_Restore_NoRedundantProviderLookup 验证还原路径不再调用 providerStore.Get。
+// Execute 中仅 prepareMessages 与 resolveLLMClient 各查询一次 provider（共 2 次），
+// 还原分支已改为仅依据占位符存在与否，不再触发第 3 次查询。
+func TestChatOrchestrator_Execute_Restore_NoRedundantProviderLookup(t *testing.T) {
+	t.Parallel()
+	mock := &mockLLMClient{chatReply: "已发送至 {{EMAIL_abc12345}}"}
+	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
+	deid := &mockDeidentifier{
+		result: models.DeidentifyResult{
+			OriginalText: "联系我 test@example.com",
+			SafeText:     "联系我 {{EMAIL_abc12345}}",
+			Placeholder:  map[string]string{"{{EMAIL_abc12345}}": "test@example.com"},
+		},
+	}
+	factory := &mockLLMClientFactory{client: mock}
+	store := &countingProviderStore{provider: &models.ProviderConfig{ID: "cloud", APIHost: "https://api.moonshot.cn", ModelID: "kimi-v1", Type: models.ProviderKimi}}
+	orch := NewChatOrchestrator(ChatOrchestratorDeps{
+		LLMFactory:           factory,
+		ProviderStore:        store,
+		Compliance:           comp,
+		DeidPipeline:         deid,
+		ConfidenceAggregator: NewConfidenceAggregator(),
+		FactRepo:             &mockFactRepository{},
+		IntentResolver:       NewIntentResolver(NewQueryExpansionService()),
+		LocalAnswer:          NewLocalAnswerService(NewLocalAnswerConfig()),
+	})
+
+	req := ChatRequest{
+		Messages:   []models.Message{{Role: models.RoleUser, Content: "联系我 test@example.com"}},
+		Model:      models.ProviderKimi,
+		ProviderID: "cloud",
+	}
+
+	resp, err := orch.Execute(context.Background(), req)
+	require.NoError(t, err)
+	assert.Equal(t, "已发送至 test@example.com", resp.Reply, "云端占位符应被还原")
+	assert.Equal(t, 2, store.getCount, "还原路径不应再触发额外的 provider 查询")
+}
 
 // mockMemoryQuerier 实现 MemoryQuerier 接口。
 type mockMemoryQuerier struct {
@@ -388,7 +459,7 @@ func TestChatOrchestrator_Execute_Restore(t *testing.T) {
 	assert.Equal(t, "已发送至 test@example.com", resp.Reply)
 }
 
-// TestChatOrchestrator_Execute_LocalModelSkipDeid 验证本地模型跳过脱敏。
+// TestChatOrchestrator_Execute_LocalModelSkipDeid 验证本地 provider 跳过脱敏。
 func TestChatOrchestrator_Execute_LocalModelSkipDeid(t *testing.T) {
 	t.Parallel()
 	mock := &mockLLMClient{chatReply: "本地回复"}
@@ -400,12 +471,23 @@ func TestChatOrchestrator_Execute_LocalModelSkipDeid(t *testing.T) {
 			Placeholder:  map[string]string{"{{EMAIL_abc12345}}": "test@example.com"},
 		},
 	}
-	orch := newTestOrchestrator(mock, comp, deid, nil, nil)
+	factory := &mockLLMClientFactory{client: mock}
+	store := &mockProviderStore{provider: &models.ProviderConfig{ID: "local-provider", Type: models.ProviderOllama, APIHost: "http://localhost:11434", ModelID: "llama3"}}
+	orch := NewChatOrchestrator(ChatOrchestratorDeps{
+		LLMFactory:           factory,
+		ProviderStore:        store,
+		Compliance:           comp,
+		DeidPipeline:         deid,
+		ConfidenceAggregator: NewConfidenceAggregator(),
+		FactRepo:             &mockFactRepository{},
+		IntentResolver:       NewIntentResolver(NewQueryExpansionService()),
+		LocalAnswer:          NewLocalAnswerService(NewLocalAnswerConfig()),
+	})
 
 	req := ChatRequest{
 		Messages:   []models.Message{{Role: models.RoleUser, Content: "联系我 test@example.com"}},
 		Model:      models.ProviderOllama,
-		ProviderID: "test-provider",
+		ProviderID: "local-provider",
 	}
 
 	resp, err := orch.Execute(context.Background(), req)
@@ -671,15 +753,18 @@ func TestInjectMemories(t *testing.T) {
 	assert.Equal(t, "你是医生", result[0].Content)
 }
 
-// TestIsLocalModel 验证本地模型判断。
-func TestIsLocalModel(t *testing.T) {
+// TestIsLocalProvider 验证本地 provider 判断。
+func TestIsLocalProvider(t *testing.T) {
 	t.Parallel()
-	assert.True(t, isLocalModel(models.ProviderOllama))
-	assert.True(t, isLocalModel(models.ProviderLocal))
-	assert.False(t, isLocalModel(models.ProviderKimi))
-	assert.False(t, isLocalModel(models.ProviderOpenAI))
-	assert.False(t, isLocalModel(models.ProviderQwen))
-	assert.False(t, isLocalModel(models.ProviderSiliconFlow))
+	assert.True(t, isLocalProvider(&models.ProviderConfig{Type: models.ProviderOllama, APIHost: "https://api.example.com"}))
+	assert.True(t, isLocalProvider(&models.ProviderConfig{Type: models.ProviderLocal, APIHost: "https://api.example.com"}))
+	assert.True(t, isLocalProvider(&models.ProviderConfig{Type: models.ProviderKimi, APIHost: "http://localhost:11434"}))
+	assert.True(t, isLocalProvider(&models.ProviderConfig{Type: models.ProviderKimi, APIHost: "http://127.0.0.1:11434"}))
+	assert.False(t, isLocalProvider(&models.ProviderConfig{Type: models.ProviderKimi, APIHost: "https://api.moonshot.cn"}))
+	assert.False(t, isLocalProvider(&models.ProviderConfig{Type: models.ProviderOpenAI, APIHost: "https://api.openai.com"}))
+	assert.False(t, isLocalProvider(&models.ProviderConfig{Type: models.ProviderQwen, APIHost: "https://dashscope.aliyuncs.com"}))
+	assert.False(t, isLocalProvider(&models.ProviderConfig{Type: models.ProviderSiliconFlow, APIHost: "https://api.siliconflow.cn"}))
+	assert.False(t, isLocalProvider(nil))
 }
 
 // mockProviderStoreCtxErr 是一个在 context 已取消时返回 context 错误的 ProviderStore Mock。
@@ -1243,4 +1328,105 @@ func TestExecute_ComplianceCheck_L3Notice(t *testing.T) {
 	assert.Equal(t, mock.chatReply, resp.Reply)
 	assert.Contains(t, resp.Warnings, application.L3Notice.String())
 	assert.Contains(t, resp.Warnings, "NOTICE:以上内容仅供参考")
+}
+
+// TestChatOrchestrator_Strict_MasksAllUserMessages 验证严格级对所有用户消息脱敏。
+func TestChatOrchestrator_Strict_MasksAllUserMessages(t *testing.T) {
+	t.Parallel()
+	mock := &mockLLMClient{chatReply: "收到"}
+	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
+	orch := newTestOrchestrator(mock, comp, &maskingMockDeidentifier{}, nil, nil)
+
+	req := ChatRequest{
+		Messages: []models.Message{
+			{Role: models.RoleUser, Content: "第一条含隐私"},
+			{Role: models.RoleAssistant, Content: "助手回复"},
+			{Role: models.RoleUser, Content: "第二条含隐私"},
+		},
+		Model:                models.ProviderKimi,
+		ProviderID:           "test-provider",
+		DesensitizationLevel: models.DesensitizationStrict,
+	}
+
+	_, err := orch.Execute(context.Background(), req)
+	require.NoError(t, err)
+	require.Len(t, mock.lastMessages, 3)
+	assert.Equal(t, "[MASKED]", mock.lastMessages[0].Content, "严格级应脱敏首条用户消息")
+	assert.Equal(t, "助手回复", mock.lastMessages[1].Content, "助手消息不脱敏")
+	assert.Equal(t, "[MASKED]", mock.lastMessages[2].Content, "严格级应脱敏末条用户消息")
+}
+
+// TestChatOrchestrator_Standard_MasksLastUserMessageOnly 验证标准级仅脱敏最后一条用户消息。
+func TestChatOrchestrator_Standard_MasksLastUserMessageOnly(t *testing.T) {
+	t.Parallel()
+	mock := &mockLLMClient{chatReply: "收到"}
+	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
+	orch := newTestOrchestrator(mock, comp, &maskingMockDeidentifier{}, nil, nil)
+
+	req := ChatRequest{
+		Messages: []models.Message{
+			{Role: models.RoleUser, Content: "第一条含隐私"},
+			{Role: models.RoleAssistant, Content: "助手回复"},
+			{Role: models.RoleUser, Content: "第二条含隐私"},
+		},
+		Model:                models.ProviderKimi,
+		ProviderID:           "test-provider",
+		DesensitizationLevel: models.DesensitizationStandard,
+	}
+
+	_, err := orch.Execute(context.Background(), req)
+	require.NoError(t, err)
+	require.Len(t, mock.lastMessages, 3)
+	assert.Equal(t, "第一条含隐私", mock.lastMessages[0].Content, "标准级不脱敏首条用户消息")
+	assert.Equal(t, "[MASKED]", mock.lastMessages[2].Content, "标准级仅脱敏末条用户消息")
+}
+
+// TestChatOrchestrator_Strict_FailClosed_Degrades 验证严格级脱敏失败时 fail-closed 降级，
+// 标记 DeidFailed 且降级内容与组装消息均不含原文级 PII。
+func TestChatOrchestrator_Strict_FailClosed_Degrades(t *testing.T) {
+	t.Parallel()
+	mock := &mockLLMClient{chatReply: "收到"}
+	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
+	deid := &mockDeidentifier{err: fmt.Errorf("pipeline down")}
+	orch := newTestOrchestrator(mock, comp, deid, nil, nil)
+
+	req := ChatRequest{
+		Messages:             []models.Message{{Role: models.RoleUser, Content: "我的身份证110101199001011234"}},
+		Model:                models.ProviderKimi,
+		ProviderID:           "test-provider",
+		DesensitizationLevel: models.DesensitizationStrict,
+	}
+
+	prepared := orch.PreparePrompt(context.Background(), req)
+	assert.True(t, prepared.DeidFailed, "严格级脱敏失败应置 DeidFailed")
+	require.NotEmpty(t, prepared.DeidDegraded)
+	assert.NotContains(t, prepared.DeidDegraded[len(prepared.DeidDegraded)-1].Content, "110101199001011234",
+		"降级内容不应外泄原文 PII")
+
+	// 组装后的消息（实际发送）同样不得含原文 PII。
+	lastIdx := findLastUserMessage(prepared.Messages)
+	require.GreaterOrEqual(t, lastIdx, 0)
+	assert.NotContains(t, prepared.Messages[lastIdx].Content, "110101199001011234")
+}
+
+// TestChatOrchestrator_Standard_KeepsRawFallback 验证标准级脱敏失败保持既有原文回退（非 fail-closed）。
+func TestChatOrchestrator_Standard_KeepsRawFallback(t *testing.T) {
+	t.Parallel()
+	mock := &mockLLMClient{chatReply: "收到"}
+	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
+	deid := &mockDeidentifier{err: fmt.Errorf("pipeline down")}
+	orch := newTestOrchestrator(mock, comp, deid, nil, nil)
+
+	req := ChatRequest{
+		Messages:             []models.Message{{Role: models.RoleUser, Content: "原始内容 X"}},
+		Model:                models.ProviderKimi,
+		ProviderID:           "test-provider",
+		DesensitizationLevel: models.DesensitizationStandard,
+	}
+
+	prepared := orch.PreparePrompt(context.Background(), req)
+	assert.False(t, prepared.DeidFailed, "标准级不触发 fail-closed")
+	lastIdx := findLastUserMessage(prepared.Messages)
+	require.GreaterOrEqual(t, lastIdx, 0)
+	assert.Equal(t, "原始内容 X", prepared.Messages[lastIdx].Content, "标准级失败保持原文回退")
 }

@@ -68,6 +68,8 @@ export function GetConversations():Promise<Array<main.ConversationSummary>>;
 
 export function GetDeletedConversations():Promise<Array<main.ConversationSummary>>;
 
+export function GetDesensitizationLevel():Promise<string>;
+
 export function GetDisclaimerStatus():Promise<main.DisclaimerStatus>;
 
 export function GetEmbeddingModelDirPath():Promise<string>;
@@ -147,6 +149,8 @@ export function SendMessageStream(arg1:main.SendMessageRequest):Promise<void>;
 export function SetCompressionSettings(arg1:main.CompressionSettings):Promise<void>;
 
 export function SetDataRetentionDays(arg1:number):Promise<void>;
+
+export function SetDesensitizationLevel(arg1:string):Promise<void>;
 
 export function SetMemoryInjectionEnabled(arg1:boolean):Promise<void>;
 

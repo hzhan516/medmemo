@@ -27,6 +27,7 @@ import { useVersionNotes } from '@/hooks/useVersionNotes'
 import { useOnboardingStore } from '@/stores/onboardingStore'
 import { useProviderStore } from '@/stores/providerStore'
 import { useChatStore } from '@/stores/chatStore'
+import { useSettingsStore } from '@/stores/settingsStore'
 
 
 /**
@@ -76,6 +77,11 @@ function App() {
     processed: number
     total: number
   } | null>(null)
+
+  // 启动时以后端配置为准回读脱敏级别，校正本地持久化的旧值（后端为权威源）。
+  useEffect(() => {
+    void useSettingsStore.getState().syncDesensitizationLevelFromBackend()
+  }, [])
 
   useEffect(() => {
     const unsubStart = EventsOn('embedding:migration:start', (data: { total: number }) => {

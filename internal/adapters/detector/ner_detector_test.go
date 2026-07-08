@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/hzhan516/medmemo/internal/infrastructure/onnx"
+	"github.com/hzhan516/medmemo/pkg/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -72,4 +74,43 @@ func TestMapNERLabel(t *testing.T) {
 func TestONNXNERDetector_ConfidenceThreshold_Behavior(t *testing.T) {
 	// 阈值常量验证
 	assert.Equal(t, float32(0.75), defaultConfidenceThreshold)
+}
+
+// TestStrictConfidenceThreshold_Constant 验证严格级阈值常量为 0.5。
+func TestStrictConfidenceThreshold_Constant(t *testing.T) {
+	assert.Equal(t, float32(0.5), strictConfidenceThreshold)
+	assert.Less(t, strictConfidenceThreshold, defaultConfidenceThreshold, "严格级阈值应低于标准级以提升召回")
+}
+
+// TestNewStrictONNXNERDetector 验证严格级检测器使用更低阈值且复用引擎。
+func TestNewStrictONNXNERDetector(t *testing.T) {
+	det := NewStrictONNXNERDetector(nil)
+	require.NotNil(t, det)
+	require.NotNil(t, det.ONNXNERDetector)
+	assert.Equal(t, strictConfidenceThreshold, det.threshold)
+	assert.False(t, det.IsAvailable())
+}
+
+// TestFilterSpansByThreshold 验证按阈值过滤与类型映射的纯函数逻辑。
+func TestFilterSpansByThreshold(t *testing.T) {
+	spans := []onnx.EntitySpan{
+		{Text: "张三", Label: "PER", Start: 0, End: 6, Score: 0.60},
+		{Text: "北京", Label: "LOC", Start: 9, End: 15, Score: 0.90},
+		{Text: "某某", Label: "MISC", Start: 20, End: 26, Score: 0.99}, // 无法映射类型，丢弃
+	}
+
+	// 标准阈值 0.75：仅保留北京（0.90），张三(0.60)被过滤，MISC 丢弃。
+	std := filterSpansByThreshold(spans, defaultConfidenceThreshold)
+	require.Len(t, std, 1)
+	assert.Equal(t, "北京", std[0].Text)
+
+	// 严格阈值 0.5：保留张三(0.60)与北京(0.90)，MISC 仍因类型丢弃。
+	strict := filterSpansByThreshold(spans, strictConfidenceThreshold)
+	require.Len(t, strict, 2)
+	texts := []string{strict[0].Text, strict[1].Text}
+	assert.Contains(t, texts, "张三")
+	assert.Contains(t, texts, "北京")
+	for _, e := range strict {
+		assert.Equal(t, models.P3Confidential, e.Level)
+	}
 }

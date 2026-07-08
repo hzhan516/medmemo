@@ -31,7 +31,7 @@ func TestDeidentifyPipeline_L1Only(t *testing.T) {
 	p := NewDeidentifyPipeline(NewL1RuleStage())
 	ctx := context.Background()
 
-	result, err := p.Execute(ctx, "我的身份证号是110101199001011234")
+	result, err := p.Execute(ctx, "我的身份证号是110101199001011234", models.DesensitizationStandard)
 	require.NoError(t, err)
 	assert.Contains(t, result.SafeText, "{{ID_CARD_")
 	assert.NotContains(t, result.SafeText, "110101199001011234")
@@ -40,7 +40,7 @@ func TestDeidentifyPipeline_L1Only(t *testing.T) {
 // TestL2NERStage_Process_NoNER 验证 NER 不可用时降级透传。
 func TestL2NERStage_Process_NoNER(t *testing.T) {
 	t.Parallel()
-	stage := NewL2NERStage(&mockNERDetector{available: false})
+	stage := NewL2NERStage(&mockNERDetector{available: false}, &mockNERDetector{available: false})
 	ctx := context.Background()
 
 	input := Input{
@@ -55,7 +55,7 @@ func TestL2NERStage_Process_NoNER(t *testing.T) {
 // TestL2NERStage_Process_EmptyNER 验证 NER 返回空实体时透传。
 func TestL2NERStage_Process_EmptyNER(t *testing.T) {
 	t.Parallel()
-	stage := NewL2NERStage(&mockNERDetector{available: true, entities: nil})
+	stage := NewL2NERStage(&mockNERDetector{available: true, entities: nil}, &mockNERDetector{available: true, entities: nil})
 	ctx := context.Background()
 
 	input := Input{
@@ -77,7 +77,7 @@ func TestL2NERStage_Process_WithMockNER(t *testing.T) {
 		{Text: "张三", Type: "姓名", StartPos: 0, EndPos: 6, Score: 0.95},
 		{Text: "北京", Type: "地点", StartPos: 9, EndPos: 15, Score: 0.88},
 	}
-	stage := NewL2NERStage(&mockNERDetector{available: true, entities: entities})
+	stage := NewL2NERStage(&mockNERDetector{available: true, entities: entities}, &mockNERDetector{available: true, entities: entities})
 	ctx := context.Background()
 
 	input := Input{
@@ -111,7 +111,7 @@ func TestL2NERStage_Process_FilterOverlap(t *testing.T) {
 		{Text: "张三", Type: "姓名", StartPos: 0, EndPos: 6, Score: 0.95},
 		{Text: "13800138000", Type: "姓名", StartPos: 12, EndPos: 23, Score: 0.82},
 	}
-	stage := NewL2NERStage(&mockNERDetector{available: true, entities: nerEntities})
+	stage := NewL2NERStage(&mockNERDetector{available: true, entities: nerEntities}, &mockNERDetector{available: true, entities: nerEntities})
 	ctx := context.Background()
 
 	input := Input{
@@ -145,7 +145,7 @@ func TestL2NERStage_Process_PositionMapping(t *testing.T) {
 	nerEntities := []models.SensitiveEntity{
 		{Text: "北京", Type: "地点", StartPos: 23, EndPos: 29, Score: 0.90},
 	}
-	stage := NewL2NERStage(&mockNERDetector{available: true, entities: nerEntities})
+	stage := NewL2NERStage(&mockNERDetector{available: true, entities: nerEntities}, &mockNERDetector{available: true, entities: nerEntities})
 	ctx := context.Background()
 
 	input := Input{
@@ -180,7 +180,7 @@ func TestL2NERStage_Process_EndToEnd(t *testing.T) {
 		{Text: "张三", Type: "姓名", StartPos: 0, EndPos: 6, Score: 0.95},
 		{Text: "北京市朝阳区", Type: "地点", StartPos: 9, EndPos: 27, Score: 0.88},
 	}
-	stage := NewL2NERStage(&mockNERDetector{available: true, entities: nerEntities})
+	stage := NewL2NERStage(&mockNERDetector{available: true, entities: nerEntities}, &mockNERDetector{available: true, entities: nerEntities})
 	ctx := context.Background()
 
 	input := Input{
@@ -210,7 +210,7 @@ func TestL2NERStage_Process_EndToEnd(t *testing.T) {
 // TestL2NERStage_Process_NERError 验证 NER 推理失败时降级透传。
 func TestL2NERStage_Process_NERError(t *testing.T) {
 	t.Parallel()
-	stage := NewL2NERStage(&mockNERDetector{available: true, err: assert.AnError})
+	stage := NewL2NERStage(&mockNERDetector{available: true, err: assert.AnError}, &mockNERDetector{available: true, err: assert.AnError})
 	ctx := context.Background()
 
 	input := Input{
@@ -305,4 +305,29 @@ func TestMapTypeToPlaceholderPrefix(t *testing.T) {
 	assert.Equal(t, "loc", mapTypeToPlaceholderPrefix("地点"))
 	assert.Equal(t, "org", mapTypeToPlaceholderPrefix("机构名"))
 	assert.Equal(t, "ent", mapTypeToPlaceholderPrefix("未知"))
+}
+
+// TestL2NERStage_SelectsDetectorByLevel 验证按脱敏级别选择对应的 NER 检测器。
+func TestL2NERStage_SelectsDetectorByLevel(t *testing.T) {
+	t.Parallel()
+	// 标准级检测器不返回实体；严格级检测器返回一个实体（模拟低阈值召回）。
+	standard := &mockNERDetector{available: true, entities: nil}
+	strict := &mockNERDetector{available: true, entities: []models.SensitiveEntity{
+		{Text: "张三", Type: "姓名", StartPos: 0, EndPos: 6, Score: 0.6},
+	}}
+	stage := NewL2NERStage(standard, strict)
+	ctx := context.Background()
+
+	mkInput := func(level models.DesensitizationLevel) Input {
+		return Input{Text: "张三住北京", Level: level, Metadata: map[string]any{"original_text": "张三住北京"}}
+	}
+
+	outStd, err := stage.Process(ctx, mkInput(models.DesensitizationStandard))
+	require.NoError(t, err)
+	assert.Contains(t, outStd.Text, "张三", "标准级检测器未召回，姓名保留")
+
+	outStrict, err := stage.Process(ctx, mkInput(models.DesensitizationStrict))
+	require.NoError(t, err)
+	assert.NotContains(t, outStrict.Text, "张三", "严格级检测器召回，姓名被遮蔽")
+	assert.Contains(t, outStrict.Text, "{{per_")
 }

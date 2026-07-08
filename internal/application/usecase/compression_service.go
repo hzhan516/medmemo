@@ -29,10 +29,11 @@ const (
 
 // CompressionConfig 是会话压缩配置。
 type CompressionConfig struct {
-	Strategy    CompressionStrategyKind
-	AnchorCount int
-	RecentCount int
-	DropN       int
+	Strategy             CompressionStrategyKind
+	AnchorCount          int
+	RecentCount          int
+	DropN                int
+	DesensitizationLevel models.DesensitizationLevel
 }
 
 // CompressionResult 是会话压缩结果。
@@ -299,7 +300,7 @@ func (s *CompressionService) applyLLMSelfSummarize(ctx context.Context, history 
 
 	safeMiddle := middle
 	placeholders := map[string]string{}
-	if !isLoopbackProvider(provider) {
+	if !isLocalProvider(provider) && cfg.DesensitizationLevel != models.DesensitizationOff {
 		var ok bool
 		safeMiddle, placeholders, ok = s.deidentifyMessages(ctx, middle)
 		if !ok {
@@ -328,7 +329,8 @@ func (s *CompressionService) deidentifyMessages(ctx context.Context, msgs []mode
 	out := make([]models.Message, len(msgs))
 	merged := map[string]string{}
 	for i, m := range msgs {
-		res, err := s.deidentifier.Execute(ctx, m.Content)
+		// 会话压缩摘要走云端路径，使用标准级脱敏作为默认策略。
+		res, err := s.deidentifier.Execute(ctx, m.Content, models.DesensitizationStandard)
 		if err != nil {
 			return nil, nil, false
 		}

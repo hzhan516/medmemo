@@ -161,7 +161,7 @@ var _ port.ProviderStore = (*cloudProviderStore)(nil)
 // transformMockDeidentifier 将手机号替换为占位符，验证云端摘要路径的脱敏行为。
 type transformMockDeidentifier struct{}
 
-func (m *transformMockDeidentifier) Execute(_ context.Context, text string) (models.DeidentifyResult, error) {
+func (m *transformMockDeidentifier) Execute(_ context.Context, text string, _ models.DesensitizationLevel) (models.DeidentifyResult, error) {
 	phone := "13800138000"
 	placeholder := "{{PHONE_1}}"
 	if strings.Contains(text, phone) {

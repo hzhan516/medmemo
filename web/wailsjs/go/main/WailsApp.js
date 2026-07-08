@@ -126,6 +126,10 @@ export function GetDeletedConversations() {
   return window['go']['main']['WailsApp']['GetDeletedConversations']();
 }
 
+export function GetDesensitizationLevel() {
+  return window['go']['main']['WailsApp']['GetDesensitizationLevel']();
+}
+
 export function GetDisclaimerStatus() {
   return window['go']['main']['WailsApp']['GetDisclaimerStatus']();
 }
@@ -284,6 +288,10 @@ export function SetCompressionSettings(arg1) {
 
 export function SetDataRetentionDays(arg1) {
   return window['go']['main']['WailsApp']['SetDataRetentionDays'](arg1);
+}
+
+export function SetDesensitizationLevel(arg1) {
+  return window['go']['main']['WailsApp']['SetDesensitizationLevel'](arg1);
 }
 
 export function SetMemoryInjectionEnabled(arg1) {

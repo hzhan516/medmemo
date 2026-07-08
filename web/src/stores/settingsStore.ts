@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { ConfidenceBarMode } from '@/components/confidence/types'
-import { SetDataRetentionDays } from '@wails/go/main/WailsApp'
+import { SetDataRetentionDays, SetDesensitizationLevel, GetDesensitizationLevel } from '@wails/go/main/WailsApp'
 
 type Theme = 'light' | 'dark' | 'system'
 type ComplianceBarMode = 'always' | 'first' | 'off'
@@ -41,7 +41,8 @@ interface SettingsState {
   setConfidenceBarMode: (mode: ConfidenceBarMode) => void
   setAutoCheckUpdate: (enabled: boolean) => void
   setUpdateChannel: (channel: UpdateChannel) => void
-  setDesensitizationLevel: (level: DesensitizationLevel) => void
+  setDesensitizationLevel: (level: DesensitizationLevel) => Promise<void>
+  syncDesensitizationLevelFromBackend: () => Promise<void>
   setDataRetentionDays: (days: number) => void
   setActiveProviderId: (id: string | null) => void
   setActiveModelId: (id: string | null) => void
@@ -53,7 +54,7 @@ interface SettingsState {
 
 export const useSettingsStore = create<SettingsState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       theme: 'system',
       selectedModel: 'kimi-lite',
       complianceBarMode: 'always',
@@ -83,7 +84,30 @@ export const useSettingsStore = create<SettingsState>()(
       setConfidenceBarMode: (mode) => set({ confidenceBarMode: mode }),
       setAutoCheckUpdate: (enabled) => set({ autoCheckUpdate: enabled }),
       setUpdateChannel: (channel) => set({ updateChannel: channel }),
-      setDesensitizationLevel: (level) => set({ desensitizationLevel: level }),
+      setDesensitizationLevel: async (level) => {
+        // 乐观更新后同步后端；后端保存失败时回滚本地状态并向调用方抛出错误，
+        // 确保前后端脱敏级别始终一致（后端为权威源）。
+        const previous = get().desensitizationLevel
+        set({ desensitizationLevel: level })
+        try {
+          await SetDesensitizationLevel(level)
+        } catch (err: unknown) {
+          set({ desensitizationLevel: previous })
+          console.error('[settings] 同步脱敏级别到后端失败，已回滚:', err)
+          throw err instanceof Error ? err : new Error(String(err))
+        }
+      },
+      syncDesensitizationLevelFromBackend: async () => {
+        // 启动时以后端配置为准回读并校正本地状态，避免持久化的旧值与后端不一致。
+        try {
+          const backendLevel = await GetDesensitizationLevel()
+          if (backendLevel === 'standard' || backendLevel === 'strict' || backendLevel === 'off') {
+            set({ desensitizationLevel: backendLevel })
+          }
+        } catch (err: unknown) {
+          console.error('[settings] 回读后端脱敏级别失败:', err)
+        }
+      },
       setDataRetentionDays: (days) => {
         set({ dataRetentionDays: days })
         // 同步到后端配置文件，确保清理逻辑使用同一数值

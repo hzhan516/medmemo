@@ -63,6 +63,36 @@ P2Internal   // Internal information, soft replacement (reversible)
 P3Confidential // Confidential information, hard replacement (irreversible)
 ```
 
+### De-Identification Levels (standard / strict / off)
+
+The de-identification strength is user-configurable and applied only to cloud requests:
+
+| Level | Behavior |
+|:------|:---------|
+| **standard** | De-identifies the last user message with L1 rules + L2 NER at the default confidence threshold (0.75). |
+| **strict** | De-identifies **all** user messages; adds an L1.5 deterministic fallback stage (birth dates, age+name, addresses, medical/record numbers, license plates, passport numbers, IP addresses); and runs L2 NER at a **lower confidence threshold of 0.5** for higher recall. |
+| **off** | Skips outbound de-identification entirely. Only for users who explicitly accept the informed risk. |
+
+**Strict NER 0.5 threshold — rationale and trade-off.** Strict mode prioritizes recall to minimize
+outbound PII: lowering the threshold from 0.75 to 0.5 captures more low-confidence candidate entities.
+The trade-off is reduced precision and possible over-masking. Because L2/strict masking uses
+**P3 (irreversible)** replacement, over-masked spans cannot be restored, and prompt fidelity may be
+slightly reduced. This trade-off is acceptable for strict-mode users, who opt into stronger privacy at
+the cost of some prompt detail.
+
+**Strict fail-closed.** If de-identification fails for a message under strict mode, the system never
+sends the raw text. It degrades to L1-only de-identification (or fully masks the message if L1 also
+fails) and requires explicit user confirmation before sending the degraded content.
+
+### Local / Loopback Skip Assumption (Security Caveat)
+
+Local providers (Ollama / llama.cpp) and loopback endpoints (`localhost`, `127.0.0.1`, `::1`) skip
+outbound de-identification because data is assumed to **stay on the device**. This assumption breaks if
+a process listening on a loopback address acts as a **proxy that forwards requests to a cloud service**:
+in that case raw, un-de-identified text would leave the device. Treat a localhost proxy that forwards to
+the cloud with the same informed-risk posture as the `off` level. Do not point MedMemo at a loopback
+address unless you are certain the endpoint keeps data on-device.
+
 ---
 
 ## Four-Level Compliance Message Interception

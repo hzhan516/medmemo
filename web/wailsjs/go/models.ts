@@ -566,6 +566,7 @@ export namespace main {
 	    model: string;
 	    provider_id: string;
 	    ai_message_id: string;
+	    force_send: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new SendMessageRequest(source);
@@ -578,6 +579,7 @@ export namespace main {
 	        this.model = source["model"];
 	        this.provider_id = source["provider_id"];
 	        this.ai_message_id = source["ai_message_id"];
+	        this.force_send = source["force_send"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
