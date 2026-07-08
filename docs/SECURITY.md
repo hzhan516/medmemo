@@ -43,6 +43,18 @@ Network communication only occurs when the user explicitly enables a cloud-based
 
 All network requests are routed through a locally configured proxy and do not pass through MedMemo-controlled servers.
 
+### Local / Loopback De-Identification Skip Assumption
+
+MedMemo skips outbound de-identification for local providers (Ollama / llama.cpp) and loopback
+endpoints (`localhost`, `127.0.0.1`, `::1`), because such traffic is assumed to **stay on the device**.
+
+**Caveat:** this assumption is broken by a process that listens on a loopback address but **forwards
+requests to a cloud service** (a localhost-to-cloud proxy). In that scenario, raw text that was never
+de-identified leaves the device. Treat such a proxy with the same informed-risk posture as the `off`
+de-identification level, and only point MedMemo at a loopback endpoint when you are certain it keeps
+data on-device. See `docs/COMPLIANCE.md` for the de-identification levels and the strict-mode NER
+threshold rationale.
+
 ## Dependency Security Scanning
 
 The project uses the following tools for dependency security monitoring:
