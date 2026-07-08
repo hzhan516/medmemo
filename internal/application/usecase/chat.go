@@ -160,21 +160,26 @@ func injectSystemPrefix(msgs []models.Message, prefix string) []models.Message {
 	return result
 }
 
-// injectMemories 将记忆片段注入为 system message 前缀。
+// injectMemories 以权威档案事实注入，避免模型反复追问已确认信息。
 func injectMemories(msgs []models.Message, memories []*entity.HealthMemory) []models.Message {
 	if len(memories) == 0 {
 		return msgs
 	}
 	var parts []string
 	for _, m := range memories {
-		if m.Content != "" {
-			parts = append(parts, m.Content)
+		content := strings.TrimSpace(m.Content)
+		if content != "" {
+			parts = append(parts, "- "+content)
 		}
 	}
 	if len(parts) == 0 {
 		return msgs
 	}
-	memCtx := "以下是与当前话题相关的历史记忆，供你参考（不对外展示）：\n" + strings.Join(parts, "\n")
+	memCtx := "【该用户已确认的个人健康档案（内部参考，请勿原样展示给用户）】\n" +
+		"以下为该用户此前已确认的个人信息，视为权威且当前有效；" +
+		"当用户的问题需要这些信息时，请直接使用，不要重复向用户询问已知信息。" +
+		"（这些仅为个人事实记录，不构成诊断依据，回答仍须遵守健康信息合规要求）\n" +
+		strings.Join(parts, "\n")
 	return injectSystemPrefix(msgs, memCtx)
 }
 
