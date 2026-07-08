@@ -198,6 +198,7 @@ func (r *ProviderRepoSQLite) scanProvider(scanner interface {
 	p.CreatedAt = createdAt
 	p.UpdatedAt = updatedAt
 	p.AuthMethod = models.AuthMethod(authMethodStr)
+	p.Type = models.InferProviderType(p.APIHost)
 	if err := p.UnmarshalAuthParams(authParamsJSON); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal auth params for provider %s: %w", p.ID, err)
 	}

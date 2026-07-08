@@ -25,6 +25,32 @@ func newValidProviderConfig() ProviderConfig {
 	}
 }
 
+// TestInferProviderType 验证根据 API Host 推断 provider 类型。
+func TestInferProviderType(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		apiHost string
+		want    ProviderType
+	}{
+		{"http://localhost:11434", ProviderOllama},
+		{"http://127.0.0.1:11434", ProviderOllama},
+		{"http://[::1]:11434", ProviderOllama},
+		{"http://localhost:8080", ProviderLocal},
+		{"http://127.0.0.1:9999", ProviderLocal},
+		{"https://api.moonshot.cn/v1", ProviderKimi},
+		{"https://api.openai.com/v1", ProviderOpenAI},
+		{"https://dashscope.aliyuncs.com/compatible-mode/v1", ProviderQwen},
+		{"https://api.siliconflow.cn/v1", ProviderSiliconFlow},
+		{"https://api.example.com", ""},
+		{"not-a-url", ""},
+		{"", ""},
+	}
+
+	for _, tt := range cases {
+		assert.Equal(t, tt.want, InferProviderType(tt.apiHost), "apiHost=%q", tt.apiHost)
+	}
+}
+
 // TestProviderConfig_Validate_APIKey_Success 验证 api_key 方式正常通过。
 func TestProviderConfig_Validate_APIKey_Success(t *testing.T) {
 	t.Parallel()

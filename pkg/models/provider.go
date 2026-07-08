@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -77,6 +78,7 @@ type ProviderModel struct {
 type ProviderConfig struct {
 	ID          string          `json:"id"`
 	Name        string          `json:"name"`
+	Type        ProviderType    `json:"type"`
 	APIHost     string          `json:"apiHost"`
 	APIKey      string          `json:"apiKey,omitempty"`
 	ModelID     string          `json:"modelId"`
@@ -240,6 +242,57 @@ func (p *ProviderConfig) UnmarshalAuthParams(data string) error {
 		return fmt.Errorf("failed to unmarshal auth params: %w", err)
 	}
 	return nil
+}
+
+// InferProviderType 根据 API Host 推断 ProviderType。
+// 用于后端在仅有 api_host 时还原 provider 类型，辅助本地/云端判据。
+// 无法识别时返回空字符串。
+func InferProviderType(apiHost string) ProviderType {
+	u, err := url.Parse(apiHost)
+	if err != nil {
+		return ""
+	}
+
+	host := u.Hostname()
+	port := u.Port()
+
+	// 本地回环端点：按常用端口推断 Ollama / 通用本地，其余统一视为 local。
+	if host == "localhost" || host == "127.0.0.1" || host == "::1" {
+		switch port {
+		case "11434":
+			return ProviderOllama
+		case "8080":
+			return ProviderLocal
+		default:
+			return ProviderLocal
+		}
+	}
+
+	// 已知云端厂商默认域名。
+	knownCloudHosts := map[string]ProviderType{
+		"api.moonshot.cn":                   ProviderKimi,
+		"api.openai.com":                    ProviderOpenAI,
+		"dashscope.aliyuncs.com":            ProviderQwen,
+		"api.siliconflow.cn":                ProviderSiliconFlow,
+		"models.inference.ai.azure.com":     ProviderMicrosoft,
+		"api.anthropic.com":                 ProviderClaude,
+		"api.x.ai":                          ProviderGrok,
+		"ark.cn-beijing.volces.com":         ProviderDoubao,
+		"open.bigmodel.cn":                  ProviderGLM,
+		"api.deepseek.com":                  ProviderDeepSeek,
+		"api.minimax.chat":                  ProviderMiniMax,
+		"api.mi.ai":                         ProviderXiaomi,
+		"hunyuan.tencentcloudapi.com":       ProviderHunyuan,
+		"generativelanguage.googleapis.com": ProviderKimi, // 未定义 gemini，保守归为 kimi 云端
+	}
+
+	for h, pt := range knownCloudHosts {
+		if strings.Contains(host, h) {
+			return pt
+		}
+	}
+
+	return ""
 }
 
 // ModelConfig 单个模型配置信息。
