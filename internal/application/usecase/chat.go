@@ -104,6 +104,12 @@ type PreparedPrompt struct {
 	Messages  []models.Message
 	Deid      models.DeidentifyResult
 	Citations []entity.KnowledgeCitation
+	// DeidFailed 表示严格级下至少一条用户消息脱敏失败并已降级（fail-closed，见 #036）。
+	// 为 true 时发送路径应先征得用户确认，且绝不发送原文。
+	DeidFailed bool
+	// DeidDegraded 为严格级脱敏降级后的用户消息（L1-only 或完全遮蔽），
+	// 供确认预览与 ForceSend 发送使用，保证不外泄原文。
+	DeidDegraded []models.Message
 }
 
 // ChatResponse 对话响应 DTO。
@@ -181,15 +187,15 @@ func (c *ChatOrchestrator) AssemblePromptForEstimate(ctx context.Context, req Ch
 // PreparePrompt 返回完整预组装结果（消息 + 脱敏映射 + 知识引用），供估算与发送路径复用。
 // 内部仅做检索/脱敏，不写库、不调用 LLM。
 func (c *ChatOrchestrator) PreparePrompt(ctx context.Context, req ChatRequest) PreparedPrompt {
-	messages, deid, citations := c.prepareMessages(ctx, req)
-	return PreparedPrompt{Messages: messages, Deid: deid, Citations: citations}
+	return c.prepareMessages(ctx, req)
 }
 
-// deidentifyAllUserMessages 在严格级下对所有用户消息逐条脱敏，合并占位符映射，
-// 返回脱敏后的消息副本与聚合脱敏结果。单条脱敏失败时降级保留该条原文
-// （Phase 2 将改为 fail-closed，见 #036）。
-func (c *ChatOrchestrator) deidentifyAllUserMessages(ctx context.Context, msgs []models.Message, level models.DesensitizationLevel) ([]models.Message, models.DeidentifyResult) {
-	out := make([]models.Message, len(msgs))
+// deidentifyAllUserMessages 在严格级下对所有用户消息逐条脱敏，合并占位符映射。
+// fail-closed（#036）：任一条脱敏失败时不保留原文，改为降级处理：
+// 先尝试 L1-only 规则脱敏，若 L1 也失败则完全遮蔽该条内容；并置 failed=true。
+// 返回脱敏后的消息副本、聚合脱敏结果、降级后的用户消息（供确认预览/ForceSend）与失败标记。
+func (c *ChatOrchestrator) deidentifyAllUserMessages(ctx context.Context, msgs []models.Message, level models.DesensitizationLevel) (out []models.Message, deid models.DeidentifyResult, degraded []models.Message, failed bool) {
+	out = make([]models.Message, len(msgs))
 	copy(out, msgs)
 	merged := make(map[string]string)
 	var entities []models.SensitiveEntity
@@ -199,7 +205,9 @@ func (c *ChatOrchestrator) deidentifyAllUserMessages(ctx context.Context, msgs [
 		}
 		r, err := c.deidPipeline.Execute(ctx, out[i].Content, level)
 		if err != nil {
-			// 降级：保留原文继续（Phase 1 行为）
+			// fail-closed 降级：绝不外泄原文。
+			out[i].Content = degradeUserContent(out[i].Content)
+			failed = true
 			continue
 		}
 		out[i].Content = r.SafeText
@@ -208,18 +216,37 @@ func (c *ChatOrchestrator) deidentifyAllUserMessages(ctx context.Context, msgs [
 		}
 		entities = append(entities, r.Entities...)
 	}
-	return out, models.DeidentifyResult{Placeholder: merged, Entities: entities}
+	// 收集降级后的用户消息，供前端确认预览与 ForceSend 使用。
+	for _, m := range out {
+		if m.Role == models.RoleUser {
+			degraded = append(degraded, m)
+		}
+	}
+	return out, models.DeidentifyResult{Placeholder: merged, Entities: entities}, degraded, failed
 }
 
-// prepareMessages 执行输入脱敏、记忆检索与知识库检索，返回处理后的消息、脱敏结果与引用。
-func (c *ChatOrchestrator) prepareMessages(ctx context.Context, req ChatRequest) ([]models.Message, models.DeidentifyResult, []entity.KnowledgeCitation) {
+// degradeUserContent 对脱敏失败的严格级内容做兜底降级：优先 L1-only 规则脱敏，
+// L1 仍失败则完全遮蔽。保证返回内容不含原文级 PII。
+func degradeUserContent(content string) string {
+	engine := desensitizer.NewRuleEngine()
+	if res, err := engine.Process(content); err == nil {
+		return res.SafeText
+	}
+	// L1 也失败：完全遮蔽，避免任何原文出网。
+	return "[内容因严格级脱敏失败已被完全屏蔽]"
+}
+
+// prepareMessages 执行输入脱敏、记忆检索与知识库检索，返回完整预组装结果。
+func (c *ChatOrchestrator) prepareMessages(ctx context.Context, req ChatRequest) PreparedPrompt {
 	// 若已有预组装结果（发送路径中 maybeAutoCompress 已组装过），直接复用，避免重复检索/脱敏。
 	if req.Prepared != nil {
-		return req.Prepared.Messages, req.Prepared.Deid, req.Prepared.Citations
+		return *req.Prepared
 	}
 
 	messages := req.Messages
 	var deidResult models.DeidentifyResult
+	var deidFailed bool
+	var deidDegraded []models.Message
 
 	// 基于 provider 判断是否为本地模型；查询失败时保守视为云端（fail-closed）。
 	provider, _ := c.providerStore.Get(ctx, req.ProviderID)
@@ -228,8 +255,8 @@ func (c *ChatOrchestrator) prepareMessages(ctx context.Context, req ChatRequest)
 	// 输入脱敏（仅云端模型且级别非 off）
 	if !local && c.deidPipeline != nil && req.DesensitizationLevel != models.DesensitizationOff {
 		if req.DesensitizationLevel == models.DesensitizationStrict {
-			// 严格级：对所有用户消息脱敏，最大化降低出网 PII。
-			messages, deidResult = c.deidentifyAllUserMessages(ctx, req.Messages, req.DesensitizationLevel)
+			// 严格级：对所有用户消息脱敏，最大化降低出网 PII；失败时 fail-closed 降级。
+			messages, deidResult, deidDegraded, deidFailed = c.deidentifyAllUserMessages(ctx, req.Messages, req.DesensitizationLevel)
 		} else {
 			// 标准级：仅脱敏最后一条用户消息（当前发送的问题）。
 			lastIdx := findLastUserMessage(req.Messages)
@@ -241,7 +268,7 @@ func (c *ChatOrchestrator) prepareMessages(ctx context.Context, req ChatRequest)
 					copy(messages, req.Messages)
 					messages[lastIdx].Content = r.SafeText
 				}
-				// 脱敏失败降级，继续使用原始文本
+				// 标准级脱敏失败保持既有降级：继续使用原始文本（非 fail-closed）。
 			}
 		}
 	}
@@ -274,7 +301,13 @@ func (c *ChatOrchestrator) prepareMessages(ctx context.Context, req ChatRequest)
 		}
 	}
 
-	return messages, deidResult, citations
+	return PreparedPrompt{
+		Messages:     messages,
+		Deid:         deidResult,
+		Citations:    citations,
+		DeidFailed:   deidFailed,
+		DeidDegraded: deidDegraded,
+	}
 }
 
 // calculateConfidenceWithRawScore 包装 ConfidenceAggregator.CalculateWithRawScore，带 nil 防护。
@@ -326,7 +359,8 @@ func (c *ChatOrchestrator) Execute(ctx context.Context, req ChatRequest) (*ChatR
 		}
 	}
 
-	messages, deidResult, citations := c.prepareMessages(ctx, req)
+	prepared := c.prepareMessages(ctx, req)
+	messages, deidResult, citations := prepared.Messages, prepared.Deid, prepared.Citations
 
 	// 根据 ProviderID 动态创建 LLMClient
 	llmClient, err := c.resolveLLMClient(ctx, req.ProviderID)
@@ -417,7 +451,8 @@ func (c *ChatOrchestrator) StreamExecute(ctx context.Context, req ChatRequest, o
 	// L1 规则引擎 <1ms，L2 NER 正常 <100ms，30s 足够覆盖异常场景
 	prepCtx, prepCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer prepCancel()
-	messages, deidResult, citations := c.prepareMessages(prepCtx, req)
+	prepared := c.prepareMessages(prepCtx, req)
+	messages, deidResult, citations := prepared.Messages, prepared.Deid, prepared.Citations
 
 	// provider 查询使用独立 context，确保不受预处理耗时影响
 	resolveCtx, resolveCancel := context.WithTimeout(context.Background(), 10*time.Second)

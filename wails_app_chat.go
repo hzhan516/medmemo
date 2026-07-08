@@ -22,6 +22,9 @@ type SendMessageRequest struct {
 	Model          string           `json:"model"`
 	ProviderID     string           `json:"provider_id"`
 	AIMessageID    string           `json:"ai_message_id"`
+	// ForceSend 表示用户已在严格级脱敏降级确认弹窗中确认继续发送。
+	// 为 true 时使用降级后的安全内容发送（绝不发送原文）。
+	ForceSend bool `json:"force_send"`
 }
 
 // SendMessageResponse 发送消息响应。
@@ -51,6 +54,11 @@ func (a *WailsApp) SendMessage(req SendMessageRequest) (*SendMessageResponse, er
 	}
 
 	a.maybeAutoCompress(ctx, &chatReq)
+
+	// 严格级 fail-closed：脱敏降级时需用户确认后方可发送。
+	if a.strictDeidBlocksSend(ctx, &chatReq, req.ForceSend, req.ConversationID) {
+		return &SendMessageResponse{Warnings: []string{"DEID_CONFIRM_REQUIRED"}}, nil
+	}
 
 	resp, err := a.chatOrchestrator.Execute(ctx, chatReq)
 	if err != nil {
@@ -110,6 +118,11 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) (err error) {
 	}
 
 	a.maybeAutoCompress(ctx, &chatReq)
+
+	// 严格级 fail-closed：脱敏降级时需用户确认后方可发送。
+	if a.strictDeidBlocksSend(ctx, &chatReq, req.ForceSend, req.ConversationID) {
+		return nil
+	}
 
 	// 统一流式处理层：将原始 callback 包装为结构化 StreamChunk 序列
 	broker := stream.NewBroker(req.Model, "", func(chunk models.StreamChunk) {
@@ -192,6 +205,58 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) (err error) {
 
 	broker.Done(usage)
 	return nil
+}
+
+// strictDeidNeedsConfirm 是纯判定：严格级下脱敏降级且用户未强制发送时需确认。
+func strictDeidNeedsConfirm(level models.DesensitizationLevel, prepared *usecase.PreparedPrompt, forceSend bool) bool {
+	return level == models.DesensitizationStrict && prepared != nil && prepared.DeidFailed && !forceSend
+}
+
+// deidDegradedPreview 从降级后的用户消息构造前端确认预览（内容已脱敏，不含原文级 PII）。
+func deidDegradedPreview(msgs []models.Message) []string {
+	preview := make([]string, 0, len(msgs))
+	for _, m := range msgs {
+		preview = append(preview, m.Content)
+	}
+	return preview
+}
+
+// strictDeidBlocksSend 处理严格级 fail-closed 确认流。
+// 返回 true 表示本次发送被阻断（已发出确认事件，等待用户确认）。
+// 未阻断（包括未降级、或 ForceSend=true）时返回 false，由调用方继续发送；
+// 此时 chatReq.Prepared 中的消息已为降级安全内容，绝不外发原文。
+func (a *WailsApp) strictDeidBlocksSend(ctx context.Context, chatReq *usecase.ChatRequest, forceSend bool, convID string) bool {
+	if chatReq.DesensitizationLevel != models.DesensitizationStrict {
+		return false
+	}
+
+	// 确保有预组装结果可供判定（压缩路径会将 Prepared 置空，此处补算一次并复用）。
+	prepared := chatReq.Prepared
+	if prepared == nil {
+		p := a.chatOrchestrator.PreparePrompt(ctx, *chatReq)
+		prepared = &p
+		chatReq.Prepared = prepared
+	}
+
+	if !prepared.DeidFailed {
+		return false
+	}
+
+	if forceSend {
+		// 用户已确认：以降级后的安全内容发送（prepared.Messages 已降级），不外发原文。
+		// 审计（仅记录计数，不含 PII 明文）。
+		fmt.Printf("[deid][strict] user confirmed force-send with degraded content, degraded_msgs=%d\n", len(prepared.DeidDegraded))
+		return false
+	}
+
+	// 需要用户确认：发出事件并阻断发送。预览内容为降级后安全文本。
+	a.safeEventsEmit("chat:deid:confirm", map[string]any{
+		"conversation_id": convID,
+		"preview":         deidDegradedPreview(prepared.DeidDegraded),
+	})
+	// 审计（不含 PII 明文）。
+	fmt.Printf("[deid][strict] fail-closed: awaiting user confirmation, degraded_msgs=%d\n", len(prepared.DeidDegraded))
+	return true
 }
 
 // maybeAutoCompress 在发送前估算上下文用量比例；若达到自动压缩阈值，

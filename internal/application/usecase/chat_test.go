@@ -1380,3 +1380,53 @@ func TestChatOrchestrator_Standard_MasksLastUserMessageOnly(t *testing.T) {
 	assert.Equal(t, "第一条含隐私", mock.lastMessages[0].Content, "标准级不脱敏首条用户消息")
 	assert.Equal(t, "[MASKED]", mock.lastMessages[2].Content, "标准级仅脱敏末条用户消息")
 }
+
+// TestChatOrchestrator_Strict_FailClosed_Degrades 验证严格级脱敏失败时 fail-closed 降级，
+// 标记 DeidFailed 且降级内容与组装消息均不含原文级 PII。
+func TestChatOrchestrator_Strict_FailClosed_Degrades(t *testing.T) {
+	t.Parallel()
+	mock := &mockLLMClient{chatReply: "收到"}
+	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
+	deid := &mockDeidentifier{err: fmt.Errorf("pipeline down")}
+	orch := newTestOrchestrator(mock, comp, deid, nil, nil)
+
+	req := ChatRequest{
+		Messages:             []models.Message{{Role: models.RoleUser, Content: "我的身份证110101199001011234"}},
+		Model:                models.ProviderKimi,
+		ProviderID:           "test-provider",
+		DesensitizationLevel: models.DesensitizationStrict,
+	}
+
+	prepared := orch.PreparePrompt(context.Background(), req)
+	assert.True(t, prepared.DeidFailed, "严格级脱敏失败应置 DeidFailed")
+	require.NotEmpty(t, prepared.DeidDegraded)
+	assert.NotContains(t, prepared.DeidDegraded[len(prepared.DeidDegraded)-1].Content, "110101199001011234",
+		"降级内容不应外泄原文 PII")
+
+	// 组装后的消息（实际发送）同样不得含原文 PII。
+	lastIdx := findLastUserMessage(prepared.Messages)
+	require.GreaterOrEqual(t, lastIdx, 0)
+	assert.NotContains(t, prepared.Messages[lastIdx].Content, "110101199001011234")
+}
+
+// TestChatOrchestrator_Standard_KeepsRawFallback 验证标准级脱敏失败保持既有原文回退（非 fail-closed）。
+func TestChatOrchestrator_Standard_KeepsRawFallback(t *testing.T) {
+	t.Parallel()
+	mock := &mockLLMClient{chatReply: "收到"}
+	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
+	deid := &mockDeidentifier{err: fmt.Errorf("pipeline down")}
+	orch := newTestOrchestrator(mock, comp, deid, nil, nil)
+
+	req := ChatRequest{
+		Messages:             []models.Message{{Role: models.RoleUser, Content: "原始内容 X"}},
+		Model:                models.ProviderKimi,
+		ProviderID:           "test-provider",
+		DesensitizationLevel: models.DesensitizationStandard,
+	}
+
+	prepared := orch.PreparePrompt(context.Background(), req)
+	assert.False(t, prepared.DeidFailed, "标准级不触发 fail-closed")
+	lastIdx := findLastUserMessage(prepared.Messages)
+	require.GreaterOrEqual(t, lastIdx, 0)
+	assert.Equal(t, "原始内容 X", prepared.Messages[lastIdx].Content, "标准级失败保持原文回退")
+}
