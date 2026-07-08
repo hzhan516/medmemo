@@ -44,3 +44,15 @@ func (d DesensitizationLevel) Normalize() DesensitizationLevel {
 func NormalizeDesensitizationLevel(level string) DesensitizationLevel {
 	return DesensitizationLevel(level).Normalize()
 }
+
+// CanonicalizeDesensitizationLevel 先规范化（去空白、转小写）再校验输入字符串。
+// 与 NormalizeDesensitizationLevel 不同，本函数对非法值返回 ok=false，
+// 不会静默回退到 standard —— 用于设置/持久化入口，确保非法输入被显式拒绝，
+// 同时接受合法值的大小写/空白变体（如 "OFF"、" Strict "）。
+func CanonicalizeDesensitizationLevel(level string) (DesensitizationLevel, bool) {
+	canonical := DesensitizationLevel(strings.ToLower(strings.TrimSpace(level)))
+	if canonical.IsValid() {
+		return canonical, true
+	}
+	return "", false
+}

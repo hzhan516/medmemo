@@ -32,3 +32,31 @@ func TestDesensitizationLevel_Constants(t *testing.T) {
 	assert.Equal(t, DesensitizationLevel("strict"), DesensitizationStrict)
 	assert.Equal(t, DesensitizationLevel("off"), DesensitizationOff)
 }
+
+func TestCanonicalizeDesensitizationLevel_Accept(t *testing.T) {
+	t.Parallel()
+	cases := map[string]DesensitizationLevel{
+		"standard":  DesensitizationStandard,
+		"strict":    DesensitizationStrict,
+		"off":       DesensitizationOff,
+		"OFF":       DesensitizationOff,
+		"Strict":    DesensitizationStrict,
+		" standard": DesensitizationStandard,
+		"OFF ":      DesensitizationOff,
+		"  Off  ":   DesensitizationOff,
+	}
+	for input, want := range cases {
+		got, ok := CanonicalizeDesensitizationLevel(input)
+		assert.True(t, ok, "input %q should be accepted", input)
+		assert.Equal(t, want, got, "input %q", input)
+	}
+}
+
+func TestCanonicalizeDesensitizationLevel_Reject(t *testing.T) {
+	t.Parallel()
+	for _, input := range []string{"", "xyz", "standardx", "of", "none", "loose"} {
+		got, ok := CanonicalizeDesensitizationLevel(input)
+		assert.False(t, ok, "input %q should be rejected", input)
+		assert.Equal(t, DesensitizationLevel(""), got, "rejected input must not fall back to a valid level")
+	}
+}

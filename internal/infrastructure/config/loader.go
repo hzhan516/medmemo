@@ -301,8 +301,8 @@ func SaveDataRetentionDays(days int) error {
 // SaveDesensitizationLevel 将脱敏级别持久化到配置文件。
 // 优先写入 ~/.medmemo/config.yaml，不丢失文件中已有其他字段。
 func SaveDesensitizationLevel(level string) error {
-	normalized := models.NormalizeDesensitizationLevel(level)
-	if normalized != models.DesensitizationLevel(level) {
+	normalized, ok := models.CanonicalizeDesensitizationLevel(level)
+	if !ok {
 		return fmt.Errorf("invalid desensitization level: %s", level)
 	}
 

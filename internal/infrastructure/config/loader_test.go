@@ -360,3 +360,28 @@ func TestLoader_Load_DesensitizationLevel_Normalize(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, models.DesensitizationStandard, cfg.DesensitizationLevel)
 }
+
+// TestSaveDesensitizationLevel_Accept 验证合法级别（含大小写变体）被规范化后持久化。
+func TestSaveDesensitizationLevel_Accept(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	require.NoError(t, SaveDesensitizationLevel("OFF"))
+
+	data, err := os.ReadFile(filepath.Join(home, ".medmemo", "config.yaml"))
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "desensitization_level: \"off\"")
+}
+
+// TestSaveDesensitizationLevel_Reject 验证非法级别被拒绝且不写入配置文件。
+func TestSaveDesensitizationLevel_Reject(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	err := SaveDesensitizationLevel("xyz")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid desensitization level")
+
+	_, statErr := os.Stat(filepath.Join(home, ".medmemo", "config.yaml"))
+	assert.True(t, os.IsNotExist(statErr), "非法级别不应写入配置文件")
+}

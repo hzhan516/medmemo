@@ -169,8 +169,8 @@ func (a *WailsApp) SetDataRetentionDays(days int) error {
 // SetDesensitizationLevel 设置脱敏级别并持久化到配置文件。
 // 仅接受标准小写值 standard / strict / off；非法值将返回错误，不会写入配置。
 func (a *WailsApp) SetDesensitizationLevel(level string) error {
-	lvl := models.DesensitizationLevel(level)
-	if !lvl.IsValid() {
+	lvl, ok := models.CanonicalizeDesensitizationLevel(level)
+	if !ok {
 		return fmt.Errorf("invalid desensitization level: %s (must be standard, strict, or off)", level)
 	}
 	a.config.DesensitizationLevel = lvl
