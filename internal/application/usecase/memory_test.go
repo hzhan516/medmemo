@@ -657,25 +657,95 @@ func TestMemoryRetriever_retrieveSemantic_error(t *testing.T) {
 	assert.Contains(t, err.Error(), "search failed")
 }
 
+func TestMemoryRetriever_semanticSearchFiltersAndSorts(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	facts := map[string]*entity.ExtractedFact{
+		"fact_a": {
+			FactID: "fact_a", Subject: "用户", Predicate: "体重是", Object: "110kg",
+			Confidence: 0.9, Status: entity.FactStatusApproved, CreatedAt: now,
+		},
+		"fact_b": {
+			FactID: "fact_b", Subject: "用户", Predicate: "身高是", Object: "180cm",
+			Confidence: 0.8, Status: entity.FactStatusApproved, CreatedAt: now,
+		},
+		"fact_low": {
+			FactID: "fact_low", Subject: "用户", Predicate: "血压是", Object: "120/80",
+			Confidence: 0.5, Status: entity.FactStatusApproved, CreatedAt: now,
+		},
+		"fact_pending": {
+			FactID: "fact_pending", Subject: "用户", Predicate: "患有", Object: "高血压",
+			Confidence: 0.95, Status: entity.FactStatusPending, CreatedAt: now,
+		},
+	}
+	embeddings := []*entity.ScoredEmbedding{
+		{SemanticEmbedding: &entity.SemanticEmbedding{FactID: "fact_a"}, Similarity: 0.7},
+		{SemanticEmbedding: &entity.SemanticEmbedding{FactID: "fact_b"}, Similarity: 0.95},
+		{SemanticEmbedding: &entity.SemanticEmbedding{FactID: "fact_low"}, Similarity: 0.9},
+		{SemanticEmbedding: &entity.SemanticEmbedding{FactID: "fact_pending"}, Similarity: 0.99},
+		{SemanticEmbedding: &entity.SemanticEmbedding{FactID: "missing"}, Similarity: 0.99},
+	}
+	migrationState := NewMigrationState()
+	migrationState.SetComplete(true)
+	retriever := NewMemoryRetriever(
+		&stubEmbeddingService{},
+		&stubEmbeddingRepository{results: embeddings},
+		&stubFactRepository{facts: facts}, nil,
+		NewDecayScorer(),
+		migrationState,
+		nil,
+		nil,
+	)
+
+	memories, err := retriever.semanticSearch(context.Background(), []float32{1, 2, 3}, 2)
+	require.NoError(t, err)
+	require.Len(t, memories, 2)
+	assert.Equal(t, models.MemoryID("fact_b"), memories[0].ID)
+	assert.Equal(t, models.MemoryID("fact_a"), memories[1].ID)
+	assert.Contains(t, memories[0].Content, "身高是")
+	assert.Greater(t, memories[0].Confidence, memories[1].Confidence)
+}
+
 func TestMemoryRetriever_mergeMemories_sessionGap(t *testing.T) {
 	t.Parallel()
-	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, &stubFactRepository{}, nil, NewDecayScorer(), nil, nil, nil)
+	now := time.Now().UTC()
+	factRepo := &stubFactRepository{
+		findBySessionFunc: func(_ context.Context, _ string) ([]*entity.ExtractedFact, error) {
+			return []*entity.ExtractedFact{
+				{
+					FactID: "m1", Subject: "用户", Predicate: "体重是", Object: "110kg",
+					Confidence: 0.9, Status: entity.FactStatusApproved, CreatedAt: now,
+				},
+				{
+					FactID: "gap", Subject: "用户", Predicate: "对...过敏", Object: "青霉素",
+					Confidence: 0.95, Status: entity.FactStatusApproved, CreatedAt: now,
+				},
+				{
+					FactID: "pending", Subject: "用户", Predicate: "患有", Object: "高血压",
+					Confidence: 0.95, Status: entity.FactStatusPending, CreatedAt: now,
+				},
+			}, nil
+		},
+	}
+	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, factRepo, nil, NewDecayScorer(), nil, nil, nil)
 
 	mentionMemories := []*entity.HealthMemory{
 		{ID: "m1", Content: "mention 1"},
 		{ID: "m2", Content: "mention 2"},
 	}
 	semanticMemories := []*entity.HealthMemory{
-		{ID: "m2", Content: "semantic 2"}, // 与 mention 重复，应去重
-		{ID: "s3", Content: "semantic 3"}, // 新记忆
+		{ID: "m2", Content: "semantic 2"},
+		{ID: "gap", Content: "semantic gap"},
+		{ID: "s3", Content: "semantic 3"},
 	}
 
 	result := retriever.mergeMemories(mentionMemories, semanticMemories, true, "test-session")
 
-	require.Len(t, result, 3)
+	require.Len(t, result, 4)
 	assert.Equal(t, "mention 1", result[0].Content)
 	assert.Equal(t, "mention 2", result[1].Content)
-	assert.Equal(t, "semantic 3", result[2].Content)
+	assert.Equal(t, "用户 对...过敏 青霉素", result[2].Content)
+	assert.Equal(t, "semantic 3", result[3].Content)
 }
 
 func TestMemoryRetriever_checkSessionGap(t *testing.T) {
@@ -872,6 +942,58 @@ func TestRetrieveWithDiagnostics_IntentPath(t *testing.T) {
 	assert.NotEmpty(t, diag.PathStatuses)
 
 	_ = memories
+}
+
+func TestIntentConfidenceToLevel_AllLevels(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, 3, intentConfidenceToLevel(ConfidenceHigh))
+	assert.Equal(t, 2, intentConfidenceToLevel(ConfidenceMedium))
+	assert.Equal(t, 1, intentConfidenceToLevel(ConfidenceLow))
+	assert.Equal(t, 0, intentConfidenceToLevel(IntentConfidence(0)))
+}
+
+func TestRetrieveWithDiagnostics_PureSemanticPath(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+
+	facts := map[string]*entity.ExtractedFact{
+		"fact_allergy": {
+			FactID: "fact_allergy", Subject: "用户", Predicate: "对...过敏", Object: "青霉素",
+			Confidence: 0.95, Status: entity.FactStatusApproved, CreatedAt: now,
+		},
+	}
+
+	embeddings := []*entity.ScoredEmbedding{
+		{SemanticEmbedding: &entity.SemanticEmbedding{FactID: "fact_allergy"}, Similarity: 0.9},
+	}
+
+	factRepo := &stubFactRepositoryWithSubjects{
+		stubFactRepository: stubFactRepository{facts: facts},
+		facts:              []*entity.ExtractedFact{facts["fact_allergy"]},
+	}
+	retriever := NewMemoryRetriever(
+		&stubEmbeddingService{},
+		&stubEmbeddingRepository{results: embeddings},
+		factRepo, nil,
+		NewDecayScorer(),
+		nil,
+		nil,
+		nil,
+	)
+
+	diag, memories, err := retriever.retrieveWithDiagnostics(context.Background(), "注射前需要提醒医生哪些个人情况", "session_semantic", 3)
+	require.NoError(t, err)
+
+	assert.Nil(t, diag.DetectedIntent)
+	assert.Empty(t, diag.IntentCandidates)
+	assert.Empty(t, diag.KeywordCandidates)
+	require.NotEmpty(t, diag.VectorCandidates)
+	assert.Equal(t, "fact_allergy", diag.VectorCandidates[0].FactID)
+	require.NotEmpty(t, diag.SelectedMemories)
+	assert.Equal(t, "fact_allergy", diag.SelectedMemories[0].FactID)
+	require.NotEmpty(t, memories)
+	assert.Equal(t, models.MemoryID("fact_allergy"), memories[0].ID)
 }
 
 func TestRetrieveWithDiagnostics_AllPathsFailGracefully(t *testing.T) {

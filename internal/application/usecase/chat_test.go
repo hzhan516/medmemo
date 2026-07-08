@@ -722,35 +722,60 @@ func TestFindLastUserMessage(t *testing.T) {
 	assert.Equal(t, -1, findLastUserMessage([]models.Message{}))
 }
 
-// TestInjectMemories 验证记忆注入逻辑。
-func TestInjectMemories(t *testing.T) {
+func TestInjectMemories_Authoritative(t *testing.T) {
 	t.Parallel()
-	// 无 system message 时插入 system
+
 	msgs := []models.Message{
 		{Role: models.RoleUser, Content: "hello"},
 	}
-	memories := []*entity.HealthMemory{{Content: "记忆1"}}
+	memories := []*entity.HealthMemory{
+		{Content: "用户 体重是 110kg"},
+		{Content: " 用户 对青霉素过敏 "},
+	}
+
 	result := injectMemories(msgs, memories)
 	require.Len(t, result, 2)
 	assert.Equal(t, models.RoleSystem, result[0].Role)
-	assert.Contains(t, result[0].Content, "记忆1")
+	assert.Contains(t, result[0].Content, "已确认的个人健康档案")
+	assert.Contains(t, result[0].Content, "视为权威且当前有效")
+	assert.Contains(t, result[0].Content, "不要重复向用户询问已知信息")
+	assert.Contains(t, result[0].Content, "不构成诊断依据")
+	assert.Contains(t, result[0].Content, "- 用户 体重是 110kg")
+	assert.Contains(t, result[0].Content, "- 用户 对青霉素过敏")
 	assert.Equal(t, models.RoleUser, result[1].Role)
 
-	// 有 system message 时追加到现有 system
 	msgs = []models.Message{
-		{Role: models.RoleSystem, Content: "你是医生"},
+		{Role: models.RoleSystem, Content: "你是健康信息助手"},
 		{Role: models.RoleUser, Content: "hello"},
 	}
 	result = injectMemories(msgs, memories)
 	require.Len(t, result, 2)
 	assert.Equal(t, models.RoleSystem, result[0].Role)
-	assert.Contains(t, result[0].Content, "记忆1")
-	assert.Contains(t, result[0].Content, "你是医生")
+	assert.Contains(t, result[0].Content, "- 用户 体重是 110kg")
+	assert.Contains(t, result[0].Content, "你是健康信息助手")
 
-	// 空记忆时不改变
 	result = injectMemories(msgs, nil)
 	require.Len(t, result, 2)
-	assert.Equal(t, "你是医生", result[0].Content)
+	assert.Equal(t, "你是健康信息助手", result[0].Content)
+
+	result = injectMemories(msgs, []*entity.HealthMemory{{Content: "  "}})
+	require.Len(t, result, 2)
+	assert.Equal(t, "你是健康信息助手", result[0].Content)
+}
+
+func TestCitationSourceType(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, entity.SourceMedicalGuideline, citationSourceType(entity.KnowledgeCitation{
+		Title: "高血压诊疗指南",
+	}))
+	assert.Equal(t, entity.SourceMedicalGuideline, citationSourceType(entity.KnowledgeCitation{
+		Source: "expert consensus",
+	}))
+	assert.Equal(t, entity.SourceEvidenceDB, citationSourceType(entity.KnowledgeCitation{
+		Title:  "健康科普",
+		Source: "local-kb",
+	}))
 }
 
 // TestIsLocalProvider 验证本地 provider 判断。
