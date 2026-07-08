@@ -763,6 +763,21 @@ func TestInjectMemories_Authoritative(t *testing.T) {
 	assert.Equal(t, "你是健康信息助手", result[0].Content)
 }
 
+func TestCitationSourceType(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, entity.SourceMedicalGuideline, citationSourceType(entity.KnowledgeCitation{
+		Title: "高血压诊疗指南",
+	}))
+	assert.Equal(t, entity.SourceMedicalGuideline, citationSourceType(entity.KnowledgeCitation{
+		Source: "expert consensus",
+	}))
+	assert.Equal(t, entity.SourceEvidenceDB, citationSourceType(entity.KnowledgeCitation{
+		Title:  "健康科普",
+		Source: "local-kb",
+	}))
+}
+
 // TestIsLocalProvider 验证本地 provider 判断。
 func TestIsLocalProvider(t *testing.T) {
 	t.Parallel()
