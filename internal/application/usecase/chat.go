@@ -87,10 +87,11 @@ func NewChatOrchestrator(deps ChatOrchestratorDeps) *ChatOrchestrator {
 
 // ChatRequest 对话请求 DTO。
 type ChatRequest struct {
-	ConversationID models.ConversationID
-	Messages       []models.Message
-	Model          models.ProviderType
-	ProviderID     string
+	ConversationID       models.ConversationID
+	Messages             []models.Message
+	Model                models.ProviderType
+	ProviderID           string
+	DesensitizationLevel models.DesensitizationLevel
 	// Prepared 为可选的预组装结果。非 nil 时 prepareMessages 直接复用，
 	// 跳过记忆/知识检索与脱敏，避免发送路径中重复组装（见 maybeAutoCompress）。
 	Prepared *PreparedPrompt
@@ -111,9 +112,16 @@ type ChatResponse struct {
 	Warnings         []string
 }
 
-// isLocalModel 判断是否为本地模型（跳过脱敏）。
-func isLocalModel(pt models.ProviderType) bool {
-	return pt == models.ProviderOllama || pt == models.ProviderLocal
+// isLocalProvider 判断 provider 是否为本地/回环端点。
+// 本地模型数据不出设备，可跳过脱敏；provider 查询失败时保守返回 false（视为云端）。
+func isLocalProvider(provider *models.ProviderConfig) bool {
+	if provider == nil {
+		return false
+	}
+	if provider.Type == models.ProviderOllama || provider.Type == models.ProviderLocal {
+		return true
+	}
+	return isLoopbackProvider(provider)
 }
 
 // findLastUserMessage 定位最后一条用户消息，无则返回 -1。
@@ -186,10 +194,15 @@ func (c *ChatOrchestrator) prepareMessages(ctx context.Context, req ChatRequest)
 	messages := req.Messages
 	var deidResult models.DeidentifyResult
 
-	// 输入脱敏（仅云端模型）
-	if !isLocalModel(req.Model) && c.deidPipeline != nil {
+	// 基于 provider 判断是否为本地模型；查询失败时保守视为云端（fail-closed）。
+	provider, _ := c.providerStore.Get(ctx, req.ProviderID)
+	local := isLocalProvider(provider)
+
+	// 输入脱敏（仅云端模型且级别非 off）
+	if !local && c.deidPipeline != nil && req.DesensitizationLevel != models.DesensitizationOff {
 		lastIdx := findLastUserMessage(req.Messages)
 		if lastIdx >= 0 {
+			// TODO(#036): strict 兜底策略待合规负责人确认后实现，当前严格级别等价于 standard。
 			r, err := c.deidPipeline.Execute(ctx, req.Messages[lastIdx].Content)
 			if err == nil {
 				deidResult = r
@@ -296,7 +309,8 @@ func (c *ChatOrchestrator) Execute(ctx context.Context, req ChatRequest) (*ChatR
 	}
 
 	// 输出还原（仅云端模型且有 P2 占位符时）
-	if !isLocalModel(req.Model) && len(deidResult.Placeholder) > 0 {
+	provider, _ := c.providerStore.Get(ctx, req.ProviderID)
+	if !isLocalProvider(provider) && len(deidResult.Placeholder) > 0 {
 		reply = desensitizer.Restore(models.DeidentifyResult{
 			SafeText:    reply,
 			Placeholder: deidResult.Placeholder,
@@ -392,7 +406,8 @@ func (c *ChatOrchestrator) StreamExecute(ctx context.Context, req ChatRequest, o
 
 	// 输出还原
 	reply := fullReply.String()
-	if !isLocalModel(req.Model) && len(deidResult.Placeholder) > 0 {
+	provider, _ := c.providerStore.Get(ctx, req.ProviderID)
+	if !isLocalProvider(provider) && len(deidResult.Placeholder) > 0 {
 		reply = desensitizer.Restore(models.DeidentifyResult{
 			SafeText:    reply,
 			Placeholder: deidResult.Placeholder,

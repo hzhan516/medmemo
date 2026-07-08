@@ -43,10 +43,11 @@ func (a *WailsApp) SendMessage(req SendMessageRequest) (*SendMessageResponse, er
 	defer cancel()
 
 	chatReq := usecase.ChatRequest{
-		ConversationID: models.ConversationID(req.ConversationID),
-		Messages:       req.Messages,
-		Model:          models.ProviderType(req.Model),
-		ProviderID:     req.ProviderID,
+		ConversationID:       models.ConversationID(req.ConversationID),
+		Messages:             req.Messages,
+		Model:                models.ProviderType(req.Model),
+		ProviderID:           req.ProviderID,
+		DesensitizationLevel: a.config.DesensitizationLevel,
 	}
 
 	a.maybeAutoCompress(ctx, &chatReq)
@@ -101,10 +102,11 @@ func (a *WailsApp) SendMessageStream(req SendMessageRequest) (err error) {
 	}()
 
 	chatReq := usecase.ChatRequest{
-		ConversationID: models.ConversationID(req.ConversationID),
-		Messages:       req.Messages,
-		Model:          models.ProviderType(req.Model),
-		ProviderID:     req.ProviderID,
+		ConversationID:       models.ConversationID(req.ConversationID),
+		Messages:             req.Messages,
+		Model:                models.ProviderType(req.Model),
+		ProviderID:           req.ProviderID,
+		DesensitizationLevel: a.config.DesensitizationLevel,
 	}
 
 	a.maybeAutoCompress(ctx, &chatReq)

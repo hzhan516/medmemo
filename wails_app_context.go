@@ -133,10 +133,11 @@ func (a *WailsApp) EstimateContextUsage(req EstimateContextUsageRequest) (*Conte
 	defer cancel()
 
 	assembled := a.chatOrchestrator.AssemblePromptForEstimate(ctx, usecase.ChatRequest{
-		ConversationID: models.ConversationID(req.ConversationID),
-		Messages:       req.Messages,
-		Model:          models.ProviderType(req.ModelID),
-		ProviderID:     req.ProviderID,
+		ConversationID:       models.ConversationID(req.ConversationID),
+		Messages:             req.Messages,
+		Model:                models.ProviderType(req.ModelID),
+		ProviderID:           req.ProviderID,
+		DesensitizationLevel: a.config.DesensitizationLevel,
 	})
 
 	result, err := a.contextEstimator.Estimate(ctx, usecase.EstimatorInput{
@@ -217,7 +218,9 @@ func buildCompressionConfigFrom(s models.CompressionSettings, activeProviderID, 
 
 // buildCompressionConfig 依据应用配置返回压缩配置与用于压缩的 provider/model。
 func (a *WailsApp) buildCompressionConfig(activeProviderID, activeModelID string) (usecase.CompressionConfig, string, string) {
-	return buildCompressionConfigFrom(a.config.CompressionSettings, activeProviderID, activeModelID)
+	cfg, providerID, modelID := buildCompressionConfigFrom(a.config.CompressionSettings, activeProviderID, activeModelID)
+	cfg.DesensitizationLevel = a.config.DesensitizationLevel
+	return cfg, providerID, modelID
 }
 
 // CompressSession 触发当前会话的上下文压缩，并在完成后通知前端刷新用量。

@@ -388,7 +388,7 @@ func TestChatOrchestrator_Execute_Restore(t *testing.T) {
 	assert.Equal(t, "已发送至 test@example.com", resp.Reply)
 }
 
-// TestChatOrchestrator_Execute_LocalModelSkipDeid 验证本地模型跳过脱敏。
+// TestChatOrchestrator_Execute_LocalModelSkipDeid 验证本地 provider 跳过脱敏。
 func TestChatOrchestrator_Execute_LocalModelSkipDeid(t *testing.T) {
 	t.Parallel()
 	mock := &mockLLMClient{chatReply: "本地回复"}
@@ -400,12 +400,23 @@ func TestChatOrchestrator_Execute_LocalModelSkipDeid(t *testing.T) {
 			Placeholder:  map[string]string{"{{EMAIL_abc12345}}": "test@example.com"},
 		},
 	}
-	orch := newTestOrchestrator(mock, comp, deid, nil, nil)
+	factory := &mockLLMClientFactory{client: mock}
+	store := &mockProviderStore{provider: &models.ProviderConfig{ID: "local-provider", Type: models.ProviderOllama, APIHost: "http://localhost:11434", ModelID: "llama3"}}
+	orch := NewChatOrchestrator(ChatOrchestratorDeps{
+		LLMFactory:           factory,
+		ProviderStore:        store,
+		Compliance:           comp,
+		DeidPipeline:         deid,
+		ConfidenceAggregator: NewConfidenceAggregator(),
+		FactRepo:             &mockFactRepository{},
+		IntentResolver:       NewIntentResolver(NewQueryExpansionService()),
+		LocalAnswer:          NewLocalAnswerService(NewLocalAnswerConfig()),
+	})
 
 	req := ChatRequest{
 		Messages:   []models.Message{{Role: models.RoleUser, Content: "联系我 test@example.com"}},
 		Model:      models.ProviderOllama,
-		ProviderID: "test-provider",
+		ProviderID: "local-provider",
 	}
 
 	resp, err := orch.Execute(context.Background(), req)
@@ -671,15 +682,18 @@ func TestInjectMemories(t *testing.T) {
 	assert.Equal(t, "你是医生", result[0].Content)
 }
 
-// TestIsLocalModel 验证本地模型判断。
-func TestIsLocalModel(t *testing.T) {
+// TestIsLocalProvider 验证本地 provider 判断。
+func TestIsLocalProvider(t *testing.T) {
 	t.Parallel()
-	assert.True(t, isLocalModel(models.ProviderOllama))
-	assert.True(t, isLocalModel(models.ProviderLocal))
-	assert.False(t, isLocalModel(models.ProviderKimi))
-	assert.False(t, isLocalModel(models.ProviderOpenAI))
-	assert.False(t, isLocalModel(models.ProviderQwen))
-	assert.False(t, isLocalModel(models.ProviderSiliconFlow))
+	assert.True(t, isLocalProvider(&models.ProviderConfig{Type: models.ProviderOllama, APIHost: "https://api.example.com"}))
+	assert.True(t, isLocalProvider(&models.ProviderConfig{Type: models.ProviderLocal, APIHost: "https://api.example.com"}))
+	assert.True(t, isLocalProvider(&models.ProviderConfig{Type: models.ProviderKimi, APIHost: "http://localhost:11434"}))
+	assert.True(t, isLocalProvider(&models.ProviderConfig{Type: models.ProviderKimi, APIHost: "http://127.0.0.1:11434"}))
+	assert.False(t, isLocalProvider(&models.ProviderConfig{Type: models.ProviderKimi, APIHost: "https://api.moonshot.cn"}))
+	assert.False(t, isLocalProvider(&models.ProviderConfig{Type: models.ProviderOpenAI, APIHost: "https://api.openai.com"}))
+	assert.False(t, isLocalProvider(&models.ProviderConfig{Type: models.ProviderQwen, APIHost: "https://dashscope.aliyuncs.com"}))
+	assert.False(t, isLocalProvider(&models.ProviderConfig{Type: models.ProviderSiliconFlow, APIHost: "https://api.siliconflow.cn"}))
+	assert.False(t, isLocalProvider(nil))
 }
 
 // mockProviderStoreCtxErr 是一个在 context 已取消时返回 context 错误的 ProviderStore Mock。

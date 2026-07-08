@@ -490,6 +490,7 @@ func TestWailsApp_SendMessage_RequestMapping(t *testing.T) {
 		ctx:              t.Context(),
 		chatOrchestrator: orch,
 		msgRepo:          &mockMessageRepo{},
+		config:           &models.AppConfig{DesensitizationLevel: models.DesensitizationStandard},
 	}
 
 	req := SendMessageRequest{
@@ -525,6 +526,7 @@ func TestWailsApp_SendMessage_ErrorPropagation(t *testing.T) {
 		ctx:              t.Context(),
 		chatOrchestrator: orch,
 		msgRepo:          &mockMessageRepo{},
+		config:           &models.AppConfig{DesensitizationLevel: models.DesensitizationStandard},
 	}
 
 	req := SendMessageRequest{
