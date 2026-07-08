@@ -247,11 +247,18 @@ func TestSQLCipherConnector_MigrateSchema(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, tableCount)
 
-	// 验证 user_version = 14（含 v1.1.10 M07 providers.provider_type 列）
+	// 验证 user_version = 15（含 v1.1.10 M02 providers.models 列）
 	var version int
 	err = conn.DB().QueryRowContext(ctx, "PRAGMA user_version").Scan(&version)
 	require.NoError(t, err)
-	assert.Equal(t, 14, version)
+	assert.Equal(t, 15, version)
+
+	// 验证 providers.models 列已由 v15 迁移创建
+	var modelsColCount int
+	err = conn.DB().QueryRowContext(ctx,
+		"SELECT count(*) FROM pragma_table_info('providers') WHERE name = 'models'").Scan(&modelsColCount)
+	require.NoError(t, err)
+	assert.Equal(t, 1, modelsColCount, "providers 表应包含 models 列")
 }
 
 // TestSQLCipherConnector_PRAGMAForeignKeys 验证外键约束在加密数据库中正常工作。

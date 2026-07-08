@@ -244,6 +244,30 @@ func (p *ProviderConfig) UnmarshalAuthParams(data string) error {
 	return nil
 }
 
+// MarshalModels 序列化模型列表为 JSON 字符串供数据库存储。
+func (p *ProviderConfig) MarshalModels() (string, error) {
+	if len(p.Models) == 0 {
+		return "[]", nil
+	}
+	b, err := json.Marshal(p.Models)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal provider models: %w", err)
+	}
+	return string(b), nil
+}
+
+// UnmarshalModels 从 JSON 字符串反序列化模型列表；空值回落为 nil。
+func (p *ProviderConfig) UnmarshalModels(data string) error {
+	if data == "" || data == "[]" {
+		p.Models = nil
+		return nil
+	}
+	if err := json.Unmarshal([]byte(data), &p.Models); err != nil {
+		return fmt.Errorf("failed to unmarshal provider models: %w", err)
+	}
+	return nil
+}
+
 // InferProviderType 根据 API Host 推断 ProviderType。
 // 用于后端在仅有 api_host 时还原 provider 类型，辅助本地/云端判据。
 // 无法识别时返回空字符串。

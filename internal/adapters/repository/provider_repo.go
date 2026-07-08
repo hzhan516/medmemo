@@ -58,13 +58,18 @@ func (r *ProviderRepoSQLite) Create(ctx context.Context, provider *models.Provid
 		return fmt.Errorf("failed to marshal auth params: %w", err)
 	}
 
+	modelsJSON, err := provider.MarshalModels()
+	if err != nil {
+		return fmt.Errorf("failed to marshal models: %w", err)
+	}
+
 	now := time.Now().UnixMilli()
 	_, err = r.db.ExecContext(ctx, `
-		INSERT INTO providers (id, name, api_host, api_key, model_id, temperature, timeout_ms, max_retries, group_name, enabled, sort_order, created_at, updated_at, auth_method, auth_params, provider_type)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO providers (id, name, api_host, api_key, model_id, temperature, timeout_ms, max_retries, group_name, enabled, sort_order, created_at, updated_at, auth_method, auth_params, provider_type, models)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, provider.ID, provider.Name, provider.APIHost, encryptedKey, provider.ModelID, provider.Temperature,
 		int64(provider.TimeoutMs), provider.MaxRetries, provider.GroupName, boolToInt(provider.Enabled),
-		provider.SortOrder, now, now, string(provider.AuthMethod), authParamsJSON, string(resolveProviderType(provider)))
+		provider.SortOrder, now, now, string(provider.AuthMethod), authParamsJSON, string(resolveProviderType(provider)), modelsJSON)
 
 	if err != nil {
 		// SQLite 约束冲突（重复主键）
@@ -92,15 +97,20 @@ func (r *ProviderRepoSQLite) Update(ctx context.Context, provider *models.Provid
 		return fmt.Errorf("failed to marshal auth params: %w", err)
 	}
 
+	modelsJSON, err := provider.MarshalModels()
+	if err != nil {
+		return fmt.Errorf("failed to marshal models: %w", err)
+	}
+
 	now := time.Now().UnixMilli()
 	res, err := r.db.ExecContext(ctx, `
 		UPDATE providers SET
 			name = ?, api_host = ?, api_key = ?, model_id = ?, temperature = ?,
-			timeout_ms = ?, max_retries = ?, group_name = ?, enabled = ?, sort_order = ?, updated_at = ?, auth_method = ?, auth_params = ?, provider_type = ?
+			timeout_ms = ?, max_retries = ?, group_name = ?, enabled = ?, sort_order = ?, updated_at = ?, auth_method = ?, auth_params = ?, provider_type = ?, models = ?
 		WHERE id = ?
 	`, provider.Name, provider.APIHost, encryptedKey, provider.ModelID, provider.Temperature,
 		int64(provider.TimeoutMs), provider.MaxRetries, provider.GroupName, boolToInt(provider.Enabled),
-		provider.SortOrder, now, string(provider.AuthMethod), authParamsJSON, string(resolveProviderType(provider)), provider.ID)
+		provider.SortOrder, now, string(provider.AuthMethod), authParamsJSON, string(resolveProviderType(provider)), modelsJSON, provider.ID)
 
 	if err != nil {
 		return fmt.Errorf("failed to update provider %s: %w", provider.ID, err)
@@ -136,7 +146,7 @@ func (r *ProviderRepoSQLite) Delete(ctx context.Context, id string) error {
 // Get 按 ID 查询 Provider 配置。
 func (r *ProviderRepoSQLite) Get(ctx context.Context, id string) (*models.ProviderConfig, error) {
 	row := r.db.QueryRowContext(ctx, `
-		SELECT id, name, api_host, api_key, model_id, temperature, timeout_ms, max_retries, group_name, enabled, sort_order, created_at, updated_at, auth_method, auth_params, provider_type
+		SELECT id, name, api_host, api_key, model_id, temperature, timeout_ms, max_retries, group_name, enabled, sort_order, created_at, updated_at, auth_method, auth_params, provider_type, models
 		FROM providers WHERE id = ?
 	`, id)
 
@@ -146,7 +156,7 @@ func (r *ProviderRepoSQLite) Get(ctx context.Context, id string) (*models.Provid
 // List 查询全部 Provider 配置，按 sort_order ASC, updated_at DESC 排序。
 func (r *ProviderRepoSQLite) List(ctx context.Context) ([]*models.ProviderConfig, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, name, api_host, api_key, model_id, temperature, timeout_ms, max_retries, group_name, enabled, sort_order, created_at, updated_at, auth_method, auth_params, provider_type
+		SELECT id, name, api_host, api_key, model_id, temperature, timeout_ms, max_retries, group_name, enabled, sort_order, created_at, updated_at, auth_method, auth_params, provider_type, models
 		FROM providers
 		ORDER BY sort_order ASC, updated_at DESC
 	`)
@@ -178,9 +188,10 @@ func (r *ProviderRepoSQLite) scanProvider(scanner interface {
 	var timeoutMs, createdAt, updatedAt int64
 	var enabledInt int
 	var authMethodStr, authParamsJSON, providerTypeStr string
+	var modelsJSON string
 
 	if err := scanner.Scan(&p.ID, &p.Name, &p.APIHost, &encryptedKey, &p.ModelID, &p.Temperature,
-		&timeoutMs, &p.MaxRetries, &p.GroupName, &enabledInt, &p.SortOrder, &createdAt, &updatedAt, &authMethodStr, &authParamsJSON, &providerTypeStr); err != nil {
+		&timeoutMs, &p.MaxRetries, &p.GroupName, &enabledInt, &p.SortOrder, &createdAt, &updatedAt, &authMethodStr, &authParamsJSON, &providerTypeStr, &modelsJSON); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("provider not found: %w", entity.ErrNotFound)
 		}
@@ -206,6 +217,14 @@ func (r *ProviderRepoSQLite) scanProvider(scanner interface {
 	}
 	if err := p.UnmarshalAuthParams(authParamsJSON); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal auth params for provider %s: %w", p.ID, err)
+	}
+	if err := p.UnmarshalModels(modelsJSON); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal models for provider %s: %w", p.ID, err)
+	}
+	// 向后兼容：旧行没有 models 列或为空，但存在 model_id 时合成单模型，
+	// 与前端 normalizeProviderConfig 行为一致（旧行缺 MaxContextLength 时回落默认，属预期）。
+	if len(p.Models) == 0 && p.ModelID != "" {
+		p.Models = []models.ProviderModel{{ID: p.ModelID, Name: p.ModelID, Enabled: true}}
 	}
 
 	return &p, nil

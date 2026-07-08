@@ -577,6 +577,14 @@ func migrateSQLiteSchema(ctx context.Context, db *sql.DB) error {
 			ALTER TABLE providers ADD COLUMN provider_type TEXT DEFAULT '';
 			`,
 		},
+		{
+			version: 15,
+			sql: `
+			-- v1.1.10 M02: 持久化 provider 模型列表（含每模型最大上下文长度），
+			-- 修复重启后模型配置与 MaxContextLength 丢失、回落默认 8192 的问题。
+			ALTER TABLE providers ADD COLUMN models TEXT DEFAULT '[]';
+			`,
+		},
 	}
 
 	for _, m := range migrations {
