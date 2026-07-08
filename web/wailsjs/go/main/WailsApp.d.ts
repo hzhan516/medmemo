@@ -148,6 +148,8 @@ export function SetCompressionSettings(arg1:main.CompressionSettings):Promise<vo
 
 export function SetDataRetentionDays(arg1:number):Promise<void>;
 
+export function SetDesensitizationLevel(arg1:string):Promise<void>;
+
 export function SetMemoryInjectionEnabled(arg1:boolean):Promise<void>;
 
 export function SetSessionMemoryInjection(arg1:string,arg2:boolean):Promise<void>;

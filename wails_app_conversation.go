@@ -166,6 +166,20 @@ func (a *WailsApp) SetDataRetentionDays(days int) error {
 	return nil
 }
 
+// SetDesensitizationLevel 设置脱敏级别并持久化到配置文件。
+// 仅接受标准小写值 standard / strict / off；非法值将返回错误，不会写入配置。
+func (a *WailsApp) SetDesensitizationLevel(level string) error {
+	lvl := models.DesensitizationLevel(level)
+	if !lvl.IsValid() {
+		return fmt.Errorf("invalid desensitization level: %s (must be standard, strict, or off)", level)
+	}
+	a.config.DesensitizationLevel = lvl
+	if err := config.SaveDesensitizationLevel(string(lvl)); err != nil {
+		return fmt.Errorf("failed to save desensitization level: %w", err)
+	}
+	return nil
+}
+
 // DeleteConversation 软删除指定会话（移入回收站）。
 func (a *WailsApp) DeleteConversation(convID string) error {
 	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)

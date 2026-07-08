@@ -286,6 +286,10 @@ export function SetDataRetentionDays(arg1) {
   return window['go']['main']['WailsApp']['SetDataRetentionDays'](arg1);
 }
 
+export function SetDesensitizationLevel(arg1) {
+  return window['go']['main']['WailsApp']['SetDesensitizationLevel'](arg1);
+}
+
 export function SetMemoryInjectionEnabled(arg1) {
   return window['go']['main']['WailsApp']['SetMemoryInjectionEnabled'](arg1);
 }

@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { ConfidenceBarMode } from '@/components/confidence/types'
-import { SetDataRetentionDays } from '@wails/go/main/WailsApp'
+import { SetDataRetentionDays, SetDesensitizationLevel } from '@wails/go/main/WailsApp'
 
 type Theme = 'light' | 'dark' | 'system'
 type ComplianceBarMode = 'always' | 'first' | 'off'
@@ -83,7 +83,13 @@ export const useSettingsStore = create<SettingsState>()(
       setConfidenceBarMode: (mode) => set({ confidenceBarMode: mode }),
       setAutoCheckUpdate: (enabled) => set({ autoCheckUpdate: enabled }),
       setUpdateChannel: (channel) => set({ updateChannel: channel }),
-      setDesensitizationLevel: (level) => set({ desensitizationLevel: level }),
+      setDesensitizationLevel: (level) => {
+        set({ desensitizationLevel: level })
+        // 同步到后端配置文件，确保脱敏流水线使用同一级别
+        SetDesensitizationLevel(level).catch((err: unknown) => {
+          console.error('[settings] 同步脱敏级别到后端失败:', err)
+        })
+      },
       setDataRetentionDays: (days) => {
         set({ dataRetentionDays: days })
         // 同步到后端配置文件，确保清理逻辑使用同一数值
