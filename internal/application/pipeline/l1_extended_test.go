@@ -95,7 +95,7 @@ func TestL1ExtendedRuleStage_RecordsPlaceholders(t *testing.T) {
 func TestDeidentifyPipeline_StrictMasksMoreThanStandard(t *testing.T) {
 	t.Parallel()
 	// NER 不可用（透传），仅比较 L1 与 L1.5 的差异。
-	l2 := NewL2NERStage(&mockNERDetector{available: false})
+	l2 := NewL2NERStage(&mockNERDetector{available: false}, &mockNERDetector{available: false})
 	p := NewDefaultDeidentifyPipeline(NewL1RuleStage(), l2, NewL1ExtendedRuleStage())
 	ctx := context.Background()
 

@@ -38,6 +38,18 @@ type NERDetector interface {
 	IsAvailable() bool
 }
 
+// StandardNERDetector 是标准级 NER 检测器的标记接口，使用默认置信度阈值。
+// 与 StrictNERDetector 区分，供 Wire 按脱敏级别注入不同实现。
+type StandardNERDetector interface {
+	NERDetector
+}
+
+// StrictNERDetector 是严格级 NER 检测器的标记接口，使用更低置信度阈值以提升召回。
+// 与 StandardNERDetector 区分，供 Wire 按脱敏级别注入不同实现。
+type StrictNERDetector interface {
+	NERDetector
+}
+
 // SensitiveDetector 定义敏感信息检测端口。
 type SensitiveDetector interface {
 	// Detect 检测文本中的敏感实体，返回分级标记结果。

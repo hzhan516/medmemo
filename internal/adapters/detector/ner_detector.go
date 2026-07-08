@@ -15,6 +15,12 @@ import (
 // 0.75 可在召回与精确之间取得平衡，过滤大部分低置信度误报。
 const defaultConfidenceThreshold float32 = 0.75
 
+// strictConfidenceThreshold 为严格级专用的 NER 置信度阈值。
+// 严格级以召回优先：将阈值降至 0.5 可捕获更多低置信度候选实体，
+// 尽量减少出网 PII。代价是精确率下降、可能过度遮蔽（P3 不可逆），
+// 并轻微影响 prompt 保真度；此权衡对严格级用户可接受，详见 docs/COMPLIANCE.md。
+const strictConfidenceThreshold float32 = 0.5
+
 // ONNXNERDetector 基于 ONNX NER 模型的敏感信息检测器。
 // 将 hugot/DistilBERT 推理结果适配为 application/port.NERDetector 接口。
 type ONNXNERDetector struct {
@@ -22,11 +28,31 @@ type ONNXNERDetector struct {
 	threshold float32
 }
 
-// NewONNXNERDetector 创建 ONNX NER 检测器。
+// NewONNXNERDetector 创建标准级 ONNX NER 检测器（默认阈值 0.75）。
 func NewONNXNERDetector(engine *onnx.Engine) *ONNXNERDetector {
+	return newONNXNERDetectorWithThreshold(engine, defaultConfidenceThreshold)
+}
+
+// newONNXNERDetectorWithThreshold 以指定置信度阈值创建检测器。
+func newONNXNERDetectorWithThreshold(engine *onnx.Engine, threshold float32) *ONNXNERDetector {
 	return &ONNXNERDetector{
 		engine:    engine,
-		threshold: defaultConfidenceThreshold,
+		threshold: threshold,
+	}
+}
+
+// StrictONNXNERDetector 是严格级 NER 检测器，复用与标准级相同的 *onnx.Engine，
+// 仅将置信度阈值降至 strictConfidenceThreshold 以提升召回。
+// 复用同一引擎可避免重复加载模型/占用额外内存，且引擎内部通过 Worker Pool 串行化推理，
+// 满足 ONNX Session.Run 非线程安全的约束。
+type StrictONNXNERDetector struct {
+	*ONNXNERDetector
+}
+
+// NewStrictONNXNERDetector 创建严格级 NER 检测器，复用传入的同一 *onnx.Engine。
+func NewStrictONNXNERDetector(engine *onnx.Engine) *StrictONNXNERDetector {
+	return &StrictONNXNERDetector{
+		ONNXNERDetector: newONNXNERDetectorWithThreshold(engine, strictConfidenceThreshold),
 	}
 }
 
@@ -43,9 +69,15 @@ func (d *ONNXNERDetector) Predict(ctx context.Context, text string) ([]models.Se
 		return nil, nil
 	}
 
+	return filterSpansByThreshold(spans, d.threshold), nil
+}
+
+// filterSpansByThreshold 按置信度阈值过滤 NER 结果并归一化为敏感实体（纯函数）。
+// 低于阈值或无法映射类型的实体被丢弃。
+func filterSpansByThreshold(spans []onnx.EntitySpan, threshold float32) []models.SensitiveEntity {
 	var entities []models.SensitiveEntity
 	for _, span := range spans {
-		if span.Score < d.threshold {
+		if span.Score < threshold {
 			continue
 		}
 		entityType := mapNERLabel(span.Label)
@@ -61,7 +93,7 @@ func (d *ONNXNERDetector) Predict(ctx context.Context, text string) ([]models.Se
 			Score:    span.Score,
 		})
 	}
-	return entities, nil
+	return entities
 }
 
 // IsAvailable 返回底层 ONNX NER 引擎是否已就绪。
@@ -88,4 +120,5 @@ func mapNERLabel(label string) string {
 // ONNXNERSet 供 Wire 使用的 ProviderSet。
 var ONNXNERSet = wire.NewSet(
 	NewONNXNERDetector,
+	NewStrictONNXNERDetector,
 )

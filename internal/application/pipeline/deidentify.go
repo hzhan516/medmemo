@@ -107,25 +107,38 @@ func (s *L1RuleStage) Process(_ context.Context, input Input) (Output, error) {
 	return Output{Text: result.SafeText, Metadata: input.Metadata}, nil
 }
 
-// L2NERStage 二级 NER 模型脱敏阶段。
-// 基于 DistilBERT-ONNX 识别人名、地点、机构名，补充 L1 未覆盖的实体。
-type L2NERStage struct {
-	detector port.NERDetector
-}
-
-// NewL2NERStage 创建 L2 NER 脱敏阶段。
-func NewL2NERStage(det port.NERDetector) *L2NERStage {
-	return &L2NERStage{detector: det}
-}
-
 // passthroughOutput 将 Input 原样透传为 Output（丢弃仅用于阶段间的 Level 字段）。
 func passthroughOutput(input Input) Output {
 	return Output{Text: input.Text, Metadata: input.Metadata}
 }
 
+// L2NERStage 二级 NER 模型脱敏阶段。
+// 基于 DistilBERT-ONNX 识别人名、地点、机构名，补充 L1 未覆盖的实体。
+// 持有标准级与严格级两个检测器，按 input.Level 选择：严格级使用更低置信度阈值以提升召回。
+type L2NERStage struct {
+	standard port.NERDetector
+	strict   port.NERDetector
+}
+
+// NewL2NERStage 创建 L2 NER 脱敏阶段。
+// standard 用于标准级（默认阈值），strict 用于严格级（更低阈值、更高召回）。
+func NewL2NERStage(standard port.StandardNERDetector, strict port.StrictNERDetector) *L2NERStage {
+	return &L2NERStage{standard: standard, strict: strict}
+}
+
+// detectorForLevel 按脱敏级别选择 NER 检测器。
+func (s *L2NERStage) detectorForLevel(level models.DesensitizationLevel) port.NERDetector {
+	if level == models.DesensitizationStrict {
+		return s.strict
+	}
+	return s.standard
+}
+
 func (s *L2NERStage) Process(ctx context.Context, input Input) (Output, error) {
+	detector := s.detectorForLevel(input.Level)
+
 	// 1. 可用性检查：NER 不可用时降级透传，不阻断流水线
-	if s.detector == nil || !s.detector.IsAvailable() {
+	if detector == nil || !detector.IsAvailable() {
 		return passthroughOutput(input), nil
 	}
 
@@ -136,7 +149,7 @@ func (s *L2NERStage) Process(ctx context.Context, input Input) (Output, error) {
 	}
 
 	// 3. 在原始文本上执行 NER 推理，避免 L1 占位符干扰模型上下文
-	entities, err := s.detector.Predict(ctx, originalText)
+	entities, err := detector.Predict(ctx, originalText)
 	if err != nil {
 		// 降级：推理失败时不阻断流水线，直接透传 L1 结果
 		return passthroughOutput(input), nil
