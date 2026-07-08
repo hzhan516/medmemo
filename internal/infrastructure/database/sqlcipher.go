@@ -569,6 +569,14 @@ func migrateSQLiteSchema(ctx context.Context, db *sql.DB) error {
 			);
 			`,
 		},
+		{
+			version: 14,
+			sql: `
+			-- v1.1.10 M07: 持久化 provider 类型，避免每次运行时靠 api_host 推断本地/云端。
+			-- 旧行 provider_type 为空，读取时回退 InferProviderType(api_host) 保持向后兼容。
+			ALTER TABLE providers ADD COLUMN provider_type TEXT DEFAULT '';
+			`,
+		},
 	}
 
 	for _, m := range migrations {

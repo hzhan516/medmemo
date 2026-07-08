@@ -655,3 +655,61 @@ func TestProviderRepo_BackwardCompatibility(t *testing.T) {
 	assert.Equal(t, models.AuthMethod(""), got.AuthMethod) // 旧数据反序列化后为空
 	assert.Empty(t, got.AuthParams.CLICredentialPath)
 }
+
+// TestProviderRepo_ProviderType_StoredPreferred 验证持久化的类型优先于按 api_host 推断的类型。
+func TestProviderRepo_ProviderType_StoredPreferred(t *testing.T) {
+	repo, cleanup := setupProviderRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	p := newTestProvider("stored-type")
+	// api_host 会被推断为 Kimi，但显式设置 Type 为 local，读取应以存储值为准。
+	p.APIHost = "https://api.moonshot.cn"
+	p.Type = models.ProviderLocal
+	require.NoError(t, repo.Create(ctx, p))
+
+	got, err := repo.Get(ctx, "stored-type")
+	require.NoError(t, err)
+	assert.Equal(t, models.ProviderLocal, got.Type, "应使用持久化类型，而非按 api_host 推断的 kimi")
+}
+
+// TestProviderRepo_ProviderType_EmptyFallback 验证存储类型为空时回退按 api_host 推断（兼容迁移前的旧行）。
+func TestProviderRepo_ProviderType_EmptyFallback(t *testing.T) {
+	repo, cleanup := setupProviderRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	p := newTestProvider("legacy-type")
+	p.APIHost = "https://api.openai.com"
+	require.NoError(t, repo.Create(ctx, p))
+
+	// 模拟迁移前旧行：清空 provider_type，读取时应回退按 api_host 推断。
+	_, err := repo.db.ExecContext(ctx, `UPDATE providers SET provider_type = '' WHERE id = ?`, "legacy-type")
+	require.NoError(t, err)
+
+	got, err := repo.Get(ctx, "legacy-type")
+	require.NoError(t, err)
+	assert.Equal(t, models.ProviderOpenAI, got.Type, "空类型应回退推断为 openai")
+}
+
+// TestProviderRepo_ProviderType_LocalPersisted 验证本地模型创建路径写入正确类型且读取一致。
+func TestProviderRepo_ProviderType_LocalPersisted(t *testing.T) {
+	repo, cleanup := setupProviderRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	p := newTestProvider("local-ollama")
+	// 未显式设置 Type，但回环 11434 端口应被推断并持久化为 ollama。
+	p.APIHost = "http://localhost:11434"
+	require.NoError(t, repo.Create(ctx, p))
+
+	got, err := repo.Get(ctx, "local-ollama")
+	require.NoError(t, err)
+	assert.Equal(t, models.ProviderOllama, got.Type)
+
+	// List 路径同样返回持久化类型。
+	list, err := repo.List(ctx)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	assert.Equal(t, models.ProviderOllama, list[0].Type)
+}
