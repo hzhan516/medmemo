@@ -90,11 +90,19 @@ jobs:
       - name: Run unit tests
         run: make test
 
-      - name: Download coverage report
+      - name: Generate HTML coverage report
+        run: |
+          go tool cover -html=coverage.out -o coverage.html
+          go tool cover -func=coverage.out -o coverage-summary.txt
+
+      - name: Upload coverage report
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
-          path: ./coverage.out
+          path: |
+            ./coverage.out
+            ./coverage.html
+            ./coverage-summary.txt
           retention-days: 7
 
       - name: Upload coverage
