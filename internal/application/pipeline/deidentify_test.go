@@ -31,7 +31,7 @@ func TestDeidentifyPipeline_L1Only(t *testing.T) {
 	p := NewDeidentifyPipeline(NewL1RuleStage())
 	ctx := context.Background()
 
-	result, err := p.Execute(ctx, "我的身份证号是110101199001011234")
+	result, err := p.Execute(ctx, "我的身份证号是110101199001011234", models.DesensitizationStandard)
 	require.NoError(t, err)
 	assert.Contains(t, result.SafeText, "{{ID_CARD_")
 	assert.NotContains(t, result.SafeText, "110101199001011234")

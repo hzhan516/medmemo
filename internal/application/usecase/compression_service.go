@@ -329,7 +329,8 @@ func (s *CompressionService) deidentifyMessages(ctx context.Context, msgs []mode
 	out := make([]models.Message, len(msgs))
 	merged := map[string]string{}
 	for i, m := range msgs {
-		res, err := s.deidentifier.Execute(ctx, m.Content)
+		// 会话压缩摘要走云端路径，使用标准级脱敏作为默认策略。
+		res, err := s.deidentifier.Execute(ctx, m.Content, models.DesensitizationStandard)
 		if err != nil {
 			return nil, nil, false
 		}

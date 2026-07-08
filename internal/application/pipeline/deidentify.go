@@ -28,6 +28,8 @@ type DeidentifyStage interface {
 type Input struct {
 	Text     string
 	Metadata map[string]any
+	// Level 为本次脱敏的分级策略，贯穿各阶段，供严格级专属阶段判定是否激活。
+	Level models.DesensitizationLevel
 }
 
 type Output struct {
@@ -42,8 +44,9 @@ func NewDeidentifyPipeline(stages ...DeidentifyStage) *DeidentifyPipeline {
 
 // Execute 顺序执行各阶段，任一阶段出错即短路返回。
 // 收集各阶段产生的实体和 P2 级占位符映射，供输出还原使用。
-func (p *DeidentifyPipeline) Execute(ctx context.Context, raw string) (models.DeidentifyResult, error) {
-	input := Input{Text: raw, Metadata: make(map[string]any)}
+// level 贯穿各阶段（Output 不携带 Level，循环内以传入的 level 重建 Input）。
+func (p *DeidentifyPipeline) Execute(ctx context.Context, raw string, level models.DesensitizationLevel) (models.DeidentifyResult, error) {
+	input := Input{Text: raw, Level: level, Metadata: make(map[string]any)}
 	var allEntities []models.SensitiveEntity
 	allPlaceholders := make(map[string]string)
 
@@ -67,7 +70,8 @@ func (p *DeidentifyPipeline) Execute(ctx context.Context, raw string) (models.De
 			allEntities = append(allEntities, l2Entities...)
 		}
 
-		input = Input(output)
+		// Output 不携带 Level，用传入的 level 重建 Input 以贯穿后续阶段。
+		input = Input{Text: output.Text, Metadata: output.Metadata, Level: level}
 	}
 	return models.DeidentifyResult{
 		OriginalText: raw,
@@ -114,10 +118,15 @@ func NewL2NERStage(det port.NERDetector) *L2NERStage {
 	return &L2NERStage{detector: det}
 }
 
+// passthroughOutput 将 Input 原样透传为 Output（丢弃仅用于阶段间的 Level 字段）。
+func passthroughOutput(input Input) Output {
+	return Output{Text: input.Text, Metadata: input.Metadata}
+}
+
 func (s *L2NERStage) Process(ctx context.Context, input Input) (Output, error) {
 	// 1. 可用性检查：NER 不可用时降级透传，不阻断流水线
 	if s.detector == nil || !s.detector.IsAvailable() {
-		return Output(input), nil
+		return passthroughOutput(input), nil
 	}
 
 	// 2. 获取原始文本（L1 存入 Metadata）
@@ -130,17 +139,17 @@ func (s *L2NERStage) Process(ctx context.Context, input Input) (Output, error) {
 	entities, err := s.detector.Predict(ctx, originalText)
 	if err != nil {
 		// 降级：推理失败时不阻断流水线，直接透传 L1 结果
-		return Output(input), nil
+		return passthroughOutput(input), nil
 	}
 	if len(entities) == 0 {
-		return Output(input), nil
+		return passthroughOutput(input), nil
 	}
 
 	// 4. 获取 L1 实体，过滤与 L1 区域重叠的 NER 结果（L1 优先）
 	l1Entities, _ := input.Metadata["l1_entities"].([]models.SensitiveEntity)
 	entities = filterOverlappingEntities(entities, l1Entities)
 	if len(entities) == 0 {
-		return Output(input), nil
+		return passthroughOutput(input), nil
 	}
 
 	// 5. 偏移量映射：将原始文本中的 NER 位置映射到 L1 脱敏文本中的对应位置

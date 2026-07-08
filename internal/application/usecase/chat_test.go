@@ -107,7 +107,7 @@ type mockDeidentifier struct {
 	err    error
 }
 
-func (m *mockDeidentifier) Execute(_ context.Context, _ string) (models.DeidentifyResult, error) {
+func (m *mockDeidentifier) Execute(_ context.Context, _ string, _ models.DesensitizationLevel) (models.DeidentifyResult, error) {
 	return m.result, m.err
 }
 

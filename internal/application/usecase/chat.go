@@ -20,8 +20,9 @@ import (
 )
 
 // Deidentifier 脱敏流水线接口。
+// level 决定分级执行策略（standard/strict/off 由上层预先判定后传入）。
 type Deidentifier interface {
-	Execute(ctx context.Context, raw string) (models.DeidentifyResult, error)
+	Execute(ctx context.Context, raw string, level models.DesensitizationLevel) (models.DeidentifyResult, error)
 }
 
 // ChatOrchestratorDeps 聚合 ChatOrchestrator 所需的全部依赖。
@@ -202,8 +203,7 @@ func (c *ChatOrchestrator) prepareMessages(ctx context.Context, req ChatRequest)
 	if !local && c.deidPipeline != nil && req.DesensitizationLevel != models.DesensitizationOff {
 		lastIdx := findLastUserMessage(req.Messages)
 		if lastIdx >= 0 {
-			// TODO(#036): strict 兜底策略待合规负责人确认后实现，当前严格级别等价于 standard。
-			r, err := c.deidPipeline.Execute(ctx, req.Messages[lastIdx].Content)
+			r, err := c.deidPipeline.Execute(ctx, req.Messages[lastIdx].Content, req.DesensitizationLevel)
 			if err == nil {
 				deidResult = r
 				messages = make([]models.Message, len(req.Messages))
