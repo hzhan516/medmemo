@@ -308,3 +308,55 @@ func TestSaveDataRetentionDays(t *testing.T) {
 		assert.Contains(t, content, "language: en-US")
 	})
 }
+
+// TestSaveDesensitizationLevel 验证脱敏级别持久化不丢失其他字段。
+func TestSaveDesensitizationLevel(t *testing.T) {
+	t.Run("create new file", func(t *testing.T) {
+		t.Setenv("HOME", t.TempDir())
+		require.NoError(t, SaveDesensitizationLevel("off"))
+
+		loader := NewLoader("", models.ChannelBeta)
+		cfg, err := loader.Load()
+		require.NoError(t, err)
+		assert.Equal(t, models.DesensitizationOff, cfg.DesensitizationLevel)
+	})
+
+	t.Run("preserve existing fields", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+
+		configPath := filepath.Join(home, ".medmemo", "config.yaml")
+		require.NoError(t, os.MkdirAll(filepath.Dir(configPath), 0755))
+		require.NoError(t, os.WriteFile(configPath, []byte("default_model: gpt-4o-mini\nlanguage: en-US\n"), 0644))
+
+		require.NoError(t, SaveDesensitizationLevel("strict"))
+
+		data, err := os.ReadFile(configPath)
+		require.NoError(t, err)
+		content := string(data)
+		assert.Contains(t, content, "desensitization_level: strict")
+		assert.Contains(t, content, "default_model: gpt-4o-mini")
+		assert.Contains(t, content, "language: en-US")
+	})
+}
+
+// TestLoader_Load_EnvOverride_DesensitizationLevel 验证脱敏级别环境变量覆盖。
+func TestLoader_Load_EnvOverride_DesensitizationLevel(t *testing.T) {
+	t.Setenv("MEDMEMO_DESENSITIZATION_LEVEL", "strict")
+	loader := NewLoader("", models.ChannelBeta)
+	cfg, err := loader.Load()
+	require.NoError(t, err)
+	assert.Equal(t, models.DesensitizationStrict, cfg.DesensitizationLevel)
+}
+
+// TestLoader_Load_DesensitizationLevel_Normalize 验证非法脱敏级别归一化为 standard。
+func TestLoader_Load_DesensitizationLevel_Normalize(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.yaml")
+	require.NoError(t, os.WriteFile(configPath, []byte("desensitization_level: invalid-level\n"), 0644))
+
+	loader := NewLoader(configPath, models.ChannelBeta)
+	cfg, err := loader.Load()
+	require.NoError(t, err)
+	assert.Equal(t, models.DesensitizationStandard, cfg.DesensitizationLevel)
+}

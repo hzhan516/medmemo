@@ -220,6 +220,7 @@ func (l *Loader) toDomain(raw *rawConfig) *models.AppConfig {
 	if cfg.DesensitizationLevel == "" {
 		cfg.DesensitizationLevel = models.DesensitizationStandard
 	}
+	cfg.DesensitizationLevel = cfg.DesensitizationLevel.Normalize()
 	if raw.DataRetentionDays != nil {
 		cfg.DataRetentionDays = *raw.DataRetentionDays
 	}
@@ -284,6 +285,42 @@ func SaveDataRetentionDays(days int) error {
 		m = make(map[string]interface{})
 	}
 	m["data_retention_days"] = days
+
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create config dir: %w", err)
+	}
+
+	data, err := yaml.Marshal(m)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+	return os.WriteFile(path, data, 0600)
+}
+
+// SaveDesensitizationLevel 将脱敏级别持久化到配置文件。
+// 优先写入 ~/.medmemo/config.yaml，不丢失文件中已有其他字段。
+func SaveDesensitizationLevel(level string) error {
+	normalized := models.NormalizeDesensitizationLevel(level)
+	if normalized != models.DesensitizationLevel(level) {
+		return fmt.Errorf("invalid desensitization level: %s", level)
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get home dir: %w", err)
+	}
+	path := filepath.Join(home, ".medmemo", "config.yaml")
+
+	// 以 map 读取现有配置，避免丢失其他字段
+	var m map[string]interface{}
+	if data, err := os.ReadFile(path); err == nil {
+		_ = yaml.Unmarshal(data, &m)
+	}
+	if m == nil {
+		m = make(map[string]interface{})
+	}
+	m["desensitization_level"] = string(normalized)
 
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
