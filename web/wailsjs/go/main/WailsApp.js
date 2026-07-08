@@ -126,6 +126,10 @@ export function GetDeletedConversations() {
   return window['go']['main']['WailsApp']['GetDeletedConversations']();
 }
 
+export function GetDesensitizationLevel() {
+  return window['go']['main']['WailsApp']['GetDesensitizationLevel']();
+}
+
 export function GetDisclaimerStatus() {
   return window['go']['main']['WailsApp']['GetDisclaimerStatus']();
 }

@@ -501,7 +501,7 @@ export function SettingsPage() {
                           ? 'border-primary bg-primary/5'
                           : 'border-border hover:border-primary/30 hover:bg-accent'
                       }`}
-                      onClick={() => setDesensitizationLevel(l.id)}
+                      onClick={() => { void setDesensitizationLevel(l.id).catch(() => {}) }}
                     >
                       <CardContent className="p-4 flex items-center justify-between">
                         <div className="flex items-center gap-3">

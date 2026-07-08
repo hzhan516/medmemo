@@ -180,6 +180,12 @@ func (a *WailsApp) SetDesensitizationLevel(level string) error {
 	return nil
 }
 
+// GetDesensitizationLevel 返回后端当前生效的脱敏级别（后端为权威源）。
+// 前端启动时回读并据此校正本地状态，避免前后端不一致。
+func (a *WailsApp) GetDesensitizationLevel() string {
+	return string(a.config.DesensitizationLevel)
+}
+
 // DeleteConversation 软删除指定会话（移入回收站）。
 func (a *WailsApp) DeleteConversation(convID string) error {
 	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)

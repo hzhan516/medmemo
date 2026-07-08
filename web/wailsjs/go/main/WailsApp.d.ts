@@ -68,6 +68,8 @@ export function GetConversations():Promise<Array<main.ConversationSummary>>;
 
 export function GetDeletedConversations():Promise<Array<main.ConversationSummary>>;
 
+export function GetDesensitizationLevel():Promise<string>;
+
 export function GetDisclaimerStatus():Promise<main.DisclaimerStatus>;
 
 export function GetEmbeddingModelDirPath():Promise<string>;
