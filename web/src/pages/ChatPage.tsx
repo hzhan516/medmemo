@@ -146,7 +146,7 @@ export function ChatPage() {
         onNewConversation={handleNewConversation}
       />
 
-      <div className="flex-1 flex flex-col min-w-0 relative">
+      <div className="flex-1 flex flex-col min-w-0 relative bg-background/30">
         <Header />
 
         <ComplianceBar conversationId={currentConversationId} />

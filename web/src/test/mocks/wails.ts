@@ -73,6 +73,12 @@ export function WindowSetSystemDefaultTheme(): void {}
 export function WindowSetTitle(_title: string): void {}
 export function BrowserOpenURL(_url: string): void {}
 export function Quit(): void {}
+export function WindowMinimise(): void {}
+export function WindowToggleMaximise(): void {}
+export async function WindowIsMaximised(): Promise<boolean> { return false }
+export async function Environment(): Promise<{ buildType: string; platform: string; arch: string }> {
+  return { buildType: 'dev', platform: 'linux', arch: 'amd64' }
+}
 
 // --- WailsApp 方法模拟 ---
 
@@ -124,6 +130,22 @@ const defaultGetDeletedConversations = async (): Promise<ConversationSummary[]> 
 }
 
 const defaultSetDataRetentionDays = async (_days: number): Promise<void> => {}
+
+const defaultGetCompressionSettings = async (): Promise<Record<string, unknown>> => {
+  return { useModel: false, providerId: '', modelId: '', anchorCount: 1, recentCount: 6 }
+}
+
+const defaultSetCompressionSettings = async (_settings: Record<string, unknown>): Promise<void> => {}
+
+const defaultTestCompressionModel = async (_providerID: string, _modelID: string): Promise<boolean> => {
+  return false
+}
+
+const defaultCompressSession = async (_req: Record<string, unknown>): Promise<void> => {}
+
+const defaultEstimateContextUsage = async (_req: Record<string, unknown>): Promise<Record<string, unknown>> => {
+  return { usedTokens: 0, maxTokens: 1, ratio: 0, approximate: false }
+}
 
 const defaultGetEmbeddingStatus = async (): Promise<Record<string, unknown>> => {
   return {
@@ -449,6 +471,11 @@ export const MockWailsApp = {
   GetConversations: () => resolveHandler('GetConversations', defaultGetConversations)(),
   GetDeletedConversations: () => resolveHandler('GetDeletedConversations', defaultGetDeletedConversations)(),
   SetDataRetentionDays: (days: number) => resolveHandler('SetDataRetentionDays', defaultSetDataRetentionDays)(days),
+  GetCompressionSettings: () => resolveHandler('GetCompressionSettings', defaultGetCompressionSettings)(),
+  SetCompressionSettings: (settings: Record<string, unknown>) => resolveHandler('SetCompressionSettings', defaultSetCompressionSettings)(settings),
+  TestCompressionModel: (providerID: string, modelID: string) => resolveHandler('TestCompressionModel', defaultTestCompressionModel)(providerID, modelID),
+  CompressSession: (req: Record<string, unknown>) => resolveHandler('CompressSession', defaultCompressSession)(req),
+  EstimateContextUsage: (req: Record<string, unknown>) => resolveHandler('EstimateContextUsage', defaultEstimateContextUsage)(req),
   GetConversationMessages: (convID: string) => resolveHandler('GetConversationMessages', defaultGetConversationMessages)(convID),
   CreateConversation: () => resolveHandler('CreateConversation', defaultCreateConversation)(),
   GetModels: () => resolveHandler('GetModels', defaultGetModels)(),

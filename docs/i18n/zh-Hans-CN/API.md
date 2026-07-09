@@ -17,6 +17,9 @@
 | Auth | 四层鉴权体系 | [`api/auth.md`](../../api/auth.md) |
 | System | 设置、更新、免责声明与诊断 | [`api/system.md`](../../api/system.md) |
 | Ollama | 本地模型检测与管理 | [`api/ollama.md`](../../api/ollama.md) |
+| Memory | 个人记忆审核、搜索和注入开关 | [`api/memory.md`](../../api/memory.md) |
+| Embedding | 本地 embedding 模型状态与模型目录辅助方法 | [`api/embedding.md`](../../api/embedding.md) |
+| Knowledge | 本地知识文档导入与管理 | [`api/knowledge.md`](../../api/knowledge.md) |
 | Events | 后端发出的 Wails Events | [`api/events.md`](../../api/events.md) |
 
 ---
@@ -31,7 +34,8 @@ type LLMClient interface {
     Chat(ctx context.Context, messages []models.Message) (string, error)
 
     // StreamChat 发送流式对话请求，通过 callback 逐块推送内容。
-    StreamChat(ctx context.Context, messages []models.Message, callback func(chunk string)) error
+    // Provider 返回 usage 元数据时同步返回 token 用量。
+    StreamChat(ctx context.Context, messages []models.Message, callback func(chunk string)) (*models.TokenUsage, error)
 
     // CheckAvailability 检查当前模型是否可用。
     CheckAvailability(ctx context.Context) (bool, string)
@@ -44,17 +48,19 @@ type LLMClient interface {
 
 ---
 
-### RecordStore
+### ProviderStore
 
 ```go
-type RecordStore interface {
-    Save(ctx context.Context, key string, value []byte) error
-    Get(ctx context.Context, key string) ([]byte, error)
-    Delete(ctx context.Context, key string) error
+type ProviderStore interface {
+    Create(ctx context.Context, provider *models.ProviderConfig) error
+    Update(ctx context.Context, provider *models.ProviderConfig) error
+    Delete(ctx context.Context, id string) error
+    Get(ctx context.Context, id string) (*models.ProviderConfig, error)
+    List(ctx context.Context) ([]*models.ProviderConfig, error)
 }
 ```
 
-通用键值存储端口，可由 SQLite / DuckDB / 本地文件系统实现。
+Provider 配置持久化端口。v1.x 实现为 `repository.ProviderRepoSQLite`。
 
 ---
 
@@ -85,7 +91,7 @@ type MemoryRepository interface {
 }
 ```
 
-**实现者**：`repository.MemoryRepoDuckDB`
+**实现者**：`repository.MemoryRepoSQLite`
 
 ---
 
@@ -102,7 +108,7 @@ type FamilyRepository interface {
 }
 ```
 
-**实现者**：`repository.FamilyRepoKuzu`
+**实现者**：`repository.FamilyRepoKuzu`（v2+ 规划存根，v1.x 运行时不启用）
 
 ---
 
@@ -159,3 +165,7 @@ EventsOn('compliance:warning', (level: string, reason: string) => {
 | `ErrSensitiveDataLeak` | 敏感数据泄露风险 | 403     | 触发二次脱敏       |
 
 所有错误通过 `fmt.Errorf("...: %w", err)` 包装传递，前端通过 `errors.Is` 链判断根因。
+
+---
+
+*最后更新：2026-07-09*

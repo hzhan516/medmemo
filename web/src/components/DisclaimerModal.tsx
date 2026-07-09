@@ -33,9 +33,9 @@ export function DisclaimerModal({ text, version, onAccept, onDecline }: Disclaim
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-2xl max-h-[90vh] flex flex-col rounded-2xl bg-background border border-border shadow-2xl overflow-hidden">
+      <div className="w-full max-w-2xl max-h-[90vh] flex flex-col rounded-2xl bg-background/95 backdrop-blur-xl border border-border/60 shadow-2xl overflow-hidden">
         {/* 头部 */}
-        <div className="flex items-center gap-3 px-6 py-4 border-b border-border bg-muted/40">
+        <div className="flex items-center gap-3 px-6 py-4 border-b border-border/60 bg-muted/30">
           <AlertTriangle className="w-6 h-6 text-amber-500 shrink-0" />
           <div className="flex-1">
             <h2 className="text-lg font-semibold text-foreground">免责声明与用户协议</h2>
@@ -57,7 +57,7 @@ export function DisclaimerModal({ text, version, onAccept, onDecline }: Disclaim
         </div>
 
         {/* 底部操作栏 */}
-        <div className="flex flex-col gap-3 px-6 py-4 border-t border-border bg-muted/30">
+        <div className="flex flex-col gap-3 px-6 py-4 border-t border-border/60 bg-muted/20">
           {!scrolledToBottom && (
             <p className="text-xs text-center text-amber-600 dark:text-amber-400">
               请向下滚动阅读完整条款后，方可进行操作

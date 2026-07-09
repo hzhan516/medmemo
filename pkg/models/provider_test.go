@@ -25,6 +25,32 @@ func newValidProviderConfig() ProviderConfig {
 	}
 }
 
+// TestInferProviderType 验证根据 API Host 推断 provider 类型。
+func TestInferProviderType(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		apiHost string
+		want    ProviderType
+	}{
+		{"http://localhost:11434", ProviderOllama},
+		{"http://127.0.0.1:11434", ProviderOllama},
+		{"http://[::1]:11434", ProviderOllama},
+		{"http://localhost:8080", ProviderLocal},
+		{"http://127.0.0.1:9999", ProviderLocal},
+		{"https://api.moonshot.cn/v1", ProviderKimi},
+		{"https://api.openai.com/v1", ProviderOpenAI},
+		{"https://dashscope.aliyuncs.com/compatible-mode/v1", ProviderQwen},
+		{"https://api.siliconflow.cn/v1", ProviderSiliconFlow},
+		{"https://api.example.com", ""},
+		{"not-a-url", ""},
+		{"", ""},
+	}
+
+	for _, tt := range cases {
+		assert.Equal(t, tt.want, InferProviderType(tt.apiHost), "apiHost=%q", tt.apiHost)
+	}
+}
+
 // TestProviderConfig_Validate_APIKey_Success 验证 api_key 方式正常通过。
 func TestProviderConfig_Validate_APIKey_Success(t *testing.T) {
 	t.Parallel()
@@ -48,7 +74,7 @@ func TestProviderConfig_Validate_APIKey_MissingKey(t *testing.T) {
 	p.AuthMethod = AuthMethodAPIToken
 	p.APIKey = ""
 	err := p.Validate()
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "api_key is required")
 }
 
@@ -70,7 +96,7 @@ func TestProviderConfig_Validate_CLIToken_MissingCredentialPath(t *testing.T) {
 	p.APIKey = ""
 	p.AuthParams = AuthParams{}
 	err := p.Validate()
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cli_credential_path is required")
 }
 
@@ -95,7 +121,7 @@ func TestProviderConfig_Validate_OAuthDevice_MissingClientID(t *testing.T) {
 	p.APIKey = ""
 	p.AuthParams = AuthParams{OAuthTokenURL: "https://auth.example.com/token"}
 	err := p.Validate()
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "oauth_client_id is required")
 }
 
@@ -107,7 +133,7 @@ func TestProviderConfig_Validate_OAuthDevice_MissingTokenURL(t *testing.T) {
 	p.APIKey = ""
 	p.AuthParams = AuthParams{OAuthClientID: "client-123"}
 	err := p.Validate()
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "oauth_token_url is required")
 }
 
@@ -132,7 +158,7 @@ func TestProviderConfig_Validate_ServiceAccount_MissingProjectID(t *testing.T) {
 	p.APIKey = ""
 	p.AuthParams = AuthParams{SAJSON: `{"type":"service_account"}`}
 	err := p.Validate()
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "gcp_project_id is required")
 }
 
@@ -144,7 +170,7 @@ func TestProviderConfig_Validate_ServiceAccount_MissingSAJSON(t *testing.T) {
 	p.APIKey = ""
 	p.AuthParams = AuthParams{GCPProjectID: "my-project-123"}
 	err := p.Validate()
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "sa_json is required")
 }
 
@@ -183,7 +209,7 @@ func TestProviderConfig_Validate_UnknownAuthMethod(t *testing.T) {
 	p := newValidProviderConfig()
 	p.AuthMethod = "unknown_method"
 	err := p.Validate()
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown auth method")
 }
 

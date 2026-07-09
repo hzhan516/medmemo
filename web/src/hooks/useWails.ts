@@ -57,6 +57,18 @@ export function useWails() {
     return await WailsApp.SetDataRetentionDays(days)
   }, [])
 
+  const getCompressionSettings = useCallback(async (): Promise<main.CompressionSettings> => {
+    return await WailsApp.GetCompressionSettings()
+  }, [])
+
+  const setCompressionSettings = useCallback(async (req: main.CompressionSettings): Promise<void> => {
+    return await WailsApp.SetCompressionSettings(req)
+  }, [])
+
+  const testCompressionModel = useCallback(async (providerID: string, modelID: string): Promise<boolean> => {
+    return await WailsApp.TestCompressionModel(providerID, modelID)
+  }, [])
+
   const getConversationMessages = useCallback(async (convID: string): Promise<MessageResponse[]> => {
     return await WailsApp.GetConversationMessages(convID)
   }, [])
@@ -271,6 +283,9 @@ export function useWails() {
     setDataRetentionDays,
     getConversationMessages,
     createConversation,
+    getCompressionSettings,
+    setCompressionSettings,
+    testCompressionModel,
     getModels,
     checkEmergency,
     generateTitle,

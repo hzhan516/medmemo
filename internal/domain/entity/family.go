@@ -10,6 +10,8 @@ import (
 // RelationType 表示家族成员间的亲属关系类型。
 type RelationType string
 
+// noinspection GoUnusedConst
+
 const (
 	RelationParent  RelationType = "PARENT"
 	RelationChild   RelationType = "CHILD"
@@ -19,6 +21,8 @@ const (
 
 // Gender 表示性别。
 type Gender string
+
+// noinspection GoUnusedConst
 
 const (
 	GenderMale   Gender = "MALE"

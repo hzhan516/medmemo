@@ -4,6 +4,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -30,7 +31,7 @@ func (r *AccuracyRepoSQLite) GetAccuracy(ctx context.Context, answerType string)
 		WHERE answer_type = ?
 	`, answerType).Scan(&correctCount, &totalCount)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return 0.75, nil
 		}
 		return 0, fmt.Errorf("failed to get accuracy stats for %s: %w", answerType, err)

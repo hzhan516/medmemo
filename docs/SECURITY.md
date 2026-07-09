@@ -22,9 +22,9 @@ If you discover a security vulnerability, please disclose it responsibly through
 
 MedMemo's core design principle is **data-local-first**:
 
-- **SQLite/SQLCipher**: Conversation records and configurations are stored with AES-256 encryption.
-- **DuckDB**: Analytical query database; data files remain local.
-- **Kùzǔ**: Family graph database; data never leaves the device.
+- **SQLCipher/SQLite**: Conversation records, configurations, extracted facts, and audit data are stored locally with AES-256 encryption.
+- **sqlite-vec**: Semantic vector indexes are stored locally alongside SQLite data.
+- **DuckDB / Kùzǔ**: v2+ planning stubs only; these stores are not active in v1.x runtime.
 - **Key Management**: API Keys and encryption keys are stored in the platform keyring (macOS Keychain / Windows DPAPI / Linux Secret Service).
 
 ### Data We Do Not Collect
@@ -42,6 +42,18 @@ Network communication only occurs when the user explicitly enables a cloud-based
 - Model availability health checks.
 
 All network requests are routed through a locally configured proxy and do not pass through MedMemo-controlled servers.
+
+### Local / Loopback De-Identification Skip Assumption
+
+MedMemo skips outbound de-identification for local providers (Ollama / llama.cpp) and loopback
+endpoints (`localhost`, `127.0.0.1`, `::1`), because such traffic is assumed to **stay on the device**.
+
+**Caveat:** this assumption is broken by a process that listens on a loopback address but **forwards
+requests to a cloud service** (a localhost-to-cloud proxy). In that scenario, raw text that was never
+de-identified leaves the device. Treat such a proxy with the same informed-risk posture as the `off`
+de-identification level, and only point MedMemo at a loopback endpoint when you are certain it keeps
+data on-device. See `docs/COMPLIANCE.md` for the de-identification levels and the strict-mode NER
+threshold rationale.
 
 ## Dependency Security Scanning
 
@@ -65,3 +77,7 @@ Security scanning is integrated into the CI pipeline; high-severity vulnerabilit
 2. Update to the latest version regularly to receive security patches.
 3. Use system-level full-disk encryption (BitLocker / FileVault / LUKS) for additional data protection.
 4. Keep local data backups secure and avoid unencrypted transmission.
+
+---
+
+*Last updated: 2026-07-09*

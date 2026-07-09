@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*'
 
+env:
+  GOPROXY: https://proxy.golang.org,https://goproxy.cn,direct
+
 permissions:
   contents: write
   packages: write
@@ -20,8 +23,12 @@ jobs:
             platform: linux
           - os: windows-latest
             platform: windows
-          - os: macos-latest
-            platform: darwin
+          - os: macos-15-intel
+            platform: darwin-amd64
+            arch: x86_64
+          - os: macos-14
+            platform: darwin-arm64
+            arch: arm64
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
@@ -54,7 +61,7 @@ jobs:
           sudo apt-get install -y libsqlcipher-dev libwebkit2gtk-4.1-dev gcc
 
       - name: Install macOS dependencies
-        if: matrix.platform == 'darwin'
+        if: startsWith(matrix.platform, 'darwin')
         run: |
           brew install sqlcipher create-dmg
 
@@ -81,7 +88,7 @@ jobs:
         shell: bash
 
       - name: Verify release artifact
-        run: ./scripts/build/verify-release-artifact.sh ${{ matrix.platform }}
+        run: ./scripts/build/verify-release-artifact.sh ${{ matrix.platform }} ${{ matrix.arch }}
         shell: bash
 
       - name: Linux runtime smoke test
@@ -92,7 +99,7 @@ jobs:
           export MEDMEMO_DATA_DIR="$RUNNER_TEMP/medmemo-data"
           mkdir -p "$HOME" "$MEDMEMO_DATA_DIR"
 
-          # 后台启动二进制，检查进程存活至少 5 秒
+          # Start the binary in the background and ensure it stays alive for 5s.
           xvfb-run -a timeout 20s ./build/bin/MedMemo &
           PID=$!
           sleep 5
@@ -104,6 +111,74 @@ jobs:
           wait $PID 2>/dev/null || true
           echo "Smoke test passed: binary stays alive for 5s"
         shell: bash
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+          VERSION="${{ github.ref_name }}"
+
+          case "${{ matrix.platform }}" in
+            windows)
+              if [ -f "build/bin/MedMemo-amd64-installer.exe" ]; then
+                cp "build/bin/MedMemo-amd64-installer.exe" "release-assets/MedMemoSetup.exe"
+              else
+                echo "ERROR: Windows installer not found"
+                exit 1
+              fi
+              ;;
+            darwin-amd64)
+              if [ -f "build/bin/MedMemo_x86_64.dmg" ]; then
+                cp "build/bin/MedMemo_x86_64.dmg" "release-assets/MedMemo_x86_64.dmg"
+              else
+                echo "ERROR: macOS Intel DMG missing"
+                exit 1
+              fi
+              ;;
+            darwin-arm64)
+              if [ -f "build/bin/MedMemo_arm64.dmg" ]; then
+                cp "build/bin/MedMemo_arm64.dmg" "release-assets/MedMemo_arm64.dmg"
+              else
+                echo "ERROR: macOS Apple Silicon DMG missing"
+                exit 1
+              fi
+              ;;
+            linux)
+              if [ -f "build/bin/MedMemo-x86_64.AppImage" ]; then
+                cp "build/bin/MedMemo-x86_64.AppImage" "release-assets/MedMemo-x86_64.AppImage"
+              else
+                echo "ERROR: Linux AppImage missing"
+                exit 1
+              fi
+              DEB_FILE="build/bin/MedMemo_${VERSION}_amd64.deb"
+              if [ -f "$DEB_FILE" ]; then
+                cp "$DEB_FILE" "release-assets/$(basename "$DEB_FILE")"
+              else
+                echo "ERROR: Linux DEB package missing: $DEB_FILE"
+                exit 1
+              fi
+              RPM_FILE="build/bin/MedMemo-${VERSION}-1.x86_64.rpm"
+              if [ -f "$RPM_FILE" ]; then
+                cp "$RPM_FILE" "release-assets/$(basename "$RPM_FILE")"
+              else
+                echo "ERROR: Linux RPM package missing: $RPM_FILE"
+                exit 1
+              fi
+              ;;
+          esac
+
+          echo "Release assets:"
+          ls -la release-assets/
+
+      - name: Generate checksums
+        run: |
+          cd release-assets
+          sha256sum * > checksums.txt
+          cd ..
+          echo "Generated checksums.txt:"
+          cat release-assets/checksums.txt
+
+      - name: Verify release asset whitelist
+        run: ./scripts/build/verify-release-assets.sh release-assets
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v7

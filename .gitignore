@@ -77,3 +77,4 @@ coverage.html
 /.hermes/
 /.qoder/
 /.worktrees/
+/qodana.yaml

@@ -31,8 +31,8 @@ export function AboutPage({ onOpenFeedback }: AboutPageProps) {
   }, [getVersionInfo, getVersionNotes])
 
   return (
-    <div className="h-full flex flex-col bg-background animate-fadeIn">
-      <div className="h-14 flex items-center px-4 border-b border-border">
+    <div className="h-full flex flex-col bg-background/30 animate-fadeIn">
+      <div className="h-14 flex items-center px-4 mac-toolbar border-b border-white/20 dark:border-white/5">
         <h1 className="text-lg font-semibold">关于</h1>
       </div>
 

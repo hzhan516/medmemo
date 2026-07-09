@@ -350,7 +350,7 @@ func (s *FileStore) decryptWithKey(ciphertext, key []byte) ([]byte, error) {
 	return plaintext, nil
 }
 
-// SecretSet 供 Wire 使用的 ProviderSet。
-var SecretSet = wire.NewSet(
+// Set 供 Wire 使用的 ProviderSet。
+var Set = wire.NewSet(
 	NewKeyringStore,
 )

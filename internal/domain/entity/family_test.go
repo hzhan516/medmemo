@@ -3,8 +3,6 @@ package entity
 import (
 	"strings"
 	"testing"
-
-	"github.com/hzhan516/medmemo/pkg/models"
 )
 
 func TestNewFamilyMember(t *testing.T) {
@@ -39,7 +37,7 @@ func TestFamilyMember_AddRelation(t *testing.T) {
 		t.Fatalf("expected 1 relation, got %d", len(m.Relations))
 	}
 	rel := m.Relations[0]
-	if rel.ToMemberID != models.MemberID("member_456") {
+	if rel.ToMemberID != "member_456" {
 		t.Errorf("expected ToMemberID %q, got %q", "member_456", rel.ToMemberID)
 	}
 	if rel.Type != RelationSpouse {

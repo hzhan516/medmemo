@@ -66,6 +66,13 @@ type WailsApp struct {
 	// v1.1.9: 知识库管理
 	knowledgeRepo     repository.KnowledgeRepository
 	knowledgeImporter *usecase.KnowledgeImporter
+
+	// 上下文长度解析与用量估算（M01-会话压缩）
+	contextLengthResolver *usecase.ContextLengthResolver
+	contextEstimator      *usecase.ContextEstimator
+
+	// 会话压缩服务（M01-会话压缩）
+	compressionService *usecase.CompressionService
 }
 
 // NewWailsApp 构造函数，供 Wire 调用。
@@ -93,34 +100,40 @@ func NewWailsApp(
 	accuracyService *usecase.AccuracyService,
 	knowledgeRepo repository.KnowledgeRepository,
 	knowledgeImporter *usecase.KnowledgeImporter,
+	contextLengthResolver *usecase.ContextLengthResolver,
+	contextEstimator *usecase.ContextEstimator,
+	compressionService *usecase.CompressionService,
 ) *WailsApp {
 	return &WailsApp{
-		chatOrchestrator:  chat,
-		memoryRetriever:   mem,
-		config:            cfg,
-		convRepo:          convRepo,
-		msgRepo:           msgRepo,
-		disclaimerRepo:    disclaimerRepo,
-		providerStore:     providerStore,
-		healthChecker:     healthChecker,
-		titleGen:          titleGen,
-		updaterSvc:        updaterSvc,
-		secretStore:       secretStore,
-		tokenRefreshSvc:   tokenRefreshSvc,
-		deviceFlowSvc:     deviceFlowSvc,
-		factRepo:          factRepo,
-		auditLogRepo:      auditLogRepo,
-		dialogueRepo:      dialogueRepo,
-		embeddingSvc:      embeddingSvc,
-		embeddingRepo:     embeddingRepo,
-		migrator:          migrator,
-		migrationState:    migrationState,
-		onnxReady:         make(chan struct{}),
-		callbackServers:   make(map[string]*auth.LocalCallbackServer),
-		activeStreams:     make(map[string]context.CancelFunc),
-		accuracyService:   accuracyService,
-		knowledgeRepo:     knowledgeRepo,
-		knowledgeImporter: knowledgeImporter,
+		chatOrchestrator:      chat,
+		memoryRetriever:       mem,
+		config:                cfg,
+		convRepo:              convRepo,
+		msgRepo:               msgRepo,
+		disclaimerRepo:        disclaimerRepo,
+		providerStore:         providerStore,
+		healthChecker:         healthChecker,
+		titleGen:              titleGen,
+		updaterSvc:            updaterSvc,
+		secretStore:           secretStore,
+		tokenRefreshSvc:       tokenRefreshSvc,
+		deviceFlowSvc:         deviceFlowSvc,
+		factRepo:              factRepo,
+		auditLogRepo:          auditLogRepo,
+		dialogueRepo:          dialogueRepo,
+		embeddingSvc:          embeddingSvc,
+		embeddingRepo:         embeddingRepo,
+		migrator:              migrator,
+		migrationState:        migrationState,
+		onnxReady:             make(chan struct{}),
+		callbackServers:       make(map[string]*auth.LocalCallbackServer),
+		activeStreams:         make(map[string]context.CancelFunc),
+		accuracyService:       accuracyService,
+		knowledgeRepo:         knowledgeRepo,
+		knowledgeImporter:     knowledgeImporter,
+		contextLengthResolver: contextLengthResolver,
+		contextEstimator:      contextEstimator,
+		compressionService:    compressionService,
 	}
 }
 

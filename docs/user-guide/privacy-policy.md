@@ -47,7 +47,7 @@ When you use a cloud AI provider (Kimi, OpenAI, Alibaba):
 Your input
   → L1 Rule Engine (regex patterns: IDs, phones, emails)
     → L2 NER Model (names, organizations, diseases)
-      → L3 Keyword Dictionary (fallback matching)
+      → Safe outbound text
         → Safe text sent to cloud API
 ```
 
@@ -149,4 +149,4 @@ For privacy-related questions or concerns:
 
 ---
 
-*Last updated: 2026-05-19*
+*Last updated: 2026-07-09*

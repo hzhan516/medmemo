@@ -13,10 +13,10 @@ MedMemo strictly follows the Clean Architecture four-layer model; dependency dir
 ```
 ┌──────────────────────────────────────┐
 │    Infrastructure Layer              │  ← Frameworks & Drivers
-│  (ONNX/DuckDB/SQLite/Wails/Viper)   │
+│  (ONNX/SQLCipher/SQLite/sqlite-vec/Wails) │
 ├──────────────────────────────────────┤
 │    Adapters Layer                    │  ← Interface Adapters
-│  (AI Adapter / Repository / DTO)    │
+│  (AI Adapter / Repository)          │
 ├──────────────────────────────────────┤
 │    Application Layer                 │  ← Use Cases
 │  (Use Case Orchestration / Ports)   │
@@ -47,7 +47,7 @@ MedMemo uses Google Wire for **compile-time** dependency injection; runtime refl
 
 1. Write a Provider function in the corresponding package that returns a **concrete type**.
 2. Register it in the package's `ProviderSet` variable (e.g., `ApplicationSet = wire.NewSet(...)`).
-3. Modify the `InitializeApp` function in `cmd/health-assistant/wire.go` to include the new ProviderSet.
+3. Modify the `InitializeApp` function in the repository-root `wire.go` to include the new ProviderSet.
 4. Run `make wire` to regenerate `wire_gen.go`.
 
 **Absolutely prohibited** to manually edit `wire_gen.go`.
@@ -77,7 +77,7 @@ return fmt.Errorf("failed to retrieve family member %s: %w", id, err)
 
 // Adapter-layer external error mapping:
 if err != nil {
-    return nil, fmt.Errorf("duckdb query failed: %w", domain.ErrRecordNotFound)
+    return nil, fmt.Errorf("sqlite query failed: %w", domain.ErrRecordNotFound)
 }
 ```
 
@@ -91,10 +91,10 @@ if err != nil {
 - Tasks are dispatched through a buffered channel (capacity 16).
 - **Session sharing for concurrent calls is prohibited** — `Run()` is not thread-safe.
 
-### DuckDB Writes
+### SQLCipher/SQLite Writes
 
-- Single goroutine executes writes.
-- MVCC guarantees read concurrency safety.
+- Database writes that can conflict are serialized at the application layer.
+- Keep connection-pool settings conservative for encrypted SQLite and sqlite-vec operations.
 
 ### HTTP Requests
 
@@ -139,7 +139,7 @@ Prioritize Tailwind CSS utility classes; custom styles should use CSS variables 
      /  \  E2E (5%)  — Wails Integration / Playwright
     /____\
    /      \
-  /        \ Integration Tests (25%) — go test + DuckDB in-memory mode
+  /        \ Integration Tests (25%) — go test + SQLite in-memory mode
  /__________\
 /            \
 /______________\ Unit Tests (70%) — go test + testify + mockery
@@ -172,3 +172,19 @@ defer cancel()
 ```
 
 Graceful shutdown order follows dependency inversion: close frontend bridge first, then stop inference workers, and finally close database connections.
+
+---
+
+## Build Tags and Commands
+
+| Tag / Command | Purpose |
+|---------------|---------|
+| `ORT` | Enables ONNX Runtime CGO bindings for local NER and embedding inference. |
+| `webkit2_41` | Linux build tag for distributions using webkit2gtk-4.1. |
+| `make test` | Runs unit tests with race detector and coverage. |
+| `make test-integration` | Runs integration tests with `integration,ORT` tags. |
+| `make lint` | Runs Go and frontend lint checks. |
+
+---
+
+*Last updated: 2026-07-09*

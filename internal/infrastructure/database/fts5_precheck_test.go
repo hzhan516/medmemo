@@ -17,7 +17,7 @@ func TestFTS5Availability_Stage0(t *testing.T) {
 	t.Run("modernc_sqlite_supports_fts5", func(t *testing.T) {
 		db, err := sql.Open("sqlite", ":memory:")
 		require.NoError(t, err)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		assert.NoError(t, probeFTS5(db), "modernc.org/sqlite 应支持 FTS5")
 	})
@@ -26,7 +26,7 @@ func TestFTS5Availability_Stage0(t *testing.T) {
 		// SQLCipher（go-sqlcipher）与 go-sqlite3 共享 sqlite3 驱动名
 		db, err := sql.Open("sqlite3", ":memory:")
 		require.NoError(t, err)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		assert.Error(t, probeFTS5(db), "go-sqlcipher 不应支持 FTS5，必须回退到 SQL LIKE 方案")
 	})

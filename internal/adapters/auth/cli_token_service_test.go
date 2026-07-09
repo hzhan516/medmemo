@@ -135,7 +135,7 @@ func TestCLITokenService_ValidateToken_Valid(t *testing.T) {
 
 // TestCLITokenService_ValidateToken_Invalid 验证无效 token 返回 false。
 func TestCLITokenService_ValidateToken_Invalid(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		_, _ = w.Write([]byte(`{"error":"invalid token"}`))
 	}))
@@ -273,7 +273,7 @@ func TestCLITokenService_Integration(t *testing.T) {
 // TestCLITokenService_ValidateToken_ContextTimeout 验证 context 超时处理。
 func TestCLITokenService_ValidateToken_ContextTimeout(t *testing.T) {
 	// 创建一个缓慢响应的服务器
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		time.Sleep(100 * time.Millisecond)
 		w.WriteHeader(http.StatusOK)
 	}))

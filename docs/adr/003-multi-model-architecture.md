@@ -112,7 +112,7 @@ When switching from a large cloud model to a smaller local model, the compressio
 - **Testing matrix expansion**: Each provider adapter requires separate integration tests (mock server + real API smoke tests), increasing CI maintenance.
 - **Context switching UX friction**: Model switches mid-conversation may cause subtle behavior changes (different tokenization, refusal patterns, formatting). The compression/summary step adds latency.
 - **Configuration complexity**: Users must understand API keys, endpoints, and model IDs — a steeper onboarding curve than "it just works" single-model apps.
-- **Local model resource pressure**: Running Ollama on the same machine as DuckDB + ONNX Runtime pushes memory usage; minimum recommended RAM is 8GB.
+- **Local model resource pressure**: Running Ollama on the same machine as ONNX Runtime and the v1.x SQLCipher/SQLite + sqlite-vec stack pushes memory usage; minimum recommended RAM is 8GB. DuckDB remains a v2+ planning candidate, not a v1.x runtime dependency.
 
 ## Alternatives Considered
 
@@ -128,3 +128,7 @@ When switching from a large cloud model to a smaller local model, the compressio
 - `internal/application/port/llm_client.go` — `LLMClient` interface definition
 - `internal/adapters/ai/provider.go` — `llmClientFactory` implementation
 - `pkg/models/provider.go` — `ProviderConfig` validation logic
+
+---
+
+*Last updated: 2026-07-09*

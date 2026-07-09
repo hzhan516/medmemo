@@ -17,6 +17,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       prerelease: ${{ steps.version.outputs.prerelease }}
+      draft: ${{ steps.version.outputs.draft }}
     steps:
       - uses: actions/checkout@v6
 
@@ -24,15 +25,30 @@ jobs:
         id: version
         run: |
           BASE_VERSION=$(jq -r '.info.productVersion' wails.json)
-          RUN_NUMBER=${{ github.run_number }}
+          REF="${GITHUB_REF_NAME}"
 
-          # branch push（main/release）统一生成预发布版本，避免稳定用户收到 CI 构建版本
-          VERSION="v${BASE_VERSION}-Pre-release-build.${RUN_NUMBER}"
-          PRERELEASE="true"
+          if [[ "$REF" == release/* ]]; then
+            BRANCH_VER=$(echo "$REF" | sed 's|release/v||')
+            if [[ "$BRANCH_VER" != "$BASE_VERSION" ]]; then
+              echo "ERROR: Branch version ($BRANCH_VER) != wails.json productVersion ($BASE_VERSION)"
+              exit 1
+            fi
+            VERSION="v${BASE_VERSION}-Pre-release"
+            PRERELEASE="true"
+            DRAFT="true"
+          elif [[ "$REF" == "main" ]]; then
+            VERSION="v${BASE_VERSION}"
+            PRERELEASE="false"
+            DRAFT="false"
+          else
+            echo "Unsupported ref: $REF"
+            exit 1
+          fi
 
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "prerelease=$PRERELEASE" >> $GITHUB_OUTPUT
-          echo "Generated version: $VERSION (prerelease=$PRERELEASE)"
+          echo "draft=$DRAFT" >> $GITHUB_OUTPUT
+          echo "Generated version: $VERSION (prerelease=$PRERELEASE, draft=$DRAFT)"
 
   build:
     name: Build ${{ matrix.platform }}
@@ -45,8 +61,12 @@ jobs:
             platform: linux
           - os: windows-latest
             platform: windows
-          - os: macos-latest
-            platform: darwin
+          - os: macos-15-intel
+            platform: darwin-amd64
+            arch: x86_64
+          - os: macos-14
+            platform: darwin-arm64
+            arch: arm64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
@@ -76,7 +96,7 @@ jobs:
           sudo apt-get install -y libsqlcipher-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev gcc
 
       - name: Install macOS dependencies
-        if: matrix.platform == 'darwin'
+        if: startsWith(matrix.platform, 'darwin')
         run: brew install sqlcipher create-dmg
 
       - name: Install dlfcn-win32 for ortgenai (Windows)
@@ -102,7 +122,7 @@ jobs:
         shell: bash
 
       - name: Verify release artifact
-        run: ./scripts/build/verify-release-artifact.sh ${{ matrix.platform }}
+        run: ./scripts/build/verify-release-artifact.sh ${{ matrix.platform }} ${{ matrix.arch }}
         shell: bash
 
       - name: Linux runtime smoke test
@@ -150,52 +170,92 @@ jobs:
           name: medmemo-windows-${{ needs.version.outputs.version }}
           path: artifacts/windows/
 
-      - name: Download macOS artifacts
+      - name: Download macOS Intel artifacts
         uses: actions/download-artifact@v8
         with:
-          name: medmemo-darwin-${{ needs.version.outputs.version }}
-          path: artifacts/darwin/
+          name: medmemo-darwin-amd64-${{ needs.version.outputs.version }}
+          path: artifacts/darwin-amd64/
+
+      - name: Download macOS Apple Silicon artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: medmemo-darwin-arm64-${{ needs.version.outputs.version }}
+          path: artifacts/darwin-arm64/
 
       - name: Prepare release assets
         run: |
           mkdir -p release-assets
+          VERSION="${{ needs.version.outputs.version }}"
 
-          # Windows：优先 NSIS installer，回退到裸二进制
+          # Windows: only ship the NSIS installer, never fall back to a bare exe.
           if [ -f "artifacts/windows/MedMemo-amd64-installer.exe" ]; then
               cp "artifacts/windows/MedMemo-amd64-installer.exe" "release-assets/MedMemoSetup.exe"
-          elif [ -f "artifacts/windows/MedMemo.exe" ]; then
-              cp "artifacts/windows/MedMemo.exe" "release-assets/MedMemoSetup.exe"
+          else
+              echo "ERROR: Windows installer not found"
+              exit 1
           fi
 
-          # macOS：只发布 .dmg
-          if [ -f "artifacts/darwin/MedMemo.dmg" ]; then
-              cp "artifacts/darwin/MedMemo.dmg" "release-assets/MedMemo.dmg"
+          # macOS Intel
+          if [ -f "artifacts/darwin-amd64/MedMemo_x86_64.dmg" ]; then
+              cp "artifacts/darwin-amd64/MedMemo_x86_64.dmg" "release-assets/MedMemo_x86_64.dmg"
+          else
+              echo "ERROR: macOS Intel DMG missing"
+              exit 1
           fi
 
-          # Linux：只发布 .AppImage，保留架构后缀以便 updater 优先匹配
+          # macOS Apple Silicon
+          if [ -f "artifacts/darwin-arm64/MedMemo_arm64.dmg" ]; then
+              cp "artifacts/darwin-arm64/MedMemo_arm64.dmg" "release-assets/MedMemo_arm64.dmg"
+          else
+              echo "ERROR: macOS Apple Silicon DMG missing"
+              exit 1
+          fi
+
+          # Linux: AppImage, DEB and RPM packages.
           if [ -f "artifacts/linux/MedMemo-x86_64.AppImage" ]; then
               cp "artifacts/linux/MedMemo-x86_64.AppImage" "release-assets/MedMemo-x86_64.AppImage"
+          else
+              echo "ERROR: Linux AppImage missing"
+              exit 1
           fi
 
-          # 生成 checksums.txt 供 updater 校验使用
-          if [ "$(ls -A release-assets)" ]; then
-              cd release-assets
-              sha256sum * > checksums.txt
-              cd ..
+          DEB_FILE="artifacts/linux/MedMemo_${VERSION}_amd64.deb"
+          if [ -f "$DEB_FILE" ]; then
+              cp "$DEB_FILE" "release-assets/$(basename "$DEB_FILE")"
+          else
+              echo "ERROR: Linux DEB package missing: $DEB_FILE"
+              exit 1
+          fi
+
+          RPM_FILE="artifacts/linux/MedMemo-${VERSION}-1.x86_64.rpm"
+          if [ -f "$RPM_FILE" ]; then
+              cp "$RPM_FILE" "release-assets/$(basename "$RPM_FILE")"
+          else
+              echo "ERROR: Linux RPM package missing: $RPM_FILE"
+              exit 1
           fi
 
           echo "Release assets:"
           ls -la release-assets/
 
-      # 先以 draft 创建 release 并上传资产，避免 immutable release 仓库
-      # 在 prerelease 状态下拒绝后续资产上传的问题。
-      - name: Create Draft Release
+      - name: Generate checksums
+        run: |
+          cd release-assets
+          sha256sum * > checksums.txt
+          cd ..
+          echo "Generated checksums.txt:"
+          cat release-assets/checksums.txt
+
+      - name: Verify release asset whitelist
+        run: ./scripts/build/verify-release-assets.sh release-assets
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           name: MedMemo ${{ needs.version.outputs.version }}
           tag_name: ${{ needs.version.outputs.version }}
           prerelease: ${{ needs.version.outputs.prerelease == 'true' }}
-          draft: true
+          draft: ${{ needs.version.outputs.draft == 'true' }}
           files: release-assets/*
           generate_release_notes: true
           fail_on_unmatched_files: false
@@ -203,6 +263,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish Release
+        if: needs.version.outputs.prerelease == 'false'
         run: |
           TAG="${{ needs.version.outputs.version }}"
           REPO="${{ github.repository }}"
@@ -212,8 +273,7 @@ jobs:
           for i in $(seq 1 $MAX_RETRIES); do
             echo "Attempt $i/$MAX_RETRIES: Publishing release $TAG..."
 
-            # 幂等检查：若已被发布则直接成功
-            # stderr 保留到日志用于排查，通过 set +e 捕获退出码避免吞掉认证失败等真实错误
+            # Idempotency: succeed if the release is already published.
             set +e
             DRAFT_JSON=$(gh release view "$TAG" --repo "$REPO" --json isDraft 2>/tmp/gh_view_err)
             VIEW_EXIT=$?

@@ -11,7 +11,7 @@
 MedMemo 是一款桌面端健康咨询工具，核心诉求包括：
 1. **长期可维护性**：健康数据模型（记忆、家族关系、会话）会随版本快速迭代，需要清晰的业务边界。
 2. **可测试性**：医疗合规逻辑（脱敏、拦截、用词校验）必须可独立单元测试，不依赖外部框架。
-3. **可替换性**：本地 AI 推理引擎（ONNX Runtime）、数据库（DuckDB/SQLite）、LLM 供应商均存在替换或降级风险。
+3. **可替换性**：本地 AI 推理引擎（ONNX Runtime）、数据库（SQLCipher/SQLite + sqlite-vec，DuckDB/Kùzǔ 仅作为 v2+ 规划候选）、LLM 供应商均存在替换或降级风险。
 
 在项目启动前，团队评估了三种后端架构风格：
 
@@ -37,7 +37,7 @@ internal/
 
 1. **domain 层零外部依赖**：仅允许导入 Go 标准库和 `pkg/models/`。违反此规则将导致 CI 的 depguard 检查阻断合并。
 2. **application 层不直接调用 adapter 实现**：通过接口（Port）解耦，adapter 层负责实现 application 层定义的接口。
-3. **infrastructure 层不知道业务存在**：仅封装第三方框架（Wails、DuckDB、ONNX Runtime），不导入任何业务包。
+3. **infrastructure 层不知道业务存在**：仅封装第三方框架（Wails、SQLCipher/SQLite、sqlite-vec、ONNX Runtime），不导入任何业务包。
 4. **依赖注入通过 Wire 编译期完成**：禁止运行时反射注入，确保冷启动速度和编译期安全。
 
 ## 后果（Consequences）
@@ -63,7 +63,11 @@ internal/
 ## 相关文档
 
 - [docs/DEVELOPMENT.md](../../../DEVELOPMENT.md) — 开发规范与依赖规则详解
-- [internal/domain/README.md](../../../internal/domain/README.md)
-- [internal/application/README.md](../../../internal/application/README.md)
-- [internal/adapters/README.md](../../../internal/adapters/README.md)
-- [internal/infrastructure/README.md](../../../internal/infrastructure/README.md)
+- [docs/internal/domain/README.md](../internal/domain/README.md)
+- [docs/internal/application/README.md](../internal/application/README.md)
+- [docs/internal/adapters/README.md](../internal/adapters/README.md)
+- [docs/internal/infrastructure/README.md](../internal/infrastructure/README.md)
+
+---
+
+*最后更新：2026-07-09*

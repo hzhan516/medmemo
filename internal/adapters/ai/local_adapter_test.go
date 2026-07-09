@@ -42,7 +42,7 @@ func TestLocalAdapter_Chat_Success(t *testing.T) {
 }
 
 func TestLocalAdapter_Chat_Error(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		resp := ollamaChatResponse{
 			Error: "model not found",
 		}
@@ -117,7 +117,7 @@ func TestLocalAdapter_CheckAvailability_Available(t *testing.T) {
 }
 
 func TestLocalAdapter_CheckAvailability_Unavailable(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()

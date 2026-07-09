@@ -149,7 +149,7 @@ func TestKnowledgeSourceTagger_Tag_UnknownSourceDefaults(t *testing.T) {
 	t.Parallel()
 	tagger := NewKnowledgeSourceTagger()
 	// 使用未定义的来源类型
-	ks := tagger.Tag(entity.SourceType("nonexistent"), "citation")
+	ks := tagger.Tag("nonexistent", "citation")
 	assert.Equal(t, entity.SourceLLMInternal, ks.Type)
 	assert.InDelta(t, 0.60, ks.Confidence, 0.001)
 }

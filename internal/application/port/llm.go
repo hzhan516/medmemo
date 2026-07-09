@@ -38,8 +38,27 @@ type NERDetector interface {
 	IsAvailable() bool
 }
 
+// StandardNERDetector 是标准级 NER 检测器的标记接口，使用默认置信度阈值。
+// 与 StrictNERDetector 区分，供 Wire 按脱敏级别注入不同实现。
+type StandardNERDetector interface {
+	NERDetector
+}
+
+// StrictNERDetector 是严格级 NER 检测器的标记接口，使用更低置信度阈值以提升召回。
+// 与 StandardNERDetector 区分，供 Wire 按脱敏级别注入不同实现。
+type StrictNERDetector interface {
+	NERDetector
+}
+
 // SensitiveDetector 定义敏感信息检测端口。
 type SensitiveDetector interface {
 	// Detect 检测文本中的敏感实体，返回分级标记结果。
 	Detect(ctx context.Context, text string) ([]models.SensitiveEntity, error)
+}
+
+// TokenCounter 估算文本的 token 数量。实现优先使用 daulet/tokenizers（HF/ONNX 工具链），
+// 在分词器不可用时返回 (heuristic, false)。
+type TokenCounter interface {
+	// Count 返回 token 数与一个布尔值：true 表示使用了真实分词器，false 表示使用了字符启发式回退。
+	Count(ctx context.Context, modelID, text string) (int, bool)
 }

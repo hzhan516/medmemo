@@ -8,6 +8,7 @@ import { useSettingsStore } from '@/stores/settingsStore'
 
 // Mock @wails/runtime 模块，使组件导入指向我们的 mock
 vi.mock('@wails/runtime', () => import('@/test/mocks/wails'))
+vi.mock('@wails/runtime/runtime', () => import('@/test/mocks/wails'))
 
 // 注册全局 Wails Mock（window.go.main.WailsApp）
 registerGlobalWailsMock()

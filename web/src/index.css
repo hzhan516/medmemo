@@ -4,48 +4,50 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
+    /* macOS clinical workspace — light mode */
+    --background: 220 14% 96%;
+    --foreground: 224 12% 12%;
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
+    --card-foreground: 224 12% 12%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 240 5.9% 10%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
+    --popover-foreground: 224 12% 12%;
+    --primary: 212 100% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 92%;
+    --secondary-foreground: 224 12% 12%;
+    --muted: 220 12% 91%;
+    --muted-foreground: 224 8% 42%;
+    --accent: 212 100% 95%;
+    --accent-foreground: 212 100% 28%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 240 5.9% 10%;
+    --border: 220 13% 84%;
+    --input: 220 13% 84%;
+    --ring: 212 100% 50%;
     --radius: 0.5rem;
   }
 
   .dark {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 217 91% 60%;
+    /* macOS clinical workspace — dark mode */
+    --background: 224 12% 8%;
+    --foreground: 220 14% 94%;
+    --card: 224 10% 12%;
+    --card-foreground: 220 14% 94%;
+    --popover: 224 10% 12%;
+    --popover-foreground: 220 14% 94%;
+    --primary: 212 100% 60%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 74.9%;
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
+    --secondary: 224 9% 17%;
+    --secondary-foreground: 220 14% 94%;
+    --muted: 224 9% 18%;
+    --muted-foreground: 220 8% 70%;
+    --accent: 212 60% 20%;
+    --accent-foreground: 212 100% 86%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 20%;
-    --input: 240 3.7% 20%;
-    --ring: 217 91% 60%;
+    --border: 224 8% 24%;
+    --input: 224 8% 24%;
+    --ring: 212 100% 60%;
   }
 }
 
@@ -55,6 +57,84 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* macOS-style scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--foreground) / 0.16);
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--foreground) / 0.28);
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Selection color */
+::selection {
+  background-color: hsl(var(--primary) / 0.2);
+  color: hsl(var(--foreground));
+}
+
+@layer components {
+  .mac-vibrant-panel {
+    background-color: rgb(255 255 255 / 0.72);
+    -webkit-backdrop-filter: blur(24px);
+    backdrop-filter: blur(24px);
+    border-color: hsl(var(--border) / 0.7);
+  }
+  .dark .mac-vibrant-panel {
+    background-color: rgb(9 9 11 / 0.64);
+  }
+
+  .mac-toolbar {
+    background-color: rgb(255 255 255 / 0.78);
+    -webkit-backdrop-filter: blur(24px);
+    backdrop-filter: blur(24px);
+    border-color: hsl(var(--border) / 0.7);
+  }
+  .dark .mac-toolbar {
+    background-color: rgb(9 9 11 / 0.70);
+  }
+
+  .mac-control {
+    border-radius: 0.375rem;
+    border: 1px solid hsl(var(--border) / 0.7);
+    background-color: rgb(255 255 255 / 0.7);
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  }
+  .dark .mac-control {
+    background-color: rgb(255 255 255 / 0.1);
+  }
+}
+
+@layer utilities {
+  /* Wails frameless 拖拽区域 */
+  .app-drag-region {
+    --wails-draggable: drag;
+    user-select: none;
+  }
+
+  /* 交互控件显式禁用拖拽 */
+  .app-no-drag,
+  .app-no-drag * {
+    --wails-draggable: no-drag;
   }
 }
