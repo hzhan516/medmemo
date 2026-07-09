@@ -33,9 +33,17 @@ jobs:
               echo "ERROR: Branch version ($BRANCH_VER) != wails.json productVersion ($BASE_VERSION)"
               exit 1
             fi
-            VERSION="v${BASE_VERSION}-Pre-release"
+            # 统一使用 vX.Y.Z-rc.N 作为预发布 tag，避免 -Pre-release 重名和无限叠加 build 号
+            EXISTING=$(git tag -l "v${BASE_VERSION}-rc.*" | sort -V | tail -1)
+            if [[ -n "$EXISTING" ]]; then
+              N=$(echo "$EXISTING" | sed 's/.*-rc\.//')
+              N=$((N + 1))
+            else
+              N=1
+            fi
+            VERSION="v${BASE_VERSION}-rc.${N}"
             PRERELEASE="true"
-            DRAFT="true"
+            DRAFT="false"
           elif [[ "$REF" == "main" ]]; then
             VERSION="v${BASE_VERSION}"
             PRERELEASE="false"
@@ -49,6 +57,19 @@ jobs:
           echo "prerelease=$PRERELEASE" >> $GITHUB_OUTPUT
           echo "draft=$DRAFT" >> $GITHUB_OUTPUT
           echo "Generated version: $VERSION (prerelease=$PRERELEASE, draft=$DRAFT)"
+
+      - name: Create or reuse tag
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git rev-parse "$VERSION" >/dev/null 2>&1; then
+            echo "Tag $VERSION already exists, reusing it."
+          else
+            git tag "$VERSION"
+            git push origin "$VERSION"
+            echo "Created and pushed tag $VERSION."
+          fi
 
   build:
     name: Build ${{ matrix.platform }}
@@ -255,54 +276,9 @@ jobs:
           name: MedMemo ${{ needs.version.outputs.version }}
           tag_name: ${{ needs.version.outputs.version }}
           prerelease: ${{ needs.version.outputs.prerelease == 'true' }}
-          draft: ${{ needs.version.outputs.draft == 'true' }}
+          draft: false
           files: release-assets/*
           generate_release_notes: true
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Publish Release
-        if: needs.version.outputs.prerelease == 'false'
-        run: |
-          TAG="${{ needs.version.outputs.version }}"
-          REPO="${{ github.repository }}"
-          MAX_RETRIES=5
-          DELAY=10
-
-          for i in $(seq 1 $MAX_RETRIES); do
-            echo "Attempt $i/$MAX_RETRIES: Publishing release $TAG..."
-
-            # Idempotency: succeed if the release is already published.
-            set +e
-            DRAFT_JSON=$(gh release view "$TAG" --repo "$REPO" --json isDraft 2>/tmp/gh_view_err)
-            VIEW_EXIT=$?
-            set -e
-
-            if [ $VIEW_EXIT -eq 0 ]; then
-              DRAFT_STATUS=$(echo "$DRAFT_JSON" | jq -r '.isDraft')
-              if [ "$DRAFT_STATUS" = "false" ]; then
-                echo "Release $TAG is already published."
-                exit 0
-              fi
-            else
-              echo "gh release view exited with code $VIEW_EXIT, stderr:"
-              cat /tmp/gh_view_err
-            fi
-
-            if gh release edit "$TAG" --draft=false --repo "$REPO"; then
-              echo "Release published successfully."
-              exit 0
-            fi
-
-            if [ $i -lt $MAX_RETRIES ]; then
-              echo "Waiting ${DELAY}s before retry..."
-              sleep $DELAY
-              DELAY=$((DELAY * 2))
-            fi
-          done
-
-          echo "Failed to publish release after $MAX_RETRIES attempts."
-          exit 1
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
