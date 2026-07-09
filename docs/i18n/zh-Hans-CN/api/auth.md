@@ -61,6 +61,30 @@ type AuthMethodDetectStatus struct {
 
 ---
 
+### `DetectCLIToken(providerType string) (*auth.CLIDetectResult, error)`
+
+检测受支持 Provider 的 CLI 是否存在可用本地凭据。
+
+---
+
+### `RefreshToken(providerID string) error`
+
+在 Provider 支持刷新时刷新已保存的 OAuth/CLI token。
+
+---
+
+### `EnableAutoRefresh(providerID string) error`
+
+为 Provider 启用自动 token 刷新。
+
+---
+
+### `DisableAutoRefresh(providerID string) error`
+
+为 Provider 关闭自动 token 刷新。
+
+---
+
 ### `StartOAuthDeviceFlow(providerType string) (*DeviceFlowStartResponse, error)`
 
 启动 OAuth 2.0 Device Flow。同时启动本地回调服务器作为授权完成的通知通道。
@@ -120,3 +144,7 @@ type OAuthDeviceFlowProviderInfo struct {
 ### `ParseServiceAccountJSON(jsonStr string) (map[string]string, error)`
 
 解析 Google 服务账号 JSON 字符串，提取项目 ID、客户端邮箱和私钥 ID。
+
+---
+
+*最后更新：2026-07-09*

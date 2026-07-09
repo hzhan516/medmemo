@@ -159,7 +159,7 @@ MedMemo 检测到新版本时，会下载对应的 `.deb` 或 `.rpm` 安装包�
 
 ```bash
 # 1. 前置条件
-go version  # 需要 Go 1.22+
+go version  # 需要 Go 1.26.4+
 node --version  # 需要 Node.js 18+
 
 # 2. 安装 Wails CLI
@@ -248,4 +248,4 @@ MedMemo 支持自动更新检测：
 
 ---
 
-*最后更新：2026-07-02*
+*最后更新：2026-07-09*

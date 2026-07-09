@@ -29,14 +29,13 @@
 
 ---
 
-## Three-Tier De-Identification Pipeline
+## Two-Level De-Identification Pipeline
 
 ```
 User Input
   → L1 Rule-Based De-Identification Engine (<1ms, <1MB)
     → L2 NER De-Identification Model (20-50ms, ~50MB int8 quantized)
-      → L3 Keyword Dictionary Matching (<5ms, ~5MB)
-        → Safe Text Output
+      → Safe Text Output
 ```
 
 ### L1: Rule-Based De-Identification Engine
@@ -46,14 +45,9 @@ User Input
 
 ### L2: NER De-Identification Model
 
-- Hugot + ONNX Runtime BiLSTM-CRF model
+- Hugot + ONNX Runtime DistilBERT-ONNX token-classification model
 - Coverage: Person names, organization names, disease names, drug names
 - **ONNX Session is not thread-safe**; must be called serially through the 2-Worker pattern
-
-### L3: Keyword Dictionary Matching
-
-- Trie tree prefix matching
-- Fallback strategy: professional terminology, drug aliases, organization abbreviations
 
 ### Sensitivity Level Classification
 
@@ -141,3 +135,7 @@ Non-skippable three-step process:
 
 A persistent compliance notice bar at the top of the conversation interface (height <= 40px):
 > "This tool provides health information for reference only. It does not diagnose or treat. For emergencies, please call 120."
+
+---
+
+*Last updated: 2026-07-09*

@@ -22,9 +22,9 @@ If you discover a security vulnerability, please disclose it responsibly through
 
 MedMemo's core design principle is **data-local-first**:
 
-- **SQLite/SQLCipher**: Conversation records and configurations are stored with AES-256 encryption.
-- **DuckDB**: Analytical query database; data files remain local.
-- **Kùzǔ**: Family graph database; data never leaves the device.
+- **SQLCipher/SQLite**: Conversation records, configurations, extracted facts, and audit data are stored locally with AES-256 encryption.
+- **sqlite-vec**: Semantic vector indexes are stored locally alongside SQLite data.
+- **DuckDB / Kùzǔ**: v2+ planning stubs only; these stores are not active in v1.x runtime.
 - **Key Management**: API Keys and encryption keys are stored in the platform keyring (macOS Keychain / Windows DPAPI / Linux Secret Service).
 
 ### Data We Do Not Collect
@@ -77,3 +77,7 @@ Security scanning is integrated into the CI pipeline; high-severity vulnerabilit
 2. Update to the latest version regularly to receive security patches.
 3. Use system-level full-disk encryption (BitLocker / FileVault / LUKS) for additional data protection.
 4. Keep local data backups secure and avoid unencrypted transmission.
+
+---
+
+*Last updated: 2026-07-09*

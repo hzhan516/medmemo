@@ -1,6 +1,6 @@
 # Domain Layer（实体层）
 
-> 🌐 [English Version](../../../../../internal/domain/README.md)
+> 🌐 [English Version](../../../../internal/domain/README.md)
 
 ## 定位
 
@@ -61,4 +61,4 @@ func (c *Conversation) Rename(title string) error {
 
 ---
 
-*最后更新：2026-05-19*
+*最后更新：2026-07-09*
