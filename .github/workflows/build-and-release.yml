@@ -116,15 +116,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libsqlcipher-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev gcc
 
+      - name: Install nfpm (Linux packaging)
+        if: matrix.platform == 'linux'
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+
       - name: Install macOS dependencies
         if: startsWith(matrix.platform, 'darwin')
         run: brew install sqlcipher create-dmg
 
-      - name: Install dlfcn-win32 for ortgenai (Windows)
+      - name: Install Windows dependencies
         if: matrix.platform == 'windows'
         shell: cmd
         run: |
-          C:\msys64\usr\bin\pacman.exe -S --noconfirm mingw-w64-x86_64-dlfcn
+          C:\msys64\usr\bin\pacman.exe -S --noconfirm mingw-w64-x86_64-dlfcn mingw-w64-x86_64-gcc-libs
 
       - name: Build and Package
         run: ./scripts/build/wails-build.sh ${{ matrix.platform }} ${{ needs.version.outputs.version }}
@@ -180,25 +184,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download Linux artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           name: medmemo-linux-${{ needs.version.outputs.version }}
           path: artifacts/linux/
 
       - name: Download Windows artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           name: medmemo-windows-${{ needs.version.outputs.version }}
           path: artifacts/windows/
 
       - name: Download macOS Intel artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           name: medmemo-darwin-amd64-${{ needs.version.outputs.version }}
           path: artifacts/darwin-amd64/
 
       - name: Download macOS Apple Silicon artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           name: medmemo-darwin-arm64-${{ needs.version.outputs.version }}
           path: artifacts/darwin-arm64/
