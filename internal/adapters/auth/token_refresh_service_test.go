@@ -57,9 +57,7 @@ func (m *mockProviderStore) Get(_ context.Context, id string) (*models.ProviderC
 	}
 	// 返回副本避免外部修改
 	cpy := *p
-	ret := new(models.ProviderConfig)
-	*ret = cpy
-	return ret, nil
+	return &cpy, nil
 }
 
 func (m *mockProviderStore) List(_ context.Context) ([]*models.ProviderConfig, error) {
@@ -68,9 +66,7 @@ func (m *mockProviderStore) List(_ context.Context) ([]*models.ProviderConfig, e
 	result := make([]*models.ProviderConfig, 0, len(m.providers))
 	for _, p := range m.providers {
 		cpy := *p
-		item := new(models.ProviderConfig)
-		*item = cpy
-		result = append(result, item)
+		result = append(result, &cpy)
 	}
 	return result, nil
 }
@@ -262,7 +258,7 @@ func TestTokenRefreshService_Refresh_4xx_Degraded(t *testing.T) {
 	credPath := filepath.Join(tmpDir, "kimi.json")
 	require.NoError(t, os.WriteFile(credPath, []byte(`{"refresh_token":"rt_bad","client_id":"cid","client_secret":"cs"}`), 0600))
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		_ = json.NewEncoder(w).Encode(map[string]any{"error": "invalid_grant"})
 	}))
@@ -302,7 +298,7 @@ func TestTokenRefreshService_Refresh_5xx_Retryable(t *testing.T) {
 	credPath := filepath.Join(tmpDir, "kimi.json")
 	require.NoError(t, os.WriteFile(credPath, []byte(`{"refresh_token":"rt_500","client_id":"cid","client_secret":"cs"}`), 0600))
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()
@@ -357,7 +353,7 @@ func TestTokenRefreshService_ScheduleAutoRefresh_AlreadyExpired(t *testing.T) {
 	credPath := filepath.Join(tmpDir, "kimi.json")
 	require.NoError(t, os.WriteFile(credPath, []byte(`{"refresh_token":"rt_expired","client_id":"cid","client_secret":"cs"}`), 0600))
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]any{
@@ -471,7 +467,7 @@ func TestTokenRefreshService_RefreshProvider_Direct(t *testing.T) {
 	credPath := filepath.Join(tmpDir, "kimi.json")
 	require.NoError(t, os.WriteFile(credPath, []byte(`{"refresh_token":"rt_direct","client_id":"cid","client_secret":"cs"}`), 0600))
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]any{
@@ -501,7 +497,7 @@ func TestTokenRefreshService_Integration_FullCycle(t *testing.T) {
 	credPath := filepath.Join(tmpDir, "kimi.json")
 	require.NoError(t, os.WriteFile(credPath, []byte(`{"refresh_token":"rt_int","client_id":"cid","client_secret":"cs"}`), 0600))
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]any{

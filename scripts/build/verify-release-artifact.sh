@@ -36,25 +36,12 @@ case "$PLATFORM" in
     ;;
   windows)
     verify_binary "build/bin/MedMemo.exe"
-    INSTALLER="build/bin/MedMemo-amd64-installer.exe"
-    if [ ! -f "$INSTALLER" ]; then
-      echo "ERROR: Windows installer not found: $INSTALLER"
-      exit 1
-    fi
-    echo "OK: $INSTALLER exists"
     ;;
   darwin)
-    ARCH="${2:-}"
-    if [ -z "$ARCH" ]; then
-      echo "ERROR: architecture argument required for darwin verification"
-      exit 1
-    fi
-    DMG_FILE="build/bin/MedMemo_${ARCH}.dmg"
-    if [ ! -f "$DMG_FILE" ]; then
-      echo "ERROR: $DMG_FILE not found"
-      exit 1
-    fi
     verify_binary "build/bin/MedMemo.app/Contents/MacOS/MedMemo"
+    if [ -f "build/bin/MedMemo" ]; then
+      verify_binary "build/bin/MedMemo"
+    fi
     ;;
   *)
     echo "Unsupported platform: $PLATFORM"

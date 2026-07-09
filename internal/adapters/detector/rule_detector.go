@@ -23,7 +23,7 @@ func NewRuleDetector() *RuleDetector {
 }
 
 // Detect 检测文本中的敏感实体，返回分级标记结果。
-func (d *RuleDetector) Detect(_ context.Context, text string) ([]models.SensitiveEntity, error) {
+func (d *RuleDetector) Detect(ctx context.Context, text string) ([]models.SensitiveEntity, error) {
 	result, err := d.engine.Process(text)
 	if err != nil {
 		return nil, fmt.Errorf("rule detection failed: %w", err)

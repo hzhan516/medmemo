@@ -32,6 +32,6 @@ func TestRestartAfterUpdate_StartsNewAppImage(t *testing.T) {
 
 func TestRestartAfterUpdate_InvalidPathReturnsError(t *testing.T) {
 	err := restartAfterUpdate(context.Background(), "/nonexistent/AppImage")
-	require.Error(t, err)
+	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to start new AppImage")
 }

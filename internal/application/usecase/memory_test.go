@@ -20,14 +20,14 @@ type stubEmbeddingService struct {
 	err     error
 }
 
-func (s *stubEmbeddingService) Embed(_ context.Context, _ []string) ([][]float32, error) {
+func (s *stubEmbeddingService) Embed(ctx context.Context, texts []string) ([][]float32, error) {
 	if s.err != nil {
 		return nil, s.err
 	}
 	return s.vectors, nil
 }
 
-func (s *stubEmbeddingService) EmbedSingle(_ context.Context, _ string) ([]float32, error) {
+func (s *stubEmbeddingService) EmbedSingle(ctx context.Context, text string) ([]float32, error) {
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -45,31 +45,31 @@ type stubEmbeddingRepository struct {
 	err     error
 }
 
-func (s *stubEmbeddingRepository) Save(_ context.Context, _ *entity.SemanticEmbedding) error {
+func (s *stubEmbeddingRepository) Save(ctx context.Context, e *entity.SemanticEmbedding) error {
 	return nil
 }
-func (s *stubEmbeddingRepository) GetByFactID(_ context.Context, _ string) (*entity.SemanticEmbedding, error) {
+func (s *stubEmbeddingRepository) GetByFactID(ctx context.Context, factID string) (*entity.SemanticEmbedding, error) {
 	return nil, nil
 }
-func (s *stubEmbeddingRepository) DeleteByFactID(_ context.Context, _ string) error {
+func (s *stubEmbeddingRepository) DeleteByFactID(ctx context.Context, factID string) error {
 	return nil
 }
-func (s *stubEmbeddingRepository) SearchSimilar(_ context.Context, _ []float32, _ int) ([]*entity.ScoredEmbedding, error) {
+func (s *stubEmbeddingRepository) SearchSimilar(ctx context.Context, queryVector []float32, topK int) ([]*entity.ScoredEmbedding, error) {
 	if s.err != nil {
 		return nil, s.err
 	}
 	return s.results, nil
 }
 
-func (s *stubEmbeddingRepository) SearchSimilarFiltered(ctx context.Context, queryVector []float32, topK int, _ string) ([]*entity.ScoredEmbedding, error) {
+func (s *stubEmbeddingRepository) SearchSimilarFiltered(ctx context.Context, queryVector []float32, topK int, modelVersion string) ([]*entity.ScoredEmbedding, error) {
 	return s.SearchSimilar(ctx, queryVector, topK)
 }
 
-func (s *stubEmbeddingRepository) CountByVersionNot(_ context.Context, _ string) (int64, error) {
+func (s *stubEmbeddingRepository) CountByVersionNot(ctx context.Context, version string) (int64, error) {
 	return 0, nil
 }
 
-func (s *stubEmbeddingRepository) UpdateEmbedding(_ context.Context, _ *entity.SemanticEmbedding) error {
+func (s *stubEmbeddingRepository) UpdateEmbedding(ctx context.Context, e *entity.SemanticEmbedding) error {
 	return nil
 }
 
@@ -79,15 +79,15 @@ type stubFactRepository struct {
 	findBySessionFunc        func(ctx context.Context, sessionID string) ([]*entity.ExtractedFact, error)
 }
 
-func (s *stubFactRepository) Save(_ context.Context, _ *entity.ExtractedFact) error { return nil }
-func (s *stubFactRepository) GetByID(_ context.Context, factID string) (*entity.ExtractedFact, error) {
+func (s *stubFactRepository) Save(ctx context.Context, f *entity.ExtractedFact) error { return nil }
+func (s *stubFactRepository) GetByID(ctx context.Context, factID string) (*entity.ExtractedFact, error) {
 	f, ok := s.facts[factID]
 	if !ok {
 		return nil, entity.ErrFactNotFound
 	}
 	return f, nil
 }
-func (s *stubFactRepository) FindByIDs(_ context.Context, factIDs []string) (map[string]*entity.ExtractedFact, error) {
+func (s *stubFactRepository) FindByIDs(ctx context.Context, factIDs []string) (map[string]*entity.ExtractedFact, error) {
 	result := make(map[string]*entity.ExtractedFact, len(factIDs))
 	for _, id := range factIDs {
 		if f, ok := s.facts[id]; ok {
@@ -114,23 +114,23 @@ func (s *spyFactRepository) FindByIDs(ctx context.Context, factIDs []string) (ma
 	return s.stubFactRepository.FindByIDs(ctx, factIDs)
 }
 
-func (s *stubFactRepository) ListByStatus(_ context.Context, _ entity.FactStatus, _, _ int) ([]*entity.ExtractedFact, error) {
+func (s *stubFactRepository) ListByStatus(ctx context.Context, status entity.FactStatus, offset, limit int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (s *stubFactRepository) ListPending(_ context.Context, _, _ int) ([]*entity.ExtractedFact, error) {
+func (s *stubFactRepository) ListPending(ctx context.Context, offset, limit int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (s *stubFactRepository) UpdateStatus(_ context.Context, _ string, _ entity.FactStatus) error {
+func (s *stubFactRepository) UpdateStatus(ctx context.Context, factID string, status entity.FactStatus) error {
 	return nil
 }
-func (s *stubFactRepository) Delete(_ context.Context, _ string) error { return nil }
-func (s *stubFactRepository) GetStats(_ context.Context) (total, approved, rejected, pending int64, err error) {
+func (s *stubFactRepository) Delete(ctx context.Context, factID string) error { return nil }
+func (s *stubFactRepository) GetStats(ctx context.Context) (total, approved, rejected, pending int64, err error) {
 	return 0, 0, 0, 0, nil
 }
-func (s *stubFactRepository) ListAllSubjects(_ context.Context) ([]string, error) {
+func (s *stubFactRepository) ListAllSubjects(ctx context.Context) ([]string, error) {
 	return nil, nil
 }
-func (s *stubFactRepository) FindBySubject(_ context.Context, _ string) ([]*entity.ExtractedFact, error) {
+func (s *stubFactRepository) FindBySubject(ctx context.Context, subject string) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
 func (s *stubFactRepository) FindBySession(ctx context.Context, sessionID string) ([]*entity.ExtractedFact, error) {
@@ -145,18 +145,18 @@ func (s *stubFactRepository) FindApprovedByPredicates(ctx context.Context, subje
 	}
 	return nil, nil
 }
-func (s *stubFactRepository) FindLatestApprovedByPredicates(_ context.Context, _ string, _ []string) (*entity.ExtractedFact, error) {
+func (s *stubFactRepository) FindLatestApprovedByPredicates(ctx context.Context, subject string, predicates []string) (*entity.ExtractedFact, error) {
 	return nil, entity.ErrFactNotFound
 }
-func (s *stubFactRepository) SearchApproved(_ context.Context, _ string, _ int) ([]*entity.ExtractedFact, error) {
+func (s *stubFactRepository) SearchApproved(ctx context.Context, query string, limit int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
 
-func (s *stubFactRepository) CountApprovedFactsNeedingEmbedding(_ context.Context, _ string) (int64, error) {
+func (s *stubFactRepository) CountApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string) (int64, error) {
 	return 0, nil
 }
 
-func (s *stubFactRepository) ListApprovedFactsNeedingEmbedding(_ context.Context, _ string, _ time.Time, _ string, _ int) ([]*entity.ExtractedFact, error) {
+func (s *stubFactRepository) ListApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string, lastCreatedAt time.Time, lastFactID string, limit int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
 
@@ -166,26 +166,26 @@ type stubMemoryRepository struct {
 	err   error
 }
 
-func (s *stubMemoryRepository) Save(_ context.Context, mem *entity.HealthMemory) error {
+func (s *stubMemoryRepository) Save(ctx context.Context, mem *entity.HealthMemory) error {
 	if s.err != nil {
 		return s.err
 	}
 	s.saved = append(s.saved, mem)
 	return nil
 }
-func (s *stubMemoryRepository) GetByID(_ context.Context, _ models.MemoryID) (*entity.HealthMemory, error) {
+func (s *stubMemoryRepository) GetByID(ctx context.Context, id models.MemoryID) (*entity.HealthMemory, error) {
 	return nil, fmt.Errorf("not implemented")
 }
-func (s *stubMemoryRepository) Search(_ context.Context, _ string, _ int) ([]*entity.HealthMemory, error) {
+func (s *stubMemoryRepository) Search(ctx context.Context, query string, limit int) ([]*entity.HealthMemory, error) {
 	return nil, nil
 }
-func (s *stubMemoryRepository) SemanticSearch(_ context.Context, _ []float32, _ int) ([]*entity.HealthMemory, error) {
+func (s *stubMemoryRepository) SemanticSearch(ctx context.Context, embedding []float32, topK int) ([]*entity.HealthMemory, error) {
 	return nil, nil
 }
-func (s *stubMemoryRepository) ListByTier(_ context.Context, _ entity.MemoryTier, _ int) ([]*entity.HealthMemory, error) {
+func (s *stubMemoryRepository) ListByTier(ctx context.Context, tier entity.MemoryTier, limit int) ([]*entity.HealthMemory, error) {
 	return nil, nil
 }
-func (s *stubMemoryRepository) Delete(_ context.Context, _ models.MemoryID) error {
+func (s *stubMemoryRepository) Delete(ctx context.Context, id models.MemoryID) error {
 	return nil
 }
 
@@ -197,13 +197,13 @@ type stubFactRepositoryWithSubjects struct {
 	facts     []*entity.ExtractedFact
 }
 
-func (s *stubFactRepositoryWithSubjects) ListAllSubjects(_ context.Context) ([]string, error) {
+func (s *stubFactRepositoryWithSubjects) ListAllSubjects(ctx context.Context) ([]string, error) {
 	return s.subjects, nil
 }
-func (s *stubFactRepositoryWithSubjects) FindBySubject(_ context.Context, subject string) ([]*entity.ExtractedFact, error) {
+func (s *stubFactRepositoryWithSubjects) FindBySubject(ctx context.Context, subject string) ([]*entity.ExtractedFact, error) {
 	return s.bySubject[subject], nil
 }
-func (s *stubFactRepositoryWithSubjects) ListByStatus(_ context.Context, status entity.FactStatus, _, _ int) ([]*entity.ExtractedFact, error) {
+func (s *stubFactRepositoryWithSubjects) ListByStatus(ctx context.Context, status entity.FactStatus, offset, limit int) ([]*entity.ExtractedFact, error) {
 	var result []*entity.ExtractedFact
 	for _, f := range s.facts {
 		if f.Status == status {
@@ -503,7 +503,7 @@ func TestMemoryRetriever_TokenBudget(t *testing.T) {
 	now := time.Now().UTC()
 
 	facts := map[string]*entity.ExtractedFact{}
-	embeddings := []*entity.ScoredEmbedding(nil)
+	embeddings := []*entity.ScoredEmbedding{}
 
 	// 创建 10 条事实，每条约 15 个字符
 	for i := 0; i < 10; i++ {
@@ -657,95 +657,25 @@ func TestMemoryRetriever_retrieveSemantic_error(t *testing.T) {
 	assert.Contains(t, err.Error(), "search failed")
 }
 
-func TestMemoryRetriever_semanticSearchFiltersAndSorts(t *testing.T) {
-	t.Parallel()
-	now := time.Now().UTC()
-	facts := map[string]*entity.ExtractedFact{
-		"fact_a": {
-			FactID: "fact_a", Subject: "用户", Predicate: "体重是", Object: "110kg",
-			Confidence: 0.9, Status: entity.FactStatusApproved, CreatedAt: now,
-		},
-		"fact_b": {
-			FactID: "fact_b", Subject: "用户", Predicate: "身高是", Object: "180cm",
-			Confidence: 0.8, Status: entity.FactStatusApproved, CreatedAt: now,
-		},
-		"fact_low": {
-			FactID: "fact_low", Subject: "用户", Predicate: "血压是", Object: "120/80",
-			Confidence: 0.5, Status: entity.FactStatusApproved, CreatedAt: now,
-		},
-		"fact_pending": {
-			FactID: "fact_pending", Subject: "用户", Predicate: "患有", Object: "高血压",
-			Confidence: 0.95, Status: entity.FactStatusPending, CreatedAt: now,
-		},
-	}
-	embeddings := []*entity.ScoredEmbedding{
-		{SemanticEmbedding: &entity.SemanticEmbedding{FactID: "fact_a"}, Similarity: 0.7},
-		{SemanticEmbedding: &entity.SemanticEmbedding{FactID: "fact_b"}, Similarity: 0.95},
-		{SemanticEmbedding: &entity.SemanticEmbedding{FactID: "fact_low"}, Similarity: 0.9},
-		{SemanticEmbedding: &entity.SemanticEmbedding{FactID: "fact_pending"}, Similarity: 0.99},
-		{SemanticEmbedding: &entity.SemanticEmbedding{FactID: "missing"}, Similarity: 0.99},
-	}
-	migrationState := NewMigrationState()
-	migrationState.SetComplete(true)
-	retriever := NewMemoryRetriever(
-		&stubEmbeddingService{},
-		&stubEmbeddingRepository{results: embeddings},
-		&stubFactRepository{facts: facts}, nil,
-		NewDecayScorer(),
-		migrationState,
-		nil,
-		nil,
-	)
-
-	memories, err := retriever.semanticSearch(context.Background(), []float32{1, 2, 3}, 2)
-	require.NoError(t, err)
-	require.Len(t, memories, 2)
-	assert.Equal(t, models.MemoryID("fact_b"), memories[0].ID)
-	assert.Equal(t, models.MemoryID("fact_a"), memories[1].ID)
-	assert.Contains(t, memories[0].Content, "身高是")
-	assert.Greater(t, memories[0].Confidence, memories[1].Confidence)
-}
-
 func TestMemoryRetriever_mergeMemories_sessionGap(t *testing.T) {
 	t.Parallel()
-	now := time.Now().UTC()
-	factRepo := &stubFactRepository{
-		findBySessionFunc: func(_ context.Context, _ string) ([]*entity.ExtractedFact, error) {
-			return []*entity.ExtractedFact{
-				{
-					FactID: "m1", Subject: "用户", Predicate: "体重是", Object: "110kg",
-					Confidence: 0.9, Status: entity.FactStatusApproved, CreatedAt: now,
-				},
-				{
-					FactID: "gap", Subject: "用户", Predicate: "对...过敏", Object: "青霉素",
-					Confidence: 0.95, Status: entity.FactStatusApproved, CreatedAt: now,
-				},
-				{
-					FactID: "pending", Subject: "用户", Predicate: "患有", Object: "高血压",
-					Confidence: 0.95, Status: entity.FactStatusPending, CreatedAt: now,
-				},
-			}, nil
-		},
-	}
-	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, factRepo, nil, NewDecayScorer(), nil, nil, nil)
+	retriever := NewMemoryRetriever(&stubEmbeddingService{}, &stubEmbeddingRepository{}, &stubFactRepository{}, nil, NewDecayScorer(), nil, nil, nil)
 
 	mentionMemories := []*entity.HealthMemory{
 		{ID: "m1", Content: "mention 1"},
 		{ID: "m2", Content: "mention 2"},
 	}
 	semanticMemories := []*entity.HealthMemory{
-		{ID: "m2", Content: "semantic 2"},
-		{ID: "gap", Content: "semantic gap"},
-		{ID: "s3", Content: "semantic 3"},
+		{ID: "m2", Content: "semantic 2"}, // 与 mention 重复，应去重
+		{ID: "s3", Content: "semantic 3"}, // 新记忆
 	}
 
 	result := retriever.mergeMemories(mentionMemories, semanticMemories, true, "test-session")
 
-	require.Len(t, result, 4)
+	require.Len(t, result, 3)
 	assert.Equal(t, "mention 1", result[0].Content)
 	assert.Equal(t, "mention 2", result[1].Content)
-	assert.Equal(t, "用户 对...过敏 青霉素", result[2].Content)
-	assert.Equal(t, "semantic 3", result[3].Content)
+	assert.Equal(t, "semantic 3", result[2].Content)
 }
 
 func TestMemoryRetriever_checkSessionGap(t *testing.T) {
@@ -803,7 +733,7 @@ func TestMemoryRetriever_recallBySessionGap(t *testing.T) {
 	}
 	factRepo := &stubFactRepository{
 		facts: facts,
-		findBySessionFunc: func(_ context.Context, _ string) ([]*entity.ExtractedFact, error) {
+		findBySessionFunc: func(ctx context.Context, sessionID string) ([]*entity.ExtractedFact, error) {
 			return []*entity.ExtractedFact{facts["fact_bp"], facts["fact_weight"]}, nil
 		},
 	}
@@ -827,7 +757,7 @@ func TestMemoryRetriever_ArchiveConversation(t *testing.T) {
 	}
 	factRepo := &stubFactRepository{
 		facts: facts,
-		findBySessionFunc: func(_ context.Context, _ string) ([]*entity.ExtractedFact, error) {
+		findBySessionFunc: func(ctx context.Context, sessionID string) ([]*entity.ExtractedFact, error) {
 			return []*entity.ExtractedFact{facts["fact_bp"]}, nil
 		},
 	}
@@ -884,7 +814,7 @@ type stubFactRepositoryWithWeightFacts struct {
 	facts []*entity.ExtractedFact
 }
 
-func (s *stubFactRepositoryWithWeightFacts) ListByStatus(_ context.Context, status entity.FactStatus, _ int, _ int) ([]*entity.ExtractedFact, error) {
+func (s *stubFactRepositoryWithWeightFacts) ListByStatus(ctx context.Context, status entity.FactStatus, offset, limit int) ([]*entity.ExtractedFact, error) {
 	var result []*entity.ExtractedFact
 	for _, f := range s.facts {
 		if f.Status == status {
@@ -908,7 +838,7 @@ func TestRetrieveWithDiagnostics_IntentPath(t *testing.T) {
 	}
 
 	factRepo := &stubFactRepository{facts: facts}
-	factRepo.approvedByPredicatesFunc = func(_ context.Context, _ string, predicates []string, _ int) ([]*entity.ExtractedFact, error) {
+	factRepo.approvedByPredicatesFunc = func(ctx context.Context, subject string, predicates []string, limit int) ([]*entity.ExtractedFact, error) {
 		if len(predicates) > 0 && predicates[0] == "体重是" {
 			return []*entity.ExtractedFact{facts["fact_weight"]}, nil
 		}
@@ -942,58 +872,6 @@ func TestRetrieveWithDiagnostics_IntentPath(t *testing.T) {
 	assert.NotEmpty(t, diag.PathStatuses)
 
 	_ = memories
-}
-
-func TestIntentConfidenceToLevel_AllLevels(t *testing.T) {
-	t.Parallel()
-
-	assert.Equal(t, 3, intentConfidenceToLevel(ConfidenceHigh))
-	assert.Equal(t, 2, intentConfidenceToLevel(ConfidenceMedium))
-	assert.Equal(t, 1, intentConfidenceToLevel(ConfidenceLow))
-	assert.Equal(t, 0, intentConfidenceToLevel(IntentConfidence(0)))
-}
-
-func TestRetrieveWithDiagnostics_PureSemanticPath(t *testing.T) {
-	t.Parallel()
-	now := time.Now().UTC()
-
-	facts := map[string]*entity.ExtractedFact{
-		"fact_allergy": {
-			FactID: "fact_allergy", Subject: "用户", Predicate: "对...过敏", Object: "青霉素",
-			Confidence: 0.95, Status: entity.FactStatusApproved, CreatedAt: now,
-		},
-	}
-
-	embeddings := []*entity.ScoredEmbedding{
-		{SemanticEmbedding: &entity.SemanticEmbedding{FactID: "fact_allergy"}, Similarity: 0.9},
-	}
-
-	factRepo := &stubFactRepositoryWithSubjects{
-		stubFactRepository: stubFactRepository{facts: facts},
-		facts:              []*entity.ExtractedFact{facts["fact_allergy"]},
-	}
-	retriever := NewMemoryRetriever(
-		&stubEmbeddingService{},
-		&stubEmbeddingRepository{results: embeddings},
-		factRepo, nil,
-		NewDecayScorer(),
-		nil,
-		nil,
-		nil,
-	)
-
-	diag, memories, err := retriever.retrieveWithDiagnostics(context.Background(), "注射前需要提醒医生哪些个人情况", "session_semantic", 3)
-	require.NoError(t, err)
-
-	assert.Nil(t, diag.DetectedIntent)
-	assert.Empty(t, diag.IntentCandidates)
-	assert.Empty(t, diag.KeywordCandidates)
-	require.NotEmpty(t, diag.VectorCandidates)
-	assert.Equal(t, "fact_allergy", diag.VectorCandidates[0].FactID)
-	require.NotEmpty(t, diag.SelectedMemories)
-	assert.Equal(t, "fact_allergy", diag.SelectedMemories[0].FactID)
-	require.NotEmpty(t, memories)
-	assert.Equal(t, models.MemoryID("fact_allergy"), memories[0].ID)
 }
 
 func TestRetrieveWithDiagnostics_AllPathsFailGracefully(t *testing.T) {

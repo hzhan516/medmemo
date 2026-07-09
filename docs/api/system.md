@@ -111,23 +111,6 @@ Returns the current application version string.
 
 ---
 
-### `GetVersionInfo() (*VersionInfoResponse, error)`
-
-Returns structured version metadata for the About page and status bar.
-
-```go
-type VersionInfoResponse struct {
-    Version         string `json:"version"`
-    DisplayVersion  string `json:"display_version"`
-    BuildNumber     string `json:"build_number"`
-    Channel         string `json:"channel"`
-    PrereleaseLabel string `json:"prerelease_label"`
-    Prerelease      bool   `json:"prerelease"`
-}
-```
-
----
-
 ### `CollectSystemInfo() (*feedback.SystemInfo, error)`
 
 Gathers anonymized system information for bug reports (OS, arch, app version, memory usage).
@@ -143,19 +126,3 @@ Opens the GitHub issue creation page in the system browser with pre-filled title
 ### `GetVersionNotes() []entity.VersionNote`
 
 Returns parsed version notes for display in the "What's New" modal after an update.
-
----
-
-## Feedback
-
-### `RecordAnswerFeedback(messageID string, answerType string, helpful bool) error`
-
-Records user feedback on whether an AI answer was helpful or inaccurate.
-
-### `ReportComplianceFeedback(ruleID string, originalText string) error`
-
-Records a false-positive compliance feedback report for later review.
-
----
-
-*Last updated: 2026-07-09*

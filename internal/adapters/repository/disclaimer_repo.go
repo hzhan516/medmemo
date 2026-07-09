@@ -4,7 +4,6 @@ package repository
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"time"
 
@@ -35,7 +34,7 @@ func (r *DisclaimerRepoSQLite) GetAcceptance(ctx context.Context) (*entity.Discl
 	var rec entity.DisclaimerAcceptance
 	var acceptedAt int64
 	if err := row.Scan(&rec.Version, &acceptedAt, &rec.TextHash); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if err == sql.ErrNoRows {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("failed to get disclaimer acceptance: %w", err)

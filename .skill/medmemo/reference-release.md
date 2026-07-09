@@ -22,7 +22,7 @@
 
 ```json
 {
-  "version": "vX.Y.Z",
+  "version": "v1.1.9",
   "title": "简短版本标题",
   "features": ["功能 1", "功能 2"],
   "fixes": ["修复 1"]
@@ -35,7 +35,6 @@
 常规 (Minor/Patch):
 □ wails.json → info.productVersion
 □ web/package.json → version（无 v 前缀，与上一致）
-□ web/package-lock.json → 执行 `cd web && npm install` 刷新
 □ internal/domain/entity/changelog/zh-Hans.json → 末尾新增
 □ medmemo/开发日志/ → 版本日志
 □ .skill/medmemo/tracker.md → 滚动记录

@@ -106,8 +106,6 @@ func candidateDirs() []string {
 	if wd, err := os.Getwd(); err == nil {
 		candidates = append(candidates, filepath.Join(wd, "resources"))
 	}
-	// DEB/RPM 安装路径回退（当 wrapper 未设置 MEDMEMO_RESOURCE_DIR 时）
-	candidates = append(candidates, "/opt/medmemo/resources")
 	candidates = append(candidates, "resources")
 	return candidates
 }

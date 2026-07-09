@@ -51,7 +51,7 @@ func (w *NERWorker) Predict(ctx context.Context, text string) ([]EntitySpan, err
 				Label: normalizeLabel(e.Entity),
 				Start: int(e.Start),
 				End:   int(e.End),
-				Score: e.Score,
+				Score: float32(e.Score),
 			})
 		}
 	}
@@ -484,7 +484,7 @@ func (e *Engine) Close() error {
 	return nil
 }
 
-// Set 供 Wire 使用的 ProviderSet。
-var Set = wire.NewSet(
+// ONNXSet 供 Wire 使用的 ProviderSet。
+var ONNXSet = wire.NewSet(
 	NewEngine,
 )

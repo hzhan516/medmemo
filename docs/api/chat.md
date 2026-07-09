@@ -117,56 +117,11 @@ Permanently removes a conversation and all its messages.
 
 ---
 
-### `GetDeletedConversations() ([]ConversationSummary, error)`
-
-Returns soft-deleted conversations that are still within the retention window.
-
----
-
 ### `GenerateTitle(convID string, userMessage string)`
 
 Asynchronously generates a conversation title based on the first user message. The result is delivered via `chat:title:generated` event. This method does not block the caller.
 
 ---
-
-## Context and Compression
-
-### `ResolveMaxContextLength(providerID, modelID string) (int, error)`
-
-Resolves the maximum context length for a provider/model pair.
-
-### `EstimateContextUsage(req EstimateContextUsageRequest) (*ContextUsageResponse, error)`
-
-Estimates token usage for the current messages and assembled prompt.
-
-```go
-type ContextUsageResponse struct {
-    UsedTokens  int     `json:"usedTokens"`
-    MaxTokens   int     `json:"maxTokens"`
-    Ratio       float64 `json:"ratio"`
-    Approximate bool    `json:"approximate"`
-}
-```
-
-### `CompressSession(req CompressSessionRequest) error`
-
-Compresses a conversation session and emits `context:usage_refresh` when done.
-
-### `GetCompressionSettings() models.CompressionSettings`
-
-Returns persisted compression settings.
-
-### `SetCompressionSettings(s models.CompressionSettings) error`
-
-Persists compression settings.
-
-### `TestCompressionModel(providerID, modelID string) (bool, error)`
-
-Checks whether the selected compression model is available.
-
----
-
-## Emergency and Privacy Settings
 
 ### `CheckEmergency(text string) (*EmergencyResult, error)`
 
@@ -185,25 +140,3 @@ type EmergencyResult struct {
 | `A` | Critical symptoms (chest pain + dyspnea, unconsciousness, etc.) | Full-screen red overlay with 120/emergency options |
 | `B` | Urgent symptoms (persistent high fever >3d, severe abdominal pain, etc.) | Red warning banner above input; require acknowledgement |
 | `none` | No emergency keywords matched | No UI interruption |
-
----
-
-### `ShowEmergencyDialog(title, message string)`
-
-Shows a native warning dialog for emergency-symptom flows.
-
-### `SetDataRetentionDays(days int) error`
-
-Persists the soft-delete retention window in days.
-
-### `SetDesensitizationLevel(level string) error`
-
-Persists the outbound de-identification level (`standard`, `strict`, or `off`).
-
-### `GetDesensitizationLevel() string`
-
-Returns the current outbound de-identification level.
-
----
-
-*Last updated: 2026-07-09*

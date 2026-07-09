@@ -8,7 +8,7 @@
 
 ## 背景
 
-MedMemo 的**两级脱敏流水线**（L1 规则 → L2 NER）需要本地命名实体识别（NER）模型，在数据离开设备前识别用户健康文本中的敏感实体。L2 NER 阶段是准确性关键层 —— 必须识别：
+MedMemo 的**三级脱敏流水线**（L1 规则 → L2 NER → L3 关键词）需要本地命名实体识别（NER）模型，在数据离开设备前识别用户健康文本中的敏感实体。L2 NER 阶段是准确性关键层 —— 必须识别：
 
 - 人名（患者、医生、家庭成员）
 - 机构名（医院、诊所、保险公司）
@@ -66,7 +66,7 @@ NER 引擎必须满足四项硬约束：
 
 ### 关键技术选择
 
-1. **模型**: 针对 token classification 微调后的 DistilBERT，导出为 ONNX，然后 int8 量化。量化将模型体积从 ~250MB（fp32）压缩到 ~50MB，在医疗实体基准上准确率损失 <2%。
+1. **模型**: 针对 token classification 微调后的 DistilBERT（BiLSTM-CRF 头），导出为 ONNX，然后 int8 量化。量化将模型体积从 ~250MB（fp32）压缩到 ~50MB，在医疗实体基准上准确率损失 <2%。
 
 2. **Worker 模型**: 2 个固定推理 Worker，每个持有独立的 ONNX Session（每个 Session ~80–100MB RAM，总计 ~200MB）。任务通过有缓冲 channel（容量 16）派发。每个 Worker 串行化 `Session.Run()` 调用，因为 ONNX Runtime Session **非线程安全**。
 
@@ -90,16 +90,17 @@ NER 引擎必须满足四项硬约束：
 
 ### 与脱敏流水线的集成
 
-L2 NER 阶段在 L1 确定性规则之后运行：
+L2 NER 阶段位于 L1（规则引擎，<1ms）和 L3（关键词字典，<5ms）之间：
 
 ```
-L1 规则引擎 ──(未命中片段)──► L2 NER ONNX
+L1 规则引擎 ──(未命中片段)──► L2 NER ONNX ──(低置信度片段)──► L3 关键词
          │                                    │
          └───── P3 硬替换 ────────────────────┘
 ```
 
 - L1 以 `Confidence == 1.0` 识别的片段完全跳过 L2（流水线短路）。
 - L2 NER 输出按 P1/P2/P3 敏感等级分级。P3 片段在调用任何云端 API 前执行**硬替换**（不可逆掩码）。
+- 低置信度 L2 输出（<0.7）作为兜底转发到 L3 关键词字典匹配。
 
 ## 结果
 
@@ -113,7 +114,7 @@ L1 规则引擎 ──(未命中片段)──► L2 NER ONNX
 ### 消极影响
 
 - **CGO 交叉编译负担**: 为三平台构建需要平台特定的 ONNX Runtime 库和 CGO 工具链配置，使 CI 复杂化。
-- **内存压力**: 2 个 ONNX Session 占用约 200MB RAM。在 <8GB RAM 的系统上，这与本地 LLM（Ollama）和操作系统争夺资源。
+- **内存压力**: 2 个 ONNX Session 占用约 200MB RAM。在 <8GB RAM 的系统上，这与 DuckDB、本地 LLM（Ollama）和操作系统争夺资源。
 - **非线程安全 Session 约束**: 2 Worker 串行模型限制了 NER 吞吐。在突发输入场景（如批量健康记录导入）下，请求在 channel 中排队。
 - **模型体积**: 50MB 是资源目录中最大的单一文件；在慢速连接上的首次下载可能降低首次启动体验。
 
@@ -131,8 +132,4 @@ L1 规则引擎 ──(未命中片段)──► L2 NER ONNX
 - [docs/ARCHITECTURE.md](../ARCHITECTURE.md) — 系统架构概览与数据流
 - `internal/infrastructure/onnx/` — ONNX Runtime Go 绑定与 Session 管理
 - `pkg/desensitizer/` — 规则引擎（L1）与流水线编排器
-- `internal/application/pipeline/` — 两级脱敏流水线
-
----
-
-*最后更新：2026-07-09*
+- `internal/application/pipeline/` — 三级脱敏流水线

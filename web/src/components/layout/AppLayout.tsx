@@ -1,9 +1,7 @@
 import { useState, useEffect } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { MessageSquare, Settings, Info, Brain, BookOpen } from 'lucide-react'
-import { Environment } from '@wails/runtime/runtime'
 import { useWails } from '@/hooks/useWails'
-import { WindowTitleBar } from './WindowTitleBar'
 
 const navItems = [
   { to: '/chat', label: '对话', icon: MessageSquare },
@@ -14,14 +12,13 @@ const navItems = [
 ]
 
 /**
- * 应用全局布局：应用级 titlebar (Linux) + 左侧 64px 图标导航栏 + 右侧主内容区 + 底部 24px 状态栏。
+ * 应用全局布局：左侧 64px 图标导航栏 + 右侧主内容区 + 底部 24px 状态栏。
  * 使用 NavLink 实现当前路由高亮，页面切换带 200ms 淡入动画。
  */
 export function AppLayout() {
   const location = useLocation()
   const { getVersionInfo } = useWails()
   const [version, setVersion] = useState('')
-  const [showAppWindowControls, setShowAppWindowControls] = useState(false)
 
   useEffect(() => {
     getVersionInfo()
@@ -31,20 +28,12 @@ export function AppLayout() {
       .catch(() => setVersion(''))
   }, [getVersionInfo])
 
-  // 平台检测：Linux 启用应用级窗口按钮
-  useEffect(() => {
-    Environment()
-      .then((env) => setShowAppWindowControls(env.platform === 'linux'))
-      .catch(() => setShowAppWindowControls(false))
-  }, [])
-
-  // 应用内容部分
-  const appContent = (
-    <div className="min-h-0 flex-1 flex overflow-hidden">
-      {/* 左侧导航栏 — macOS translucent rail */}
-      <nav className="shrink-0 w-16 mac-vibrant-panel border-r border-white/20 dark:border-white/5 flex flex-col items-center py-4 gap-2 select-none">
-        {/* Logo — restrained app tile */}
-        <div className="mb-4 w-8 h-8 rounded-lg bg-primary/90 flex items-center justify-center shadow-sm">
+  return (
+    <div className="h-screen w-screen overflow-hidden bg-background text-foreground flex">
+      {/* 左侧导航栏 */}
+      <nav className="shrink-0 w-16 border-r border-border bg-background flex flex-col items-center py-4 gap-2 select-none">
+        {/* Logo */}
+        <div className="mb-4 w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
           <span className="text-primary-foreground text-xs font-bold">M</span>
         </div>
 
@@ -59,8 +48,8 @@ export function AppLayout() {
               className={({ isActive }) =>
                 `group relative flex items-center justify-center w-11 h-11 rounded-xl transition-all duration-200 ${
                   isActive
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-muted-foreground hover:bg-white/50 dark:hover:bg-white/10 hover:text-foreground'
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                 }`
               }
               aria-label={item.label}
@@ -87,10 +76,10 @@ export function AppLayout() {
           </div>
         </main>
 
-        {/* 底部状态栏（24px）— lightweight transparent bar */}
-        <footer className="shrink-0 h-6 flex items-center justify-between px-3 border-t border-border/70 bg-background/60 backdrop-blur text-[11px] text-muted-foreground select-none">
+        {/* 底部状态栏（24px） */}
+        <footer className="shrink-0 h-6 flex items-center justify-between px-3 border-t border-border bg-muted/30 text-[11px] text-muted-foreground select-none">
           <div className="flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_4px_rgba(16,185,129,0.4)]" />
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
             <span>就绪</span>
           </div>
           <div className="flex items-center gap-3">
@@ -98,16 +87,6 @@ export function AppLayout() {
           </div>
         </footer>
       </div>
-    </div>
-  )
-
-  return (
-    <div className="h-screen w-screen overflow-hidden bg-background text-foreground flex flex-col">
-      {/* 应用级 titlebar：仅 Linux frameless 模式 */}
-      {showAppWindowControls && (
-        <WindowTitleBar showControls={true} />
-      )}
-      {appContent}
     </div>
   )
 }

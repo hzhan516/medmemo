@@ -16,7 +16,7 @@ export function UpdateBanner({ info, onShowDetails, onDismiss }: UpdateBannerPro
   if (!info) return null
 
   return (
-    <div className="flex items-center justify-between gap-3 bg-primary/10 backdrop-blur-sm px-4 py-2 text-sm">
+    <div className="flex items-center justify-between gap-3 bg-primary/10 px-4 py-2 text-sm">
       <div className="flex items-center gap-2 min-w-0">
         <Download size={14} className="shrink-0 text-primary" />
         <span className="truncate">

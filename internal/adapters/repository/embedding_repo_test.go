@@ -25,7 +25,7 @@ func setupEmbeddingTestDB(t *testing.T) (*EmbeddingRepoSQLite, *FactRepoSQLite, 
 	embeddingRepo := NewEmbeddingRepoSQLite(connector)
 	factRepo := NewFactRepoSQLite(connector)
 	cleanup := func() {
-		_ = connector.Close()
+		connector.Close()
 	}
 	return embeddingRepo, factRepo, cleanup
 }

@@ -16,7 +16,7 @@ func TestNewSQLiteConnector(t *testing.T) {
 	connector, err := NewSQLiteConnector(tmpDir)
 	require.NoError(t, err)
 	require.NotNil(t, connector)
-	defer func() { _ = connector.Close() }()
+	defer connector.Close()
 
 	// 验证底层 DB 可用
 	db := connector.DB()
@@ -33,7 +33,7 @@ func TestSQLiteConnector_Migrate_CreatesTables(t *testing.T) {
 	tmpDir := t.TempDir()
 	connector, err := NewSQLiteConnector(tmpDir)
 	require.NoError(t, err)
-	defer func() { _ = connector.Close() }()
+	defer connector.Close()
 
 	ctx := context.Background()
 	err = connector.Migrate(ctx)
@@ -88,7 +88,7 @@ func TestSQLiteConnector_Migrate_Idempotent(t *testing.T) {
 	tmpDir := t.TempDir()
 	connector, err := NewSQLiteConnector(tmpDir)
 	require.NoError(t, err)
-	defer func() { _ = connector.Close() }()
+	defer connector.Close()
 
 	ctx := context.Background()
 
@@ -105,7 +105,7 @@ func TestSQLiteConnector_DB_ReturnsConnection(t *testing.T) {
 	tmpDir := t.TempDir()
 	connector, err := NewSQLiteConnector(tmpDir)
 	require.NoError(t, err)
-	defer func() { _ = connector.Close() }()
+	defer connector.Close()
 
 	db := connector.DB()
 	require.NotNil(t, db)
@@ -133,7 +133,7 @@ func TestSQLiteConnector_ForeignKeysEnabled(t *testing.T) {
 	tmpDir := t.TempDir()
 	connector, err := NewSQLiteConnector(tmpDir)
 	require.NoError(t, err)
-	defer func() { _ = connector.Close() }()
+	defer connector.Close()
 
 	ctx := context.Background()
 	err = connector.Migrate(ctx)
@@ -153,7 +153,7 @@ func TestSQLiteConnector_DataDirCreated(t *testing.T) {
 
 	connector, err := NewSQLiteConnector(subDir)
 	require.NoError(t, err)
-	defer func() { _ = connector.Close() }()
+	defer connector.Close()
 
 	_, err = os.Stat(subDir)
 	assert.NoError(t, err, "data directory should be created")
@@ -163,7 +163,7 @@ func TestMigrateV7_ForeignKeyConstraint(t *testing.T) {
 	tmpDir := t.TempDir()
 	connector, err := NewSQLiteConnector(tmpDir)
 	require.NoError(t, err)
-	defer func() { _ = connector.Close() }()
+	defer connector.Close()
 
 	ctx := context.Background()
 	err = connector.Migrate(ctx)
@@ -201,7 +201,7 @@ func TestMigrateV7_CheckConstraints(t *testing.T) {
 	tmpDir := t.TempDir()
 	connector, err := NewSQLiteConnector(tmpDir)
 	require.NoError(t, err)
-	defer func() { _ = connector.Close() }()
+	defer connector.Close()
 
 	ctx := context.Background()
 	err = connector.Migrate(ctx)

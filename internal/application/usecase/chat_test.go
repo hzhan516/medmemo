@@ -44,12 +44,12 @@ type mockLLMClient struct {
 	lastMessages    []models.Message
 }
 
-func (m *mockLLMClient) Chat(_ context.Context, messages []models.Message) (string, error) {
+func (m *mockLLMClient) Chat(ctx context.Context, messages []models.Message) (string, error) {
 	m.lastMessages = messages
 	return m.chatReply, m.chatErr
 }
 
-func (m *mockLLMClient) StreamChat(_ context.Context, messages []models.Message, callback func(chunk string)) (*models.TokenUsage, error) {
+func (m *mockLLMClient) StreamChat(ctx context.Context, messages []models.Message, callback func(chunk string)) (*models.TokenUsage, error) {
 	m.lastMessages = messages
 	for _, chunk := range m.streamChunks {
 		callback(chunk)
@@ -58,7 +58,7 @@ func (m *mockLLMClient) StreamChat(_ context.Context, messages []models.Message,
 	return nil, m.streamErr
 }
 
-func (m *mockLLMClient) CheckAvailability(_ context.Context) (bool, string) {
+func (m *mockLLMClient) CheckAvailability(ctx context.Context) (bool, string) {
 	return true, "available"
 }
 
@@ -69,7 +69,7 @@ type mockLLMClientFactory struct {
 	client port.LLMClient
 }
 
-func (m *mockLLMClientFactory) CreateClient(_ *models.ProviderConfig) (port.LLMClient, error) {
+func (m *mockLLMClientFactory) CreateClient(providerConfig *models.ProviderConfig) (port.LLMClient, error) {
 	return m.client, nil
 }
 
@@ -80,22 +80,22 @@ type mockProviderStore struct {
 	provider *models.ProviderConfig
 }
 
-func (m *mockProviderStore) Create(_ context.Context, _ *models.ProviderConfig) error {
+func (m *mockProviderStore) Create(ctx context.Context, provider *models.ProviderConfig) error {
 	return nil
 }
-func (m *mockProviderStore) Update(_ context.Context, _ *models.ProviderConfig) error {
+func (m *mockProviderStore) Update(ctx context.Context, provider *models.ProviderConfig) error {
 	return nil
 }
-func (m *mockProviderStore) Delete(_ context.Context, _ string) error {
+func (m *mockProviderStore) Delete(ctx context.Context, id string) error {
 	return nil
 }
-func (m *mockProviderStore) Get(_ context.Context, id string) (*models.ProviderConfig, error) {
+func (m *mockProviderStore) Get(ctx context.Context, id string) (*models.ProviderConfig, error) {
 	if m.provider == nil {
 		return &models.ProviderConfig{ID: id, APIHost: "https://api.example.com", ModelID: "test-model"}, nil
 	}
 	return m.provider, nil
 }
-func (m *mockProviderStore) List(_ context.Context) ([]*models.ProviderConfig, error) {
+func (m *mockProviderStore) List(ctx context.Context) ([]*models.ProviderConfig, error) {
 	return []*models.ProviderConfig{}, nil
 }
 
@@ -107,82 +107,11 @@ type mockDeidentifier struct {
 	err    error
 }
 
-func (m *mockDeidentifier) Execute(_ context.Context, _ string, _ models.DesensitizationLevel) (models.DeidentifyResult, error) {
+func (m *mockDeidentifier) Execute(ctx context.Context, raw string) (models.DeidentifyResult, error) {
 	return m.result, m.err
 }
 
 var _ Deidentifier = (*mockDeidentifier)(nil)
-
-// maskingMockDeidentifier 将输入内容替换为可识别的遮蔽标记，用于验证
-// 严格级对所有用户消息脱敏、标准级仅脱敏最后一条的行为差异。
-type maskingMockDeidentifier struct{}
-
-func (m *maskingMockDeidentifier) Execute(_ context.Context, raw string, _ models.DesensitizationLevel) (models.DeidentifyResult, error) {
-	return models.DeidentifyResult{OriginalText: raw, SafeText: "[MASKED]"}, nil
-}
-
-var _ Deidentifier = (*maskingMockDeidentifier)(nil)
-
-// countingProviderStore 记录 Get 调用次数，用于验证还原路径不再重复查询 provider。
-type countingProviderStore struct {
-	provider *models.ProviderConfig
-	getCount int
-}
-
-func (m *countingProviderStore) Create(_ context.Context, _ *models.ProviderConfig) error { return nil }
-func (m *countingProviderStore) Update(_ context.Context, _ *models.ProviderConfig) error { return nil }
-func (m *countingProviderStore) Delete(_ context.Context, _ string) error                 { return nil }
-func (m *countingProviderStore) Get(_ context.Context, id string) (*models.ProviderConfig, error) {
-	m.getCount++
-	if m.provider == nil {
-		return &models.ProviderConfig{ID: id, APIHost: "https://api.example.com", ModelID: "test-model"}, nil
-	}
-	return m.provider, nil
-}
-func (m *countingProviderStore) List(_ context.Context) ([]*models.ProviderConfig, error) {
-	return []*models.ProviderConfig{}, nil
-}
-
-var _ port.ProviderStore = (*countingProviderStore)(nil)
-
-// TestChatOrchestrator_Execute_Restore_NoRedundantProviderLookup 验证还原路径不再调用 providerStore.Get。
-// Execute 中仅 prepareMessages 与 resolveLLMClient 各查询一次 provider（共 2 次），
-// 还原分支已改为仅依据占位符存在与否，不再触发第 3 次查询。
-func TestChatOrchestrator_Execute_Restore_NoRedundantProviderLookup(t *testing.T) {
-	t.Parallel()
-	mock := &mockLLMClient{chatReply: "已发送至 {{EMAIL_abc12345}}"}
-	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
-	deid := &mockDeidentifier{
-		result: models.DeidentifyResult{
-			OriginalText: "联系我 test@example.com",
-			SafeText:     "联系我 {{EMAIL_abc12345}}",
-			Placeholder:  map[string]string{"{{EMAIL_abc12345}}": "test@example.com"},
-		},
-	}
-	factory := &mockLLMClientFactory{client: mock}
-	store := &countingProviderStore{provider: &models.ProviderConfig{ID: "cloud", APIHost: "https://api.moonshot.cn", ModelID: "kimi-v1", Type: models.ProviderKimi}}
-	orch := NewChatOrchestrator(ChatOrchestratorDeps{
-		LLMFactory:           factory,
-		ProviderStore:        store,
-		Compliance:           comp,
-		DeidPipeline:         deid,
-		ConfidenceAggregator: NewConfidenceAggregator(),
-		FactRepo:             &mockFactRepository{},
-		IntentResolver:       NewIntentResolver(NewQueryExpansionService()),
-		LocalAnswer:          NewLocalAnswerService(NewLocalAnswerConfig()),
-	})
-
-	req := ChatRequest{
-		Messages:   []models.Message{{Role: models.RoleUser, Content: "联系我 test@example.com"}},
-		Model:      models.ProviderKimi,
-		ProviderID: "cloud",
-	}
-
-	resp, err := orch.Execute(context.Background(), req)
-	require.NoError(t, err)
-	assert.Equal(t, "已发送至 test@example.com", resp.Reply, "云端占位符应被还原")
-	assert.Equal(t, 2, store.getCount, "还原路径不应再触发额外的 provider 查询")
-}
 
 // mockMemoryQuerier 实现 MemoryQuerier 接口。
 type mockMemoryQuerier struct {
@@ -190,7 +119,7 @@ type mockMemoryQuerier struct {
 	err      error
 }
 
-func (m *mockMemoryQuerier) RetrieveForContext(_ context.Context, _, _ string, _ int) ([]*entity.HealthMemory, error) {
+func (m *mockMemoryQuerier) RetrieveForContext(ctx context.Context, query, sessionID string, limit int) ([]*entity.HealthMemory, error) {
 	return m.memories, m.err
 }
 
@@ -203,15 +132,15 @@ type mockFactRepository struct {
 	err         error
 }
 
-func (m *mockFactRepository) Save(_ context.Context, _ *entity.ExtractedFact) error { return nil }
-func (m *mockFactRepository) GetByID(_ context.Context, factID string) (*entity.ExtractedFact, error) {
+func (m *mockFactRepository) Save(ctx context.Context, f *entity.ExtractedFact) error { return nil }
+func (m *mockFactRepository) GetByID(ctx context.Context, factID string) (*entity.ExtractedFact, error) {
 	f, ok := m.facts[factID]
 	if !ok {
 		return nil, entity.ErrFactNotFound
 	}
 	return f, nil
 }
-func (m *mockFactRepository) FindByIDs(_ context.Context, factIDs []string) (map[string]*entity.ExtractedFact, error) {
+func (m *mockFactRepository) FindByIDs(ctx context.Context, factIDs []string) (map[string]*entity.ExtractedFact, error) {
 	result := make(map[string]*entity.ExtractedFact, len(factIDs))
 	for _, id := range factIDs {
 		if f, ok := m.facts[id]; ok {
@@ -220,32 +149,32 @@ func (m *mockFactRepository) FindByIDs(_ context.Context, factIDs []string) (map
 	}
 	return result, nil
 }
-func (m *mockFactRepository) ListByStatus(_ context.Context, _ entity.FactStatus, _, _ int) ([]*entity.ExtractedFact, error) {
+func (m *mockFactRepository) ListByStatus(ctx context.Context, status entity.FactStatus, offset, limit int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (m *mockFactRepository) ListPending(_ context.Context, _, _ int) ([]*entity.ExtractedFact, error) {
+func (m *mockFactRepository) ListPending(ctx context.Context, offset, limit int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (m *mockFactRepository) UpdateStatus(_ context.Context, _ string, _ entity.FactStatus) error {
+func (m *mockFactRepository) UpdateStatus(ctx context.Context, factID string, status entity.FactStatus) error {
 	return nil
 }
-func (m *mockFactRepository) Delete(_ context.Context, _ string) error { return nil }
-func (m *mockFactRepository) GetStats(_ context.Context) (total, approved, rejected, pending int64, err error) {
+func (m *mockFactRepository) Delete(ctx context.Context, factID string) error { return nil }
+func (m *mockFactRepository) GetStats(ctx context.Context) (total, approved, rejected, pending int64, err error) {
 	return 0, 0, 0, 0, nil
 }
-func (m *mockFactRepository) ListAllSubjects(_ context.Context) ([]string, error) {
+func (m *mockFactRepository) ListAllSubjects(ctx context.Context) ([]string, error) {
 	return nil, nil
 }
-func (m *mockFactRepository) FindBySubject(_ context.Context, _ string) ([]*entity.ExtractedFact, error) {
+func (m *mockFactRepository) FindBySubject(ctx context.Context, subject string) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (m *mockFactRepository) FindBySession(_ context.Context, _ string) ([]*entity.ExtractedFact, error) {
+func (m *mockFactRepository) FindBySession(ctx context.Context, sessionID string) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (m *mockFactRepository) FindApprovedByPredicates(_ context.Context, _ string, _ []string, _ int) ([]*entity.ExtractedFact, error) {
+func (m *mockFactRepository) FindApprovedByPredicates(ctx context.Context, subject string, predicates []string, limit int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (m *mockFactRepository) FindLatestApprovedByPredicates(_ context.Context, _ string, predicates []string) (*entity.ExtractedFact, error) {
+func (m *mockFactRepository) FindLatestApprovedByPredicates(ctx context.Context, subject string, predicates []string) (*entity.ExtractedFact, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -257,15 +186,15 @@ func (m *mockFactRepository) FindLatestApprovedByPredicates(_ context.Context, _
 	return nil, entity.ErrFactNotFound
 }
 
-func (m *mockFactRepository) SearchApproved(_ context.Context, _ string, _ int) ([]*entity.ExtractedFact, error) {
+func (m *mockFactRepository) SearchApproved(ctx context.Context, query string, limit int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
 
-func (m *mockFactRepository) CountApprovedFactsNeedingEmbedding(_ context.Context, _ string) (int64, error) {
+func (m *mockFactRepository) CountApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string) (int64, error) {
 	return 0, nil
 }
 
-func (m *mockFactRepository) ListApprovedFactsNeedingEmbedding(_ context.Context, _ string, _ time.Time, _ string, _ int) ([]*entity.ExtractedFact, error) {
+func (m *mockFactRepository) ListApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string, lastCreatedAt time.Time, lastFactID string, limit int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
 
@@ -459,7 +388,7 @@ func TestChatOrchestrator_Execute_Restore(t *testing.T) {
 	assert.Equal(t, "已发送至 test@example.com", resp.Reply)
 }
 
-// TestChatOrchestrator_Execute_LocalModelSkipDeid 验证本地 provider 跳过脱敏。
+// TestChatOrchestrator_Execute_LocalModelSkipDeid 验证本地模型跳过脱敏。
 func TestChatOrchestrator_Execute_LocalModelSkipDeid(t *testing.T) {
 	t.Parallel()
 	mock := &mockLLMClient{chatReply: "本地回复"}
@@ -471,23 +400,12 @@ func TestChatOrchestrator_Execute_LocalModelSkipDeid(t *testing.T) {
 			Placeholder:  map[string]string{"{{EMAIL_abc12345}}": "test@example.com"},
 		},
 	}
-	factory := &mockLLMClientFactory{client: mock}
-	store := &mockProviderStore{provider: &models.ProviderConfig{ID: "local-provider", Type: models.ProviderOllama, APIHost: "http://localhost:11434", ModelID: "llama3"}}
-	orch := NewChatOrchestrator(ChatOrchestratorDeps{
-		LLMFactory:           factory,
-		ProviderStore:        store,
-		Compliance:           comp,
-		DeidPipeline:         deid,
-		ConfidenceAggregator: NewConfidenceAggregator(),
-		FactRepo:             &mockFactRepository{},
-		IntentResolver:       NewIntentResolver(NewQueryExpansionService()),
-		LocalAnswer:          NewLocalAnswerService(NewLocalAnswerConfig()),
-	})
+	orch := newTestOrchestrator(mock, comp, deid, nil, nil)
 
 	req := ChatRequest{
 		Messages:   []models.Message{{Role: models.RoleUser, Content: "联系我 test@example.com"}},
 		Model:      models.ProviderOllama,
-		ProviderID: "local-provider",
+		ProviderID: "test-provider",
 	}
 
 	resp, err := orch.Execute(context.Background(), req)
@@ -531,7 +449,7 @@ type countingMockLLMClient struct {
 	chatCount int
 }
 
-func (m *countingMockLLMClient) Chat(_ context.Context, messages []models.Message) (string, error) {
+func (m *countingMockLLMClient) Chat(ctx context.Context, messages []models.Message) (string, error) {
 	m.chatCount++
 	m.lastMessages = messages
 	return m.chatReply, m.chatErr
@@ -669,7 +587,7 @@ func TestChatOrchestrator_StreamExecute_Error(t *testing.T) {
 		ProviderID: "test-provider",
 	}
 
-	_, _, _, err := orch.StreamExecute(context.Background(), req, func(_ string) {})
+	_, _, _, err := orch.StreamExecute(context.Background(), req, func(chunk string) {})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "stream execution failed")
 }
@@ -722,93 +640,65 @@ func TestFindLastUserMessage(t *testing.T) {
 	assert.Equal(t, -1, findLastUserMessage([]models.Message{}))
 }
 
-func TestInjectMemories_Authoritative(t *testing.T) {
+// TestInjectMemories 验证记忆注入逻辑。
+func TestInjectMemories(t *testing.T) {
 	t.Parallel()
-
+	// 无 system message 时插入 system
 	msgs := []models.Message{
 		{Role: models.RoleUser, Content: "hello"},
 	}
-	memories := []*entity.HealthMemory{
-		{Content: "用户 体重是 110kg"},
-		{Content: " 用户 对青霉素过敏 "},
-	}
-
+	memories := []*entity.HealthMemory{{Content: "记忆1"}}
 	result := injectMemories(msgs, memories)
 	require.Len(t, result, 2)
 	assert.Equal(t, models.RoleSystem, result[0].Role)
-	assert.Contains(t, result[0].Content, "已确认的个人健康档案")
-	assert.Contains(t, result[0].Content, "视为权威且当前有效")
-	assert.Contains(t, result[0].Content, "不要重复向用户询问已知信息")
-	assert.Contains(t, result[0].Content, "不构成诊断依据")
-	assert.Contains(t, result[0].Content, "- 用户 体重是 110kg")
-	assert.Contains(t, result[0].Content, "- 用户 对青霉素过敏")
+	assert.Contains(t, result[0].Content, "记忆1")
 	assert.Equal(t, models.RoleUser, result[1].Role)
 
+	// 有 system message 时追加到现有 system
 	msgs = []models.Message{
-		{Role: models.RoleSystem, Content: "你是健康信息助手"},
+		{Role: models.RoleSystem, Content: "你是医生"},
 		{Role: models.RoleUser, Content: "hello"},
 	}
 	result = injectMemories(msgs, memories)
 	require.Len(t, result, 2)
 	assert.Equal(t, models.RoleSystem, result[0].Role)
-	assert.Contains(t, result[0].Content, "- 用户 体重是 110kg")
-	assert.Contains(t, result[0].Content, "你是健康信息助手")
+	assert.Contains(t, result[0].Content, "记忆1")
+	assert.Contains(t, result[0].Content, "你是医生")
 
+	// 空记忆时不改变
 	result = injectMemories(msgs, nil)
 	require.Len(t, result, 2)
-	assert.Equal(t, "你是健康信息助手", result[0].Content)
-
-	result = injectMemories(msgs, []*entity.HealthMemory{{Content: "  "}})
-	require.Len(t, result, 2)
-	assert.Equal(t, "你是健康信息助手", result[0].Content)
+	assert.Equal(t, "你是医生", result[0].Content)
 }
 
-func TestCitationSourceType(t *testing.T) {
+// TestIsLocalModel 验证本地模型判断。
+func TestIsLocalModel(t *testing.T) {
 	t.Parallel()
-
-	assert.Equal(t, entity.SourceMedicalGuideline, citationSourceType(entity.KnowledgeCitation{
-		Title: "高血压诊疗指南",
-	}))
-	assert.Equal(t, entity.SourceMedicalGuideline, citationSourceType(entity.KnowledgeCitation{
-		Source: "expert consensus",
-	}))
-	assert.Equal(t, entity.SourceEvidenceDB, citationSourceType(entity.KnowledgeCitation{
-		Title:  "健康科普",
-		Source: "local-kb",
-	}))
-}
-
-// TestIsLocalProvider 验证本地 provider 判断。
-func TestIsLocalProvider(t *testing.T) {
-	t.Parallel()
-	assert.True(t, isLocalProvider(&models.ProviderConfig{Type: models.ProviderOllama, APIHost: "https://api.example.com"}))
-	assert.True(t, isLocalProvider(&models.ProviderConfig{Type: models.ProviderLocal, APIHost: "https://api.example.com"}))
-	assert.True(t, isLocalProvider(&models.ProviderConfig{Type: models.ProviderKimi, APIHost: "http://localhost:11434"}))
-	assert.True(t, isLocalProvider(&models.ProviderConfig{Type: models.ProviderKimi, APIHost: "http://127.0.0.1:11434"}))
-	assert.False(t, isLocalProvider(&models.ProviderConfig{Type: models.ProviderKimi, APIHost: "https://api.moonshot.cn"}))
-	assert.False(t, isLocalProvider(&models.ProviderConfig{Type: models.ProviderOpenAI, APIHost: "https://api.openai.com"}))
-	assert.False(t, isLocalProvider(&models.ProviderConfig{Type: models.ProviderQwen, APIHost: "https://dashscope.aliyuncs.com"}))
-	assert.False(t, isLocalProvider(&models.ProviderConfig{Type: models.ProviderSiliconFlow, APIHost: "https://api.siliconflow.cn"}))
-	assert.False(t, isLocalProvider(nil))
+	assert.True(t, isLocalModel(models.ProviderOllama))
+	assert.True(t, isLocalModel(models.ProviderLocal))
+	assert.False(t, isLocalModel(models.ProviderKimi))
+	assert.False(t, isLocalModel(models.ProviderOpenAI))
+	assert.False(t, isLocalModel(models.ProviderQwen))
+	assert.False(t, isLocalModel(models.ProviderSiliconFlow))
 }
 
 // mockProviderStoreCtxErr 是一个在 context 已取消时返回 context 错误的 ProviderStore Mock。
 type mockProviderStoreCtxErr struct{}
 
-func (m *mockProviderStoreCtxErr) Create(_ context.Context, _ *models.ProviderConfig) error {
+func (m *mockProviderStoreCtxErr) Create(ctx context.Context, provider *models.ProviderConfig) error {
 	return nil
 }
-func (m *mockProviderStoreCtxErr) Update(_ context.Context, _ *models.ProviderConfig) error {
+func (m *mockProviderStoreCtxErr) Update(ctx context.Context, provider *models.ProviderConfig) error {
 	return nil
 }
-func (m *mockProviderStoreCtxErr) Delete(_ context.Context, _ string) error { return nil }
+func (m *mockProviderStoreCtxErr) Delete(ctx context.Context, id string) error { return nil }
 func (m *mockProviderStoreCtxErr) Get(ctx context.Context, id string) (*models.ProviderConfig, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	return &models.ProviderConfig{ID: id, APIHost: "https://api.example.com", ModelID: "test-model"}, nil
 }
-func (m *mockProviderStoreCtxErr) List(_ context.Context) ([]*models.ProviderConfig, error) {
+func (m *mockProviderStoreCtxErr) List(ctx context.Context) ([]*models.ProviderConfig, error) {
 	return []*models.ProviderConfig{}, nil
 }
 
@@ -944,20 +834,20 @@ type multiProviderStore struct {
 	providers map[string]*models.ProviderConfig
 }
 
-func (m *multiProviderStore) Create(_ context.Context, _ *models.ProviderConfig) error {
+func (m *multiProviderStore) Create(ctx context.Context, provider *models.ProviderConfig) error {
 	return nil
 }
-func (m *multiProviderStore) Update(_ context.Context, _ *models.ProviderConfig) error {
+func (m *multiProviderStore) Update(ctx context.Context, provider *models.ProviderConfig) error {
 	return nil
 }
-func (m *multiProviderStore) Delete(_ context.Context, _ string) error { return nil }
-func (m *multiProviderStore) Get(_ context.Context, id string) (*models.ProviderConfig, error) {
+func (m *multiProviderStore) Delete(ctx context.Context, id string) error { return nil }
+func (m *multiProviderStore) Get(ctx context.Context, id string) (*models.ProviderConfig, error) {
 	if p, ok := m.providers[id]; ok {
 		return p, nil
 	}
 	return nil, fmt.Errorf("provider not found: %s", id)
 }
-func (m *multiProviderStore) List(_ context.Context) ([]*models.ProviderConfig, error) {
+func (m *multiProviderStore) List(ctx context.Context) ([]*models.ProviderConfig, error) {
 	var result []*models.ProviderConfig
 	for _, p := range m.providers {
 		result = append(result, p)
@@ -1353,105 +1243,4 @@ func TestExecute_ComplianceCheck_L3Notice(t *testing.T) {
 	assert.Equal(t, mock.chatReply, resp.Reply)
 	assert.Contains(t, resp.Warnings, application.L3Notice.String())
 	assert.Contains(t, resp.Warnings, "NOTICE:以上内容仅供参考")
-}
-
-// TestChatOrchestrator_Strict_MasksAllUserMessages 验证严格级对所有用户消息脱敏。
-func TestChatOrchestrator_Strict_MasksAllUserMessages(t *testing.T) {
-	t.Parallel()
-	mock := &mockLLMClient{chatReply: "收到"}
-	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
-	orch := newTestOrchestrator(mock, comp, &maskingMockDeidentifier{}, nil, nil)
-
-	req := ChatRequest{
-		Messages: []models.Message{
-			{Role: models.RoleUser, Content: "第一条含隐私"},
-			{Role: models.RoleAssistant, Content: "助手回复"},
-			{Role: models.RoleUser, Content: "第二条含隐私"},
-		},
-		Model:                models.ProviderKimi,
-		ProviderID:           "test-provider",
-		DesensitizationLevel: models.DesensitizationStrict,
-	}
-
-	_, err := orch.Execute(context.Background(), req)
-	require.NoError(t, err)
-	require.Len(t, mock.lastMessages, 3)
-	assert.Equal(t, "[MASKED]", mock.lastMessages[0].Content, "严格级应脱敏首条用户消息")
-	assert.Equal(t, "助手回复", mock.lastMessages[1].Content, "助手消息不脱敏")
-	assert.Equal(t, "[MASKED]", mock.lastMessages[2].Content, "严格级应脱敏末条用户消息")
-}
-
-// TestChatOrchestrator_Standard_MasksLastUserMessageOnly 验证标准级仅脱敏最后一条用户消息。
-func TestChatOrchestrator_Standard_MasksLastUserMessageOnly(t *testing.T) {
-	t.Parallel()
-	mock := &mockLLMClient{chatReply: "收到"}
-	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
-	orch := newTestOrchestrator(mock, comp, &maskingMockDeidentifier{}, nil, nil)
-
-	req := ChatRequest{
-		Messages: []models.Message{
-			{Role: models.RoleUser, Content: "第一条含隐私"},
-			{Role: models.RoleAssistant, Content: "助手回复"},
-			{Role: models.RoleUser, Content: "第二条含隐私"},
-		},
-		Model:                models.ProviderKimi,
-		ProviderID:           "test-provider",
-		DesensitizationLevel: models.DesensitizationStandard,
-	}
-
-	_, err := orch.Execute(context.Background(), req)
-	require.NoError(t, err)
-	require.Len(t, mock.lastMessages, 3)
-	assert.Equal(t, "第一条含隐私", mock.lastMessages[0].Content, "标准级不脱敏首条用户消息")
-	assert.Equal(t, "[MASKED]", mock.lastMessages[2].Content, "标准级仅脱敏末条用户消息")
-}
-
-// TestChatOrchestrator_Strict_FailClosed_Degrades 验证严格级脱敏失败时 fail-closed 降级，
-// 标记 DeidFailed 且降级内容与组装消息均不含原文级 PII。
-func TestChatOrchestrator_Strict_FailClosed_Degrades(t *testing.T) {
-	t.Parallel()
-	mock := &mockLLMClient{chatReply: "收到"}
-	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
-	deid := &mockDeidentifier{err: fmt.Errorf("pipeline down")}
-	orch := newTestOrchestrator(mock, comp, deid, nil, nil)
-
-	req := ChatRequest{
-		Messages:             []models.Message{{Role: models.RoleUser, Content: "我的身份证110101199001011234"}},
-		Model:                models.ProviderKimi,
-		ProviderID:           "test-provider",
-		DesensitizationLevel: models.DesensitizationStrict,
-	}
-
-	prepared := orch.PreparePrompt(context.Background(), req)
-	assert.True(t, prepared.DeidFailed, "严格级脱敏失败应置 DeidFailed")
-	require.NotEmpty(t, prepared.DeidDegraded)
-	assert.NotContains(t, prepared.DeidDegraded[len(prepared.DeidDegraded)-1].Content, "110101199001011234",
-		"降级内容不应外泄原文 PII")
-
-	// 组装后的消息（实际发送）同样不得含原文 PII。
-	lastIdx := findLastUserMessage(prepared.Messages)
-	require.GreaterOrEqual(t, lastIdx, 0)
-	assert.NotContains(t, prepared.Messages[lastIdx].Content, "110101199001011234")
-}
-
-// TestChatOrchestrator_Standard_KeepsRawFallback 验证标准级脱敏失败保持既有原文回退（非 fail-closed）。
-func TestChatOrchestrator_Standard_KeepsRawFallback(t *testing.T) {
-	t.Parallel()
-	mock := &mockLLMClient{chatReply: "收到"}
-	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
-	deid := &mockDeidentifier{err: fmt.Errorf("pipeline down")}
-	orch := newTestOrchestrator(mock, comp, deid, nil, nil)
-
-	req := ChatRequest{
-		Messages:             []models.Message{{Role: models.RoleUser, Content: "原始内容 X"}},
-		Model:                models.ProviderKimi,
-		ProviderID:           "test-provider",
-		DesensitizationLevel: models.DesensitizationStandard,
-	}
-
-	prepared := orch.PreparePrompt(context.Background(), req)
-	assert.False(t, prepared.DeidFailed, "标准级不触发 fail-closed")
-	lastIdx := findLastUserMessage(prepared.Messages)
-	require.GreaterOrEqual(t, lastIdx, 0)
-	assert.Equal(t, "原始内容 X", prepared.Messages[lastIdx].Content, "标准级失败保持原文回退")
 }

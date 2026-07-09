@@ -459,16 +459,16 @@ func TestProviderRepo_Delete_ExecError(t *testing.T) {
 // failingSecretStore 是一个在 Set 时总是返回错误的 store，用于测试错误路径。
 type failingSecretStore struct{}
 
-func (f *failingSecretStore) Set(_ string, _ []byte) error { return errors.New("set failed") }
-func (f *failingSecretStore) Get(_ string) ([]byte, error) { return nil, errors.New("get failed") }
-func (f *failingSecretStore) Delete(_ string) error        { return nil }
+func (f *failingSecretStore) Set(key string, value []byte) error { return errors.New("set failed") }
+func (f *failingSecretStore) Get(key string) ([]byte, error)     { return nil, errors.New("get failed") }
+func (f *failingSecretStore) Delete(key string) error            { return nil }
 
 // TestNewProviderRepoSQLite_KeyError 验证主密钥初始化失败时返回错误。
 func TestNewProviderRepoSQLite_KeyError(t *testing.T) {
 	tmpDir := t.TempDir()
 	conn, err := database.NewSQLiteConnector(tmpDir)
 	require.NoError(t, err)
-	defer func() { _ = conn.Close() }()
+	defer conn.Close()
 
 	_, err = NewProviderRepoSQLite(conn, &failingSecretStore{})
 	require.Error(t, err)
@@ -654,151 +654,4 @@ func TestProviderRepo_BackwardCompatibility(t *testing.T) {
 	assert.Equal(t, "sk-legacy-key", got.APIKey)
 	assert.Equal(t, models.AuthMethod(""), got.AuthMethod) // 旧数据反序列化后为空
 	assert.Empty(t, got.AuthParams.CLICredentialPath)
-}
-
-// TestProviderRepo_ProviderType_StoredPreferred 验证持久化的类型优先于按 api_host 推断的类型。
-func TestProviderRepo_ProviderType_StoredPreferred(t *testing.T) {
-	repo, cleanup := setupProviderRepo(t)
-	defer cleanup()
-
-	ctx := context.Background()
-	p := newTestProvider("stored-type")
-	// api_host 会被推断为 Kimi，但显式设置 Type 为 local，读取应以存储值为准。
-	p.APIHost = "https://api.moonshot.cn"
-	p.Type = models.ProviderLocal
-	require.NoError(t, repo.Create(ctx, p))
-
-	got, err := repo.Get(ctx, "stored-type")
-	require.NoError(t, err)
-	assert.Equal(t, models.ProviderLocal, got.Type, "应使用持久化类型，而非按 api_host 推断的 kimi")
-}
-
-// TestProviderRepo_ProviderType_EmptyFallback 验证存储类型为空时回退按 api_host 推断（兼容迁移前的旧行）。
-func TestProviderRepo_ProviderType_EmptyFallback(t *testing.T) {
-	repo, cleanup := setupProviderRepo(t)
-	defer cleanup()
-
-	ctx := context.Background()
-	p := newTestProvider("legacy-type")
-	p.APIHost = "https://api.openai.com"
-	require.NoError(t, repo.Create(ctx, p))
-
-	// 模拟迁移前旧行：清空 provider_type，读取时应回退按 api_host 推断。
-	_, err := repo.db.ExecContext(ctx, `UPDATE providers SET provider_type = '' WHERE id = ?`, "legacy-type")
-	require.NoError(t, err)
-
-	got, err := repo.Get(ctx, "legacy-type")
-	require.NoError(t, err)
-	assert.Equal(t, models.ProviderOpenAI, got.Type, "空类型应回退推断为 openai")
-}
-
-// TestProviderRepo_ProviderType_LocalPersisted 验证本地模型创建路径写入正确类型且读取一致。
-func TestProviderRepo_ProviderType_LocalPersisted(t *testing.T) {
-	repo, cleanup := setupProviderRepo(t)
-	defer cleanup()
-
-	ctx := context.Background()
-	p := newTestProvider("local-ollama")
-	// 未显式设置 Type，但回环 11434 端口应被推断并持久化为 ollama。
-	p.APIHost = "http://localhost:11434"
-	require.NoError(t, repo.Create(ctx, p))
-
-	got, err := repo.Get(ctx, "local-ollama")
-	require.NoError(t, err)
-	assert.Equal(t, models.ProviderOllama, got.Type)
-
-	// List 路径同样返回持久化类型。
-	list, err := repo.List(ctx)
-	require.NoError(t, err)
-	require.Len(t, list, 1)
-	assert.Equal(t, models.ProviderOllama, list[0].Type)
-}
-
-// TestProviderRepo_Models_RoundTrip 验证模型列表（含 MaxContextLength）持久化后可完整读回。
-func TestProviderRepo_Models_RoundTrip(t *testing.T) {
-	repo, cleanup := setupProviderRepo(t)
-	defer cleanup()
-	ctx := context.Background()
-
-	p := newTestProvider("models-rt")
-	p.ModelID = "deepseek-v4-flash"
-	p.Models = []models.ProviderModel{
-		{ID: "deepseek-v4-flash", Name: "deepseek-v4-flash", Enabled: true, MaxContextLength: 1000000},
-	}
-	require.NoError(t, repo.Create(ctx, p))
-
-	got, err := repo.Get(ctx, p.ID)
-	require.NoError(t, err)
-	require.Len(t, got.Models, 1)
-	assert.Equal(t, "deepseek-v4-flash", got.Models[0].ID)
-	assert.Equal(t, "deepseek-v4-flash", got.Models[0].Name)
-	assert.True(t, got.Models[0].Enabled)
-	assert.Equal(t, 1000000, got.Models[0].MaxContextLength)
-}
-
-// TestProviderRepo_Models_UpdatePreservesMaxContextLength 验证更新 MaxContextLength 后读取到新值。
-func TestProviderRepo_Models_UpdatePreservesMaxContextLength(t *testing.T) {
-	repo, cleanup := setupProviderRepo(t)
-	defer cleanup()
-	ctx := context.Background()
-
-	p := newTestProvider("models-upd")
-	p.ModelID = "glm-5"
-	p.Models = []models.ProviderModel{
-		{ID: "glm-5", Name: "glm-5", Enabled: true, MaxContextLength: 128000},
-	}
-	require.NoError(t, repo.Create(ctx, p))
-
-	// 更新 MaxContextLength
-	p.Models[0].MaxContextLength = 256000
-	require.NoError(t, repo.Update(ctx, p))
-
-	got, err := repo.Get(ctx, p.ID)
-	require.NoError(t, err)
-	require.Len(t, got.Models, 1)
-	assert.Equal(t, 256000, got.Models[0].MaxContextLength)
-}
-
-// TestProviderRepo_Models_ListCarriesModels 验证 List 返回的 provider 携带模型列表。
-func TestProviderRepo_Models_ListCarriesModels(t *testing.T) {
-	repo, cleanup := setupProviderRepo(t)
-	defer cleanup()
-	ctx := context.Background()
-
-	p := newTestProvider("models-list")
-	p.ModelID = "qwen-max"
-	p.Models = []models.ProviderModel{
-		{ID: "qwen-max", Name: "qwen-max", Enabled: true, MaxContextLength: 32768},
-		{ID: "qwen-plus", Name: "qwen-plus", Enabled: false, MaxContextLength: 131072},
-	}
-	require.NoError(t, repo.Create(ctx, p))
-
-	list, err := repo.List(ctx)
-	require.NoError(t, err)
-	require.Len(t, list, 1)
-	require.Len(t, list[0].Models, 2)
-	assert.Equal(t, "qwen-max", list[0].Models[0].ID)
-	assert.Equal(t, 32768, list[0].Models[0].MaxContextLength)
-	assert.Equal(t, "qwen-plus", list[0].Models[1].ID)
-	assert.Equal(t, 131072, list[0].Models[1].MaxContextLength)
-}
-
-// TestProviderRepo_Models_EmptyFallbackSynthesizesModel 验证旧行（空 models、非空 model_id）
-// 读取时合成单个模型，保持向后兼容。
-func TestProviderRepo_Models_EmptyFallbackSynthesizesModel(t *testing.T) {
-	repo, cleanup := setupProviderRepo(t)
-	defer cleanup()
-	ctx := context.Background()
-
-	p := newTestProvider("models-legacy")
-	p.ModelID = "gpt-4o-mini"
-	p.Models = nil // 模拟旧行：无模型列表
-	require.NoError(t, repo.Create(ctx, p))
-
-	got, err := repo.Get(ctx, p.ID)
-	require.NoError(t, err)
-	require.Len(t, got.Models, 1)
-	assert.Equal(t, "gpt-4o-mini", got.Models[0].ID)
-	assert.Equal(t, "gpt-4o-mini", got.Models[0].Name)
-	assert.True(t, got.Models[0].Enabled)
 }

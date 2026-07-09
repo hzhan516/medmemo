@@ -4,7 +4,6 @@ package repository
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -58,17 +57,17 @@ func (r *EmbeddingRepoSQLite) GetByFactID(ctx context.Context, factID string) (*
 	var created int64
 
 	if err := row.Scan(&e.EmbeddingID, &e.FactID, &vectorBytes, &e.ModelVersion, &created); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("embedding not found: %w", entity.ErrEmbeddingNotFound)
 		}
 		return nil, fmt.Errorf("failed to get embedding: %w", err)
 	}
 
-	vec, err := entity.VectorFromBytes(vectorBytes)
+	vector, err := entity.VectorFromBytes(vectorBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode embedding vector: %w", err)
 	}
-	e.Vector = vec
+	e.Vector = vector
 	e.CreatedAt = time.UnixMilli(created).UTC()
 	return &e, nil
 }
@@ -106,7 +105,7 @@ func (r *EmbeddingRepoSQLite) SearchSimilar(ctx context.Context, queryVector []f
 	if err != nil {
 		return nil, fmt.Errorf("failed to search similar embeddings: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 
 	return r.scanScoredEmbeddings(rows)
 }
@@ -140,7 +139,7 @@ func (r *EmbeddingRepoSQLite) SearchSimilarFiltered(ctx context.Context, queryVe
 	if err != nil {
 		return nil, fmt.Errorf("failed to search similar embeddings with filter: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 
 	return r.scanScoredEmbeddings(rows)
 }
@@ -228,18 +227,18 @@ func (r *EmbeddingRepoSQLite) scanScoredEmbeddings(rows *sql.Rows) ([]*entity.Sc
 
 // searchSimilarInGo 在 Go 中完成相似度计算；modelVersion 为空时搜索全部版本。
 func (r *EmbeddingRepoSQLite) searchSimilarInGo(ctx context.Context, queryVector []float32, topK int, modelVersion string) ([]*entity.ScoredEmbedding, error) {
-	query := `SELECT embedding_id, fact_id, vector, model_version, created_at FROM semantic_embeddings`
+	sql := `SELECT embedding_id, fact_id, vector, model_version, created_at FROM semantic_embeddings`
 	var args []any
 	if modelVersion != "" {
-		query += " WHERE model_version = ?"
+		sql += " WHERE model_version = ?"
 		args = append(args, modelVersion)
 	}
 
-	rows, err := r.db.QueryContext(ctx, query, args...)
+	rows, err := r.db.QueryContext(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list embeddings for fallback search: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 
 	var results []*entity.ScoredEmbedding
 	for rows.Next() {

@@ -166,7 +166,7 @@ func (ci *ComplianceInterceptor) Version() string {
 
 // Evaluate 评估单条文本的风险等级。
 // 按 L1→L2→L3 优先级匹配，命中即短路返回；无命中返回 L4_NORMAL。
-func (ci *ComplianceInterceptor) Evaluate(_ context.Context, text string) (*ComplianceResult, error) {
+func (ci *ComplianceInterceptor) Evaluate(ctx context.Context, text string) (*ComplianceResult, error) {
 	ci.mu.RLock()
 	rules := ci.rules
 	ci.mu.RUnlock()

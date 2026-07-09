@@ -16,24 +16,24 @@ type wailsConfig struct {
 
 func main() {
 	if len(os.Args) < 2 {
-		_, _ = fmt.Fprintln(os.Stderr, "usage: read-version <wails.json>")
+		fmt.Fprintln(os.Stderr, "usage: read-version <wails.json>")
 		os.Exit(1)
 	}
 
 	data, err := os.ReadFile(os.Args[1])
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "failed to read %s: %v\n", os.Args[1], err)
+		fmt.Fprintf(os.Stderr, "failed to read %s: %v\n", os.Args[1], err)
 		os.Exit(1)
 	}
 
 	var cfg wailsConfig
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "failed to parse %s: %v\n", os.Args[1], err)
+		fmt.Fprintf(os.Stderr, "failed to parse %s: %v\n", os.Args[1], err)
 		os.Exit(1)
 	}
 
 	if cfg.Info.ProductVersion == "" {
-		_, _ = fmt.Fprintln(os.Stderr, "productVersion not found in wails.json")
+		fmt.Fprintln(os.Stderr, "productVersion not found in wails.json")
 		os.Exit(1)
 	}
 

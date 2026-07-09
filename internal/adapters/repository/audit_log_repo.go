@@ -49,9 +49,7 @@ func (r *AuditLogRepoSQLite) ListByTarget(ctx context.Context, targetType, targe
 	if err != nil {
 		return nil, fmt.Errorf("failed to list audit logs: %w", err)
 	}
-	defer func() {
-		_ = rows.Close()
-	}()
+	defer rows.Close()
 
 	var result []*entity.AuditLogEntry
 	for rows.Next() {

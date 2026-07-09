@@ -17,7 +17,7 @@ import (
 
 // TestMain 为 Device Flow 测试设置全局环境变量。
 func TestMain(m *testing.M) {
-	_ = os.Setenv("TEST_CLIENT_ID", "test-client")
+	os.Setenv("TEST_CLIENT_ID", "test-client")
 	os.Exit(m.Run())
 }
 
@@ -55,7 +55,7 @@ func TestOAuthDeviceFlowService_FullFlow_Success(t *testing.T) {
 			assert.Equal(t, http.MethodPost, r.Method)
 			assert.Equal(t, "application/x-www-form-urlencoded", r.Header.Get("Content-Type"))
 
-			require.NoError(t, r.ParseForm())
+			r.ParseForm()
 			assert.Equal(t, "test-client", r.PostForm.Get("client_id"))
 			assert.Equal(t, "test-scope", r.PostForm.Get("scope"))
 
@@ -70,7 +70,7 @@ func TestOAuthDeviceFlowService_FullFlow_Success(t *testing.T) {
 
 		case "/token":
 			cnt := tokenPollCount.Add(1)
-			require.NoError(t, r.ParseForm())
+			r.ParseForm()
 			assert.Equal(t, "test-client", r.PostForm.Get("client_id"))
 			assert.Equal(t, "dev_abc123", r.PostForm.Get("device_code"))
 			assert.Equal(t, "urn:ietf:params:oauth:grant-type:device_code", r.PostForm.Get("grant_type"))
@@ -134,9 +134,9 @@ func TestOAuthDeviceFlowService_FullFlow_Success(t *testing.T) {
 				cfg          *models.ProviderConfig
 			}{dc, pt, cfg}
 		},
-		func(_, _ string, err error) { t.Logf("error: %v", err) },
-		func(dc, _ string) { t.Logf("pending: %s", dc) },
-		func(_, _ string, interval int) { t.Logf("slow_down: %d", interval) },
+		func(dc, pt string, err error) { t.Logf("error: %v", err) },
+		func(dc, pt string) { t.Logf("pending: %s", dc) },
+		func(dc, pt string, interval int) { t.Logf("slow_down: %d", interval) },
 	)
 
 	// 1. 启动 Flow
@@ -174,7 +174,7 @@ func TestOAuthDeviceFlowService_FullFlow_Success(t *testing.T) {
 
 	// 6. 验证状态查询
 	status := svc.GetStatus("dev_abc123")
-	require.NotNil(t, status)
+	assert.NotNil(t, status)
 	assert.Equal(t, DeviceFlowStatusSuccess, status.Status)
 }
 

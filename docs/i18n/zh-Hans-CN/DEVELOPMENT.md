@@ -13,10 +13,10 @@ MedMemo 严格遵循 Clean Architecture 四层模型，依赖方向始终向内�
 ```
 ┌──────────────────────────────────────┐
 │    Infrastructure Layer              │  ← Frameworks & Drivers
-│  (ONNX/SQLCipher/SQLite/sqlite-vec/Wails) │
+│  (ONNX/DuckDB/SQLite/Wails/Viper)   │
 ├──────────────────────────────────────┤
 │    Adapters Layer                    │  ← Interface Adapters
-│  (AI适配器/仓库实现)                 │
+│  (AI适配器/仓库实现/DTO转换)          │
 ├──────────────────────────────────────┤
 │    Application Layer                 │  ← Use Cases
 │  (用例编排/端口定义/流水线)           │
@@ -47,7 +47,7 @@ MedMemo 使用 Google Wire 进行**编译期**依赖注入，禁止运行时反�
 
 1. 在对应包内编写返回**具体类型**的 Provider 函数
 2. 在包的 `ProviderSet` 变量中注册（如 `ApplicationSet = wire.NewSet(...)`）
-3. 修改仓库根 `wire.go` 的 `InitializeApp` 函数，加入新的 ProviderSet
+3. 修改 `cmd/health-assistant/wire.go` 的 `InitializeApp` 函数，加入新的 ProviderSet
 4. 运行 `make wire` 重新生成 `wire_gen.go`
 
 **绝对禁止**手动修改 `wire_gen.go`。
@@ -77,7 +77,7 @@ return fmt.Errorf("failed to retrieve family member %s: %w", id, err)
 
 // 适配器层外部错误映射：
 if err != nil {
-    return nil, fmt.Errorf("sqlite query failed: %w", domain.ErrRecordNotFound)
+    return nil, fmt.Errorf("duckdb query failed: %w", domain.ErrRecordNotFound)
 }
 ```
 
@@ -91,10 +91,10 @@ if err != nil {
 - 任务通过有缓冲 channel（容量 16）派发
 - **不可共享 Session 并发调用**——`Run()` 非线程安全
 
-### SQLCipher/SQLite 写入
+### DuckDB 写入
 
-- 可能发生冲突的数据库写入在应用层串行化
-- 加密 SQLite 与 sqlite-vec 操作使用保守的连接池设置
+- 单一 Goroutine 执行写入
+- 利用 MVCC 保证读并发安全
 
 ### HTTP 请求
 
@@ -139,7 +139,7 @@ if err != nil {
      /  \  E2E (5%)  — Wails 集成 / Playwright
     /____\
    /      \
-  /        \ 集成测试 (25%) — go test + SQLite 内存模式
+  /        \ 集成测试 (25%) — go test + DuckDB 内存模式
  /__________\
 /            \
 /______________\ 单元测试 (70%) — go test + testify + mockery
@@ -172,19 +172,3 @@ defer cancel()
 ```
 
 优雅关闭顺序遵循依赖倒置：先关闭前端桥接，再停止推理 Worker，最后关闭数据库连接。
-
----
-
-## 构建标签与命令
-
-| 标签 / 命令 | 用途 |
-|-------------|------|
-| `ORT` | 启用 ONNX Runtime CGO 绑定，用于本地 NER 与 embedding 推理。 |
-| `webkit2_41` | 面向使用 webkit2gtk-4.1 的 Linux 发行版构建。 |
-| `make test` | 运行带 race detector 与覆盖率的单元测试。 |
-| `make test-integration` | 使用 `integration,ORT` 标签运行集成测试。 |
-| `make lint` | 运行 Go 与前端 lint 检查。 |
-
----
-
-*最后更新：2026-07-09*

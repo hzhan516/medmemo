@@ -57,9 +57,8 @@ export function ComplianceBar({ conversationId }: ComplianceBarProps) {
       aria-label="合规提示"
       className={`
         shrink-0 h-8 flex items-center justify-between px-3 text-xs
-        bg-[#EBF5FF]/90 text-[#2563EB] border-b border-[#BFDBFE]
-        dark:bg-[#1E3A5F]/90 dark:text-[#93C5FD] dark:border-[#1E3A5F]/60
-        backdrop-blur-sm
+        bg-[#EBF5FF] text-[#2563EB] border-b border-[#BFDBFE]
+        dark:bg-[#1E3A5F] dark:text-[#93C5FD] dark:border-[#1E3A5F]/60
         transition-transform duration-200 ease-out
         ${visible ? 'translate-y-0' : '-translate-y-full'}
       `}

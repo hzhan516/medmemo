@@ -1,21 +1,13 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { ConfidenceBarMode } from '@/components/confidence/types'
-import { SetDataRetentionDays, SetDesensitizationLevel, GetDesensitizationLevel } from '@wails/go/main/WailsApp'
+import { SetDataRetentionDays } from '@wails/go/main/WailsApp'
 
 type Theme = 'light' | 'dark' | 'system'
 type ComplianceBarMode = 'always' | 'first' | 'off'
 type UpdateChannel = 'stable' | 'beta'
 type DesensitizationLevel = 'standard' | 'strict' | 'off'
 export type ProviderHealthStatus = 'green' | 'yellow' | 'red' | 'unknown'
-
-export type CompressionSettings = {
-  useModel: boolean
-  providerId: string
-  modelId: string
-  anchorCount: number
-  recentCount: number
-}
 
 interface SettingsState {
   theme: Theme
@@ -32,7 +24,6 @@ interface SettingsState {
   providerHealthStatus: Record<string, ProviderHealthStatus>
   lastSelectedProviderId: string | null
   lastSeenVersionNotes: string
-  compressionSettings: CompressionSettings
 
   setTheme: (theme: Theme) => void
   setSelectedModel: (model: string) => void
@@ -41,20 +32,18 @@ interface SettingsState {
   setConfidenceBarMode: (mode: ConfidenceBarMode) => void
   setAutoCheckUpdate: (enabled: boolean) => void
   setUpdateChannel: (channel: UpdateChannel) => void
-  setDesensitizationLevel: (level: DesensitizationLevel) => Promise<void>
-  syncDesensitizationLevelFromBackend: () => Promise<void>
+  setDesensitizationLevel: (level: DesensitizationLevel) => void
   setDataRetentionDays: (days: number) => void
   setActiveProviderId: (id: string | null) => void
   setActiveModelId: (id: string | null) => void
   setProviderHealthStatus: (id: string, status: ProviderHealthStatus) => void
   setLastSelectedProviderId: (id: string | null) => void
   setLastSeenVersionNotes: (version: string) => void
-  setCompressionSettings: (settings: Partial<CompressionSettings>) => void
 }
 
 export const useSettingsStore = create<SettingsState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       theme: 'system',
       selectedModel: 'kimi-lite',
       complianceBarMode: 'always',
@@ -69,13 +58,6 @@ export const useSettingsStore = create<SettingsState>()(
       providerHealthStatus: {},
       lastSelectedProviderId: null,
       lastSeenVersionNotes: '',
-      compressionSettings: {
-        useModel: false,
-        providerId: '',
-        modelId: '',
-        anchorCount: 1,
-        recentCount: 6,
-      },
 
       setTheme: (theme) => set({ theme }),
       setSelectedModel: (model) => set({ selectedModel: model }),
@@ -84,30 +66,7 @@ export const useSettingsStore = create<SettingsState>()(
       setConfidenceBarMode: (mode) => set({ confidenceBarMode: mode }),
       setAutoCheckUpdate: (enabled) => set({ autoCheckUpdate: enabled }),
       setUpdateChannel: (channel) => set({ updateChannel: channel }),
-      setDesensitizationLevel: async (level) => {
-        // 乐观更新后同步后端；后端保存失败时回滚本地状态并向调用方抛出错误，
-        // 确保前后端脱敏级别始终一致（后端为权威源）。
-        const previous = get().desensitizationLevel
-        set({ desensitizationLevel: level })
-        try {
-          await SetDesensitizationLevel(level)
-        } catch (err: unknown) {
-          set({ desensitizationLevel: previous })
-          console.error('[settings] 同步脱敏级别到后端失败，已回滚:', err)
-          throw err instanceof Error ? err : new Error(String(err))
-        }
-      },
-      syncDesensitizationLevelFromBackend: async () => {
-        // 启动时以后端配置为准回读并校正本地状态，避免持久化的旧值与后端不一致。
-        try {
-          const backendLevel = await GetDesensitizationLevel()
-          if (backendLevel === 'standard' || backendLevel === 'strict' || backendLevel === 'off') {
-            set({ desensitizationLevel: backendLevel })
-          }
-        } catch (err: unknown) {
-          console.error('[settings] 回读后端脱敏级别失败:', err)
-        }
-      },
+      setDesensitizationLevel: (level) => set({ desensitizationLevel: level }),
       setDataRetentionDays: (days) => {
         set({ dataRetentionDays: days })
         // 同步到后端配置文件，确保清理逻辑使用同一数值
@@ -123,10 +82,6 @@ export const useSettingsStore = create<SettingsState>()(
         })),
       setLastSelectedProviderId: (id) => set({ lastSelectedProviderId: id }),
       setLastSeenVersionNotes: (version) => set({ lastSeenVersionNotes: version }),
-      setCompressionSettings: (updates) =>
-        set((state) => ({
-          compressionSettings: { ...state.compressionSettings, ...updates },
-        })),
     }),
     {
       name: 'medmemo-settings',
@@ -144,7 +99,6 @@ export const useSettingsStore = create<SettingsState>()(
         activeModelId: state.activeModelId,
         lastSelectedProviderId: state.lastSelectedProviderId,
         lastSeenVersionNotes: state.lastSeenVersionNotes,
-        compressionSettings: state.compressionSettings,
         // providerHealthStatus 不持久化（运行时状态）
       }),
       merge: (persistedState, currentState) => {
@@ -155,10 +109,6 @@ export const useSettingsStore = create<SettingsState>()(
           // 新字段兜底：旧 localStorage 中缺少时恢复默认值
           confidenceBarMode: persisted.confidenceBarMode ?? currentState.confidenceBarMode,
           showConfidenceBar: persisted.showConfidenceBar ?? currentState.showConfidenceBar,
-          compressionSettings: {
-            ...currentState.compressionSettings,
-            ...persisted.compressionSettings,
-          },
         }
       },
     }

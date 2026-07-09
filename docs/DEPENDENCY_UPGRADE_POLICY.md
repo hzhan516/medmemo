@@ -28,20 +28,19 @@ This policy establishes:
 | `@types/react` | `^18.2.55` | Must stay in sync with `react`. |
 | `@types/react-dom` | `^18.2.19` | Must stay in sync with `react-dom`. |
 | `typescript` | `5.9.3` | AGENTS.md locks TypeScript to 5.x+; strict mode and type behavior must not shift unexpectedly. |
-| `@typescript-eslint/eslint-plugin` | `^8.62.1` | Tightly coupled to TypeScript version; major bumps may introduce incompatible lint rules. |
-| `@typescript-eslint/parser` | `^8.63.0` | Must stay aligned with the ESLint plugin and TypeScript version. |
-| `vite` | `6.4.3` | Build toolchain; major upgrades frequently break plugin APIs and cross-platform CGO builds. |
+| `@typescript-eslint/*` | `^8.60.0` | Tightly coupled to TypeScript version; major bumps may introduce incompatible lint rules. |
+| `vite` | `6.4.2` | Build toolchain; major upgrades frequently break plugin APIs and cross-platform CGO builds. |
 | `@vitejs/plugin-react` | `4.7.0` | Tightly coupled to Vite major version. |
 | `tailwindcss` | `^3.4.1` | AGENTS.md locks Tailwind to 3.x+; major upgrades may break utility class generation. |
 | `tailwindcss-animate` | `^1.0.7` | Tightly coupled to `tailwindcss` major version. |
 | `eslint` | `^8.56.0` | Lint toolchain stability; major upgrades often require config migrations. |
 | `eslint-plugin-react-refresh` | `^0.4.5` | Tightly coupled to React and ESLint major versions. |
 | `zustand` | `^5.0.13` | State management recently upgraded to v5; major upgrades require store API validation. |
-| `react-router-dom` | `^7.18.1` | Routing API changes can break deep-linking and Wails navigation integration. |
+| `react-router-dom` | `^7.15.1` | Routing API changes can break deep-linking and Wails navigation integration. |
 | `react-markdown` | `^10.1.0` | Markdown rendering engine; major upgrades may break `remark-gfm` plugin compatibility. |
-| `vitest` | `^4.1.10` | Test framework; major upgrades may break test config, coverage reporters, and UI mode. |
-| `@vitest/coverage-v8` | `^4.1.10` | Tightly coupled to `vitest` major version. |
-| `@vitest/ui` | `^4.1.9` | Tightly coupled to `vitest` major version. |
+| `vitest` | `^4.1.6` | Test framework; major upgrades may break test config, coverage reporters, and UI mode. |
+| `@vitest/coverage-v8` | `^4.1.6` | Tightly coupled to `vitest` major version. |
+| `@vitest/ui` | `^4.1.6` | Tightly coupled to `vitest` major version. |
 
 ### Backend (Go Modules)
 
@@ -146,7 +145,3 @@ wails build -platform linux/amd64
 - [`AGENTS.md`](../AGENTS.md) — Full development standards and stack version locks.
 - [`.github/dependabot.yml`](../.github/dependabot.yml) — Dependabot configuration with `ignore` rules.
 - [`docs/DEVELOPMENT.md`](./DEVELOPMENT.md) — Clean Architecture and coding conventions.
-
----
-
-*Last updated: 2026-07-09*

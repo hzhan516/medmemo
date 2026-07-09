@@ -1,6 +1,6 @@
 # Application Layer（用例层）
 
-> 🌐 [English Version](../../../../internal/application/README.md)
+> 🌐 [English Version](../../../../../internal/application/README.md)
 
 ## 定位
 
@@ -12,11 +12,9 @@ Application Layer 是 Clean Architecture 的第二层，负责**编排领域对�
 
 ```
 internal/application/
-├── usecase/    # 用例实现：ChatOrchestrator, MemoryRetriever, TitleGenerator, compression...
-├── port/       # 端口定义：LLMClient、仓库、检测器、TokenCounter...
-├── pipeline/   # 两级脱敏流水线编排
-├── stream/     # Wails 事件流 broker
-└── updater/    # 更新相关用例
+├── usecase/    # 用例实现：ChatOrchestrator, MemoryRetriever, TitleGenerator...
+├── port/       # 端口定义：LLMClient, MemoryRepository, SensitiveDetector, ComplianceChecker...
+└── pipeline/   # 脱敏流水线编排器：协调 L1/L2/L3 三级脱敏
 ```
 
 ## 导入约束
@@ -50,7 +48,7 @@ package usecase
 
 func (o *ChatOrchestrator) Execute(ctx context.Context, req ChatRequest) (ChatResponse, error) {
 	// 1. 紧急症状检测
-	// 2. 两级脱敏流水线
+	// 2. 三级脱敏流水线
 	// 3. LLM 调用
 	// 4. 合规拦截
 	// 5. 消息持久化
@@ -59,4 +57,4 @@ func (o *ChatOrchestrator) Execute(ctx context.Context, req ChatRequest) (ChatRe
 
 ---
 
-*最后更新：2026-07-09*
+*最后更新：2026-05-19*

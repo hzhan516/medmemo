@@ -5,7 +5,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -34,12 +33,12 @@ func (r *FactRepoSQLite) Save(ctx context.Context, f *entity.ExtractedFact) erro
 
 	var scoredAt, reviewedAt *int64
 	if f.ScoredAt != nil {
-		scoredAt = new(int64)
-		*scoredAt = f.ScoredAt.UnixMilli()
+		v := f.ScoredAt.UnixMilli()
+		scoredAt = &v
 	}
 	if f.ReviewedAt != nil {
-		reviewedAt = new(int64)
-		*reviewedAt = f.ReviewedAt.UnixMilli()
+		v := f.ReviewedAt.UnixMilli()
+		reviewedAt = &v
 	}
 
 	_, err = r.db.ExecContext(ctx, `
@@ -86,7 +85,7 @@ func (r *FactRepoSQLite) FindApprovedByPredicates(ctx context.Context, subject s
 	if err != nil {
 		return nil, fmt.Errorf("failed to query approved facts by predicates: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	return scanFacts(rows)
 }
 
@@ -167,7 +166,6 @@ func (r *FactRepoSQLite) FindByIDs(ctx context.Context, factIDs []string) (map[s
 			return nil, fmt.Errorf("failed to query facts by ids: %w", err)
 		}
 		facts, err := scanFacts(rows)
-		_ = rows.Close()
 		if err != nil {
 			return nil, err
 		}
@@ -193,7 +191,7 @@ func (r *FactRepoSQLite) ListByStatus(ctx context.Context, status entity.FactSta
 	if err != nil {
 		return nil, fmt.Errorf("failed to list facts by status: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	return scanFacts(rows)
 }
 
@@ -248,7 +246,7 @@ func (r *FactRepoSQLite) ListAllSubjects(ctx context.Context) ([]string, error) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to list subjects: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 
 	var subjects []string
 	for rows.Next() {
@@ -275,7 +273,7 @@ func (r *FactRepoSQLite) FindBySubject(ctx context.Context, subject string) ([]*
 	if err != nil {
 		return nil, fmt.Errorf("failed to find facts by subject: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	return scanFacts(rows)
 }
 
@@ -301,7 +299,7 @@ func (r *FactRepoSQLite) SearchApproved(ctx context.Context, query string, limit
 	if err != nil {
 		return nil, fmt.Errorf("failed to search approved facts: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 	return scanFacts(rows)
 }
 
@@ -319,12 +317,12 @@ func (r *FactRepoSQLite) FindBySession(ctx context.Context, sessionID string) ([
 	for msgRows.Next() {
 		var id string
 		if err := msgRows.Scan(&id); err != nil {
-			_ = msgRows.Close()
+			msgRows.Close()
 			return nil, fmt.Errorf("failed to scan message id: %w", err)
 		}
 		msgIDs = append(msgIDs, id)
 	}
-	_ = msgRows.Close()
+	msgRows.Close()
 	if err := msgRows.Err(); err != nil {
 		return nil, fmt.Errorf("failed to iterate message ids: %w", err)
 	}
@@ -342,7 +340,7 @@ func (r *FactRepoSQLite) FindBySession(ctx context.Context, sessionID string) ([
 	if err != nil {
 		return nil, fmt.Errorf("failed to list facts: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 
 	facts, err := scanFacts(rows)
 	if err != nil {
@@ -411,7 +409,7 @@ func (r *FactRepoSQLite) ListApprovedFactsNeedingEmbedding(ctx context.Context, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to list approved facts needing embedding: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 
 	return scanFacts(rows)
 }
@@ -445,7 +443,7 @@ func scanFact(row *sql.Row) (*entity.ExtractedFact, error) {
 	var created int64
 
 	if err := row.Scan(&f.FactID, &f.Subject, &f.Predicate, &f.Object, &f.Confidence, &sourceIDsJSON, &f.Status, &isSensitive, &scoredAt, &reviewedAt, &created); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("fact not found: %w", entity.ErrFactNotFound)
 		}
 		return nil, fmt.Errorf("failed to scan fact: %w", err)
@@ -456,12 +454,12 @@ func scanFact(row *sql.Row) (*entity.ExtractedFact, error) {
 	}
 	f.IsSensitive = isSensitive != 0
 	if scoredAt != nil {
-		f.ScoredAt = new(time.Time)
-		*f.ScoredAt = time.UnixMilli(*scoredAt).UTC()
+		t := time.UnixMilli(*scoredAt).UTC()
+		f.ScoredAt = &t
 	}
 	if reviewedAt != nil {
-		f.ReviewedAt = new(time.Time)
-		*f.ReviewedAt = time.UnixMilli(*reviewedAt).UTC()
+		t := time.UnixMilli(*reviewedAt).UTC()
+		f.ReviewedAt = &t
 	}
 	f.CreatedAt = time.UnixMilli(created).UTC()
 	return &f, nil
@@ -484,12 +482,12 @@ func scanFacts(rows *sql.Rows) ([]*entity.ExtractedFact, error) {
 		}
 		f.IsSensitive = isSensitive != 0
 		if scoredAt != nil {
-			f.ScoredAt = new(time.Time)
-			*f.ScoredAt = time.UnixMilli(*scoredAt).UTC()
+			t := time.UnixMilli(*scoredAt).UTC()
+			f.ScoredAt = &t
 		}
 		if reviewedAt != nil {
-			f.ReviewedAt = new(time.Time)
-			*f.ReviewedAt = time.UnixMilli(*reviewedAt).UTC()
+			t := time.UnixMilli(*reviewedAt).UTC()
+			f.ReviewedAt = &t
 		}
 		f.CreatedAt = time.UnixMilli(created).UTC()
 		result = append(result, &f)

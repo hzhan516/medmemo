@@ -135,9 +135,7 @@ func TestEnsureMemorySchema(t *testing.T) {
 	dir := t.TempDir()
 	connector, err := database.NewSQLiteConnector(dir)
 	require.NoError(t, err)
-	defer func() {
-		_ = connector.Close()
-	}()
+	defer connector.Close()
 
 	// 直接调用包级函数
 	err = EnsureMemorySchema(connector.DB())

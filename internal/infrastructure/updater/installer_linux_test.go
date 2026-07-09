@@ -36,36 +36,7 @@ func TestResolveAppImagePathWith_FallbackExecutable(t *testing.T) {
 	assert.Equal(t, fallback, got)
 }
 
-func TestResolveAppImagePathWith_NilFallback(t *testing.T) {
-	got := resolveAppImagePathWith("/not-an-appimage", []byte("/usr/bin/go\x00test\x00"), nil)
-	assert.Empty(t, got)
-}
-
-func TestReadProcSelfCmdline(t *testing.T) {
-	data := readProcSelfCmdline()
-	// 在 Linux 上通常能读取到当前进程命令行
-	assert.NotNil(t, data)
-}
-
-// TestNewInstaller 验证 Linux Installer 工厂函数。
-func TestNewInstaller(t *testing.T) {
-	inst := NewInstaller()
-	require.NotNil(t, inst)
-	assert.NotEmpty(t, inst.CurrentBinaryPath())
-}
-
-// TestManualPackageInstallRequired_Error 验证错误信息包含建议命令。
-func TestManualPackageInstallRequired_Error(t *testing.T) {
-	err := &ManualPackageInstallRequired{
-		PackagePath: "/tmp/MedMemo.deb",
-		Kind:        "deb",
-		Command:     "sudo dpkg -i /tmp/MedMemo.deb",
-	}
-	assert.Contains(t, err.Error(), "manual package install required")
-	assert.Contains(t, err.Error(), "dpkg")
-}
-
-func TestLinuxInstaller_Install_AppImageReplacesOriginal(t *testing.T) {
+func TestLinuxInstaller_Install_ReplacesOriginalAppImage(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", t.TempDir())
 
@@ -113,16 +84,9 @@ func TestLinuxInstaller_Install_NotAppImageReturnsManualError(t *testing.T) {
 	require.NoError(t, os.WriteFile(currentBinary, []byte("old"), 0755))
 
 	installer := &LinuxInstaller{currentPath: currentBinary}
-	assetPath := filepath.Join(tmpDir, "new.AppImage")
-	require.NoError(t, os.WriteFile(assetPath, []byte("update"), 0644))
-
-	_, err := installer.Install(assetPath)
+	_, err := installer.Install(filepath.Join(tmpDir, "new.AppImage"))
 	require.Error(t, err)
-
-	var manual *ManualPackageInstallRequired
-	require.ErrorAs(t, err, &manual)
-	assert.Equal(t, "unknown", manual.Kind)
-	assert.Equal(t, assetPath, manual.PackagePath)
+	assert.Contains(t, err.Error(), "manual update required")
 }
 
 func TestLinuxInstaller_Rollback(t *testing.T) {
@@ -149,7 +113,7 @@ func TestLinuxInstaller_Rollback(t *testing.T) {
 func TestLinuxInstaller_RollbackNoBackup(t *testing.T) {
 	installer := &LinuxInstaller{}
 	err := installer.Rollback()
-	require.Error(t, err)
+	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "no backup available")
 }
 
@@ -195,17 +159,6 @@ func TestLinuxInstallerInstall_CopyFileFails(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestLinuxInstallerInstall_CurrentBinaryMissing(t *testing.T) {
-	tmpDir := t.TempDir()
-	installer := &LinuxInstaller{currentPath: filepath.Join(tmpDir, "missing.AppImage")}
-	assetPath := filepath.Join(tmpDir, "asset.AppImage")
-	require.NoError(t, os.WriteFile(assetPath, []byte("update"), 0644))
-
-	_, err := installer.Install(assetPath)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to backup current binary")
-}
-
 func TestLinuxInstallerInstall_RenameFails(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", t.TempDir())
@@ -226,7 +179,7 @@ func TestLinuxInstallerRollback_BackupNotFound(t *testing.T) {
 		backupPath:  filepath.Join(tmpDir, "nonexistent.backup"),
 	}
 	err := installer.Rollback()
-	require.Error(t, err)
+	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "backup file not found")
 }
 
@@ -242,7 +195,7 @@ func TestLinuxInstallerRollback_RenameFails(t *testing.T) {
 		backupPath:  backupPath,
 	}
 	err := installer.Rollback()
-	require.Error(t, err)
+	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to restore backup")
 }
 
@@ -260,83 +213,4 @@ func TestAssertDirWritable(t *testing.T) {
 	require.NoError(t, os.Mkdir(readOnly, 0555))
 	t.Cleanup(func() { _ = os.Chmod(readOnly, 0755) })
 	assert.Error(t, assertDirWritable(readOnly))
-}
-
-func TestLinuxInstaller_Install_DebReturnsManualInstall(t *testing.T) {
-	tmpDir := t.TempDir()
-	currentBinary := filepath.Join(tmpDir, "MedMemo")
-	require.NoError(t, os.WriteFile(currentBinary, []byte("old"), 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".install_kind"), []byte("deb"), 0644))
-
-	assetPath := filepath.Join(tmpDir, "MedMemo_1.1.10_amd64.deb")
-	require.NoError(t, os.WriteFile(assetPath, []byte("pkg"), 0644))
-
-	installer := &LinuxInstaller{currentPath: currentBinary}
-	_, err := installer.Install(assetPath)
-	require.Error(t, err)
-
-	var manual *ManualPackageInstallRequired
-	require.ErrorAs(t, err, &manual)
-	assert.Equal(t, "deb", manual.Kind)
-	assert.Equal(t, assetPath, manual.PackagePath)
-	assert.Contains(t, manual.Command, "dpkg")
-}
-
-func TestLinuxInstaller_Install_RPMReturnsManualInstall(t *testing.T) {
-	tmpDir := t.TempDir()
-	currentBinary := filepath.Join(tmpDir, "MedMemo")
-	require.NoError(t, os.WriteFile(currentBinary, []byte("old"), 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".install_kind"), []byte("rpm"), 0644))
-
-	assetPath := filepath.Join(tmpDir, "MedMemo-1.1.10-1.x86_64.rpm")
-	require.NoError(t, os.WriteFile(assetPath, []byte("pkg"), 0644))
-
-	installer := &LinuxInstaller{currentPath: currentBinary}
-	_, err := installer.Install(assetPath)
-	require.Error(t, err)
-
-	var manual *ManualPackageInstallRequired
-	require.ErrorAs(t, err, &manual)
-	assert.Equal(t, "rpm", manual.Kind)
-	assert.Equal(t, assetPath, manual.PackagePath)
-	assert.Contains(t, manual.Command, "rpm")
-}
-
-func TestDetectInstallKind(t *testing.T) {
-	t.Run("appimage by suffix", func(t *testing.T) {
-		assert.Equal(t, "appimage", DetectInstallKind("/opt/MedMemo.AppImage"))
-	})
-
-	t.Run("deb by env", func(t *testing.T) {
-		t.Setenv("MEDMEMO_INSTALL_KIND", "deb")
-		assert.Equal(t, "deb", DetectInstallKind("/opt/MedMemo"))
-	})
-
-	t.Run("rpm by marker file", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		binary := filepath.Join(tmpDir, "MedMemo")
-		require.NoError(t, os.WriteFile(binary, []byte("x"), 0755))
-		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".install_kind"), []byte("rpm"), 0644))
-
-		assert.Equal(t, "rpm", DetectInstallKind(binary))
-	})
-
-	t.Run("marker file read error falls back to unknown", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		binary := filepath.Join(tmpDir, "MedMemo")
-		require.NoError(t, os.WriteFile(binary, []byte("x"), 0755))
-		// 将标记文件创建为目录，使 ReadFile 失败
-		require.NoError(t, os.Mkdir(filepath.Join(tmpDir, ".install_kind"), 0755))
-
-		assert.Equal(t, "unknown", DetectInstallKind(binary))
-	})
-
-	t.Run("appimage wins over env", func(t *testing.T) {
-		t.Setenv("MEDMEMO_INSTALL_KIND", "deb")
-		assert.Equal(t, "appimage", DetectInstallKind("/opt/MedMemo.AppImage"))
-	})
-
-	t.Run("unknown", func(t *testing.T) {
-		assert.Equal(t, "unknown", DetectInstallKind("/opt/MedMemo"))
-	})
 }

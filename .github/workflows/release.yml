@@ -5,16 +5,13 @@ on:
     tags:
       - 'v*'
 
-env:
-  GOPROXY: https://proxy.golang.org,https://goproxy.cn,direct
-
 permissions:
   contents: write
   packages: write
 
 jobs:
-  build:
-    name: Build ${{ matrix.platform }}
+  release:
+    name: Release ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
@@ -23,12 +20,8 @@ jobs:
             platform: linux
           - os: windows-latest
             platform: windows
-          - os: macos-15-intel
-            platform: darwin-amd64
-            arch: x86_64
-          - os: macos-14
-            platform: darwin-arm64
-            arch: arm64
+          - os: macos-latest
+            platform: darwin
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
@@ -61,7 +54,7 @@ jobs:
           sudo apt-get install -y libsqlcipher-dev libwebkit2gtk-4.1-dev gcc
 
       - name: Install macOS dependencies
-        if: startsWith(matrix.platform, 'darwin')
+        if: matrix.platform == 'darwin'
         run: |
           brew install sqlcipher create-dmg
 
@@ -88,7 +81,7 @@ jobs:
         shell: bash
 
       - name: Verify release artifact
-        run: ./scripts/build/verify-release-artifact.sh ${{ matrix.platform }} ${{ matrix.arch }}
+        run: ./scripts/build/verify-release-artifact.sh ${{ matrix.platform }}
         shell: bash
 
       - name: Linux runtime smoke test
@@ -99,7 +92,7 @@ jobs:
           export MEDMEMO_DATA_DIR="$RUNNER_TEMP/medmemo-data"
           mkdir -p "$HOME" "$MEDMEMO_DATA_DIR"
 
-          # Start the binary in the background and ensure it stays alive for 5s.
+          # 后台启动二进制，检查进程存活至少 5 秒
           xvfb-run -a timeout 20s ./build/bin/MedMemo &
           PID=$!
           sleep 5
@@ -112,50 +105,6 @@ jobs:
           echo "Smoke test passed: binary stays alive for 5s"
         shell: bash
 
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: medmemo-${{ matrix.platform }}-${{ github.ref_name }}
-          path: build/bin/*
-          retention-days: 1
-
-  release:
-    name: Release
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Download Linux artifacts
-        uses: actions/download-artifact@v8
-        with:
-          name: medmemo-linux-${{ github.ref_name }}
-          path: build/bin/
-
-      - name: Download Windows artifacts
-        uses: actions/download-artifact@v8
-        with:
-          name: medmemo-windows-${{ github.ref_name }}
-          path: build/bin/
-
-      - name: Download macOS Intel artifacts
-        uses: actions/download-artifact@v8
-        with:
-          name: medmemo-darwin-amd64-${{ github.ref_name }}
-          path: build/bin/
-
-      - name: Download macOS Apple Silicon artifacts
-        uses: actions/download-artifact@v8
-        with:
-          name: medmemo-darwin-arm64-${{ github.ref_name }}
-          path: build/bin/
-
-      - name: List release assets
-        run: ls -la build/bin/
-
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v7
         with:
@@ -164,4 +113,4 @@ jobs:
           args: release --clean --skip=validate
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PLATFORM: linux
+          PLATFORM: ${{ matrix.platform }}

@@ -112,9 +112,7 @@ func TestReadCLITokenFromFile_PermissionDenied(t *testing.T) {
 	credPath := filepath.Join(tmpDir, "secret.json")
 	require.NoError(t, os.WriteFile(credPath, []byte(`{"access_token":"secret"}`), 0600))
 	require.NoError(t, os.Chmod(credPath, 0000))
-	defer func() {
-		_ = os.Chmod(credPath, 0600) // 清理权限，避免 TempDir 清理失败
-	}()
+	defer os.Chmod(credPath, 0600) // 清理权限，避免 TempDir 清理失败
 
 	token, hint, err := ReadCLITokenFromFile(credPath)
 	assert.Error(t, err)

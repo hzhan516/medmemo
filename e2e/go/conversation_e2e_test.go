@@ -169,14 +169,11 @@ func (m *mockProviderStore) Get(ctx context.Context, id string) (*models.Provide
 	if p, ok := m.providers[id]; ok {
 		return p, nil
 	}
-	// 测试场景下返回默认配置，避免每个测试都需要手动创建 provider。
-	// 使用云端 APIHost（非回环）以模拟云端 provider：这样脱敏链路才会执行
-	// （回环端点会被 isLocalProvider 正确判为本地并跳过脱敏）。
-	// 如需模拟本地模型（跳过脱敏），应显式创建 Type=ollama 或回环 APIHost 的 provider。
+	// 测试场景下返回默认配置，避免每个测试都需要手动创建 provider
 	return &models.ProviderConfig{
 		ID:      id,
 		Name:    "test-provider",
-		APIHost: "https://api.example.com",
+		APIHost: "http://localhost",
 		ModelID: "test-model",
 		Enabled: true,
 	}, nil

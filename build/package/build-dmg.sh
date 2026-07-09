@@ -1,38 +1,13 @@
 #!/bin/bash
 # macOS .dmg 打包脚本（需在 macOS runner 上执行）
-# 用法: ./build/package/build-dmg.sh [--arch x86_64|arm64|universal]
-# 产物: build/bin/MedMemo_<arch>.dmg（未指定 arch 时回退到 MedMemo.dmg）
+# 产物: build/bin/MedMemo.dmg
 set -euo pipefail
 
 echo "[TASK-027] Packaging dmg for macOS..."
 
 APP_NAME="MedMemo"
 APP_DIR="build/bin/${APP_NAME}.app"
-ARCH=""
 DMG_NAME="build/bin/${APP_NAME}.dmg"
-
-# 解析命令行参数
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        --arch)
-            if [[ -z "${2:-}" ]]; then
-                echo "ERROR: --arch requires a value (x86_64|arm64|universal)"
-                exit 1
-            fi
-            ARCH="$2"
-            shift 2
-            ;;
-        *)
-            echo "ERROR: unknown argument: $1"
-            exit 1
-            ;;
-    esac
-done
-
-if [ -n "$ARCH" ]; then
-    DMG_NAME="build/bin/${APP_NAME}_${ARCH}.dmg"
-fi
-
 TMP_DMG="build/bin/${APP_NAME}-tmp.dmg"
 MOUNT_DIR="/Volumes/${APP_NAME}"
 

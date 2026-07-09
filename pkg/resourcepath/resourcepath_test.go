@@ -1,7 +1,6 @@
 package resourcepath
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -110,66 +109,4 @@ func TestResolveSafe_RejectEscape(t *testing.T) {
 	_, err := ResolveSafe(subpath)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "directory traversal")
-}
-
-// TestResolve_ExactResources 验证 "resources" 精确匹配返回资源根目录。
-func TestResolve_ExactResources(t *testing.T) {
-	dir := t.TempDir()
-	t.Setenv(EnvDir, dir)
-	assert.Equal(t, dir, Resolve("resources"))
-}
-
-// TestResolve_EmptyPath 验证空路径返回空字符串。
-func TestResolve_EmptyPath(t *testing.T) {
-	assert.Empty(t, Resolve(""))
-}
-
-// TestDir_FallbackToRelativeResources 验证无环境变量且候选目录均不存在时回退到相对 resources。
-func TestDir_FallbackToRelativeResources(t *testing.T) {
-	t.Setenv(EnvDir, "")
-	got := Dir()
-	assert.Equal(t, "resources", got)
-}
-
-// TestDir_CandidateMatch 验证当 exe 同级目录存在 resources 时优先返回该目录。
-func TestDir_CandidateMatch(t *testing.T) {
-	t.Setenv(EnvDir, "")
-	exe, err := os.Executable()
-	require.NoError(t, err)
-	exeDir := filepath.Dir(exe)
-	resDir := filepath.Join(exeDir, "resources")
-	require.NoError(t, os.MkdirAll(resDir, 0755))
-	t.Cleanup(func() { _ = os.RemoveAll(resDir) })
-
-	got := Dir()
-	assert.Equal(t, resDir, got)
-}
-
-// TestPath 验证 Path 拼接资源根目录与给定路径。
-func TestPath(t *testing.T) {
-	dir := t.TempDir()
-	t.Setenv(EnvDir, dir)
-	got := Path("models", "model.onnx")
-	want := filepath.Join(dir, "models", "model.onnx")
-	assert.Equal(t, want, got)
-}
-
-// TestIsDir 验证目录存在性判断。
-func TestIsDir(t *testing.T) {
-	tmpDir := t.TempDir()
-	assert.True(t, isDir(tmpDir))
-	assert.False(t, isDir(filepath.Join(tmpDir, "nonexistent")))
-
-	file := filepath.Join(tmpDir, "file.txt")
-	require.NoError(t, os.WriteFile(file, []byte("x"), 0644))
-	assert.False(t, isDir(file))
-}
-
-// TestCleanAbs 验证 cleanAbs 对相对路径的清理结果。
-func TestCleanAbs(t *testing.T) {
-	wd, err := os.Getwd()
-	require.NoError(t, err)
-	got := cleanAbs("resources")
-	want := filepath.Join(wd, "resources")
-	assert.Equal(t, want, got)
 }

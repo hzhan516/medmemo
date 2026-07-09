@@ -5,7 +5,7 @@
 > *An open-source desktop health companion that learns you better over time. Layered memory × multi-model agents × local AI — every conversation becomes lasting knowledge.*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![Go Version](https://img.shields.io/badge/Go-1.26%2B-blue)](https://go.dev)
+[![Go Version](https://img.shields.io/badge/Go-1.22%2B-blue)](https://go.dev)
 [![Wails v2](https://img.shields.io/badge/Wails-v2-green)](https://wails.io)
 
 ---
@@ -30,7 +30,7 @@ Switch between Kimi, GPT, Qwen, Ollama, and llama.cpp with one click — no cont
 
 ### 👨‍👩‍👧‍👦 Family Health Relationship Graph
 
-Planned for v2+. In v1.x the family graph repository remains a frozen stub and is not enabled in the product runtime.
+Visualize your family's health tree with Cypher query support. The system automatically analyzes disease clustering patterns and intelligently alerts you to potential hereditary risks.
 
 ### 🗂️ Visual Memory Management Console
 
@@ -38,7 +38,7 @@ Browse via timeline view and knowledge graph view. Supports keyword search, tag 
 
 ### 🔒 Privacy-First, Local-First
 
-All core data is stored locally with SQLCipher/SQLite and sqlite-vec. AI inference runs on-device via ONNX Runtime. A two-level de-identification pipeline keeps sensitive information off cloud requests unless the user explicitly opts out.
+All core data is stored locally (SQLite + DuckDB + Kùzǔ). AI inference runs on-device via ONNX Runtime. A three-stage de-identification pipeline ensures sensitive information never leaves your device.
 
 ---
 
@@ -51,7 +51,7 @@ All core data is stored locally with SQLCipher/SQLite and sqlite-vec. AI inferen
 | Dependency Injection | Google Wire (compile-time) |
 | Local AI | Hugot + ONNX Runtime (NER / embeddings) |
 | LLM Access | OpenAI-compatible API / Ollama / llama.cpp |
-| Database | SQLCipher/SQLite + sqlite-vec; DuckDB/Kùzǔ are v2+ planning stubs |
+| Database | DuckDB (analytics) + SQLite/SQLCipher (transactions) + Kùzǔ (graph) |
 | Frontend | React 18 + TypeScript Strict Mode + Tailwind CSS + Zustand |
 
 ---
@@ -61,7 +61,7 @@ All core data is stored locally with SQLCipher/SQLite and sqlite-vec. AI inferen
 ### Requirements
 
 - **OS**: macOS 12+ / Windows 10+ / Linux (Ubuntu 20.04+)
-- **Go**: 1.26.4+
+- **Go**: 1.22+
 - **Node.js**: 18.x+
 - **npm**: 9.x+
 
@@ -108,10 +108,7 @@ Build artifacts are located in `build/bin/`:
 
 ```
 medmemo/
-├── main.go                  # Application entry point
-├── wails_app*.go            # Wails frontend-backend bindings
-├── wire.go                  # Wire injection blueprint
-├── wire_gen.go              # Wire generated file, do not edit manually
+├── cmd/health-assistant/    # Application entry point + Wire injection blueprint
 ├── internal/
 │   ├── domain/              # [Entities Layer] Zero external dependencies
 │   │   ├── entity/          # Conversation, Memory, FamilyMember...
@@ -120,17 +117,18 @@ medmemo/
 │   │   └── service/         # Domain service interfaces
 │   ├── application/         # [Use Cases Layer]
 │   │   ├── usecase/         # ChatOrchestrator, MemoryRetriever...
-│   │   ├── port/            # LLMClient, repositories, detectors...
-│   │   └── pipeline/        # Two-level de-identification orchestration
+│   │   ├── port/            # LLMClient, RecordStore...
+│   │   └── pipeline/        # Three-stage de-identification orchestration
 │   ├── adapters/            # [Interface Adapters Layer]
 │   │   ├── ai/              # OpenAI/Kimi/Local adapters
-│   │   └── repository/      # SQLCipher/SQLite repository implementations
+│   │   ├── repository/      # DuckDB/Kùzǔ repository implementations
+│   │   └── dto/             # Data transfer object transformations
 │   └── infrastructure/      # [Frameworks & Drivers Layer]
 │       ├── onnx/            # Hugot ONNX inference runtime
-│       ├── database/        # SQLCipher/SQLite + sqlite-vec connectors
-│       ├── config/          # Local configuration loader
+│       ├── database/        # DuckDB/SQLite connection pools
+│       ├── config/          # Viper configuration loading
 │       ├── secret/          # System keychain wrapper
-│       └── updater/         # Auto-update installer helpers
+│       └── network/         # HTTP client (retry/timeout/circuit breaker)
 ├── pkg/
 │   ├── desensitizer/        # De-identification algorithm toolkit
 │   └── models/              # Shared data structures
@@ -170,7 +168,7 @@ git push origin feature/M01-your-feature
 | [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)           | System architecture overview, four-layer mapping, data flow, module dependencies                                         |
 | [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md)             | Development standards, Clean Architecture dependency rules, Wire guide, testing strategy                                 |
 | [docs/API.md](./docs/API.md)                             | Internal interface contracts, Wails frontend-backend binding, error code definitions                                     |
-| [docs/COMPLIANCE.md](./docs/COMPLIANCE.md)               | Compliance red lines, two-level de-identification pipeline, four-level interception rules, emergency symptom detection   |
+| [docs/COMPLIANCE.md](./docs/COMPLIANCE.md)               | Compliance red lines, three-stage de-identification pipeline, four-level interception rules, emergency symptom detection |
 | [docs/SECURITY.md](./docs/SECURITY.md)                   | Security disclosure process, data encryption details, dependency security scanning                                       |
 | [docs/user-guide/README.md](./docs/user-guide/README.md) | End-user guide: installation, getting started, privacy policy, FAQ, troubleshooting                                      |
 
@@ -199,4 +197,5 @@ MedMemo is licensed under [MIT License](./LICENSE). Free to use, modify, and dis
 
 ---
 
-*Last updated: 2026-07-09*
+*Last updated: 2026-05-19*
+

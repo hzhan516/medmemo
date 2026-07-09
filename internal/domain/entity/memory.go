@@ -10,8 +10,6 @@ import (
 // MemoryTier 表示记忆层级（L1/L2/L3）。
 type MemoryTier int
 
-// noinspection GoUnusedConst
-
 const (
 	TierWorking   MemoryTier = iota + 1 // L1 工作记忆：当前会话上下文
 	TierShortTerm                       // L2 短期记忆：近期对话归档

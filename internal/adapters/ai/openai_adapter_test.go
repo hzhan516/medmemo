@@ -65,7 +65,7 @@ func TestOpenAIAdapter_Chat_ProviderBaseWithPath(t *testing.T) {
 
 // TestOpenAIAdapter_Chat_Unauthorized 验证 401 认证失败错误映射。
 func TestOpenAIAdapter_Chat_Unauthorized(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp := chatResponse{
 			Error: &apiError{
 				Message: "Invalid Authentication",
@@ -92,7 +92,7 @@ func TestOpenAIAdapter_Chat_Unauthorized(t *testing.T) {
 // TestOpenAIAdapter_Chat_RateLimit 验证 429 速率限制时重试后成功。
 func TestOpenAIAdapter_Chat_RateLimit(t *testing.T) {
 	var callCount int
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		callCount++
 		if callCount == 1 {
 			resp := chatResponse{
@@ -129,7 +129,7 @@ func TestOpenAIAdapter_Chat_RateLimit(t *testing.T) {
 
 // TestOpenAIAdapter_Chat_ModelNotFound 验证 404 模型不存在错误映射。
 func TestOpenAIAdapter_Chat_ModelNotFound(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp := chatResponse{
 			Error: &apiError{
 				Message: "The model 'unknown-model' does not exist",
@@ -153,7 +153,7 @@ func TestOpenAIAdapter_Chat_ModelNotFound(t *testing.T) {
 
 // TestOpenAIAdapter_Chat_Timeout 验证网络超时错误处理。
 func TestOpenAIAdapter_Chat_Timeout(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(100 * time.Millisecond)
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -212,7 +212,7 @@ func TestOpenAIAdapter_StreamChat_Success(t *testing.T) {
 
 // TestOpenAIAdapter_StreamChat_EmptyContent 验证流式响应中空的 content 不触发回调。
 func TestOpenAIAdapter_StreamChat_EmptyContent(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.WriteHeader(http.StatusOK)
 
@@ -233,7 +233,7 @@ func TestOpenAIAdapter_StreamChat_EmptyContent(t *testing.T) {
 	msgs := []models.Message{{Role: models.RoleUser, Content: "test"}}
 
 	callCount := 0
-	usage, err := adapter.StreamChat(context.Background(), msgs, func(_ string) {
+	usage, err := adapter.StreamChat(context.Background(), msgs, func(chunk string) {
 		callCount++
 	})
 	require.NoError(t, err)
@@ -244,7 +244,7 @@ func TestOpenAIAdapter_StreamChat_EmptyContent(t *testing.T) {
 
 // TestOpenAIAdapter_StreamChat_ErrorStatus 验证流式请求返回错误状态码。
 func TestOpenAIAdapter_StreamChat_ErrorStatus(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp := streamChunk{
 			Error: &apiError{
 				Message: "Invalid API Key",
@@ -260,7 +260,7 @@ func TestOpenAIAdapter_StreamChat_ErrorStatus(t *testing.T) {
 	adapter := NewOpenAIAdapter("bad-key", server.URL, "test-model", 0, 30*time.Second)
 	msgs := []models.Message{{Role: models.RoleUser, Content: "test"}}
 
-	usage, err := adapter.StreamChat(context.Background(), msgs, func(_ string) {})
+	usage, err := adapter.StreamChat(context.Background(), msgs, func(chunk string) {})
 	require.Error(t, err)
 	assert.Nil(t, usage)
 	assert.Contains(t, err.Error(), "API 认证失败")
@@ -291,7 +291,7 @@ func TestOpenAIAdapter_CheckAvailability_NoKey(t *testing.T) {
 
 // TestOpenAIAdapter_CheckAvailability_Unauthorized 验证 401 时返回认证失败。
 func TestOpenAIAdapter_CheckAvailability_Unauthorized(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 	}))
 	defer server.Close()
@@ -314,7 +314,7 @@ func TestOpenAIAdapter_CheckAvailability_NetworkError(t *testing.T) {
 
 // TestOpenAIAdapter_Chat_RateLimitNoErrorBody 验证 429 无错误体时不包含 <nil>。
 func TestOpenAIAdapter_Chat_RateLimitNoErrorBody(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTooManyRequests)
 	}))
 	defer server.Close()
@@ -332,7 +332,7 @@ func TestOpenAIAdapter_Chat_RateLimitNoErrorBody(t *testing.T) {
 // TestOpenAIAdapter_StreamChat_RateLimitRetry 验证 429 时重试后成功。
 func TestOpenAIAdapter_StreamChat_RateLimitRetry(t *testing.T) {
 	var callCount int
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		callCount++
 		if callCount < 3 {
 			w.WriteHeader(http.StatusTooManyRequests)
@@ -362,7 +362,7 @@ func TestOpenAIAdapter_StreamChat_RateLimitRetry(t *testing.T) {
 // TestOpenAIAdapter_Chat_RateLimitRetryExhausted 验证 429 重试耗尽后返回错误。
 func TestOpenAIAdapter_Chat_RateLimitRetryExhausted(t *testing.T) {
 	var callCount int
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		callCount++
 		w.WriteHeader(http.StatusTooManyRequests)
 	}))
@@ -380,7 +380,7 @@ func TestOpenAIAdapter_Chat_RateLimitRetryExhausted(t *testing.T) {
 
 // TestOpenAIAdapter_Chat_EmptyChoices 验证空 choices 时返回错误。
 func TestOpenAIAdapter_Chat_EmptyChoices(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp := chatResponse{Choices: []choice{}}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -461,7 +461,7 @@ func TestOpenAIAdapter_streamClient_timeout0(t *testing.T) {
 // 注意：生产代码中退避间隔为 2s/4s/8s，本测试执行耗时约 14s。
 func TestOpenAIAdapter_doWithRetry_maxRetries3(t *testing.T) {
 	var callCount int
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		callCount++
 		w.WriteHeader(http.StatusTooManyRequests)
 	}))
@@ -485,7 +485,7 @@ func TestOpenAIAdapter_StreamChat_ServerError(t *testing.T) {
 		t.Skip("skipping slow test in short mode: ~14s due to exponential backoff")
 	}
 	var callCount int
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		callCount++
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
@@ -494,7 +494,7 @@ func TestOpenAIAdapter_StreamChat_ServerError(t *testing.T) {
 	adapter := NewOpenAIAdapter("test-key", server.URL, "test-model", 0, 30*time.Second)
 	msgs := []models.Message{{Role: models.RoleUser, Content: "test"}}
 
-	usage, err := adapter.StreamChat(context.Background(), msgs, func(_ string) {})
+	usage, err := adapter.StreamChat(context.Background(), msgs, func(chunk string) {})
 	require.Error(t, err)
 	assert.Nil(t, usage)
 	assert.Equal(t, 4, callCount) // 初始 1 次 + 3 次重试
@@ -508,7 +508,7 @@ func TestOpenAIAdapter_Chat_500Error(t *testing.T) {
 		t.Skip("skipping slow test in short mode: ~14s due to exponential backoff")
 	}
 	var callCount int
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		callCount++
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
@@ -525,7 +525,7 @@ func TestOpenAIAdapter_Chat_500Error(t *testing.T) {
 
 // TestOpenAIAdapter_Chat_InvalidJSON 验证服务端返回 200 但响应体为非法 JSON 时返回解析错误。
 func TestOpenAIAdapter_Chat_InvalidJSON(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{invalid json`))

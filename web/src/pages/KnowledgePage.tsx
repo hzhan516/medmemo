@@ -75,7 +75,7 @@ export function KnowledgePage() {
   }, [deleteKnowledgeDocument, loadDocuments])
 
   return (
-    <div className="flex flex-col h-full p-4 gap-4 overflow-auto bg-background/30">
+    <div className="flex flex-col h-full p-4 gap-4 overflow-auto">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold flex items-center gap-2">
           <BookOpen size={22} />

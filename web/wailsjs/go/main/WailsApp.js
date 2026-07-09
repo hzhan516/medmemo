@@ -38,10 +38,6 @@ export function CollectSystemInfo() {
   return window['go']['main']['WailsApp']['CollectSystemInfo']();
 }
 
-export function CompressSession(arg1) {
-  return window['go']['main']['WailsApp']['CompressSession'](arg1);
-}
-
 export function CreateConversation() {
   return window['go']['main']['WailsApp']['CreateConversation']();
 }
@@ -60,10 +56,6 @@ export function DeclineDisclaimer() {
 
 export function DeleteConversation(arg1) {
   return window['go']['main']['WailsApp']['DeleteConversation'](arg1);
-}
-
-export function DeleteKnowledgeDocument(arg1) {
-  return window['go']['main']['WailsApp']['DeleteKnowledgeDocument'](arg1);
 }
 
 export function DeleteMemory(arg1) {
@@ -102,16 +94,8 @@ export function EnsureOllamaAndSmolLM2() {
   return window['go']['main']['WailsApp']['EnsureOllamaAndSmolLM2']();
 }
 
-export function EstimateContextUsage(arg1) {
-  return window['go']['main']['WailsApp']['EstimateContextUsage'](arg1);
-}
-
 export function GenerateTitle(arg1, arg2) {
   return window['go']['main']['WailsApp']['GenerateTitle'](arg1, arg2);
-}
-
-export function GetCompressionSettings() {
-  return window['go']['main']['WailsApp']['GetCompressionSettings']();
 }
 
 export function GetConversationMessages(arg1) {
@@ -126,10 +110,6 @@ export function GetDeletedConversations() {
   return window['go']['main']['WailsApp']['GetDeletedConversations']();
 }
 
-export function GetDesensitizationLevel() {
-  return window['go']['main']['WailsApp']['GetDesensitizationLevel']();
-}
-
 export function GetDisclaimerStatus() {
   return window['go']['main']['WailsApp']['GetDisclaimerStatus']();
 }
@@ -140,10 +120,6 @@ export function GetEmbeddingModelDirPath() {
 
 export function GetEmbeddingStatus() {
   return window['go']['main']['WailsApp']['GetEmbeddingStatus']();
-}
-
-export function GetKnowledgeImportJob(arg1) {
-  return window['go']['main']['WailsApp']['GetKnowledgeImportJob'](arg1);
 }
 
 export function GetMemories(arg1, arg2) {
@@ -206,14 +182,6 @@ export function HasAPIKey(arg1) {
   return window['go']['main']['WailsApp']['HasAPIKey'](arg1);
 }
 
-export function ImportKnowledgeFile(arg1) {
-  return window['go']['main']['WailsApp']['ImportKnowledgeFile'](arg1);
-}
-
-export function ListKnowledgeDocuments() {
-  return window['go']['main']['WailsApp']['ListKnowledgeDocuments']();
-}
-
 export function ListProviders() {
   return window['go']['main']['WailsApp']['ListProviders']();
 }
@@ -238,12 +206,12 @@ export function PullOllamaModel(arg1) {
   return window['go']['main']['WailsApp']['PullOllamaModel'](arg1);
 }
 
-export function RecordAnswerFeedback(arg1, arg2, arg3) {
-  return window['go']['main']['WailsApp']['RecordAnswerFeedback'](arg1, arg2, arg3);
-}
-
 export function RefreshToken(arg1) {
   return window['go']['main']['WailsApp']['RefreshToken'](arg1);
+}
+
+export function RecordAnswerFeedback(arg1, arg2, arg3) {
+  return window['go']['main']['WailsApp']['RecordAnswerFeedback'](arg1, arg2, arg3);
 }
 
 export function RejectFact(arg1) {
@@ -252,10 +220,6 @@ export function RejectFact(arg1) {
 
 export function ReportComplianceFeedback(arg1, arg2) {
   return window['go']['main']['WailsApp']['ReportComplianceFeedback'](arg1, arg2);
-}
-
-export function ResolveMaxContextLength(arg1, arg2) {
-  return window['go']['main']['WailsApp']['ResolveMaxContextLength'](arg1, arg2);
 }
 
 export function RestoreConversation(arg1) {
@@ -270,10 +234,6 @@ export function SearchMemories(arg1) {
   return window['go']['main']['WailsApp']['SearchMemories'](arg1);
 }
 
-export function SelectKnowledgeFile() {
-  return window['go']['main']['WailsApp']['SelectKnowledgeFile']();
-}
-
 export function SendMessage(arg1) {
   return window['go']['main']['WailsApp']['SendMessage'](arg1);
 }
@@ -282,16 +242,8 @@ export function SendMessageStream(arg1) {
   return window['go']['main']['WailsApp']['SendMessageStream'](arg1);
 }
 
-export function SetCompressionSettings(arg1) {
-  return window['go']['main']['WailsApp']['SetCompressionSettings'](arg1);
-}
-
 export function SetDataRetentionDays(arg1) {
   return window['go']['main']['WailsApp']['SetDataRetentionDays'](arg1);
-}
-
-export function SetDesensitizationLevel(arg1) {
-  return window['go']['main']['WailsApp']['SetDesensitizationLevel'](arg1);
 }
 
 export function SetMemoryInjectionEnabled(arg1) {
@@ -330,10 +282,26 @@ export function TestAPIKey(arg1, arg2, arg3) {
   return window['go']['main']['WailsApp']['TestAPIKey'](arg1, arg2, arg3);
 }
 
-export function TestCompressionModel(arg1, arg2) {
-  return window['go']['main']['WailsApp']['TestCompressionModel'](arg1, arg2);
-}
-
 export function UpdateProvider(arg1) {
   return window['go']['main']['WailsApp']['UpdateProvider'](arg1);
+}
+
+export function SelectKnowledgeFile() {
+  return window['go']['main']['WailsApp']['SelectKnowledgeFile']();
+}
+
+export function ImportKnowledgeFile(arg1) {
+  return window['go']['main']['WailsApp']['ImportKnowledgeFile'](arg1);
+}
+
+export function ListKnowledgeDocuments() {
+  return window['go']['main']['WailsApp']['ListKnowledgeDocuments']();
+}
+
+export function DeleteKnowledgeDocument(arg1) {
+  return window['go']['main']['WailsApp']['DeleteKnowledgeDocument'](arg1);
+}
+
+export function GetKnowledgeImportJob(arg1) {
+  return window['go']['main']['WailsApp']['GetKnowledgeImportJob'](arg1);
 }

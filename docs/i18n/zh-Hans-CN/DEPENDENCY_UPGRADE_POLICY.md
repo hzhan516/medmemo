@@ -28,20 +28,19 @@ MedMemo 依赖于经过精心筛选的技术栈，其中包含多个高替换成
 | `@types/react` | `^18.2.55` | 必须与 `react` 保持同步。 |
 | `@types/react-dom` | `^18.2.19` | 必须与 `react-dom` 保持同步。 |
 | `typescript` | `5.9.3` | AGENTS.md 锁定 TypeScript 为 5.x+；严格模式和类型行为不可意外变动。 |
-| `@typescript-eslint/eslint-plugin` | `^8.62.1` | 与 TypeScript 版本强耦合；Major 升级可能引入不兼容的 Lint 规则。 |
-| `@typescript-eslint/parser` | `^8.63.0` | 必须与 ESLint plugin 和 TypeScript 版本保持一致。 |
-| `vite` | `6.4.3` | 构建工具链；Major 升级经常破坏插件 API 和跨平台 CGO 构建。 |
+| `@typescript-eslint/*` | `^8.60.0` | 与 TypeScript 版本强耦合；Major 升级可能引入不兼容的 Lint 规则。 |
+| `vite` | `6.4.2` | 构建工具链；Major 升级经常破坏插件 API 和跨平台 CGO 构建。 |
 | `@vitejs/plugin-react` | `4.7.0` | 与 Vite Major 版本强耦合。 |
 | `tailwindcss` | `^3.4.1` | AGENTS.md 锁定 Tailwind 为 3.x+；Major 升级可能破坏工具类生成。 |
 | `tailwindcss-animate` | `^1.0.7` | 与 `tailwindcss` Major 版本强耦合。 |
 | `eslint` | `^8.56.0` | Lint 工具链稳定性；Major 升级通常需要配置迁移。 |
 | `eslint-plugin-react-refresh` | `^0.4.5` | 与 React 和 ESLint Major 版本强耦合。 |
 | `zustand` | `^5.0.13` | 状态管理近期刚升级到 v5；Major 升级需要验证 Store API。 |
-| `react-router-dom` | `^7.18.1` | 路由 API 变更可能破坏深层链接和 Wails 导航集成。 |
+| `react-router-dom` | `^7.15.1` | 路由 API 变更可能破坏深层链接和 Wails 导航集成。 |
 | `react-markdown` | `^10.1.0` | Markdown 渲染引擎；Major 升级可能破坏 `remark-gfm` 插件兼容性。 |
-| `vitest` | `^4.1.10` | 测试框架；Major 升级可能破坏测试配置、覆盖率报告器和 UI 模式。 |
-| `@vitest/coverage-v8` | `^4.1.10` | 与 `vitest` Major 版本强耦合。 |
-| `@vitest/ui` | `^4.1.9` | 与 `vitest` Major 版本强耦合。 |
+| `vitest` | `^4.1.6` | 测试框架；Major 升级可能破坏测试配置、覆盖率报告器和 UI 模式。 |
+| `@vitest/coverage-v8` | `^4.1.6` | 与 `vitest` Major 版本强耦合。 |
+| `@vitest/ui` | `^4.1.6` | 与 `vitest` Major 版本强耦合。 |
 
 ### 后端（Go Modules）
 
@@ -143,10 +142,6 @@ wails build -platform linux/amd64
 
 ## 相关文档
 
-- [`AGENTS.md`](../../../AGENTS.md) — 完整的开发标准和技术栈版本锁定。
-- [`.github/dependabot.yml`](../../../.github/dependabot.yml) — 包含 `ignore` 规则的 Dependabot 配置。
+- [`AGENTS.md`](../../AGENTS.md) — 完整的开发标准和技术栈版本锁定。
+- [`.github/dependabot.yml`](../../.github/dependabot.yml) — 包含 `ignore` 规则的 Dependabot 配置。
 - [`docs/DEVELOPMENT.md`](../../DEVELOPMENT.md) — Clean Architecture 和编码规范。
-
----
-
-*最后更新：2026-07-09*

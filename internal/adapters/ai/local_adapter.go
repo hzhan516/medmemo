@@ -101,7 +101,7 @@ func (a *LocalAdapter) Chat(ctx context.Context, messages []models.Message) (str
 	if err != nil {
 		return "", fmt.Errorf("failed to send ollama chat request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -149,7 +149,7 @@ func (a *LocalAdapter) StreamChat(ctx context.Context, messages []models.Message
 	if err != nil {
 		return nil, fmt.Errorf("failed to send ollama stream request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -210,7 +210,7 @@ func (a *LocalAdapter) CheckAvailability(ctx context.Context) (bool, string) {
 	if err != nil {
 		return false, fmt.Sprintf("ollama not reachable: %v", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusOK {
 		return true, "available"

@@ -26,7 +26,7 @@ func setupFactMigrationTestDB(t *testing.T) (*FactRepoSQLite, *EmbeddingRepoSQLi
 	factRepo := NewFactRepoSQLite(connector)
 	embeddingRepo := NewEmbeddingRepoSQLite(connector)
 	cleanup := func() {
-		_ = connector.Close()
+		connector.Close()
 	}
 	return factRepo, embeddingRepo, cleanup
 }

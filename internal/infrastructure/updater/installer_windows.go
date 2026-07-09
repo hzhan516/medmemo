@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 
 	"golang.org/x/sys/windows/registry"
 )
@@ -40,7 +39,11 @@ func (w *WindowsInstaller) Install(assetPath string) (string, error) {
 		return "", fmt.Errorf("failed to resolve install directory: %w", err)
 	}
 
-	backupDir := filepath.Join(installDir, "data", "backup")
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to get home directory: %w", err)
+	}
+	backupDir := filepath.Join(home, ".medmemo", "backup")
 	if err := os.MkdirAll(backupDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create backup directory: %w", err)
 	}
@@ -107,45 +110,28 @@ func defaultReadInstallPath(key registry.Key, path string) (string, error) {
 }
 
 // resolveInstallDir 根据当前 exe 路径与注册表记录确定升级目标目录。
-// 注册表 InstallPath 既可能是目录也可能是旧版写的 exe 路径，统一归一化为目录。
 func resolveInstallDir(currentExe string, readPath readInstallPathFunc) (string, error) {
 	currentDir := filepath.Dir(currentExe)
 
-	hkcuRaw, _ := readPath(registry.CURRENT_USER, `Software\MedMemo`)
-	hklmRaw, _ := readPath(registry.LOCAL_MACHINE, `Software\MedMemo`)
-
-	hkcu := normalizeInstallPath(hkcuRaw)
-	hklm := normalizeInstallPath(hklmRaw)
+	hkcu, _ := readPath(registry.CURRENT_USER, `Software\MedMemo`)
+	hklm, _ := readPath(registry.LOCAL_MACHINE, `Software\MedMemo`)
 
 	// 优先匹配当前运行 exe 所在目录，防止 per-user/all-users 混淆
-	if hkcu != "" && hkcu == currentDir {
+	if hkcu != "" && filepath.Dir(hkcu) == currentDir {
 		return currentDir, nil
 	}
-	if hklm != "" && hklm == currentDir {
+	if hklm != "" && filepath.Dir(hklm) == currentDir {
 		return currentDir, nil
 	}
 
 	// fallback：按 HKCU → HKLM → 当前 exe 目录
 	if hkcu != "" {
-		return hkcu, nil
+		return filepath.Dir(hkcu), nil
 	}
 	if hklm != "" {
-		return hklm, nil
+		return filepath.Dir(hklm), nil
 	}
 	return currentDir, nil
-}
-
-// normalizeInstallPath 将注册表 InstallPath 值归一化为安装目录。
-// 旧版本可能写入 exe 路径，新版本写入目录，两者都需要兼容。
-func normalizeInstallPath(value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return ""
-	}
-	if strings.EqualFold(filepath.Base(value), "MedMemo.exe") {
-		return filepath.Dir(value)
-	}
-	return value
 }
 
 // copyFileWindows 复制文件。
