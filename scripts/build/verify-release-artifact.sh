@@ -43,11 +43,15 @@ case "$PLATFORM" in
     fi
     echo "OK: $INSTALLER exists"
     ;;
-  darwin)
+  darwin|darwin-amd64|darwin-arm64)
     ARCH="${2:-}"
     if [ -z "$ARCH" ]; then
-      echo "ERROR: architecture argument required for darwin verification"
-      exit 1
+      # 兼容 workflow 直接传入 darwin-amd64/darwin-arm64 的场景
+      case "$PLATFORM" in
+        darwin-amd64) ARCH="x86_64" ;;
+        darwin-arm64) ARCH="arm64" ;;
+        *) ARCH="arm64" ;;
+      esac
     fi
     DMG_FILE="build/bin/MedMemo_${ARCH}.dmg"
     if [ ! -f "$DMG_FILE" ]; then

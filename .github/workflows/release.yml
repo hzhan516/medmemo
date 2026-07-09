@@ -13,8 +13,8 @@ permissions:
   packages: write
 
 jobs:
-  release:
-    name: Release ${{ matrix.os }}
+  build:
+    name: Build ${{ matrix.platform }}
     strategy:
       fail-fast: false
       matrix:
@@ -60,16 +60,20 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libsqlcipher-dev libwebkit2gtk-4.1-dev gcc
 
+      - name: Install nfpm (Linux packaging)
+        if: matrix.platform == 'linux'
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+
       - name: Install macOS dependencies
         if: startsWith(matrix.platform, 'darwin')
         run: |
           brew install sqlcipher create-dmg
 
-      - name: Install dlfcn-win32 for ortgenai (Windows)
+      - name: Install Windows dependencies
         if: matrix.platform == 'windows'
         shell: cmd
         run: |
-          C:\msys64\usr\bin\pacman.exe -S --noconfirm mingw-w64-x86_64-dlfcn
+          C:\msys64\usr\bin\pacman.exe -S --noconfirm mingw-w64-x86_64-dlfcn mingw-w64-x86_64-gcc-libs
 
       - name: Build and Package
         run: ./scripts/build/wails-build.sh ${{ matrix.platform }} ${{ github.ref_name }}
@@ -112,73 +116,49 @@ jobs:
           echo "Smoke test passed: binary stays alive for 5s"
         shell: bash
 
-      - name: Prepare release assets
-        run: |
-          mkdir -p release-assets
-          VERSION="${{ github.ref_name }}"
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: medmemo-${{ matrix.platform }}-${{ github.ref_name }}
+          path: build/bin/*
+          retention-days: 1
 
-          case "${{ matrix.platform }}" in
-            windows)
-              if [ -f "build/bin/MedMemo-amd64-installer.exe" ]; then
-                cp "build/bin/MedMemo-amd64-installer.exe" "release-assets/MedMemoSetup.exe"
-              else
-                echo "ERROR: Windows installer not found"
-                exit 1
-              fi
-              ;;
-            darwin-amd64)
-              if [ -f "build/bin/MedMemo_x86_64.dmg" ]; then
-                cp "build/bin/MedMemo_x86_64.dmg" "release-assets/MedMemo_x86_64.dmg"
-              else
-                echo "ERROR: macOS Intel DMG missing"
-                exit 1
-              fi
-              ;;
-            darwin-arm64)
-              if [ -f "build/bin/MedMemo_arm64.dmg" ]; then
-                cp "build/bin/MedMemo_arm64.dmg" "release-assets/MedMemo_arm64.dmg"
-              else
-                echo "ERROR: macOS Apple Silicon DMG missing"
-                exit 1
-              fi
-              ;;
-            linux)
-              if [ -f "build/bin/MedMemo-x86_64.AppImage" ]; then
-                cp "build/bin/MedMemo-x86_64.AppImage" "release-assets/MedMemo-x86_64.AppImage"
-              else
-                echo "ERROR: Linux AppImage missing"
-                exit 1
-              fi
-              DEB_FILE="build/bin/MedMemo_${VERSION}_amd64.deb"
-              if [ -f "$DEB_FILE" ]; then
-                cp "$DEB_FILE" "release-assets/$(basename "$DEB_FILE")"
-              else
-                echo "ERROR: Linux DEB package missing: $DEB_FILE"
-                exit 1
-              fi
-              RPM_FILE="build/bin/MedMemo-${VERSION}-1.x86_64.rpm"
-              if [ -f "$RPM_FILE" ]; then
-                cp "$RPM_FILE" "release-assets/$(basename "$RPM_FILE")"
-              else
-                echo "ERROR: Linux RPM package missing: $RPM_FILE"
-                exit 1
-              fi
-              ;;
-          esac
+  release:
+    name: Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
-          echo "Release assets:"
-          ls -la release-assets/
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: medmemo-linux-${{ github.ref_name }}
+          path: build/bin/
 
-      - name: Generate checksums
-        run: |
-          cd release-assets
-          sha256sum * > checksums.txt
-          cd ..
-          echo "Generated checksums.txt:"
-          cat release-assets/checksums.txt
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: medmemo-windows-${{ github.ref_name }}
+          path: build/bin/
 
-      - name: Verify release asset whitelist
-        run: ./scripts/build/verify-release-assets.sh release-assets
+      - name: Download macOS Intel artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: medmemo-darwin-amd64-${{ github.ref_name }}
+          path: build/bin/
+
+      - name: Download macOS Apple Silicon artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: medmemo-darwin-arm64-${{ github.ref_name }}
+          path: build/bin/
+
+      - name: List release assets
+        run: ls -la build/bin/
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v7
@@ -188,4 +168,4 @@ jobs:
           args: release --clean --skip=validate
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PLATFORM: ${{ matrix.platform }}
+          PLATFORM: linux

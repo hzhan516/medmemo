@@ -9,6 +9,16 @@ export VERSION="${2:-dev}"
 ./scripts/build/build-frontend.sh
 
 case "$OS" in
+  linux|windows|darwin|darwin-amd64|darwin-arm64)
+    # 外层仅做路由；带架构的 darwin-* 由各自分支处理
+    ;;
+  *)
+    echo "Unsupported OS: $OS"
+    exit 1
+    ;;
+esac
+
+case "$OS" in
   linux)
     echo "[TASK-027] Building for Linux..."
     export MEDMEMO_ONNX_BASE_URL="https://github.com/hzhan516/medmemo/releases/download/onnx-runtime-v1.26.0"
