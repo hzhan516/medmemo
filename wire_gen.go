@@ -62,8 +62,10 @@ func InitializeApp() (*App, func(), error) {
 		return nil, nil, err
 	}
 	onnxnerDetector := detector.NewONNXNERDetector(engine)
-	l2NERStage := pipeline.NewL2NERStage(onnxnerDetector)
-	deidentifyPipeline := pipeline.NewDefaultDeidentifyPipeline(l1RuleStage, l2NERStage)
+	strictONNXNERDetector := detector.NewStrictONNXNERDetector(engine)
+	l2NERStage := pipeline.NewL2NERStage(onnxnerDetector, strictONNXNERDetector)
+	l1ExtendedRuleStage := pipeline.NewL1ExtendedRuleStage()
+	deidentifyPipeline := pipeline.NewDefaultDeidentifyPipeline(l1RuleStage, l2NERStage, l1ExtendedRuleStage)
 	embeddingServiceAdapter := NewEmbeddingServiceAdapterWithVersion(engine)
 	embeddingRepoSQLite := repository.NewEmbeddingRepoSQLite(sqlCipherConnector)
 	factRepoSQLite := repository.NewFactRepoSQLite(sqlCipherConnector)
@@ -117,7 +119,11 @@ func InitializeApp() (*App, func(), error) {
 	embeddingMigrator := usecase.NewEmbeddingMigrator(factRepoSQLite, embeddingRepoSQLite, embeddingServiceAdapter, migrationState)
 	knowledgeChunker := usecase.NewDefaultKnowledgeChunker()
 	knowledgeImporter := usecase.NewKnowledgeImporter(knowledgeRepoSQLite, knowledgeChunker, knowledgeTokenizer, embeddingServiceAdapter)
-	wailsApp := NewWailsApp(chatOrchestrator, memoryRetriever, appConfig, conversationRepoSQLite, messageRepoSQLite, disclaimerRepoSQLite, providerRepoSQLite, healthEngine, titleGenerator, service, keyringStore, tokenRefreshService, oAuthDeviceFlowService, factRepoSQLite, auditLogRepoSQLite, dialogueRepoSQLite, embeddingServiceAdapter, embeddingRepoSQLite, embeddingMigrator, migrationState, accuracyService, knowledgeRepoSQLite, knowledgeImporter)
+	contextLengthResolver := usecase.NewContextLengthResolver(providerRepoSQLite)
+	hfTokenCounter := ai.NewHFTokenCounter()
+	contextEstimator := usecase.NewContextEstimator(hfTokenCounter, contextLengthResolver)
+	compressionService := usecase.NewCompressionService(contextEstimator, llmClientFactory, providerRepoSQLite, messageRepoSQLite, deidentifyPipeline)
+	wailsApp := NewWailsApp(chatOrchestrator, memoryRetriever, appConfig, conversationRepoSQLite, messageRepoSQLite, disclaimerRepoSQLite, providerRepoSQLite, healthEngine, titleGenerator, service, keyringStore, tokenRefreshService, oAuthDeviceFlowService, factRepoSQLite, auditLogRepoSQLite, dialogueRepoSQLite, embeddingServiceAdapter, embeddingRepoSQLite, embeddingMigrator, migrationState, accuracyService, knowledgeRepoSQLite, knowledgeImporter, contextLengthResolver, contextEstimator, compressionService)
 	app, cleanup, err := NewApp(wailsApp, sqlCipherConnector, deidentifyPipeline, healthEngine)
 	if err != nil {
 		return nil, nil, err

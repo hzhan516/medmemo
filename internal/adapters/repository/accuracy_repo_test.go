@@ -103,7 +103,7 @@ func TestAccuracyRepoSQLite_RestartPersistence(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, conn2.Migrate(ctx))
 	repo2 := NewAccuracyRepoSQLite(conn2)
-	defer conn2.Close()
+	defer func() { _ = conn2.Close() }()
 
 	acc, err := repo2.GetAccuracy(ctx, "health_info")
 	require.NoError(t, err)

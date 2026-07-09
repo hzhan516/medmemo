@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -62,7 +63,7 @@ func (r *KnowledgeRepoSQLite) SaveChunks(ctx context.Context, chunks []*entity.K
 	if err != nil {
 		return fmt.Errorf("failed to prepare chunks statement: %w", err)
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }()
 
 	for _, c := range chunks {
 		if _, err := stmt.ExecContext(ctx, c.ChunkID, c.DocumentID, c.ChunkIndex, c.Content, c.TokenCount, c.MetadataJSON, c.CreatedAt.UnixMilli()); err != nil {
@@ -96,7 +97,7 @@ func (r *KnowledgeRepoSQLite) ListDocuments(ctx context.Context) ([]*entity.Know
 	if err != nil {
 		return nil, fmt.Errorf("failed to list knowledge documents: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var result []*entity.KnowledgeDocument
 	for rows.Next() {
@@ -236,29 +237,34 @@ func (r *KnowledgeRepoSQLite) SearchKeyword(ctx context.Context, terms []string,
 		if err != nil {
 			return nil, fmt.Errorf("failed to query term %s: %w", term, err)
 		}
-		for rows.Next() {
-			var chunkID, documentID, content string
-			var tokenCount, tf int
-			if err := rows.Scan(&chunkID, &documentID, &content, &tokenCount, &tf); err != nil {
-				rows.Close()
-				return nil, fmt.Errorf("failed to scan term row: %w", err)
-			}
-			tfWeight := (float64(tf) * (k1 + 1)) / (float64(tf) + k1*(1-b+b*float64(tokenCount)/avgChunkLen))
-			score := idf * tfWeight
-			if res, ok := scores[chunkID]; ok {
-				res.Score += score
-			} else {
-				scores[chunkID] = &repository.KnowledgeSearchResult{
-					ChunkID:    chunkID,
-					DocumentID: documentID,
-					Content:    content,
-					Score:      score,
-					SourceType: "keyword",
+		if err := func() error {
+			defer func() { _ = rows.Close() }()
+			for rows.Next() {
+				var chunkID, documentID, content string
+				var tokenCount, tf int
+				if err := rows.Scan(&chunkID, &documentID, &content, &tokenCount, &tf); err != nil {
+					return fmt.Errorf("failed to scan term row: %w", err)
+				}
+				tfWeight := (float64(tf) * (k1 + 1)) / (float64(tf) + k1*(1-b+b*float64(tokenCount)/avgChunkLen))
+				score := idf * tfWeight
+				if res, ok := scores[chunkID]; ok {
+					res.Score += score
+				} else {
+					scores[chunkID] = &repository.KnowledgeSearchResult{
+						ChunkID:    chunkID,
+						DocumentID: documentID,
+						Content:    content,
+						Score:      score,
+						SourceType: "keyword",
+					}
 				}
 			}
-		}
-		if err := rows.Err(); err != nil {
-			return nil, fmt.Errorf("failed to iterate term rows: %w", err)
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("failed to iterate term rows: %w", err)
+			}
+			return nil
+		}(); err != nil {
+			return nil, err
 		}
 	}
 
@@ -326,7 +332,7 @@ func (r *KnowledgeRepoSQLite) searchVectorSQL(ctx context.Context, embedding []f
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute vector search: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	return r.scanVectorResults(rows)
 }
@@ -341,7 +347,7 @@ func (r *KnowledgeRepoSQLite) searchVectorGo(ctx context.Context, embedding []fl
 	if err != nil {
 		return nil, fmt.Errorf("failed to list embeddings: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var results []*repository.KnowledgeSearchResult
 	for rows.Next() {
@@ -422,7 +428,7 @@ func (r *KnowledgeRepoSQLite) SaveTerms(ctx context.Context, chunkID, documentID
 	if err != nil {
 		return fmt.Errorf("failed to prepare terms statement: %w", err)
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }()
 
 	for term, tf := range termFreq {
 		if _, err := stmt.ExecContext(ctx, term, chunkID, tf, documentID); err != nil {
@@ -460,7 +466,7 @@ func (r *KnowledgeRepoSQLite) GetImportJob(ctx context.Context, id string) (*ent
 	var status string
 	var createdAt, updatedAt int64
 	if err := row.Scan(&job.JobID, &status, &job.Total, &job.Processed, &job.ErrorMessage, &createdAt, &updatedAt); err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("knowledge import job %s not found: %w", id, entity.ErrNotFound)
 		}
 		return nil, fmt.Errorf("failed to get knowledge import job: %w", err)

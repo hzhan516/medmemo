@@ -100,7 +100,7 @@ func TestHealthEngine_CheckNow_Green(t *testing.T) {
 
 func TestHealthEngine_CheckNow_Yellow(t *testing.T) {
 	t.Parallel()
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// 模拟 2.5s 延迟，落在 Yellow 区间
 		time.Sleep(2500 * time.Millisecond)
 		w.WriteHeader(http.StatusOK)
@@ -131,7 +131,7 @@ func TestHealthEngine_CheckNow_Yellow(t *testing.T) {
 
 func TestHealthEngine_CheckNow_Red_NonOK(t *testing.T) {
 	t.Parallel()
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 	}))
 	defer server.Close()
@@ -154,7 +154,7 @@ func TestHealthEngine_CheckNow_Red_NonOK(t *testing.T) {
 
 func TestHealthEngine_CheckNow_Red_500(t *testing.T) {
 	t.Parallel()
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()
@@ -177,7 +177,7 @@ func TestHealthEngine_CheckNow_Red_500(t *testing.T) {
 
 func TestHealthEngine_CheckNow_Red_Timeout(t *testing.T) {
 	t.Parallel()
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// 响应延迟超过 client 超时（1ms）
 		time.Sleep(500 * time.Millisecond)
 		w.WriteHeader(http.StatusOK)
@@ -224,7 +224,7 @@ func TestHealthEngine_OnChange(t *testing.T) {
 	callCount := atomic.Int32{}
 	var lastResult port.HealthResult
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
@@ -266,7 +266,7 @@ func TestHealthEngine_OnChange_StatusTransition(t *testing.T) {
 	responseCode := atomic.Int32{}
 	responseCode.Store(200)
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		code := int(responseCode.Load())
 		w.WriteHeader(code)
 	}))
@@ -312,7 +312,7 @@ func TestHealthEngine_GetStatus(t *testing.T) {
 	_, ok := engine.GetStatus("p1")
 	assert.False(t, ok)
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
@@ -336,7 +336,7 @@ func TestHealthEngine_PeriodicCheck(t *testing.T) {
 	t.Parallel()
 	callCount := atomic.Int32{}
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
@@ -351,7 +351,7 @@ func TestHealthEngine_PeriodicCheck(t *testing.T) {
 
 	engine := NewHealthEngineWithClient(store, server.Client())
 	engine.interval = 100 * time.Millisecond // 加速轮询
-	engine.SetOnChange(func(r port.HealthResult) {
+	engine.SetOnChange(func(_ port.HealthResult) {
 		callCount.Add(1)
 	})
 

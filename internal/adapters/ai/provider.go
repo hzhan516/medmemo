@@ -189,4 +189,5 @@ func resolveModel(modelID string, models []models.ProviderModel, defaultModel st
 var ProviderSet = wire.NewSet(
 	ProviderFactory,
 	NewLLMClientFactory,
+	NewHFTokenCounter,
 )

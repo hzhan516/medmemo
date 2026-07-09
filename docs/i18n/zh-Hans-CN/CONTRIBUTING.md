@@ -10,11 +10,11 @@
 
 | 工具            | 最低版本   | 安装方式                                                       |
 |---------------|--------|------------------------------------------------------------|
-| Go            | 1.22+  | [官方下载](https://go.dev/dl/) 或 `brew install go`             |
+| Go            | 1.26.4+ | [官方下载](https://go.dev/dl/) 或 `brew install go`             |
 | Node.js       | 18.x+  | [官方下载](https://nodejs.org/) 或 `brew install node`          |
-| Wails CLI     | v2.9+  | `go install github.com/wailsapp/wails/v2/cmd/wails@latest` |
+| Wails CLI     | 2.12.x | `go install github.com/wailsapp/wails/v2/cmd/wails@latest` |
 | golangci-lint | latest | `make install-tools`                                       |
-| Wire          | v0.6+  | `make install-tools`                                       |
+| Wire          | 0.7.0  | `make install-tools`                                       |
 
 ### 快速开始
 
@@ -116,7 +116,7 @@ feature/M<模块号>-<简述> (功能分支)
 
 ## 安全披露
 
-对于安全漏洞，请发送邮件至 **doyle_zhang@outlook.com**，请勿在公开 Issue 中披露。我们将在 48 小时内回复。
+对于安全漏洞，请发送邮件至 **doyle_zhang@outlook.com**，请勿在公开 Issue 中披露。我们将在 72 小时内确认收到。
 
 ## 行为准则
 
@@ -124,4 +124,4 @@ feature/M<模块号>-<简述> (功能分支)
 
 ---
 
-*最后更新：2026-05-19*
+*最后更新：2026-07-09*

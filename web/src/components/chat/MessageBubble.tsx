@@ -94,7 +94,7 @@ export function MessageBubble({ message, onRetry, onReportCompliance, onFollowup
   if (role === 'system') {
     return (
       <div className="flex justify-center my-3">
-        <div className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-system-gray text-xs text-muted-foreground">
+        <div className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-system-gray/70 backdrop-blur text-xs text-muted-foreground">
           <AlertCircle size={12} />
           <span>{content}</span>
         </div>
@@ -135,7 +135,7 @@ export function MessageBubble({ message, onRetry, onReportCompliance, onFollowup
           max-w-[80%] px-4 py-3 text-sm leading-relaxed
           ${isUser
             ? 'bg-gradient-to-br from-user-blue to-user-blue-dark text-white rounded-2xl rounded-tr-sm'
-            : `bg-ai-bg dark:bg-ai-bg-dark text-ai-text dark:text-gray-200 border rounded-2xl rounded-tl-sm shadow-sm ${error ? 'border-destructive' : 'border-border'}`
+            : `bg-ai-bg dark:bg-ai-bg-dark text-ai-text dark:text-gray-200 border rounded-2xl rounded-tl-sm shadow-sm ${error ? 'border-destructive' : 'border-border/60'}`
           }
         `}
       >

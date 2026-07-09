@@ -129,7 +129,7 @@ export function MemoryPage() {
   }
 
   return (
-    <div className="h-full flex flex-col p-4 gap-4 overflow-auto">
+    <div className="h-full flex flex-col p-4 gap-4 overflow-auto bg-background/30">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold flex items-center gap-2">
           <Brain size={22} className="text-primary" />
@@ -137,45 +137,23 @@ export function MemoryPage() {
         </h1>
       </div>
 
-      {/* 统计卡片 */}
+      {/* 统计卡片 — compact translucent */}
       {stats && (
         <div className="grid grid-cols-4 gap-3">
-          <Card>
-            <CardContent className="p-3 flex items-center gap-3">
-              <Brain size={18} className="text-muted-foreground" />
+          {[
+            { icon: Brain, color: 'text-muted-foreground', value: stats.total, label: '全部记忆' },
+            { icon: CheckCircle, color: 'text-emerald-500', value: stats.approved, label: '已审批' },
+            { icon: Clock, color: 'text-amber-500', value: stats.pending, label: '待审核' },
+            { icon: XCircle, color: 'text-red-500', value: stats.rejected, label: '已拒绝' },
+          ].map(({ icon: Icon, color, value, label }) => (
+            <div key={label} className="flex items-center gap-3 p-3 rounded-xl bg-white/60 dark:bg-white/5 border border-border/60 backdrop-blur-sm shadow-sm">
+              <Icon size={18} className={color} />
               <div>
-                <div className="text-lg font-bold">{stats.total}</div>
-                <div className="text-xs text-muted-foreground">全部记忆</div>
+                <div className="text-lg font-bold">{value}</div>
+                <div className="text-xs text-muted-foreground">{label}</div>
               </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3 flex items-center gap-3">
-              <CheckCircle size={18} className="text-emerald-500" />
-              <div>
-                <div className="text-lg font-bold">{stats.approved}</div>
-                <div className="text-xs text-muted-foreground">已审批</div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3 flex items-center gap-3">
-              <Clock size={18} className="text-amber-500" />
-              <div>
-                <div className="text-lg font-bold">{stats.pending}</div>
-                <div className="text-xs text-muted-foreground">待审核</div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3 flex items-center gap-3">
-              <XCircle size={18} className="text-red-500" />
-              <div>
-                <div className="text-lg font-bold">{stats.rejected}</div>
-                <div className="text-xs text-muted-foreground">已拒绝</div>
-              </div>
-            </CardContent>
-          </Card>
+            </div>
+          ))}
         </div>
       )}
 
@@ -187,7 +165,7 @@ export function MemoryPage() {
             placeholder="搜索记忆..."
             value={searchQuery}
             onChange={(e) => { setSearchQuery(e.target.value); setPage(0) }}
-            className="pl-8"
+            className="pl-8 mac-control"
           />
         </div>
         <div className="flex gap-1">

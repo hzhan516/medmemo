@@ -23,7 +23,7 @@ export function useOnboarding() {
 
   const savePrivacySettings = useCallback(
     async (level: string, retentionDays: number) => {
-      settings.setDesensitizationLevel(level as 'standard' | 'strict' | 'off')
+      await settings.setDesensitizationLevel(level as 'standard' | 'strict' | 'off')
       settings.setDataRetentionDays(retentionDays)
     },
     [settings]

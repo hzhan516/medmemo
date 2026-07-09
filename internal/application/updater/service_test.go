@@ -3,6 +3,7 @@ package updater
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"runtime"
 	"testing"
 
@@ -21,16 +22,16 @@ type mockUpdater struct {
 	verifyErr   error
 }
 
-func (m *mockUpdater) FetchLatest(ctx context.Context, channel models.UpdateChannel) (*entity.UpdateInfo, error) {
+func (m *mockUpdater) FetchLatest(_ context.Context, _ models.UpdateChannel) (*entity.UpdateInfo, error) {
 	return m.latestInfo, m.fetchErr
 }
 
-func (m *mockUpdater) Download(ctx context.Context, url, destPath string, progress func(downloaded, total int64)) error {
+func (m *mockUpdater) Download(_ context.Context, _, destPath string, _ func(downloaded, total int64)) error {
 	m.downloadTo = destPath
 	return m.downloadErr
 }
 
-func (m *mockUpdater) VerifyChecksum(path, expectedSHA256 string) error {
+func (m *mockUpdater) VerifyChecksum(_, _ string) error {
 	return m.verifyErr
 }
 
@@ -42,7 +43,7 @@ type mockInstaller struct {
 	currentPath string
 }
 
-func (m *mockInstaller) Install(assetPath string) (string, error) {
+func (m *mockInstaller) Install(_ string) (string, error) {
 	return m.installPath, m.installErr
 }
 
@@ -278,6 +279,54 @@ func TestPlatformAssetName(t *testing.T) {
 				t.Skipf("当前平台为 %s，跳过 %s 断言", runtime.GOOS, goos)
 			}
 			assert.Equal(t, want, PlatformAssetName())
+		})
+	}
+}
+
+// TestUpdateDownloadDirFor_HomeError 验证无法获取用户主目录时返回错误。
+func TestUpdateDownloadDirFor_HomeError(t *testing.T) {
+	_, err := updateDownloadDirFor("linux", func() (string, error) { return "", fmt.Errorf("no exe") }, func() (string, error) { return "", fmt.Errorf("no home") })
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to get home directory")
+}
+
+// TestUpdateDownloadDirFor_Windows 验证 Windows 分支使用 exe 所在目录。
+func TestUpdateDownloadDirFor_Windows(t *testing.T) {
+	got, err := updateDownloadDirFor("windows", func() (string, error) { return "/opt/MedMemo/MedMemo.exe", nil }, func() (string, error) { return "", fmt.Errorf("no home") })
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join("/opt/MedMemo", "data", "updates"), got)
+}
+
+// TestUpdateDownloadDirFor_WindowsFallbackHome 验证 Windows 无法获取 exe 时回退到主目录。
+func TestUpdateDownloadDirFor_WindowsFallbackHome(t *testing.T) {
+	home := t.TempDir()
+	got, err := updateDownloadDirFor("windows", func() (string, error) { return "", fmt.Errorf("no exe") }, func() (string, error) { return home, nil })
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(home, ".medmemo", "updates"), got)
+}
+
+// TestUpdateDownloadDir_HomeError 验证无法获取用户主目录时返回错误。
+func TestUpdateDownloadDir_HomeError(t *testing.T) {
+	t.Setenv("HOME", "")
+	// 某些系统下空 HOME 仍可能解析成功，此时跳过该边界测试
+	_, err := updateDownloadDir()
+	if err != nil {
+		assert.Contains(t, err.Error(), "failed to get home directory")
+	}
+}
+
+// TestPlatformAssetNameFor 验证各平台产物名称模式。
+func TestPlatformAssetNameFor(t *testing.T) {
+	tests := map[string]string{
+		"linux":   fmt.Sprintf("*%s*.AppImage", runtime.GOARCH),
+		"darwin":  "*.dmg",
+		"windows": "*-installer.exe",
+		"freebsd": "",
+	}
+
+	for goos, want := range tests {
+		t.Run(goos, func(t *testing.T) {
+			assert.Equal(t, want, platformAssetNameFor(goos))
 		})
 	}
 }

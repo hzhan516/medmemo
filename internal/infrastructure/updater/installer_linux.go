@@ -15,7 +15,7 @@ func NewInstaller() *LinuxInstaller {
 	return newLinuxInstaller()
 }
 
-// LinuxInstaller 实现 Linux 平台（AppImage）的更新安装与回滚。
+// LinuxInstaller 实现 Linux 平台（AppImage / DEB / RPM）的更新安装与回滚。
 type LinuxInstaller struct {
 	currentPath string
 	backupPath  string
@@ -27,16 +27,51 @@ func newLinuxInstaller() *LinuxInstaller {
 	}
 }
 
-// Install 安装更新：备份当前 AppImage → 替换为新版本 → 设置可执行权限。
+// ManualPackageInstallRequired 表示 DEB/RPM 等包管理安装需要用户手动完成。
+type ManualPackageInstallRequired struct {
+	PackagePath string
+	Kind        string
+	Command     string
+}
+
+// Error 返回可展示给用户的错误信息。
+func (e *ManualPackageInstallRequired) Error() string {
+	return fmt.Sprintf("manual package install required: %s", e.Command)
+}
+
+// Install 根据当前 Linux 安装方式执行更新。
+// AppImage 使用原地替换；DEB/RPM 返回 ManualPackageInstallRequired，由上层提示用户手动安装。
 func (l *LinuxInstaller) Install(assetPath string) (string, error) {
 	if l.currentPath == "" {
 		return "", fmt.Errorf("failed to determine current binary path")
 	}
 
-	if !isAppImage(l.currentPath) {
-		return "", fmt.Errorf("manual update required: current binary is not an AppImage")
+	kind := DetectInstallKind(l.currentPath)
+	switch kind {
+	case "appimage":
+		return l.installAppImage(assetPath)
+	case "deb":
+		return "", &ManualPackageInstallRequired{
+			PackagePath: assetPath,
+			Kind:        "deb",
+			Command:     fmt.Sprintf("sudo dpkg -i %q", assetPath),
+		}
+	case "rpm":
+		return "", &ManualPackageInstallRequired{
+			PackagePath: assetPath,
+			Kind:        "rpm",
+			Command:     fmt.Sprintf("sudo rpm -Uvh %q", assetPath),
+		}
+	default:
+		return "", &ManualPackageInstallRequired{
+			PackagePath: assetPath,
+			Kind:        "unknown",
+			Command:     fmt.Sprintf("please install %q manually", assetPath),
+		}
 	}
+}
 
+func (l *LinuxInstaller) installAppImage(assetPath string) (string, error) {
 	dir := filepath.Dir(l.currentPath)
 	if err := assertDirWritable(dir); err != nil {
 		return "", fmt.Errorf("AppImage directory is not writable: %w", err)
@@ -131,11 +166,6 @@ func readProcSelfCmdline() []byte {
 		return nil
 	}
 	return data
-}
-
-// isAppImage 判断路径是否为 AppImage。
-func isAppImage(path string) bool {
-	return strings.HasSuffix(strings.ToLower(path), ".appimage")
 }
 
 // assertDirWritable 通过创建临时文件验证目录可写。

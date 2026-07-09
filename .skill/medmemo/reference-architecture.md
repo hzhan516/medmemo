@@ -83,7 +83,9 @@ repo 接口  infrastructure/
 
 ## 关键依赖版本
 
-以 `go.mod`、`wails.json`、`web/package.json` 为准（当前 v1.1.9）：
+以 `go.mod`、`wails.json`、`web/package.json` 为准（当前以 `wails.json` 的 `info.productVersion` 为准）：
+
+> 仅供参考，实际以 `go.mod` / `wails.json` / `web/package.json` 为准。
 
 | 组件 | 版本 |
 |------|------|
@@ -92,12 +94,15 @@ repo 接口  infrastructure/
 | Google Wire | 0.7.0 |
 | ONNX Runtime | 1.26.0 |
 | Hugot | 0.7.4 |
+| daulet/tokenizers | 1.27.0 |
 | modernc.org/sqlite | 1.53.0 |
 | sqlite-vec | 0.3.0 |
 | React | 18.2.0 |
 | TypeScript | 5.9.3 |
 
-## 已冻结组件
+## v2+ 规划组件（DuckDB 分析层 / Kùzǔ 家族图谱）
 
-- **DuckDB**：`DuckDBConnector.Migrate` → `not implemented`
-- **Kùzǔ**：`FamilyRepoKuzu` 全 stub，Issue#016
+以下组件为 v2+ 规划组件，不是当前活跃后端：
+
+- **DuckDB 分析层**：`DuckDBConnector.Migrate` → `not implemented`
+- **Kùzǔ 家族图谱**：`FamilyRepoKuzu` 全 stub，Issue#016

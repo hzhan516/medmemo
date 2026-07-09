@@ -7,6 +7,7 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -57,13 +58,18 @@ func (r *ProviderRepoSQLite) Create(ctx context.Context, provider *models.Provid
 		return fmt.Errorf("failed to marshal auth params: %w", err)
 	}
 
+	modelsJSON, err := provider.MarshalModels()
+	if err != nil {
+		return fmt.Errorf("failed to marshal models: %w", err)
+	}
+
 	now := time.Now().UnixMilli()
 	_, err = r.db.ExecContext(ctx, `
-		INSERT INTO providers (id, name, api_host, api_key, model_id, temperature, timeout_ms, max_retries, group_name, enabled, sort_order, created_at, updated_at, auth_method, auth_params)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO providers (id, name, api_host, api_key, model_id, temperature, timeout_ms, max_retries, group_name, enabled, sort_order, created_at, updated_at, auth_method, auth_params, provider_type, models)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, provider.ID, provider.Name, provider.APIHost, encryptedKey, provider.ModelID, provider.Temperature,
 		int64(provider.TimeoutMs), provider.MaxRetries, provider.GroupName, boolToInt(provider.Enabled),
-		provider.SortOrder, now, now, string(provider.AuthMethod), authParamsJSON)
+		provider.SortOrder, now, now, string(provider.AuthMethod), authParamsJSON, string(resolveProviderType(provider)), modelsJSON)
 
 	if err != nil {
 		// SQLite 约束冲突（重复主键）
@@ -91,15 +97,20 @@ func (r *ProviderRepoSQLite) Update(ctx context.Context, provider *models.Provid
 		return fmt.Errorf("failed to marshal auth params: %w", err)
 	}
 
+	modelsJSON, err := provider.MarshalModels()
+	if err != nil {
+		return fmt.Errorf("failed to marshal models: %w", err)
+	}
+
 	now := time.Now().UnixMilli()
 	res, err := r.db.ExecContext(ctx, `
 		UPDATE providers SET
 			name = ?, api_host = ?, api_key = ?, model_id = ?, temperature = ?,
-			timeout_ms = ?, max_retries = ?, group_name = ?, enabled = ?, sort_order = ?, updated_at = ?, auth_method = ?, auth_params = ?
+			timeout_ms = ?, max_retries = ?, group_name = ?, enabled = ?, sort_order = ?, updated_at = ?, auth_method = ?, auth_params = ?, provider_type = ?, models = ?
 		WHERE id = ?
 	`, provider.Name, provider.APIHost, encryptedKey, provider.ModelID, provider.Temperature,
 		int64(provider.TimeoutMs), provider.MaxRetries, provider.GroupName, boolToInt(provider.Enabled),
-		provider.SortOrder, now, string(provider.AuthMethod), authParamsJSON, provider.ID)
+		provider.SortOrder, now, string(provider.AuthMethod), authParamsJSON, string(resolveProviderType(provider)), modelsJSON, provider.ID)
 
 	if err != nil {
 		return fmt.Errorf("failed to update provider %s: %w", provider.ID, err)
@@ -135,7 +146,7 @@ func (r *ProviderRepoSQLite) Delete(ctx context.Context, id string) error {
 // Get 按 ID 查询 Provider 配置。
 func (r *ProviderRepoSQLite) Get(ctx context.Context, id string) (*models.ProviderConfig, error) {
 	row := r.db.QueryRowContext(ctx, `
-		SELECT id, name, api_host, api_key, model_id, temperature, timeout_ms, max_retries, group_name, enabled, sort_order, created_at, updated_at, auth_method, auth_params
+		SELECT id, name, api_host, api_key, model_id, temperature, timeout_ms, max_retries, group_name, enabled, sort_order, created_at, updated_at, auth_method, auth_params, provider_type, models
 		FROM providers WHERE id = ?
 	`, id)
 
@@ -145,14 +156,14 @@ func (r *ProviderRepoSQLite) Get(ctx context.Context, id string) (*models.Provid
 // List 查询全部 Provider 配置，按 sort_order ASC, updated_at DESC 排序。
 func (r *ProviderRepoSQLite) List(ctx context.Context) ([]*models.ProviderConfig, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, name, api_host, api_key, model_id, temperature, timeout_ms, max_retries, group_name, enabled, sort_order, created_at, updated_at, auth_method, auth_params
+		SELECT id, name, api_host, api_key, model_id, temperature, timeout_ms, max_retries, group_name, enabled, sort_order, created_at, updated_at, auth_method, auth_params, provider_type, models
 		FROM providers
 		ORDER BY sort_order ASC, updated_at DESC
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list providers: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var result []*models.ProviderConfig
 	for rows.Next() {
@@ -176,11 +187,12 @@ func (r *ProviderRepoSQLite) scanProvider(scanner interface {
 	var encryptedKey []byte
 	var timeoutMs, createdAt, updatedAt int64
 	var enabledInt int
-	var authMethodStr, authParamsJSON string
+	var authMethodStr, authParamsJSON, providerTypeStr string
+	var modelsJSON string
 
 	if err := scanner.Scan(&p.ID, &p.Name, &p.APIHost, &encryptedKey, &p.ModelID, &p.Temperature,
-		&timeoutMs, &p.MaxRetries, &p.GroupName, &enabledInt, &p.SortOrder, &createdAt, &updatedAt, &authMethodStr, &authParamsJSON); err != nil {
-		if err == sql.ErrNoRows {
+		&timeoutMs, &p.MaxRetries, &p.GroupName, &enabledInt, &p.SortOrder, &createdAt, &updatedAt, &authMethodStr, &authParamsJSON, &providerTypeStr, &modelsJSON); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("provider not found: %w", entity.ErrNotFound)
 		}
 		return nil, fmt.Errorf("failed to scan provider row: %w", err)
@@ -197,11 +209,35 @@ func (r *ProviderRepoSQLite) scanProvider(scanner interface {
 	p.CreatedAt = createdAt
 	p.UpdatedAt = updatedAt
 	p.AuthMethod = models.AuthMethod(authMethodStr)
+	// 优先使用持久化的类型；旧行 provider_type 为空时回退按 api_host 推断，保持向后兼容。
+	if providerTypeStr != "" {
+		p.Type = models.ProviderType(providerTypeStr)
+	} else {
+		p.Type = models.InferProviderType(p.APIHost)
+	}
 	if err := p.UnmarshalAuthParams(authParamsJSON); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal auth params for provider %s: %w", p.ID, err)
 	}
+	if err := p.UnmarshalModels(modelsJSON); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal models for provider %s: %w", p.ID, err)
+	}
+	// 向后兼容：旧行没有 models 列或为空，但存在 model_id 时合成单模型，
+	// 与前端 normalizeProviderConfig 行为一致（旧行缺 MaxContextLength 时回落默认，属预期）。
+	if len(p.Models) == 0 && p.ModelID != "" {
+		p.Models = []models.ProviderModel{{ID: p.ModelID, Name: p.ModelID, Enabled: true}}
+	}
 
 	return &p, nil
+}
+
+// resolveProviderType 返回待持久化的 provider 类型。
+// 若调用方已显式设置 Type 则直接使用；否则按 api_host 推断，
+// 确保本地模型（ollama/local/回环地址）等创建路径也能写入正确类型。
+func resolveProviderType(p *models.ProviderConfig) models.ProviderType {
+	if p.Type != "" {
+		return p.Type
+	}
+	return models.InferProviderType(p.APIHost)
 }
 
 // validateProvider 校验 Provider 配置字段合法性。

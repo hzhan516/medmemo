@@ -267,7 +267,7 @@ func (s *TokenRefreshService) doRefresh(providerType string, creds *models.CLICr
 	if err != nil {
 		return nil, fmt.Errorf("refresh request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 && resp.StatusCode < 500 {
 		return nil, fmt.Errorf("refresh endpoint returned status %d", resp.StatusCode)
@@ -340,7 +340,7 @@ func (s *TokenRefreshService) writeBackCredentials(p *models.ProviderConfig, cre
 }
 
 // writeKimiCredentials 更新 Kimi 凭证文件。
-func (s *TokenRefreshService) writeKimiCredentials(path string, creds *models.CLICredentials, result *RefreshResult) error {
+func (s *TokenRefreshService) writeKimiCredentials(path string, _ *models.CLICredentials, result *RefreshResult) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("failed to read kimi credential file: %w", err)

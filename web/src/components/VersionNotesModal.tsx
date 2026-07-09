@@ -32,9 +32,9 @@ export function VersionNotesModal({ notes, currentVersion, onDismiss }: VersionN
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="w-full max-w-2xl max-h-[85vh] flex flex-col rounded-2xl bg-background border border-border shadow-2xl overflow-hidden">
+      <div className="w-full max-w-2xl max-h-[85vh] flex flex-col rounded-2xl bg-background/95 backdrop-blur-xl border border-border/60 shadow-2xl overflow-hidden">
         {/* 头部 */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-muted/40 shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border/60 bg-muted/30 shrink-0">
           <div className="flex items-center gap-3">
             <BookOpen className="w-5 h-5 text-primary shrink-0" />
             <div>

@@ -23,7 +23,7 @@ func setupDisclaimerTestDB(t *testing.T) (*DisclaimerRepoSQLite, func()) {
 
 	repo := NewDisclaimerRepoSQLite(connector)
 	cleanup := func() {
-		connector.Close()
+		_ = connector.Close()
 	}
 	return repo, cleanup
 }

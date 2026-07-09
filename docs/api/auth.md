@@ -61,6 +61,30 @@ Constructs a provider configuration from detected CLI credentials.
 
 ---
 
+### `DetectCLIToken(providerType string) (*auth.CLIDetectResult, error)`
+
+Detects whether a supported provider CLI has usable local credentials.
+
+---
+
+### `RefreshToken(providerID string) error`
+
+Refreshes the stored OAuth/CLI provider token when the provider supports refresh.
+
+---
+
+### `EnableAutoRefresh(providerID string) error`
+
+Enables automatic token refresh for a provider.
+
+---
+
+### `DisableAutoRefresh(providerID string) error`
+
+Disables automatic token refresh for a provider.
+
+---
+
 ### `StartOAuthDeviceFlow(providerType string) (*DeviceFlowStartResponse, error)`
 
 Initiates OAuth 2.0 Device Flow. A local callback server is started to receive the authorization completion notification.
@@ -120,3 +144,7 @@ type OAuthDeviceFlowProviderInfo struct {
 ### `ParseServiceAccountJSON(jsonStr string) (map[string]string, error)`
 
 Parses a Google service account JSON string and extracts the project ID, client email, and private key ID.
+
+---
+
+*Last updated: 2026-07-09*

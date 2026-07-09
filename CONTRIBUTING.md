@@ -12,11 +12,11 @@ Thank you for your interest in MedMemo! Whether you are a Go developer, frontend
 
 | Tool | Minimum Version | Installation |
 |------|-----------------|--------------|
-| Go | 1.22+ | [Official Download](https://go.dev/dl/) or `brew install go` |
+| Go | 1.26.4+ | [Official Download](https://go.dev/dl/) or `brew install go` |
 | Node.js | 18.x+ | [Official Download](https://nodejs.org/) or `brew install node` |
-| Wails CLI | v2.9+ | `go install github.com/wailsapp/wails/v2/cmd/wails@latest` |
+| Wails CLI | 2.12.x | `go install github.com/wailsapp/wails/v2/cmd/wails@latest` |
 | golangci-lint | latest | `make install-tools` |
-| Wire | v0.6+ | `make install-tools` |
+| Wire | 0.7.0 | `make install-tools` |
 
 ### Quick Start
 
@@ -128,7 +128,7 @@ Search existing issues first to avoid duplicates. Use the Feature Request templa
 
 ## Security Disclosures
 
-For security vulnerabilities, please email **doyle_zhang@outlook.com** instead of opening a public issue. We will respond within 48 hours.
+For security vulnerabilities, please email **doyle_zhang@outlook.com** instead of opening a public issue. We will acknowledge receipt within 72 hours.
 
 ---
 
@@ -138,4 +138,4 @@ Participation in this project means you agree to treat every contributor with pr
 
 ---
 
-*Last updated: 2026-05-19*
+*Last updated: 2026-07-09*

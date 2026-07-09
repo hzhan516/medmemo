@@ -19,15 +19,15 @@ type mockUpdater struct {
 	err  error
 }
 
-func (m *mockUpdater) FetchLatest(ctx context.Context, channel models.UpdateChannel) (*entity.UpdateInfo, error) {
+func (m *mockUpdater) FetchLatest(_ context.Context, _ models.UpdateChannel) (*entity.UpdateInfo, error) {
 	return m.info, m.err
 }
 
-func (m *mockUpdater) Download(ctx context.Context, url, dest string, progress func(int64, int64)) error {
+func (m *mockUpdater) Download(_ context.Context, _, _ string, _ func(int64, int64)) error {
 	return nil
 }
 
-func (m *mockUpdater) VerifyChecksum(path, checksum string) error {
+func (m *mockUpdater) VerifyChecksum(_, _ string) error {
 	return nil
 }
 
@@ -37,9 +37,9 @@ type mockInstaller struct {
 	installErr  error
 }
 
-func (m *mockInstaller) Install(assetPath string) (string, error) { return m.installPath, m.installErr }
-func (m *mockInstaller) Rollback() error                          { return nil }
-func (m *mockInstaller) CurrentBinaryPath() string                { return "" }
+func (m *mockInstaller) Install(_ string) (string, error) { return m.installPath, m.installErr }
+func (m *mockInstaller) Rollback() error                  { return nil }
+func (m *mockInstaller) CurrentBinaryPath() string        { return "" }
 
 // TestCheckUpdate_NoUpdate 验证远程版本与当前一致时返回 nil。
 func TestCheckUpdate_NoUpdate(t *testing.T) {

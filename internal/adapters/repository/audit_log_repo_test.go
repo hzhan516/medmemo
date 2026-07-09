@@ -22,7 +22,7 @@ func setupAuditLogTestDB(t *testing.T) (*AuditLogRepoSQLite, func()) {
 
 	repo := NewAuditLogRepoSQLite(connector)
 	cleanup := func() {
-		connector.Close()
+		_ = connector.Close()
 	}
 	return repo, cleanup
 }

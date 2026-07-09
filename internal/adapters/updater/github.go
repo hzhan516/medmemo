@@ -20,6 +20,7 @@ import (
 	"github.com/google/wire"
 	"github.com/hzhan516/medmemo/internal/application/port"
 	"github.com/hzhan516/medmemo/internal/domain/entity"
+	infraUpdater "github.com/hzhan516/medmemo/internal/infrastructure/updater"
 	"github.com/hzhan516/medmemo/pkg/models"
 )
 
@@ -65,6 +66,16 @@ func NewDefaultHTTPClient() *http.Client {
 	}
 }
 
+// getLinuxInstallKind 返回当前 Linux 安装方式，供资产匹配使用。
+// 通过包级变量暴露，便于单测注入固定值。
+var getLinuxInstallKind = func() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return infraUpdater.DetectInstallKind("")
+	}
+	return infraUpdater.DetectInstallKind(exe)
+}
+
 // Ensure GitHubUpdater 实现了 port.Updater 接口。
 var _ port.Updater = (*GitHubUpdater)(nil)
 
@@ -84,7 +95,7 @@ func (g *GitHubUpdater) FetchLatest(ctx context.Context, channel models.UpdateCh
 	if err != nil {
 		return nil, fmt.Errorf("github api request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -170,7 +181,7 @@ func (g *GitHubUpdater) Download(ctx context.Context, url, destPath string, prog
 	if err != nil {
 		return fmt.Errorf("download request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download returned %d", resp.StatusCode)
@@ -185,7 +196,7 @@ func (g *GitHubUpdater) Download(ctx context.Context, url, destPath string, prog
 	if err != nil {
 		return fmt.Errorf("failed to create file: %w", err)
 	}
-	defer out.Close()
+	defer func() { _ = out.Close() }()
 
 	total := resp.ContentLength
 	reader := &port.ProgressReader{
@@ -213,7 +224,7 @@ func (g *GitHubUpdater) VerifyChecksum(path, expectedSHA256 string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open file for checksum: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	h := sha256.New()
 	if _, err := io.Copy(h, f); err != nil {
@@ -230,7 +241,11 @@ func (g *GitHubUpdater) VerifyChecksum(path, expectedSHA256 string) error {
 // matchPlatformAsset 根据当前平台匹配对应的 Release 资产文件。
 // 同时查找配套的 checksums.txt 提取 SHA256 值。
 func (g *GitHubUpdater) matchPlatformAsset(ctx context.Context, assets []githubAsset) (*githubAsset, string) {
-	targetAsset := findTargetAsset(assets, runtime.GOOS, runtime.GOARCH)
+	installKind := ""
+	if runtime.GOOS == "linux" {
+		installKind = getLinuxInstallKind()
+	}
+	targetAsset := findTargetAsset(assets, runtime.GOOS, runtime.GOARCH, installKind)
 	checksum := ""
 	if targetAsset != nil {
 		checksum = g.findChecksum(ctx, assets, targetAsset.Name)
@@ -238,34 +253,46 @@ func (g *GitHubUpdater) matchPlatformAsset(ctx context.Context, assets []githubA
 	return targetAsset, checksum
 }
 
-// findTargetAsset 按平台匹配最佳 Release 资产。
-func findTargetAsset(assets []githubAsset, goos, goarch string) *githubAsset {
+// findTargetAsset 按平台与安装方式匹配最佳 Release 资产。
+func findTargetAsset(assets []githubAsset, goos, goarch, installKind string) *githubAsset {
 	for i := range assets {
 		a := &assets[i]
-		if matchesPlatform(a.Name, goos, goarch) {
+		if matchesPlatform(a.Name, goos, goarch, installKind) {
 			return a
 		}
 	}
-	// Windows 回退：未匹配到 setup/installer 时取任意 exe
-	if goos == "linux" {
+	// Linux 回退：未匹配到带架构的 AppImage 时取任意 .AppImage（仅 AppImage 或未知安装方式）
+	if goos == "linux" && (installKind == "appimage" || installKind == "unknown" || installKind == "") {
 		if fallback := findLinuxFallback(assets); fallback != nil {
 			return fallback
 		}
 	}
-	if goos == "windows" {
-		return findWindowsFallback(assets)
+	// Darwin 回退：未匹配到架构特定 DMG 时取任意 .dmg（向后兼容）
+	if goos == "darwin" {
+		for i := range assets {
+			if strings.HasSuffix(strings.ToLower(assets[i].Name), ".dmg") {
+				return &assets[i]
+			}
+		}
 	}
 	return nil
 }
 
-// matchesPlatform 检查资产文件名是否匹配当前平台与架构。
-func matchesPlatform(name, goos, goarch string) bool {
+// matchesPlatform 检查资产文件名是否匹配当前平台、架构与 Linux 安装方式。
+func matchesPlatform(name, goos, goarch, installKind string) bool {
 	name = strings.ToLower(name)
 	switch goos {
 	case "linux":
-		return strings.Contains(name, "appimage") && matchArch(name, goarch)
+		switch installKind {
+		case "deb":
+			return strings.HasSuffix(name, ".deb")
+		case "rpm":
+			return strings.HasSuffix(name, ".rpm")
+		default:
+			return strings.Contains(name, "appimage") && matchArch(name, goarch)
+		}
 	case "darwin":
-		return strings.HasSuffix(name, ".dmg")
+		return strings.HasSuffix(name, ".dmg") && matchArch(name, goarch)
 	case "windows":
 		return strings.HasSuffix(name, ".exe") &&
 			(strings.Contains(name, "setup") || strings.Contains(name, "installer"))
@@ -277,16 +304,6 @@ func matchesPlatform(name, goos, goarch string) bool {
 func findLinuxFallback(assets []githubAsset) *githubAsset {
 	for i := range assets {
 		if strings.HasSuffix(strings.ToLower(assets[i].Name), ".appimage") {
-			return &assets[i]
-		}
-	}
-	return nil
-}
-
-// findWindowsFallback 在未匹配到 setup 安装程序时回退到任意 exe。
-func findWindowsFallback(assets []githubAsset) *githubAsset {
-	for i := range assets {
-		if strings.HasSuffix(strings.ToLower(assets[i].Name), ".exe") {
 			return &assets[i]
 		}
 	}
@@ -326,7 +343,7 @@ func (g *GitHubUpdater) extractChecksum(ctx context.Context, checksumsURL, asset
 	if err != nil {
 		return ""
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return ""
 	}
