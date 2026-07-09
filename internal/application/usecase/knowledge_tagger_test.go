@@ -48,7 +48,7 @@ func TestKnowledgeSourceTagger_Tag_UnknownDefaultsToLLMInternal(t *testing.T) {
 	t.Parallel()
 	tagger := NewKnowledgeSourceTagger()
 	// 未知来源类型应降级为 llm_internal
-	ks := tagger.Tag("unknown_source", "some citation")
+	ks := tagger.Tag(entity.SourceType("unknown_source"), "some citation")
 
 	assert.Equal(t, entity.SourceLLMInternal, ks.Type)
 	assert.InDelta(t, 0.60, ks.Confidence, 0.001)

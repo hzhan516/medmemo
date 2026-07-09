@@ -36,13 +36,13 @@ func isSQLiteConstraintOn(err error, column string, allowPrimary bool, allowUniq
 }
 
 func sqlCipherExtendedCode(err error) (sqlcipher.ErrNoExtended, bool) {
-	valueErr, ok := errors.AsType[sqlcipher.Error](err)
-	if ok {
+	var valueErr sqlcipher.Error
+	if errors.As(err, &valueErr) {
 		return valueErr.ExtendedCode, true
 	}
 
-	pointerErr, ok := errors.AsType[*sqlcipher.Error](err)
-	if ok {
+	var pointerErr *sqlcipher.Error
+	if errors.As(err, &pointerErr) && pointerErr != nil {
 		return pointerErr.ExtendedCode, true
 	}
 
@@ -50,19 +50,17 @@ func sqlCipherExtendedCode(err error) (sqlcipher.ErrNoExtended, bool) {
 }
 
 func moderncErrorCode(err error) (int, bool) {
-	sqliteErr, ok := errors.AsType[*moderncsqlite.Error](err)
-	if ok {
+	var sqliteErr *moderncsqlite.Error
+	if errors.As(err, &sqliteErr) && sqliteErr != nil {
 		return sqliteErr.Code(), true
 	}
 	return 0, false
 }
 
 func sqlCipherConstraintMatches(code sqlcipher.ErrNoExtended, allowPrimary bool, allowUnique bool) bool {
-	//goland:noinspection GoDirectComparisonOfErrors
 	if allowPrimary && code == sqlcipher.ErrConstraintPrimaryKey {
 		return true
 	}
-	//goland:noinspection GoDirectComparisonOfErrors
 	if allowUnique && code == sqlcipher.ErrConstraintUnique {
 		return true
 	}

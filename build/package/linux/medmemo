@@ -1,6 +1,0 @@
-#!/bin/sh
-# /usr/bin/medmemo wrapper for DEB/RPM installations.
-# Sets resource directory and install kind, then delegates to the bundled binary.
-export MEDMEMO_RESOURCE_DIR="${MEDMEMO_RESOURCE_DIR:-/opt/medmemo/resources}"
-export MEDMEMO_INSTALL_KIND="${MEDMEMO_INSTALL_KIND:-package}"
-exec /opt/medmemo/MedMemo "$@"

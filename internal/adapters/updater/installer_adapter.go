@@ -34,8 +34,6 @@ func (a *InstallerAdapter) CurrentBinaryPath() string {
 }
 
 // InstallerAdapterSet 供 Wire 使用的 ProviderSet。
-//
-//goland:noinspection GoUnusedGlobalVariable
 var InstallerAdapterSet = wire.NewSet(
 	NewInstallerAdapter,
 	wire.Bind(new(port.Installer), new(*InstallerAdapter)),

@@ -43,7 +43,7 @@ func TestNewEngine_NoLibrary_ReturnsUnavailable(t *testing.T) {
 func TestEngine_Predict_WhenUnavailable_ReturnsError(t *testing.T) {
 	engine, err := NewEngine(EngineConfig{ResourceDir: "resources", ModelPath: "resources/models/nonexistent"})
 	require.NoError(t, err)
-	defer func() { assert.NoError(t, engine.Close()) }()
+	defer engine.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -119,7 +119,7 @@ func TestVerifyModelSHA256_Mismatch(t *testing.T) {
 	require.NoError(t, os.WriteFile(shaFile, []byte("0000000000000000000000000000000000000000000000000000000000000000"), 0644))
 
 	err := verifyModelSHA256(modelFile)
-	require.Error(t, err)
+	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "mismatch")
 }
 
@@ -232,7 +232,7 @@ func TestIsNERAvailable(t *testing.T) {
 	t.Run("pipeline非nil时IsNERAvailable返回true", func(t *testing.T) {
 		engine, err := NewEngine(EngineConfig{ResourceDir: "resources", ModelPath: "resources/models/nonexistent"})
 		require.NoError(t, err)
-		defer func() { assert.NoError(t, engine.Close()) }()
+		defer engine.Close()
 
 		engine.pipeline = &pipelines.TokenClassificationPipeline{}
 		engine.nerAvailable = true
@@ -242,7 +242,7 @@ func TestIsNERAvailable(t *testing.T) {
 	t.Run("仅NER可用时IsAvailable为true且IsEmbeddingAvailable为false", func(t *testing.T) {
 		engine, err := NewEngine(EngineConfig{ResourceDir: "resources", ModelPath: "resources/models/nonexistent"})
 		require.NoError(t, err)
-		defer func() { assert.NoError(t, engine.Close()) }()
+		defer engine.Close()
 
 		engine.nerAvailable = true
 		engine.pipeline = &pipelines.TokenClassificationPipeline{}
@@ -256,7 +256,7 @@ func TestIsNERAvailable(t *testing.T) {
 	t.Run("NER与Embedding均不可用时IsAvailable返回false", func(t *testing.T) {
 		engine, err := NewEngine(EngineConfig{ResourceDir: "resources", ModelPath: "resources/models/nonexistent"})
 		require.NoError(t, err)
-		defer func() { assert.NoError(t, engine.Close()) }()
+		defer engine.Close()
 
 		engine.nerAvailable = false
 		engine.embeddingAvailable = false
@@ -273,7 +273,7 @@ func TestIsEmbeddingAvailable(t *testing.T) {
 	t.Run("embeddingPipeline非nil且embeddingAvailable为true时返回true", func(t *testing.T) {
 		engine, err := NewEngine(EngineConfig{ResourceDir: "resources", ModelPath: "resources/models/nonexistent"})
 		require.NoError(t, err)
-		defer func() { assert.NoError(t, engine.Close()) }()
+		defer engine.Close()
 
 		engine.embeddingPipeline = &pipelines.FeatureExtractionPipeline{}
 		engine.embeddingAvailable = true
@@ -283,7 +283,7 @@ func TestIsEmbeddingAvailable(t *testing.T) {
 	t.Run("仅Embedding可用时IsAvailable为true且IsNERAvailable为false", func(t *testing.T) {
 		engine, err := NewEngine(EngineConfig{ResourceDir: "resources", ModelPath: "resources/models/nonexistent"})
 		require.NoError(t, err)
-		defer func() { assert.NoError(t, engine.Close()) }()
+		defer engine.Close()
 
 		engine.embeddingAvailable = true
 		engine.embeddingPipeline = &pipelines.FeatureExtractionPipeline{}
@@ -299,7 +299,7 @@ func TestIsEmbeddingAvailable(t *testing.T) {
 func TestEngine_Embed_WhenUnavailable(t *testing.T) {
 	engine, err := NewEngine(EngineConfig{ResourceDir: "resources", ModelPath: "resources/models/nonexistent"})
 	require.NoError(t, err)
-	defer func() { assert.NoError(t, engine.Close()) }()
+	defer engine.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -451,7 +451,7 @@ func (w *mockEmbeddingWorker) run(e *Engine) {
 func TestPredict_ContextCancellation_ReturnsError(t *testing.T) {
 	engine, err := NewEngine(EngineConfig{ResourceDir: "resources", ModelPath: "resources/models/nonexistent"})
 	require.NoError(t, err)
-	defer func() { assert.NoError(t, engine.Close()) }()
+	defer engine.Close()
 
 	// 模拟一个可用的引擎（无需真实模型）
 	engine.nerAvailable = true
@@ -468,7 +468,7 @@ func TestPredict_ContextCancellation_ReturnsError(t *testing.T) {
 func TestEmbed_ContextCancellation_ReturnsError(t *testing.T) {
 	engine, err := NewEngine(EngineConfig{ResourceDir: "resources", ModelPath: "resources/models/nonexistent"})
 	require.NoError(t, err)
-	defer func() { assert.NoError(t, engine.Close()) }()
+	defer engine.Close()
 
 	engine.embeddingAvailable = true
 	engine.embeddingWorkers = nil

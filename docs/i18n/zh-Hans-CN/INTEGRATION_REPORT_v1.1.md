@@ -12,7 +12,7 @@
 |:---|:---|
 | **分支** | `feature/TASK-059-memory-injection-enhancement` |
 | **提交** | HEAD（基准修复后） |
-| **Go 版本** | 1.26.4 |
+| **Go 版本** | 1.22+ |
 | **操作系统 / 架构** | Linux amd64 |
 | **CPU** | Intel Core Ultra 9 185H |
 | **数据库** | SQLite 3.45+ with sqlcipher（向量搜索使用 github.com/viant/sqlite-vec） |
@@ -218,11 +218,11 @@
 
 ## 7. Wire 依赖注入
 
-**文件**：仓库根 `wire_gen.go`
+**文件**：`cmd/health-assistant/wire_gen.go`
 
 | 验证 | 状态 |
 |:---|:---:|
-| `wire .` 执行无错误 | ✅ |
+| `wire ./cmd/health-assistant` 执行无错误 | ✅ |
 | `auditLogRepoSQLite` 正确注入 `WailsApp` | ✅ |
 | 无手动编辑 `wire_gen.go` | ✅ |
 
@@ -245,7 +245,7 @@
 |:---|:---|:---|
 | — | — | — |
 
-> **记忆模块更新**：Issue#004 与 Issue#035 已在记忆模块中解决。`ArchiveConversation` 现在将已审批事实归档为 L2 短期记忆，会话间隙召回通过 `FindBySession` 复用会话关联事实。其余未关闭项（#002、#016、#019）记录在 `medmemo/开发日志/issues.md` 的 M04 分类下。
+> **更新（v1.1.9）**：Issue#004 与 Issue#035 已在记忆模块中解决。`ArchiveConversation` 现在将已审批事实归档为 L2 短期记忆，会话间隙召回通过 `FindBySession` 复用会话关联事实。其余未关闭项（#002、#016、#019）记录在 `medmemo/开发日志/issues.md` 的 M04 分类下。
 
 ---
 
@@ -281,5 +281,3 @@
 > **测试人员**：AI Agent（自动化测试套件）
 >
 > **状态**：✅ 范围内全部测试通过。 ready for PR 审查。
->
-> **最后更新**：2026-07-09

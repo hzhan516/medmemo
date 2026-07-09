@@ -90,19 +90,11 @@ jobs:
       - name: Run unit tests
         run: make test
 
-      - name: Generate HTML coverage report
-        run: |
-          go tool cover -html=coverage.out -o coverage.html
-          go tool cover -func=coverage.out -o coverage-summary.txt
-
-      - name: Upload coverage report
+      - name: Download coverage report
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
-          path: |
-            ./coverage.out
-            ./coverage.html
-            ./coverage-summary.txt
+          path: ./coverage.out
           retention-days: 7
 
       - name: Upload coverage
@@ -226,7 +218,7 @@ jobs:
     name: Cross Platform Build
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-15-intel, macos-14]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     continue-on-error: true
     steps:

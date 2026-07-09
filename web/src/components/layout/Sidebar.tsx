@@ -106,17 +106,17 @@ export function Sidebar({
 
   if (isCollapsed) {
     return (
-      <div className="shrink-0 w-14 mac-vibrant-panel border-r border-white/20 dark:border-white/5 flex flex-col items-center py-3 gap-3">
+      <div className="shrink-0 w-14 border-r border-border bg-background flex flex-col items-center py-3 gap-3">
         <button
           onClick={() => setIsCollapsed(false)}
-          className="p-2 rounded-md hover:bg-white/50 dark:hover:bg-white/10 transition-colors"
+          className="p-2 rounded-md hover:bg-accent transition-colors"
           aria-label="展开侧边栏"
         >
           <PanelLeft size={20} />
         </button>
         <button
           onClick={onNewConversation}
-          className="p-2 rounded-md bg-primary text-primary-foreground hover:opacity-90 transition-opacity shadow-sm"
+          className="p-2 rounded-md bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
           aria-label="新建会话"
         >
           <Plus size={18} />
@@ -128,14 +128,14 @@ export function Sidebar({
   return (
     <>
       <aside
-        className="shrink-0 flex flex-col mac-vibrant-panel border-r border-white/20 dark:border-white/5"
+        className="shrink-0 flex flex-col border-r border-border bg-background"
         style={{ width: isMobile ? '100%' : width }}
       >
         {/* 侧边栏头部 */}
-        <div className="flex items-center justify-between px-3 py-3 border-b border-border/60 gap-2">
+        <div className="flex items-center justify-between px-3 py-3 border-b border-border gap-2">
           <button
             onClick={onNewConversation}
-            className="flex items-center gap-2 flex-1 justify-center px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity shadow-sm"
+            className="flex items-center gap-2 flex-1 justify-center px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
             title="新建会话 (Ctrl+N)"
           >
             <Plus size={16} />
@@ -144,7 +144,7 @@ export function Sidebar({
           {!isMobile && (
             <button
               onClick={() => setIsCollapsed(true)}
-              className="p-2 rounded-md hover:bg-white/50 dark:hover:bg-white/10 transition-colors"
+              className="p-2 rounded-md hover:bg-accent transition-colors"
               aria-label="收起侧边栏"
             >
               <PanelLeftClose size={18} />
@@ -153,7 +153,7 @@ export function Sidebar({
         </div>
 
         {/* 搜索框或回收站返回 */}
-        <div className="px-3 py-2 border-b border-border/60">
+        <div className="px-3 py-2 border-b border-border">
           {showTrash ? (
             <button
               onClick={() => setShowTrash(false)}
@@ -170,7 +170,7 @@ export function Sidebar({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="搜索会话..."
-                className="w-full pl-8 pr-3 py-1.5 text-sm rounded-md mac-control outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground"
+                className="w-full pl-8 pr-3 py-1.5 text-sm rounded-md bg-muted border-0 outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground"
               />
               {searchQuery && (
                 <button
@@ -254,7 +254,7 @@ export function Sidebar({
 
         {/* 底部回收站入口 */}
         {!showTrash && (
-          <div className="px-3 py-2 border-t border-border/60">
+          <div className="px-3 py-2 border-t border-border">
             <button
               onClick={() => setShowTrash(true)}
               className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"

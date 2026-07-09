@@ -45,7 +45,7 @@ func defaultTokenEstimator(s string) int {
 }
 
 // ChunkMarkdown 按 Markdown 标题或段落边界切分。
-func (c *KnowledgeChunker) ChunkMarkdown(_ string, content []byte) []*entity.KnowledgeChunk {
+func (c *KnowledgeChunker) ChunkMarkdown(title string, content []byte) []*entity.KnowledgeChunk {
 	text := string(content)
 	// 按二级及以下标题切分
 	sections := splitByHeaders(text)

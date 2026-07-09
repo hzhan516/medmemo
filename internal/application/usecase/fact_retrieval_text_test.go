@@ -6,7 +6,6 @@ import (
 
 	"github.com/hzhan516/medmemo/internal/domain/entity"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestBuildFactRetrievalText(t *testing.T) {
@@ -126,6 +125,6 @@ func TestMatchCategory_Priority(t *testing.T) {
 	// 体重在注册表中排第一，事实同时含体重和身高关键词时应命中体重。
 	fact := &entity.ExtractedFact{Subject: "用户", Predicate: "体重是", Object: "70公斤且身高175"}
 	cat := matchCategory(fact)
-	require.NotNil(t, cat)
+	assert.NotNil(t, cat)
 	assert.Equal(t, "体重", cat.name)
 }

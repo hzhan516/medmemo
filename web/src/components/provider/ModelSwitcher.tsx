@@ -1,5 +1,4 @@
-import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react'
-import { createPortal } from 'react-dom'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronDown, Cloud, Server, Plus } from 'lucide-react'
 import { useSettingsStore, type ProviderHealthStatus } from '@/stores/settingsStore'
@@ -23,7 +22,6 @@ export function ModelSwitcher() {
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [toast, setToast] = useState<{ message: string; visible: boolean } | null>(null)
-  const [menuPos, setMenuPos] = useState<{ top: number; right: number; maxHeight: number } | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
 
@@ -96,27 +94,6 @@ export function ModelSwitcher() {
     }, 2000)
   }, [])
 
-  // 计算下拉面板相对视口的锚定坐标（fixed 定位，右对齐，按可用空间动态限高）。
-  const updateMenuPos = useCallback(() => {
-    const rect = triggerRef.current?.getBoundingClientRect()
-    if (!rect) return
-    const margin = 8
-    const top = rect.bottom + 6
-    const available = window.innerHeight - top - margin
-    const maxHeight = Math.max(160, Math.min(window.innerHeight * 0.6, available))
-    setMenuPos({
-      top,
-      right: Math.max(margin, window.innerWidth - rect.right),
-      maxHeight,
-    })
-  }, [])
-
-  // 切换下拉：打开前同步读取触发器坐标，避免首帧错位。
-  const handleToggle = useCallback(() => {
-    if (!open) updateMenuPos()
-    setOpen((prev) => !prev)
-  }, [open, updateMenuPos])
-
   const handleSwitch = useCallback(
     (modelId: string, providerId: string) => {
       const item = enabledModels.find((m) => m.modelId === modelId && m.providerId === providerId)
@@ -130,7 +107,7 @@ export function ModelSwitcher() {
     [enabledModels, setActiveModelId, setActiveProviderId, setLastSelectedProviderId, showToast]
   )
 
-  // 点击外部或按 Esc 关闭下拉
+  // 点击外部关闭下拉
   useEffect(() => {
     if (!open) return
     const handleClickOutside = (e: MouseEvent) => {
@@ -144,28 +121,9 @@ export function ModelSwitcher() {
         setOpen(false)
       }
     }
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false)
-    }
     document.addEventListener('mousedown', handleClickOutside)
-    document.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
+    return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [open])
-
-  // 下拉打开期间跟随窗口缩放/滚动重新定位（Portal 为 fixed，需随视口变化更新坐标）。
-  useLayoutEffect(() => {
-    if (!open) return
-    updateMenuPos()
-    window.addEventListener('resize', updateMenuPos)
-    window.addEventListener('scroll', updateMenuPos, true)
-    return () => {
-      window.removeEventListener('resize', updateMenuPos)
-      window.removeEventListener('scroll', updateMenuPos, true)
-    }
-  }, [open, updateMenuPos])
 
   const statusColor = useMemo(() => {
     switch (activeStatus) {
@@ -200,7 +158,7 @@ export function ModelSwitcher() {
       {/* 触发按钮 */}
       <button
         ref={triggerRef}
-        onClick={handleToggle}
+        onClick={() => setOpen((prev) => !prev)}
         className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium
                    bg-accent/50 hover:bg-accent transition-colors min-w-0"
         data-testid="ms-trigger"
@@ -219,19 +177,12 @@ export function ModelSwitcher() {
         />
       </button>
 
-      {/* 下拉面板（Portal 到 body，脱离 header 的层叠上下文与 overflow 裁剪） */}
-      {open && createPortal(
+      {/* 下拉面板 */}
+      {open && (
         <div
           ref={dropdownRef}
-          style={{
-            position: 'fixed',
-            top: menuPos?.top ?? 0,
-            right: menuPos?.right ?? 0,
-            maxHeight: menuPos?.maxHeight,
-            visibility: menuPos ? 'visible' : 'hidden',
-          }}
-          className="w-72 bg-popover border border-border
-                     rounded-lg shadow-lg z-[60] py-1 overflow-y-auto"
+          className="absolute top-full right-0 mt-1.5 w-72 bg-popover border border-border
+                     rounded-lg shadow-lg z-50 py-1 max-h-[60vh] overflow-y-auto"
           data-testid="ms-dropdown"
         >
           {dropdownGroups.length === 0 ? (
@@ -317,27 +268,20 @@ export function ModelSwitcher() {
               ))}
             </div>
           )}
-        </div>,
-        document.body
+        </div>
       )}
 
-      {/* Toast 提示（Portal 到 body） */}
-      {toast && createPortal(
+      {/* Toast 提示 */}
+      {toast && (
         <div
-          style={{
-            position: 'fixed',
-            top: menuPos?.top ?? 0,
-            right: menuPos?.right ?? 0,
-          }}
-          className={`px-3 py-1.5 rounded-md bg-primary text-primary-foreground
-                      text-xs font-medium shadow-lg z-[60] transition-all duration-200
+          className={`absolute top-full right-0 mt-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground
+                      text-xs font-medium shadow-lg z-50 transition-all duration-200
                       ${toast.visible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-1 pointer-events-none'}
                     `}
           data-testid="ms-toast"
         >
           {toast.message}
-        </div>,
-        document.body
+        </div>
       )}
     </div>
   )

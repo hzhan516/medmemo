@@ -8,7 +8,7 @@
 
 ## Context
 
-MedMemo's **two-level de-identification pipeline** (L1 Rules → L2 NER) requires a local Named Entity Recognition (NER) model to identify sensitive entities in user health text before any data leaves the device. The L2 NER stage is the accuracy-critical layer — it must recognize:
+MedMemo's **three-tier de-identification pipeline** (L1 Rules → L2 NER → L3 Keywords) requires a local Named Entity Recognition (NER) model to identify sensitive entities in user health text before any data leaves the device. The L2 NER stage is the accuracy-critical layer — it must recognize:
 
 - Person names (patients, doctors, family members)
 - Organization names (hospitals, clinics, insurance companies)
@@ -66,7 +66,7 @@ User Input Text
 
 ### Key Technical Choices
 
-1. **Model**: DistilBERT fine-tuned for token classification, exported to ONNX, then int8-quantized. Quantization reduces model size from ~250MB (fp32) to ~50MB with <2% accuracy loss on medical entity benchmarks.
+1. **Model**: DistilBERT fine-tuned for token classification (BiLSTM-CRF head), exported to ONNX, then int8-quantized. Quantization reduces model size from ~250MB (fp32) to ~50MB with <2% accuracy loss on medical entity benchmarks.
 
 2. **Worker model**: 2 fixed inference workers, each holding an independent ONNX Session (~80–100MB RAM per session, total ~200MB). Tasks are dispatched via a buffered channel (capacity 16). Each worker serializes `Session.Run()` calls because ONNX Runtime sessions are **not thread-safe**.
 
@@ -90,16 +90,17 @@ User Input Text
 
 ### Integration with De-Identification Pipeline
 
-The L2 NER stage runs after L1 deterministic rules:
+The L2 NER stage sits between L1 (rule engine, <1ms) and L3 (keyword dictionary, <5ms):
 
 ```
-L1 Rule Engine ──(missed spans)──► L2 NER ONNX
+L1 Rule Engine ──(missed spans)──► L2 NER ONNX ──(low-confidence spans)──► L3 Keywords
          │                                    │
          └───── P3 hard-mask ────────────────┘
 ```
 
 - Spans identified by L1 with `Confidence == 1.0` bypass L2 entirely (pipeline short-circuit).
 - L2 NER outputs are graded into P1/P2/P3 sensitivity levels. P3 spans are **hard-replaced** with irreversible masks before any cloud API call.
+- Low-confidence L2 outputs (<0.7) are forwarded to L3 keyword dictionary matching as a fallback.
 
 ## Consequences
 
@@ -113,7 +114,7 @@ L1 Rule Engine ──(missed spans)──► L2 NER ONNX
 ### Negative Impacts
 
 - **CGO cross-compilation burden**: Building for three platforms requires platform-specific ONNX Runtime libraries and CGO toolchain setup, complicating CI.
-- **Memory pressure**: 2 ONNX Sessions consume ~200MB RAM. On systems with <8GB RAM, this competes with local LLMs (Ollama) and the OS.
+- **Memory pressure**: 2 ONNX Sessions consume ~200MB RAM. On systems with <8GB RAM, this competes with DuckDB, local LLM (Ollama), and the OS.
 - **Non-thread-safe session constraint**: The 2-worker serial model limits NER throughput. Under burst input scenarios (e.g., bulk health record import), requests queue in the channel.
 - **Model size**: 50MB is the largest single file in the resource directory; slow initial download may degrade first-launch experience on slow connections.
 
@@ -131,8 +132,4 @@ L1 Rule Engine ──(missed spans)──► L2 NER ONNX
 - [docs/ARCHITECTURE.md](../ARCHITECTURE.md) — System architecture overview and data flow
 - `internal/infrastructure/onnx/` — ONNX Runtime Go binding and session management
 - `pkg/desensitizer/` — Rule engine (L1) and pipeline orchestrator
-- `internal/application/pipeline/` — Two-level de-identification pipeline
-
----
-
-*Last updated: 2026-07-09*
+- `internal/application/pipeline/` — Three-tier de-identification pipeline

@@ -8,8 +8,6 @@ import (
 // HealthStatus 表示 Provider 的健康状态。
 type HealthStatus string
 
-// noinspection GoUnusedConst
-
 const (
 	// HealthGreen 表示连通且延迟低（<2s）。
 	HealthGreen HealthStatus = "green"

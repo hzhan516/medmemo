@@ -144,30 +144,6 @@ Choose your preferred AI provider:
 - Enable/disable automatic update checks
 - Choose channel: **Stable** or **Beta**
 
-### Optional: Model-Based Session Compression
-
-MedMemo can summarize older messages automatically or on demand to keep long conversations within your model's context window. By default it uses a built-in deterministic summarizer. You can optionally enable a model-powered summarizer for better quality.
-
-**Local setup (recommended for privacy)**
-
-1. Install [Ollama](https://ollama.com) for your platform (macOS, Linux, or Windows).
-2. Pull a small instruction-following model, for example:
-   ```bash
-   ollama pull qwen3.5:2b
-   ```
-3. In MedMemo, go to **Settings → Providers** and add or enable an Ollama provider pointing to `http://localhost:11434`.
-4. Open **Settings → Compression**, turn on **Use model for compression**, select the Ollama provider and `qwen3.5:2b` model, then click **Test Connection**.
-
-**Cloud setup**
-
-1. Configure a cloud provider in **Settings → Providers**.
-2. Open **Settings → Compression**, turn on **Use model for compression**, and select the cloud provider and model.
-3. Click **Test Connection**. MedMemo sends only de-identified placeholders to the cloud for summarization; sensitive values are restored locally.
-
-**Fallback behavior**
-
-If model-based compression is disabled or the selected model is unavailable, MedMemo falls back to the built-in deterministic summarizer. If summarization does not reduce token usage, it falls back to dropping the oldest messages.
-
 ---
 
 ## Keyboard Shortcuts

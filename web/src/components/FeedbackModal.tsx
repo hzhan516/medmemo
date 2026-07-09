@@ -52,10 +52,10 @@ export function FeedbackModal({ isOpen, errorInfo, onClose, onSubmit }: Feedback
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="w-full max-w-lg rounded-xl border border-border/60 bg-background/95 backdrop-blur-xl shadow-xl flex flex-col max-h-[85vh]">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-lg rounded-xl border border-border bg-background shadow-xl flex flex-col max-h-[85vh]">
         {/* Header */}
-        <div className="flex items-center gap-3 px-5 py-4 border-b border-border/60">
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-border">
           <div className="p-2 rounded-lg bg-primary/10">
             <Bug size={20} className="text-primary" />
           </div>

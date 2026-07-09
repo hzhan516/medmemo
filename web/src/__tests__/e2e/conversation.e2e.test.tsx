@@ -16,7 +16,7 @@ describe('E2E: 对话流程', () => {
     render(<ChatPage />)
 
     // 初始状态：空会话，显示欢迎页
-    expect(screen.getByText('健康信息助手')).toBeInTheDocument()
+    expect(screen.getByText('MedMemo 健康助手')).toBeInTheDocument()
 
     // 输入并发送消息
     const textarea = screen.getByPlaceholderText(/输入你的健康问题/)
@@ -66,7 +66,7 @@ describe('E2E: 对话流程', () => {
 
     // 验证新会话为空状态（回到欢迎页）
     await waitFor(() => {
-      expect(screen.getByText('健康信息助手')).toBeInTheDocument()
+      expect(screen.getByText('MedMemo 健康助手')).toBeInTheDocument()
     })
 
     // 在新会话发送第二条消息
@@ -208,7 +208,7 @@ describe('E2E: 对话流程', () => {
 
     // 验证回到空状态
     await waitFor(() => {
-      expect(screen.getByText('健康信息助手')).toBeInTheDocument()
+      expect(screen.getByText('MedMemo 健康助手')).toBeInTheDocument()
     })
   })
 })

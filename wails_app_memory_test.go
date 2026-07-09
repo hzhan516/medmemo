@@ -18,10 +18,10 @@ type stubDisclaimerRepository struct {
 	acceptance *entity.DisclaimerAcceptance
 }
 
-func (s *stubDisclaimerRepository) GetAcceptance(_ context.Context) (*entity.DisclaimerAcceptance, error) {
+func (s *stubDisclaimerRepository) GetAcceptance(ctx context.Context) (*entity.DisclaimerAcceptance, error) {
 	return s.acceptance, nil
 }
-func (s *stubDisclaimerRepository) SaveAcceptance(_ context.Context, _ *entity.DisclaimerAcceptance) error {
+func (s *stubDisclaimerRepository) SaveAcceptance(ctx context.Context, record *entity.DisclaimerAcceptance) error {
 	return nil
 }
 
@@ -30,11 +30,11 @@ type stubAuditLogRepository struct {
 	logs []*entity.AuditLogEntry
 }
 
-func (s *stubAuditLogRepository) Save(_ context.Context, entry *entity.AuditLogEntry) error {
+func (s *stubAuditLogRepository) Save(ctx context.Context, entry *entity.AuditLogEntry) error {
 	s.logs = append(s.logs, entry)
 	return nil
 }
-func (s *stubAuditLogRepository) ListByTarget(_ context.Context, targetType, targetID string, _ int) ([]*entity.AuditLogEntry, error) {
+func (s *stubAuditLogRepository) ListByTarget(ctx context.Context, targetType, targetID string, limit int) ([]*entity.AuditLogEntry, error) {
 	var result []*entity.AuditLogEntry
 	for _, log := range s.logs {
 		if log.TargetType == targetType && log.TargetID == targetID {
@@ -50,15 +50,15 @@ type wailsStubFactRepo struct {
 	pendingList []*entity.ExtractedFact
 }
 
-func (s *wailsStubFactRepo) Save(_ context.Context, _ *entity.ExtractedFact) error { return nil }
-func (s *wailsStubFactRepo) GetByID(_ context.Context, factID string) (*entity.ExtractedFact, error) {
+func (s *wailsStubFactRepo) Save(ctx context.Context, f *entity.ExtractedFact) error { return nil }
+func (s *wailsStubFactRepo) GetByID(ctx context.Context, factID string) (*entity.ExtractedFact, error) {
 	f, ok := s.facts[factID]
 	if !ok {
 		return nil, entity.ErrFactNotFound
 	}
 	return f, nil
 }
-func (s *wailsStubFactRepo) FindByIDs(_ context.Context, factIDs []string) (map[string]*entity.ExtractedFact, error) {
+func (s *wailsStubFactRepo) FindByIDs(ctx context.Context, factIDs []string) (map[string]*entity.ExtractedFact, error) {
 	result := make(map[string]*entity.ExtractedFact, len(factIDs))
 	for _, id := range factIDs {
 		if f, ok := s.facts[id]; ok {
@@ -67,7 +67,7 @@ func (s *wailsStubFactRepo) FindByIDs(_ context.Context, factIDs []string) (map[
 	}
 	return result, nil
 }
-func (s *wailsStubFactRepo) ListByStatus(_ context.Context, status entity.FactStatus, offset, limit int) ([]*entity.ExtractedFact, error) {
+func (s *wailsStubFactRepo) ListByStatus(ctx context.Context, status entity.FactStatus, offset, limit int) ([]*entity.ExtractedFact, error) {
 	var result []*entity.ExtractedFact
 	for _, f := range s.facts {
 		if f.Status == status {
@@ -83,7 +83,7 @@ func (s *wailsStubFactRepo) ListByStatus(_ context.Context, status entity.FactSt
 	}
 	return result[offset:end], nil
 }
-func (s *wailsStubFactRepo) ListPending(_ context.Context, offset, limit int) ([]*entity.ExtractedFact, error) {
+func (s *wailsStubFactRepo) ListPending(ctx context.Context, offset, limit int) ([]*entity.ExtractedFact, error) {
 	if offset >= len(s.pendingList) {
 		return nil, nil
 	}
@@ -93,7 +93,7 @@ func (s *wailsStubFactRepo) ListPending(_ context.Context, offset, limit int) ([
 	}
 	return s.pendingList[offset:end], nil
 }
-func (s *wailsStubFactRepo) UpdateStatus(_ context.Context, factID string, status entity.FactStatus) error {
+func (s *wailsStubFactRepo) UpdateStatus(ctx context.Context, factID string, status entity.FactStatus) error {
 	f, ok := s.facts[factID]
 	if !ok {
 		return entity.ErrFactNotFound
@@ -101,23 +101,23 @@ func (s *wailsStubFactRepo) UpdateStatus(_ context.Context, factID string, statu
 	f.Status = status
 	return nil
 }
-func (s *wailsStubFactRepo) Delete(_ context.Context, factID string) error {
+func (s *wailsStubFactRepo) Delete(ctx context.Context, factID string) error {
 	delete(s.facts, factID)
 	return nil
 }
-func (s *wailsStubFactRepo) GetStats(_ context.Context) (total, approved, rejected, pending int64, err error) {
+func (s *wailsStubFactRepo) GetStats(ctx context.Context) (total, approved, rejected, pending int64, err error) {
 	return 0, 0, 0, 0, nil
 }
-func (s *wailsStubFactRepo) ListAllSubjects(_ context.Context) ([]string, error) {
+func (s *wailsStubFactRepo) ListAllSubjects(ctx context.Context) ([]string, error) {
 	return nil, nil
 }
-func (s *wailsStubFactRepo) FindBySubject(_ context.Context, _ string) ([]*entity.ExtractedFact, error) {
+func (s *wailsStubFactRepo) FindBySubject(ctx context.Context, subject string) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (s *wailsStubFactRepo) FindBySession(_ context.Context, _ string) ([]*entity.ExtractedFact, error) {
+func (s *wailsStubFactRepo) FindBySession(ctx context.Context, sessionID string) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (s *wailsStubFactRepo) SearchApproved(_ context.Context, query string, limit int) ([]*entity.ExtractedFact, error) {
+func (s *wailsStubFactRepo) SearchApproved(ctx context.Context, query string, limit int) ([]*entity.ExtractedFact, error) {
 	if limit <= 0 {
 		limit = 20
 	}
@@ -139,7 +139,7 @@ func (s *wailsStubFactRepo) SearchApproved(_ context.Context, query string, limi
 	}
 	return result[:limit], nil
 }
-func (s *wailsStubFactRepo) CountApprovedFactsNeedingEmbedding(_ context.Context, _ string) (int64, error) {
+func (s *wailsStubFactRepo) CountApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string) (int64, error) {
 	var count int64
 	for _, f := range s.facts {
 		if f.Status == entity.FactStatusApproved {
@@ -148,7 +148,7 @@ func (s *wailsStubFactRepo) CountApprovedFactsNeedingEmbedding(_ context.Context
 	}
 	return count, nil
 }
-func (s *wailsStubFactRepo) ListApprovedFactsNeedingEmbedding(_ context.Context, _ string, _ time.Time, lastFactID string, limit int) ([]*entity.ExtractedFact, error) {
+func (s *wailsStubFactRepo) ListApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string, lastCreatedAt time.Time, lastFactID string, limit int) ([]*entity.ExtractedFact, error) {
 	var result []*entity.ExtractedFact
 	var started bool
 	if lastFactID == "" {
@@ -170,10 +170,10 @@ func (s *wailsStubFactRepo) ListApprovedFactsNeedingEmbedding(_ context.Context,
 	}
 	return result, nil
 }
-func (s *wailsStubFactRepo) FindApprovedByPredicates(_ context.Context, _ string, _ []string, _ int) ([]*entity.ExtractedFact, error) {
+func (s *wailsStubFactRepo) FindApprovedByPredicates(ctx context.Context, subject string, predicates []string, limit int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (s *wailsStubFactRepo) FindLatestApprovedByPredicates(_ context.Context, subject string, predicates []string) (*entity.ExtractedFact, error) {
+func (s *wailsStubFactRepo) FindLatestApprovedByPredicates(ctx context.Context, subject string, predicates []string) (*entity.ExtractedFact, error) {
 	var latest *entity.ExtractedFact
 	for _, f := range s.facts {
 		if f.Subject != subject || f.Status != entity.FactStatusApproved {
@@ -353,14 +353,14 @@ type captureEmbeddingService struct {
 	lastText string
 }
 
-func (s *captureEmbeddingService) Embed(_ context.Context, texts []string) ([][]float32, error) {
+func (s *captureEmbeddingService) Embed(ctx context.Context, texts []string) ([][]float32, error) {
 	if len(texts) > 0 {
 		s.lastText = texts[0]
 	}
 	return [][]float32{make([]float32, entity.EmbeddingDimension)}, nil
 }
 
-func (s *captureEmbeddingService) EmbedSingle(_ context.Context, text string) ([]float32, error) {
+func (s *captureEmbeddingService) EmbedSingle(ctx context.Context, text string) ([]float32, error) {
 	s.lastText = text
 	return make([]float32, entity.EmbeddingDimension), nil
 }
@@ -371,28 +371,28 @@ type captureEmbeddingRepository struct {
 	existing map[string]*entity.SemanticEmbedding
 }
 
-func (s *captureEmbeddingRepository) Save(_ context.Context, _ *entity.SemanticEmbedding) error {
+func (s *captureEmbeddingRepository) Save(ctx context.Context, e *entity.SemanticEmbedding) error {
 	return nil
 }
-func (s *captureEmbeddingRepository) GetByFactID(_ context.Context, factID string) (*entity.SemanticEmbedding, error) {
+func (s *captureEmbeddingRepository) GetByFactID(ctx context.Context, factID string) (*entity.SemanticEmbedding, error) {
 	if e, ok := s.existing[factID]; ok {
 		return e, nil
 	}
 	return nil, entity.ErrFactNotFound
 }
-func (s *captureEmbeddingRepository) DeleteByFactID(_ context.Context, _ string) error {
+func (s *captureEmbeddingRepository) DeleteByFactID(ctx context.Context, factID string) error {
 	return nil
 }
-func (s *captureEmbeddingRepository) SearchSimilar(_ context.Context, _ []float32, _ int) ([]*entity.ScoredEmbedding, error) {
+func (s *captureEmbeddingRepository) SearchSimilar(ctx context.Context, queryVector []float32, topK int) ([]*entity.ScoredEmbedding, error) {
 	return nil, nil
 }
-func (s *captureEmbeddingRepository) SearchSimilarFiltered(_ context.Context, _ []float32, _ int, _ string) ([]*entity.ScoredEmbedding, error) {
+func (s *captureEmbeddingRepository) SearchSimilarFiltered(ctx context.Context, queryVector []float32, topK int, modelVersion string) ([]*entity.ScoredEmbedding, error) {
 	return nil, nil
 }
-func (s *captureEmbeddingRepository) CountByVersionNot(_ context.Context, _ string) (int64, error) {
+func (s *captureEmbeddingRepository) CountByVersionNot(ctx context.Context, version string) (int64, error) {
 	return 0, nil
 }
-func (s *captureEmbeddingRepository) UpdateEmbedding(_ context.Context, _ *entity.SemanticEmbedding) error {
+func (s *captureEmbeddingRepository) UpdateEmbedding(ctx context.Context, e *entity.SemanticEmbedding) error {
 	return nil
 }
 

@@ -111,23 +111,6 @@ type UpdateSettingsResponse struct {
 
 ---
 
-### `GetVersionInfo() (*VersionInfoResponse, error)`
-
-返回 About 页与状态栏使用的结构化版本信息。
-
-```go
-type VersionInfoResponse struct {
-    Version         string `json:"version"`
-    DisplayVersion  string `json:"display_version"`
-    BuildNumber     string `json:"build_number"`
-    Channel         string `json:"channel"`
-    PrereleaseLabel string `json:"prerelease_label"`
-    Prerelease      bool   `json:"prerelease"`
-}
-```
-
----
-
 ### `CollectSystemInfo() (*feedback.SystemInfo, error)`
 
 收集用于错误报告的去标识化系统信息（操作系统、架构、应用版本、内存使用）。
@@ -143,19 +126,3 @@ type VersionInfoResponse struct {
 ### `GetVersionNotes() []entity.VersionNote`
 
 返回解析后的版本说明，用于更新后的"新功能"弹窗展示。
-
----
-
-## 反馈
-
-### `RecordAnswerFeedback(messageID string, answerType string, helpful bool) error`
-
-记录用户对 AI 回答是否有帮助或不准确的反馈。
-
-### `ReportComplianceFeedback(ruleID string, originalText string) error`
-
-记录合规误判反馈，供后续复核。
-
----
-
-*最后更新：2026-07-09*

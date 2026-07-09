@@ -117,56 +117,11 @@ type MessageResponse struct {
 
 ---
 
-### `GetDeletedConversations() ([]ConversationSummary, error)`
-
-返回仍处于保留期内的软删除会话。
-
----
-
 ### `GenerateTitle(convID string, userMessage string)`
 
 基于首条用户消息异步生成会话标题。结果通过 `chat:title:generated` 事件送达。此方法不阻塞调用方。
 
 ---
-
-## 上下文与压缩
-
-### `ResolveMaxContextLength(providerID, modelID string) (int, error)`
-
-解析指定 provider/model 的最大上下文长度。
-
-### `EstimateContextUsage(req EstimateContextUsageRequest) (*ContextUsageResponse, error)`
-
-估算当前消息和组装后 prompt 的 token 用量。
-
-```go
-type ContextUsageResponse struct {
-    UsedTokens  int     `json:"usedTokens"`
-    MaxTokens   int     `json:"maxTokens"`
-    Ratio       float64 `json:"ratio"`
-    Approximate bool    `json:"approximate"`
-}
-```
-
-### `CompressSession(req CompressSessionRequest) error`
-
-压缩会话，并在完成后发出 `context:usage_refresh` 事件。
-
-### `GetCompressionSettings() models.CompressionSettings`
-
-返回已保存的压缩设置。
-
-### `SetCompressionSettings(s models.CompressionSettings) error`
-
-保存压缩设置。
-
-### `TestCompressionModel(providerID, modelID string) (bool, error)`
-
-检查所选压缩模型是否可用。
-
----
-
-## 紧急症状与隐私设置
 
 ### `CheckEmergency(text string) (*EmergencyResult, error)`
 
@@ -185,25 +140,3 @@ type EmergencyResult struct {
 | `A` | 危急症状（胸痛伴呼吸困难、意识丧失等） | 全屏红色遮罩，提供 120/急诊选项 |
 | `B` | 紧急症状（持续高热>3天、剧烈腹痛等） | 输入框上方红色警告横幅，需点击确认 |
 | `none` | 未匹配紧急关键词 | 不中断 UI |
-
----
-
-### `ShowEmergencyDialog(title, message string)`
-
-为紧急症状流程显示原生警告弹窗。
-
-### `SetDataRetentionDays(days int) error`
-
-保存软删除数据保留天数。
-
-### `SetDesensitizationLevel(level string) error`
-
-保存出站脱敏级别（`standard`、`strict` 或 `off`）。
-
-### `GetDesensitizationLevel() string`
-
-返回当前出站脱敏级别。
-
----
-
-*最后更新：2026-07-09*

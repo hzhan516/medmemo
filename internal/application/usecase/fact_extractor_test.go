@@ -167,77 +167,77 @@ type mockLLMForFactExtraction struct {
 	err      error
 }
 
-func (m *mockLLMForFactExtraction) Chat(_ context.Context, _ []string) (string, error) {
+func (m *mockLLMForFactExtraction) Chat(ctx context.Context, messages []string) (string, error) {
 	return m.response, m.err
 }
 
 // mockDialogueRepo 用于测试
 type mockDialogueRepo struct{}
 
-func (m *mockDialogueRepo) Insert(_ context.Context, _ *entity.RawDialogue) error { return nil }
-func (m *mockDialogueRepo) InsertBatch(_ context.Context, _ []*entity.RawDialogue) error {
+func (m *mockDialogueRepo) Insert(ctx context.Context, d *entity.RawDialogue) error { return nil }
+func (m *mockDialogueRepo) InsertBatch(ctx context.Context, dialogues []*entity.RawDialogue) error {
 	return nil
 }
-func (m *mockDialogueRepo) GetBySession(_ context.Context, _ string, _, _ int) ([]*entity.RawDialogue, error) {
+func (m *mockDialogueRepo) GetBySession(ctx context.Context, sessionID string, offset, limit int) ([]*entity.RawDialogue, error) {
 	return nil, nil
 }
-func (m *mockDialogueRepo) GetRecent(_ context.Context, _ string, _ int) ([]*entity.RawDialogue, error) {
+func (m *mockDialogueRepo) GetRecent(ctx context.Context, sessionID string, minutes int) ([]*entity.RawDialogue, error) {
 	return nil, nil
 }
-func (m *mockDialogueRepo) GetUnprocessed(_ context.Context, _ int) ([]*entity.RawDialogue, error) {
+func (m *mockDialogueRepo) GetUnprocessed(ctx context.Context, limit int) ([]*entity.RawDialogue, error) {
 	return nil, nil
 }
-func (m *mockDialogueRepo) MarkProcessing(_ context.Context, _ string) error { return nil }
-func (m *mockDialogueRepo) MarkProcessed(_ context.Context, _ string) error  { return nil }
-func (m *mockDialogueRepo) MarkFailed(_ context.Context, _ string) error     { return nil }
+func (m *mockDialogueRepo) MarkProcessing(ctx context.Context, messageID string) error { return nil }
+func (m *mockDialogueRepo) MarkProcessed(ctx context.Context, messageID string) error  { return nil }
+func (m *mockDialogueRepo) MarkFailed(ctx context.Context, messageID string) error     { return nil }
 
 // mockFactRepo 用于测试
 type mockFactRepo struct{}
 
-func (m *mockFactRepo) Save(_ context.Context, _ *entity.ExtractedFact) error { return nil }
-func (m *mockFactRepo) GetByID(_ context.Context, _ string) (*entity.ExtractedFact, error) {
+func (m *mockFactRepo) Save(ctx context.Context, f *entity.ExtractedFact) error { return nil }
+func (m *mockFactRepo) GetByID(ctx context.Context, factID string) (*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (m *mockFactRepo) FindByIDs(_ context.Context, _ []string) (map[string]*entity.ExtractedFact, error) {
+func (m *mockFactRepo) FindByIDs(ctx context.Context, factIDs []string) (map[string]*entity.ExtractedFact, error) {
 	return map[string]*entity.ExtractedFact{}, nil
 }
-func (m *mockFactRepo) ListByStatus(_ context.Context, _ entity.FactStatus, _, _ int) ([]*entity.ExtractedFact, error) {
+func (m *mockFactRepo) ListByStatus(ctx context.Context, status entity.FactStatus, offset, limit int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (m *mockFactRepo) ListPending(_ context.Context, _, _ int) ([]*entity.ExtractedFact, error) {
+func (m *mockFactRepo) ListPending(ctx context.Context, offset, limit int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (m *mockFactRepo) UpdateStatus(_ context.Context, _ string, _ entity.FactStatus) error {
+func (m *mockFactRepo) UpdateStatus(ctx context.Context, factID string, status entity.FactStatus) error {
 	return nil
 }
-func (m *mockFactRepo) Delete(_ context.Context, _ string) error { return nil }
-func (m *mockFactRepo) GetStats(_ context.Context) (total, approved, rejected, pending int64, err error) {
+func (m *mockFactRepo) Delete(ctx context.Context, factID string) error { return nil }
+func (m *mockFactRepo) GetStats(ctx context.Context) (total, approved, rejected, pending int64, err error) {
 	return 0, 0, 0, 0, nil
 }
-func (m *mockFactRepo) ListAllSubjects(_ context.Context) ([]string, error) {
+func (m *mockFactRepo) ListAllSubjects(ctx context.Context) ([]string, error) {
 	return nil, nil
 }
-func (m *mockFactRepo) FindBySubject(_ context.Context, _ string) ([]*entity.ExtractedFact, error) {
+func (m *mockFactRepo) FindBySubject(ctx context.Context, subject string) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (m *mockFactRepo) FindBySession(_ context.Context, _ string) ([]*entity.ExtractedFact, error) {
+func (m *mockFactRepo) FindBySession(ctx context.Context, sessionID string) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (m *mockFactRepo) SearchApproved(_ context.Context, _ string, _ int) ([]*entity.ExtractedFact, error) {
+func (m *mockFactRepo) SearchApproved(ctx context.Context, query string, limit int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (m *mockFactRepo) FindApprovedByPredicates(_ context.Context, _ string, _ []string, _ int) ([]*entity.ExtractedFact, error) {
+func (m *mockFactRepo) FindApprovedByPredicates(ctx context.Context, subject string, predicates []string, limit int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
-func (m *mockFactRepo) FindLatestApprovedByPredicates(_ context.Context, _ string, _ []string) (*entity.ExtractedFact, error) {
+func (m *mockFactRepo) FindLatestApprovedByPredicates(ctx context.Context, subject string, predicates []string) (*entity.ExtractedFact, error) {
 	return nil, entity.ErrFactNotFound
 }
 
-func (m *mockFactRepo) CountApprovedFactsNeedingEmbedding(_ context.Context, _ string) (int64, error) {
+func (m *mockFactRepo) CountApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string) (int64, error) {
 	return 0, nil
 }
 
-func (m *mockFactRepo) ListApprovedFactsNeedingEmbedding(_ context.Context, _ string, _ time.Time, _ string, _ int) ([]*entity.ExtractedFact, error) {
+func (m *mockFactRepo) ListApprovedFactsNeedingEmbedding(ctx context.Context, targetVersion string, lastCreatedAt time.Time, lastFactID string, limit int) ([]*entity.ExtractedFact, error) {
 	return nil, nil
 }
 

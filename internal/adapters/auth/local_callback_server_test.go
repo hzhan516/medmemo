@@ -16,7 +16,7 @@ func TestLocalCallbackServer_Start_DynamicPort(t *testing.T) {
 	server := NewLocalCallbackServer()
 	port, err := server.Start()
 	require.NoError(t, err)
-	defer func() { _ = server.Stop() }()
+	defer server.Stop()
 
 	// 端口应由操作系统分配，大于 0 即可
 	assert.Greater(t, port, 0)
@@ -35,7 +35,7 @@ func TestLocalCallbackServer_Callback_Success(t *testing.T) {
 	server := NewLocalCallbackServer()
 	_, err := server.Start()
 	require.NoError(t, err)
-	defer func() { _ = server.Stop() }()
+	defer server.Stop()
 
 	state := server.GetState()
 	redirectURI := server.GetRedirectURI()
@@ -57,7 +57,7 @@ func TestLocalCallbackServer_Callback_Success(t *testing.T) {
 	callbackURL := fmt.Sprintf("%s?code=auth_code_123&state=%s", redirectURI, state)
 	resp, err := client.Get(callbackURL)
 	require.NoError(t, err)
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -80,7 +80,7 @@ func TestLocalCallbackServer_Callback_InvalidState(t *testing.T) {
 	server := NewLocalCallbackServer()
 	_, err := server.Start()
 	require.NoError(t, err)
-	defer func() { _ = server.Stop() }()
+	defer server.Stop()
 
 	redirectURI := server.GetRedirectURI()
 
@@ -89,7 +89,7 @@ func TestLocalCallbackServer_Callback_InvalidState(t *testing.T) {
 	callbackURL := fmt.Sprintf("%s?code=xxx&state=invalid_state", redirectURI)
 	resp, err := client.Get(callbackURL)
 	require.NoError(t, err)
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
 
@@ -106,7 +106,7 @@ func TestLocalCallbackServer_Callback_ErrorResponse(t *testing.T) {
 	server := NewLocalCallbackServer()
 	_, err := server.Start()
 	require.NoError(t, err)
-	defer func() { _ = server.Stop() }()
+	defer server.Stop()
 
 	state := server.GetState()
 	redirectURI := server.GetRedirectURI()
@@ -124,7 +124,7 @@ func TestLocalCallbackServer_Callback_ErrorResponse(t *testing.T) {
 	callbackURL := fmt.Sprintf("%s?error=access_denied&error_description=user+denied&state=%s", redirectURI, state)
 	resp, err := client.Get(callbackURL)
 	require.NoError(t, err)
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
@@ -144,7 +144,7 @@ func TestLocalCallbackServer_WaitForCallback_Timeout(t *testing.T) {
 	server := NewLocalCallbackServer()
 	_, err := server.Start()
 	require.NoError(t, err)
-	defer func() { _ = server.Stop() }()
+	defer server.Stop()
 
 	// 设置很短超时，且不发回调
 	res, err := server.WaitForCallback(100 * time.Millisecond)
@@ -177,12 +177,12 @@ func TestLocalCallbackServer_MultipleServers_DifferentPorts(t *testing.T) {
 	server1 := NewLocalCallbackServer()
 	port1, err := server1.Start()
 	require.NoError(t, err)
-	defer func() { _ = server1.Stop() }()
+	defer server1.Stop()
 
 	server2 := NewLocalCallbackServer()
 	port2, err := server2.Start()
 	require.NoError(t, err)
-	defer func() { _ = server2.Stop() }()
+	defer server2.Stop()
 
 	assert.NotEqual(t, port1, port2)
 	assert.NotEqual(t, server1.GetState(), server2.GetState())
@@ -192,14 +192,14 @@ func TestLocalCallbackServer_Callback_MethodNotAllowed(t *testing.T) {
 	server := NewLocalCallbackServer()
 	_, err := server.Start()
 	require.NoError(t, err)
-	defer func() { _ = server.Stop() }()
+	defer server.Stop()
 
 	redirectURI := server.GetRedirectURI()
 
 	// POST 请求应返回 405
 	resp, err := http.Post(redirectURI, "application/json", strings.NewReader("{}"))
 	require.NoError(t, err)
-	defer func() { _ = resp.Body.Close() }()
+	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusMethodNotAllowed, resp.StatusCode)
 }

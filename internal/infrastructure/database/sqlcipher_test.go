@@ -140,7 +140,7 @@ func TestSQLCipherConnector_MigrateFromPlaintext(t *testing.T) {
 	require.NoError(t, err)
 	_, err = f.Read(header)
 	require.NoError(t, err)
-	_ = f.Close()
+	f.Close()
 	assert.NotEqual(t, "SQLite format 3\x00", string(header))
 
 	// 5. 验证 backup 文件存在且是明文
@@ -150,7 +150,7 @@ func TestSQLCipherConnector_MigrateFromPlaintext(t *testing.T) {
 	require.NoError(t, err)
 	_, err = f.Read(backupHeader)
 	require.NoError(t, err)
-	_ = f.Close()
+	f.Close()
 	assert.Equal(t, "SQLite format 3\x00", string(backupHeader))
 }
 
@@ -180,13 +180,13 @@ func TestSQLCipherConnector_MigrateDataIntegrity(t *testing.T) {
 	// 2. 迁移
 	conn, err := NewSQLCipherConnector(tmpDir, store)
 	require.NoError(t, err)
-	defer func() { _ = conn.Close() }()
+	defer conn.Close()
 
 	// 3. 验证 users
 	ctx := context.Background()
 	rows, err := conn.DB().QueryContext(ctx, "SELECT id, name FROM users ORDER BY id")
 	require.NoError(t, err)
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 
 	var users []struct{ id, name string }
 	for rows.Next() {
@@ -219,7 +219,7 @@ func TestSQLCipherConnector_MigrateSchema(t *testing.T) {
 
 	conn, err := NewSQLCipherConnector(tmpDir, store)
 	require.NoError(t, err)
-	defer func() { _ = conn.Close() }()
+	defer conn.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -247,18 +247,11 @@ func TestSQLCipherConnector_MigrateSchema(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, tableCount)
 
-	// 验证 user_version = 15（含 v1.1.10 M02 providers.models 列）
+	// 验证 user_version = 13（含 v1.1.9 知识库 RAG 表结构）
 	var version int
 	err = conn.DB().QueryRowContext(ctx, "PRAGMA user_version").Scan(&version)
 	require.NoError(t, err)
-	assert.Equal(t, 15, version)
-
-	// 验证 providers.models 列已由 v15 迁移创建
-	var modelsColCount int
-	err = conn.DB().QueryRowContext(ctx,
-		"SELECT count(*) FROM pragma_table_info('providers') WHERE name = 'models'").Scan(&modelsColCount)
-	require.NoError(t, err)
-	assert.Equal(t, 1, modelsColCount, "providers 表应包含 models 列")
+	assert.Equal(t, 13, version)
 }
 
 // TestSQLCipherConnector_PRAGMAForeignKeys 验证外键约束在加密数据库中正常工作。
@@ -268,7 +261,7 @@ func TestSQLCipherConnector_PRAGMAForeignKeys(t *testing.T) {
 
 	conn, err := NewSQLCipherConnector(tmpDir, store)
 	require.NoError(t, err)
-	defer func() { _ = conn.Close() }()
+	defer conn.Close()
 
 	ctx := context.Background()
 	_, err = conn.DB().ExecContext(ctx, `

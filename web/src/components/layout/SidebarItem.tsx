@@ -131,8 +131,8 @@ export function SidebarItem({
         group flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-pointer
         transition-colors text-sm
         ${isActive
-          ? 'bg-primary text-primary-foreground shadow-sm'
-          : 'hover:bg-white/50 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground'
+          ? 'bg-accent text-accent-foreground'
+          : 'hover:bg-accent/50 text-muted-foreground hover:text-foreground'
         }
       `}
       onClick={onClick}
@@ -187,14 +187,14 @@ export function SidebarItem({
               )}
             </span>
             {timestamp !== undefined && (
-              <span className={`text-[10px] shrink-0 ${isActive ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+              <span className="text-[10px] text-muted-foreground shrink-0">
                 {formatRelativeTime(timestamp)}
               </span>
             )}
           </div>
           {preview && previewParts.length > 0 && (
             <div className="flex items-center justify-between gap-2 mt-0.5">
-              <span className={`truncate text-xs ${isActive ? 'text-primary-foreground/60' : 'text-muted-foreground'}`}>
+              <span className="truncate text-xs text-muted-foreground">
                 {previewParts.map((part, i) =>
                   part.highlight ? (
                     <mark key={i} className="bg-yellow-200 dark:bg-yellow-700 text-inherit rounded px-0.5">
@@ -220,7 +220,7 @@ export function SidebarItem({
           <button
             className={`
               p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity
-              ${isActive ? 'hover:bg-white/20' : 'hover:bg-white/50 dark:hover:bg-white/10'}
+              ${isActive ? 'hover:bg-accent-foreground/10' : 'hover:bg-accent'}
             `}
             onClick={(e) => {
               e.stopPropagation()
@@ -231,7 +231,7 @@ export function SidebarItem({
           </button>
 
           {showMenu && (
-            <div className="absolute right-0 top-7 z-20 w-32 bg-popover/95 backdrop-blur-xl border border-border/70 rounded-md shadow-lg py-1">
+            <div className="absolute right-0 top-7 z-20 w-32 bg-popover border border-border rounded-md shadow-lg py-1">
               {isTrashView ? (
                 <>
                   <button

@@ -620,9 +620,7 @@ func mergeCandidates(paths ...[]RetrievalCandidate) []RetrievalCandidate {
 				}
 			} else {
 				cp := *c
-				p := new(RetrievalCandidate)
-				*p = cp
-				byID[c.FactID] = p
+				byID[c.FactID] = &cp
 			}
 		}
 	}

@@ -156,9 +156,7 @@ func (s *CLITokenService) ValidateToken(ctx context.Context, apiHost, token stri
 	if err != nil {
 		return false, fmt.Errorf("request failed: %w", err)
 	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
+	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusOK {
 		return true, nil

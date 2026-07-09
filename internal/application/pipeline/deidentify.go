@@ -21,18 +21,16 @@ type DeidentifyPipeline struct {
 
 // DeidentifyStage 单个脱敏阶段接口。
 type DeidentifyStage interface {
-	Process(ctx context.Context, input Input) (Output, error)
+	Process(ctx context.Context, input PipelineInput) (PipelineOutput, error)
 }
 
-// Input / Output 管道数据单元。
-type Input struct {
+// PipelineInput / PipelineOutput 管道数据单元。
+type PipelineInput struct {
 	Text     string
 	Metadata map[string]any
-	// Level 为本次脱敏的分级策略，贯穿各阶段，供严格级专属阶段判定是否激活。
-	Level models.DesensitizationLevel
 }
 
-type Output struct {
+type PipelineOutput struct {
 	Text     string
 	Metadata map[string]any
 }
@@ -44,9 +42,8 @@ func NewDeidentifyPipeline(stages ...DeidentifyStage) *DeidentifyPipeline {
 
 // Execute 顺序执行各阶段，任一阶段出错即短路返回。
 // 收集各阶段产生的实体和 P2 级占位符映射，供输出还原使用。
-// level 贯穿各阶段（Output 不携带 Level，循环内以传入的 level 重建 Input）。
-func (p *DeidentifyPipeline) Execute(ctx context.Context, raw string, level models.DesensitizationLevel) (models.DeidentifyResult, error) {
-	input := Input{Text: raw, Level: level, Metadata: make(map[string]any)}
+func (p *DeidentifyPipeline) Execute(ctx context.Context, raw string) (models.DeidentifyResult, error) {
+	input := PipelineInput{Text: raw, Metadata: make(map[string]any)}
 	var allEntities []models.SensitiveEntity
 	allPlaceholders := make(map[string]string)
 
@@ -70,8 +67,7 @@ func (p *DeidentifyPipeline) Execute(ctx context.Context, raw string, level mode
 			allEntities = append(allEntities, l2Entities...)
 		}
 
-		// Output 不携带 Level，用传入的 level 重建 Input 以贯穿后续阶段。
-		input = Input{Text: output.Text, Metadata: output.Metadata, Level: level}
+		input = PipelineInput(output)
 	}
 	return models.DeidentifyResult{
 		OriginalText: raw,
@@ -92,10 +88,10 @@ func NewL1RuleStage() *L1RuleStage {
 	return &L1RuleStage{engine: desensitizer.NewRuleEngine()}
 }
 
-func (s *L1RuleStage) Process(_ context.Context, input Input) (Output, error) {
+func (s *L1RuleStage) Process(ctx context.Context, input PipelineInput) (PipelineOutput, error) {
 	result, err := s.engine.Process(input.Text)
 	if err != nil {
-		return Output{}, fmt.Errorf("l1 rule deidentify failed: %w", err)
+		return PipelineOutput{}, fmt.Errorf("L1 rule deidentify failed: %w", err)
 	}
 	if input.Metadata == nil {
 		input.Metadata = make(map[string]any)
@@ -104,42 +100,24 @@ func (s *L1RuleStage) Process(_ context.Context, input Input) (Output, error) {
 	input.Metadata["original_text"] = input.Text
 	input.Metadata["l1_entities"] = result.Entities
 	input.Metadata["l1_placeholders"] = result.Placeholder
-	return Output{Text: result.SafeText, Metadata: input.Metadata}, nil
-}
-
-// passthroughOutput 将 Input 原样透传为 Output（丢弃仅用于阶段间的 Level 字段）。
-func passthroughOutput(input Input) Output {
-	return Output{Text: input.Text, Metadata: input.Metadata}
+	return PipelineOutput{Text: result.SafeText, Metadata: input.Metadata}, nil
 }
 
 // L2NERStage 二级 NER 模型脱敏阶段。
 // 基于 DistilBERT-ONNX 识别人名、地点、机构名，补充 L1 未覆盖的实体。
-// 持有标准级与严格级两个检测器，按 input.Level 选择：严格级使用更低置信度阈值以提升召回。
 type L2NERStage struct {
-	standard port.NERDetector
-	strict   port.NERDetector
+	detector port.NERDetector
 }
 
 // NewL2NERStage 创建 L2 NER 脱敏阶段。
-// standard 用于标准级（默认阈值），strict 用于严格级（更低阈值、更高召回）。
-func NewL2NERStage(standard port.StandardNERDetector, strict port.StrictNERDetector) *L2NERStage {
-	return &L2NERStage{standard: standard, strict: strict}
+func NewL2NERStage(det port.NERDetector) *L2NERStage {
+	return &L2NERStage{detector: det}
 }
 
-// detectorForLevel 按脱敏级别选择 NER 检测器。
-func (s *L2NERStage) detectorForLevel(level models.DesensitizationLevel) port.NERDetector {
-	if level == models.DesensitizationStrict {
-		return s.strict
-	}
-	return s.standard
-}
-
-func (s *L2NERStage) Process(ctx context.Context, input Input) (Output, error) {
-	detector := s.detectorForLevel(input.Level)
-
+func (s *L2NERStage) Process(ctx context.Context, input PipelineInput) (PipelineOutput, error) {
 	// 1. 可用性检查：NER 不可用时降级透传，不阻断流水线
-	if detector == nil || !detector.IsAvailable() {
-		return passthroughOutput(input), nil
+	if s.detector == nil || !s.detector.IsAvailable() {
+		return PipelineOutput(input), nil
 	}
 
 	// 2. 获取原始文本（L1 存入 Metadata）
@@ -149,20 +127,20 @@ func (s *L2NERStage) Process(ctx context.Context, input Input) (Output, error) {
 	}
 
 	// 3. 在原始文本上执行 NER 推理，避免 L1 占位符干扰模型上下文
-	entities, err := detector.Predict(ctx, originalText)
+	entities, err := s.detector.Predict(ctx, originalText)
 	if err != nil {
 		// 降级：推理失败时不阻断流水线，直接透传 L1 结果
-		return passthroughOutput(input), nil
+		return PipelineOutput(input), nil
 	}
 	if len(entities) == 0 {
-		return passthroughOutput(input), nil
+		return PipelineOutput(input), nil
 	}
 
 	// 4. 获取 L1 实体，过滤与 L1 区域重叠的 NER 结果（L1 优先）
 	l1Entities, _ := input.Metadata["l1_entities"].([]models.SensitiveEntity)
 	entities = filterOverlappingEntities(entities, l1Entities)
 	if len(entities) == 0 {
-		return passthroughOutput(input), nil
+		return PipelineOutput(input), nil
 	}
 
 	// 5. 偏移量映射：将原始文本中的 NER 位置映射到 L1 脱敏文本中的对应位置
@@ -191,7 +169,7 @@ func (s *L2NERStage) Process(ctx context.Context, input Input) (Output, error) {
 
 	// 7. 将 L2 实体记录存入 Metadata，供后续阶段或日志使用
 	input.Metadata["l2_entities"] = entities
-	return Output{Text: text, Metadata: input.Metadata}, nil
+	return PipelineOutput{Text: text, Metadata: input.Metadata}, nil
 }
 
 // --- 辅助函数 ---
@@ -259,19 +237,15 @@ func mapTypeToPlaceholderPrefix(entityType string) string {
 	}
 }
 
-// NewDefaultDeidentifyPipeline 创建默认的脱敏流水线，
-// 顺序为 L1 规则 → L2 NER → L1.5 严格兜底（仅严格级激活），
+// NewDefaultDeidentifyPipeline 创建默认的二级脱敏流水线（L1→L2），
 // 供 Wire 注入使用，避免变参接口带来的多绑定问题。
-// L1.5 置于最后：运行在 L1+L2 已处理的文本上，对残留可标识信息做兜底遮蔽，
-// 从而不干扰 L2 基于原始文本的偏移映射逻辑。
-func NewDefaultDeidentifyPipeline(l1 *L1RuleStage, l2 *L2NERStage, l1ext *L1ExtendedRuleStage) *DeidentifyPipeline {
-	return NewDeidentifyPipeline(l1, l2, l1ext)
+func NewDefaultDeidentifyPipeline(l1 *L1RuleStage, l2 *L2NERStage) *DeidentifyPipeline {
+	return NewDeidentifyPipeline(l1, l2)
 }
 
-// Set 供 Wire 使用的 ProviderSet。
-var Set = wire.NewSet(
+// PipelineSet 供 Wire 使用的 ProviderSet。
+var PipelineSet = wire.NewSet(
 	NewDefaultDeidentifyPipeline,
 	NewL1RuleStage,
 	NewL2NERStage,
-	NewL1ExtendedRuleStage,
 )
