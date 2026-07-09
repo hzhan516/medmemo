@@ -1,5 +1,33 @@
 # 滚动更新追踪器
 
+### [2026-07-09 / v1.1.10] — Skill 文档修订计划（skill_plan）落地
+
+**[Modified Areas]**
+- `.skill/medmemo/tracker.md` — 纠偏 v1.1.9 条目，使其与当前磁盘状态一致
+- `.skill/medmemo/SKILL.md` — 新增 docs 滞后提示、入口速查表、权威顺序、实测构建命令；统一 DuckDB/Kùzǔ 为 v2+ 规划组件口径；补充 DistilBERT-ONNX token-classification 与 daulet/tokenizers v1.27.0
+- `.skill/medmemo/reference-architecture.md` — 删除 v1.1.9 硬编码，新增 daulet/tokenizers 1.27.0，改述「已冻结组件」为「v2+ 规划组件」，添加版本仅供参考声明
+- `.skill/medmemo/reference-release.md` — changelog 模板版本改为占位符 `vX.Y.Z`；补充 `web/package-lock.json` 刷新项
+- `.skill/medmemo/reference-modules.md` — 按 `wails_app_*.go` 实际公开方法重建 Wails 绑定表；删除已不存在的记忆方法；补充 `EmbeddingService` / `ComplianceChecker` / `CompressionService` 关键接口签名
+
+**[Logic Evolution]**
+- Skill 文档与源码事实来源（`wails.json` → `info.productVersion`）保持一致，消除硬编码版本号
+- 明确文档冲突时的权威顺序：源码 > Skill > AGENTS.md > docs/
+- 将 DuckDB / Kùzǔ 统一描述为 v2+ 规划组件，避免 AI 被误导为当前活跃后端
+- 绑定表与源码逐一核对，覆盖 13 个域共 86 个公开方法
+
+**[Checklist Status]**
+- 分支基于当前工作分支
+- ✅ 批次 A：tracker 纠偏完成，无与磁盘不符的「已完成」声明
+- ✅ 批次 B：硬编码版本号清理、tokenizers 补充、占位符修正、绑定表重建完成
+- ✅ 批次 C：入口速查表、权威顺序、实测构建命令、版本集中化标注、v2+ 规划清单完成
+- ✅ 所有改动仅落在 `.skill/medmemo/`
+- ✅ `git diff --check` 通过
+
+**[Pending/Next Steps]**
+- 本次仅更新 Skill 文档，未修改源码；后续继续通过 `docs/kb/` 滚动更新知识库
+
+---
+
 ### [2026-07-06 / v1.1.10] — M01 会话压缩服务接入与 CompressSession 绑定实现
 
 **[Modified Areas]**
@@ -26,23 +54,25 @@
 
 ---
 
+### [2026-07-06 / v1.1.9] — Skill 与知识库对齐、顶层文档与当前版本统一
+
 **[Modified Areas]**
 - `.skill/medmemo/SKILL.md` — 增加 `codebase-documenter` / `submission-checker` / `code-comment` Skill 触发要求；补充双语文档规则；更新脱敏管线为 L1→L2
-- `.skill/medmemo/reference-*.md` / `tracker.md` — 依赖版本、架构白名单、发布检查清单同步到 v1.1.9
-- `docs/kb/` — 新建项目 LLM Wiki 知识库（Home、Status Board、Feature Map、Architecture Wiki、Roadmap、Modules、Templates 等）
-- `README.md` / `docs/API.md` / `docs/ARCHITECTURE.md` / `docs/DEVELOPMENT.md` 及其中文翻译 — 修正版本、入口路径、存储栈、冻结 stub、API 实现列表
+- `.skill/medmemo/reference-*.md` / `tracker.md` — 依赖版本、架构白名单、发布检查清单同步到 `wails.json` 的 `info.productVersion`（当前 1.1.10）；统一 DuckDB/Kùzǔ 为 v2+ 规划组件口径；补充 daulet/tokenizers v1.27.0
+- `docs/kb/` — 新建项目 LLM Wiki 知识库（Home、Status Board、Feature Map、Architecture Wiki、Roadmap、Modules、Templates 等）及其中文翻译
+- `README.md` / `docs/API.md` / `docs/ARCHITECTURE.md` / `docs/DEVELOPMENT.md` 及其中文翻译 — 修正版本号来源、入口路径、存储栈、DuckDB/Kùzǔ 为 v2+ 规划组件/存根、API 实现列表
 
 **[Logic Evolution]**
 - 项目 Skill 与 AGENTS.md 最新约束对齐：文档/注释变更必须触发对应 Skill
 - 在仓库内建立可持续更新的 Markdown 知识库体系，避免个人笔记与项目源码分离
-- 顶层文档统一以 `wails.json` 的 v1.1.9 为基准，消除 DuckDB/Kùzǔ 作为活跃后端的描述
+- 顶层文档统一以 `wails.json` 的 `info.productVersion`（当前 1.1.10）为基准；DuckDB/Kùzǔ 仅作为 v2+ 规划组件/存根描述，不作为当前活跃后端
 
 **[Checklist Status]**
 - 分支 `feature/M01-M07-update-skill-and-knowledge-base`
-- ✅ `wails.json` → v1.1.9
-- ✅ `web/package.json` → v1.1.9
+- ✅ 版本号统一以 `wails.json` → `info.productVersion`（当前 1.1.10）为准
+- ✅ `web/package.json` / `web/package-lock.json` 同步刷新
 - ✅ `docs/kb/` 知识库初始化
-- ✅ `README.md` + `docs/i18n/zh-Hans-CN/README.md` 同步
+- ✅ `README.md` / `docs/API.md` / `docs/ARCHITECTURE.md` / `docs/DEVELOPMENT.md` 及其中文翻译同步修正
 - ✅ `medmemo/开发日志/v1.1/v1.1.9.md` → 创建
 - ✅ `go test ./...`、`go vet ./...`、`git diff --check` 通过
 

@@ -12,6 +12,19 @@ description: >-
 
 **当前版本**：以 `wails.json` → `info.productVersion` 为准（勿硬编码版本号）。
 
+> **docs 滞后提示**：顶层 `docs/` 中的部分说明存在已知滞后，阅读时请以本 Skill 及源码为准。
+
+## 入口速查表
+
+| 任务 | 首读文件 |
+|------|---------|
+| 对话流 / ChatOrchestrator | `internal/application/usecase/chat.go` → `wails_app.go` |
+| 记忆检索 / MemoryRetriever | `internal/application/usecase/memory.go` |
+| 脱敏 / Deidentify | `internal/application/pipeline/deidentify.go` + `pkg/desensitizer/` |
+| 合规拦截 / Compliance | `internal/application/compliance_interceptor.go` + `resources/rules/compliance_rules_v1.json` |
+| Provider / 多模型 | `internal/adapters/ai/provider.go` + `web/src/data/provider-templates.json` |
+| 会话压缩 / Title | `internal/application/usecase/compression_service.go` + `title_generator.go` |
+
 ## 开始工作前
 
 1. 读 [reference-architecture.md](reference-architecture.md) 确认分层与数据流
@@ -29,21 +42,24 @@ description: >-
 | DI | `wire.go` 手改 → `wire .` 生成 `wire_gen.go`（**禁止手改**） |
 | 前端 | `web/` — React 18 + TS strict + Zustand + HashRouter |
 | 主库 | SQLCipher + sqlite-vec 向量检索 |
-| 本地 AI | Hugot/ONNX — NER 脱敏 + Embedding（Session 非线程安全，mutex 串行） |
+| 本地 AI | Hugot/ONNX — NER（DistilBERT-ONNX token-classification，路径 `resources/models/distilbert-ner`）+ Embedding（Session 非线程安全，mutex 串行） |
+| Tokenizer | `github.com/daulet/tokenizers v1.27.0` |
 | Wails 绑定 | `wails_app.go` → 前端 `useWails()` |
 
-> **未落地存根（严禁自行实现）**
+> **注意**：`frontend/` 为 Wails 构建产物目录（`dist/`、`wailsjs/` 已在 `.gitignore` 中忽略），请勿手动修改；前端源码位于 `web/`。
+
+> **v2+ 规划组件（DuckDB / Kùzǔ）**
 >
-> 以下模块仅保留接口或占位实现，**不要假设可用，也不要主动补全实现**：
-> - DuckDB（`internal/infrastructure/database/duckdb.go`）— 已冻结，项目已降级至 SQLite
-> - Kùzǔ 家族图谱（`FamilyRepoKuzu`）— 未接入 Wire，无实际调用路径
+> 以下组件为 v2+ 远期规划占位，**不是当前活跃后端**，也**不属于本次迭代范围**：
+> - DuckDB（`internal/infrastructure/database/duckdb.go`）— v2+ 分析型存储规划
+> - Kùzǔ 家族图谱（`FamilyRepoKuzu`）— v2+ 图数据库规划，未接入 Wire，无实际调用路径
 >
-> 若需求涉及上述模块，必须先与维护者确认技术路线。
+> 当前活跃后端为 SQLCipher + sqlite-vec。若需求涉及上述规划组件，必须先与维护者确认技术路线。
 
 ## 对话主路径（简图）
 
 ```
-用户输入 → CheckEmergency → [云端] DeidentifyPipeline（L1 规则 → L2 NER）→ MemoryRetriever
+用户输入 → CheckEmergency → [云端] DeidentifyPipeline（L1 规则 → L2 DistilBERT-ONNX token-classification NER）→ MemoryRetriever
          → IntentResolver / LocalAnswerService（高置信本地短路）
          → LLM StreamChat → ComplianceInterceptor 分句检测 → Events 推送前端
          → saveMessages + extractFactsAsync
@@ -98,6 +114,8 @@ description: >-
 
 完整约定见 [reference-conventions.md](reference-conventions.md)。
 
+> **权威顺序**：当源码、本 Skill、`AGENTS.md`、`docs/` 之间出现描述冲突时，优先级为 **源码 > Skill > AGENTS.md > docs/**。
+
 ## 版本发布
 
 推进版本号时**必须**同步（常规 Minor/Patch）：
@@ -121,6 +139,11 @@ wails build        # 构建（前端 embed 到 main.go）
 wire .             # 依赖注入生成
 go test ./...      # 后端测试
 cd web && npm test # 前端测试
+
+# Linux 实测构建命令示例（根据实际 ONNX / tokenizer 库路径替换 CGO_LDFLAGS）
+GOTOOLCHAIN=auto CGO_LDFLAGS="-L$(pwd)/resources/lib/linux \
+  -lonnxruntime -ltokenizers" \
+  go build -tags "webkit2_41,ORT" -o /tmp/medmemo .
 ```
 
 ## 滚动更新
