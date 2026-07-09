@@ -159,7 +159,7 @@ If you prefer to build from source:
 
 ```bash
 # 1. Prerequisites
-go version  # Requires Go 1.22+
+go version  # Requires Go 1.26.4+
 node --version  # Requires Node.js 18+
 
 # 2. Install Wails CLI
@@ -248,4 +248,4 @@ When an update is available, a notification appears.
 
 ---
 
-*Last updated: 2026-07-02*
+*Last updated: 2026-07-09*

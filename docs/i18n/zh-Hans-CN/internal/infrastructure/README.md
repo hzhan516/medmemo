@@ -1,6 +1,6 @@
 # Infrastructure Layer（基础设施层）
 
-> 🌐 [English Version](../../../../../internal/infrastructure/README.md)
+> 🌐 [English Version](../../../../internal/infrastructure/README.md)
 
 ## 定位
 
@@ -12,11 +12,11 @@ Infrastructure Layer 是 Clean Architecture 的最外层，封装所有技术框
 
 ```
 internal/infrastructure/
+├── config/     # 本地配置加载与校验
+├── database/   # SQLCipher/SQLite 连接器与 sqlite-vec 初始化
 ├── onnx/       # Hugot ONNX Runtime 推理运行时封装
-├── database/   # DuckDB / SQLite 连接池、迁移、事务管理
-├── config/     # Viper 配置加载与校验
 ├── secret/     # 系统密钥环封装（macOS Keychain / Windows Credential / Linux Secret Service）
-└── network/    # HTTP 客户端：重试、超时、断路器
+└── updater/    # 平台更新安装辅助
 ```
 
 ## 导入约束（铁律）
@@ -24,7 +24,7 @@ internal/infrastructure/
 | 允许导入                                   | 禁止导入                                                |
 |----------------------------------------|-----------------------------------------------------|
 | Go 标准库                                 | `github.com/hzhan516/medmemo/internal/domain/*`      |
-| 第三方框架库（Wails, DuckDB, Viper, Hugot...） | `github.com/hzhan516/medmemo/internal/application/*` |
+| 第三方框架库（Wails、SQLCipher/SQLite、sqlite-vec、Hugot...） | `github.com/hzhan516/medmemo/internal/application/*` |
 | —                                      | `github.com/hzhan516/medmemo/internal/adapters/*`    |
 
 > ⚠️ 基础设施层如果导入了任何业务包，将破坏 Clean Architecture 的依赖方向。
@@ -43,36 +43,8 @@ internal/infrastructure/
 
 ## 示例
 
-```go
-// database/duckdb.go
-package database
-
-import (
-	"database/sql"
-
-	_ "github.com/marcboeker/go-duckdb"
-)
-
-type DuckDBConnector struct {
-	db *sql.DB
-}
-
-func NewDuckDBConnector(dataSourceName string) (*DuckDBConnector, error) {
-	db, err := sql.Open("duckdb", dataSourceName)
-	if err != nil {
-		return nil, err
-	}
-	if err := db.Ping(); err != nil {
-		return nil, err
-	}
-	return &DuckDBConnector{db: db}, nil
-}
-
-func (c *DuckDBConnector) Close() error {
-	return c.db.Close()
-}
-```
+示例实现见 `internal/infrastructure/database/` 中的 SQLCipher/SQLite connector。
 
 ---
 
-*最后更新：2026-05-19*
+*最后更新：2026-07-09*

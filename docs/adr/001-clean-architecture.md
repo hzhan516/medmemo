@@ -11,7 +11,7 @@
 MedMemo is a desktop health information tool with the following core requirements:
 1. **Long-term maintainability**: Health data models (memories, family relations, conversations) evolve rapidly across versions and require clear business boundaries.
 2. **Testability**: Medical compliance logic (de-identification, interception, terminology validation) must be unit-testable in isolation without external frameworks.
-3. **Replaceability**: Local AI inference engines (ONNX Runtime), databases (DuckDB/SQLite), and LLM providers all carry replacement or downgrade risks.
+3. **Replaceability**: Local AI inference engines (ONNX Runtime), databases (SQLCipher/SQLite + sqlite-vec, with DuckDB/Kùzǔ only as v2+ planning candidates), and LLM providers all carry replacement or downgrade risks.
 
 Before project kickoff, the team evaluated three backend architecture styles:
 
@@ -37,7 +37,7 @@ internal/
 
 1. **Zero external dependencies in the domain layer**: Only Go standard library and `pkg/models/` are allowed. Violations will be blocked by CI depguard checks.
 2. **Application layer does not directly call adapter implementations**: Decoupled via interfaces (Ports); the adapter layer implements interfaces defined by the application layer.
-3. **Infrastructure layer knows nothing about business logic**: Only encapsulates third-party frameworks (Wails, DuckDB, ONNX Runtime); does not import any business packages.
+3. **Infrastructure layer knows nothing about business logic**: Only encapsulates third-party frameworks (Wails, SQLCipher/SQLite, sqlite-vec, ONNX Runtime); does not import any business packages.
 4. **Dependency injection completed at compile time via Wire**: Runtime reflection injection is prohibited to ensure cold-start speed and compile-time safety.
 
 ## Consequences
@@ -63,7 +63,11 @@ internal/
 ## Related Documents
 
 - [docs/DEVELOPMENT.md](../DEVELOPMENT.md) — Detailed development standards and dependency rules
-- [internal/domain/README.md](../../internal/domain/README.md)
-- [internal/application/README.md](../../internal/application/README.md)
-- [internal/adapters/README.md](../../internal/adapters/README.md)
-- [internal/infrastructure/README.md](../../internal/infrastructure/README.md)
+- [docs/internal/domain/README.md](../internal/domain/README.md)
+- [docs/internal/application/README.md](../internal/application/README.md)
+- [docs/internal/adapters/README.md](../internal/adapters/README.md)
+- [docs/internal/infrastructure/README.md](../internal/infrastructure/README.md)
+
+---
+
+*Last updated: 2026-07-09*

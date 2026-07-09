@@ -112,7 +112,7 @@ type LLMClient interface {
 - **测试矩阵扩大**: 每个提供商适配器需要单独的集成测试（模拟服务器 + 真实 API 冒烟测试），增加了 CI 维护成本。
 - **上下文切换 UX 摩擦**: 对话中途切换模型可能导致细微的行为变化（不同的分词、拒绝模式、格式）。压缩/摘要步骤增加了延迟。
 - **配置复杂度**: 用户必须理解 API Key、端点和模型 ID —— 比「开箱即用」的单模型应用 onboarding 曲线更陡峭。
-- **本地模型资源压力**: 在同一台机器上同时运行 Ollama、DuckDB 和 ONNX Runtime 会推高内存使用；最低推荐内存为 8GB。
+- **本地模型资源压力**: 在同一台机器上同时运行 Ollama、ONNX Runtime 和 v1.x SQLCipher/SQLite + sqlite-vec 存储栈会推高内存使用；最低推荐内存为 8GB。DuckDB 仍是 v2+ 规划候选，不是 v1.x 运行时依赖。
 
 ## 替代方案
 
@@ -128,3 +128,7 @@ type LLMClient interface {
 - `internal/application/port/llm_client.go` — `LLMClient` 接口定义
 - `internal/adapters/ai/provider.go` — `llmClientFactory` 实现
 - `pkg/models/provider.go` — `ProviderConfig` 校验逻辑
+
+---
+
+*最后更新：2026-07-09*
