@@ -68,7 +68,8 @@ main() {
 
   echo "==> 获取所有 GitHub releases..."
   local releases_json
-  releases_json=$(gh api "repos/${REPO}/releases" --jq '[.[] | {id, tag_name, draft, prerelease, created_at}]')
+  # 使用 --paginate 获取所有 pages，避免默认 30 条限制
+  releases_json=$(gh api --paginate "repos/${REPO}/releases" --jq '[.[] | {id, tag_name, draft, prerelease, created_at}]')
 
   # 按 tag_name 分组，每组保留最新一个 release（按 id 降序，id 越大创建越晚）
   for tag in $(echo "$releases_json" | jq -r '.[].tag_name' | sort -u); do

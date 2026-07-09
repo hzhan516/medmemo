@@ -1,16 +1,17 @@
 #!/bin/bash
 set -euo pipefail
 
-# 清理 MedMemo 历史 tags。
+# 清理 MedMemo 历史 tags（批量删除版，减少网络往返）。
 # 默认 dry-run，加 --execute 才真正执行删除/推送。
 # 设计原则：
-#   1. 保留每个 X.Y.Z 版本的最新一个预发布 tag（含 -rc 或 -Pre-release-build）
+#   1. 保留每个 X.Y.Z 版本的最新一个预发布 tag（含 -Pre-release-build）
 #   2. 保留所有正式版 tag（vX.Y.Z）
 #   3. 将不规范正式版 tag（如 1.1.7.77）重命名为 vX.Y.Z
 #   4. 删除旧 -build.N tag（不含 Pre-release）
 #   5. 保留资源标签（embedding-model-v1 等）
 
 REMOTE="origin"
+REPO="hzhan516/medmemo"
 DRY_RUN=true
 
 if [[ "${1:-}" == "--execute" ]]; then
@@ -26,27 +27,68 @@ run() {
   fi
 }
 
+# 批量删除本地 + 远程 tags
+batch_delete_tags() {
+  local tags=("$@")
+  if [[ ${#tags[@]} -eq 0 ]]; then
+    return 0
+  fi
+
+  # 本地删除
+  if ! $DRY_RUN; then
+    git tag -d "${tags[@]}" 2>/dev/null || true
+  else
+    for t in "${tags[@]}"; do
+      echo "[DRY-RUN] git tag -d $t"
+    done
+  fi
+
+  # 远程删除：使用 GitHub API 逐个删除（gh api 在部分规则下会返回 422）
+  local token
+  token=$(gh auth token)
+  for t in "${tags[@]}"; do
+    run curl -s -X DELETE \
+      -H "Authorization: token ${token}" \
+      -H "Accept: application/vnd.github+json" \
+      "https://api.github.com/repos/${REPO}/git/refs/tags/${t}" \
+      -w "\nHTTP %{http_code}\n"
+  done
+}
+
+# 批量创建并推送 tags
+batch_create_tags() {
+  local tags=("$@")
+  if [[ ${#tags[@]} -eq 0 ]]; then
+    return 0
+  fi
+
+  if ! $DRY_RUN; then
+    git tag "${tags[@]}"
+    git push "$REMOTE" "${tags[@]}"
+  else
+    for t in "${tags[@]}"; do
+      echo "[DRY-RUN] git tag $t"
+      echo "[DRY-RUN] git push $REMOTE $t"
+    done
+  fi
+}
+
 # 1. 删除同一版本的旧预发布 build tag，只保留最新的一个。
-# 同时兼容带 v 前缀和不带 v 前缀的历史 tag。
 delete_older_prereleases() {
   echo "==> 清理旧预发布 build tag..."
-  # 匹配历史两种格式：v1.1.9-Pre-release-build.83 或 1.1.7-Pre-release-build.76
   local tags
   tags=$(git tag -l '*-Pre-release-build.*' | sort -V)
 
-  # 按版本前缀分组，保留每组最新一个
+  local to_delete=()
   local current_prefix="" keep=""
   for tag in $tags; do
-    # 提取版本前缀：v1.1.9 或 1.1.7
     local prefix
     prefix=$(echo "$tag" | sed -E 's/(-Pre-release-build\..*)//')
     if [[ "$prefix" != "$current_prefix" ]]; then
-      # 新组开始，先处理上一组
       if [[ -n "$current_prefix" && -n "$keep" ]]; then
         for old in $(echo "$tags" | grep "^${current_prefix}-Pre-release-build\." | sort -V); do
           if [[ "$old" != "$keep" ]]; then
-            run git tag -d "$old" 2>/dev/null || true
-            run git push "$REMOTE" :refs/tags/"$old" 2>/dev/null || true
+            to_delete+=("$old")
           fi
         done
       fi
@@ -60,17 +102,19 @@ delete_older_prereleases() {
   if [[ -n "$current_prefix" && -n "$keep" ]]; then
     for old in $(echo "$tags" | grep "^${current_prefix}-Pre-release-build\." | sort -V); do
       if [[ "$old" != "$keep" ]]; then
-        run git tag -d "$old" 2>/dev/null || true
-        run git push "$REMOTE" :refs/tags/"$old" 2>/dev/null || true
+        to_delete+=("$old")
       fi
     done
+  fi
+
+  if [[ ${#to_delete[@]} -gt 0 ]]; then
+    batch_delete_tags "${to_delete[@]}"
   fi
 }
 
 # 2. 将不规范正式版 tag 重命名为 vX.Y.Z。
 rename_to_semver() {
   echo "==> 重命名不规范正式版 tag 为 vX.Y.Z..."
-  # 旧 tag 到 commit 的映射
   declare -A rename_map=(
     ["1.1.7.77"]="v1.1.7"
     ["1.1.6.73"]="v1.1.6"
@@ -80,34 +124,69 @@ rename_to_semver() {
     ["1.1.2.54"]="v1.1.2"
   )
 
+  local to_create=()
+  local to_delete=()
   for old in "${!rename_map[@]}"; do
     local new="${rename_map[$old]}"
     if git tag -l "$old" | grep -q "$old"; then
-      local commit
-      commit=$(git rev-list -n1 "$old")
       if ! git tag -l "$new" | grep -q "$new"; then
-        run git tag "$new" "$commit"
-        run git push "$REMOTE" "$new"
+        local commit
+        commit=$(git rev-list -n1 "$old")
+        to_create+=("$new" "$commit")
       else
         echo "Tag $new already exists, skipping creation."
       fi
-      run git tag -d "$old" 2>/dev/null || true
-      run git push "$REMOTE" :refs/tags/"$old" 2>/dev/null || true
+      to_delete+=("$old")
     fi
   done
+
+  # 批量创建新 tag（tag 名和 commit 成对出现）
+  if [[ ${#to_create[@]} -gt 0 ]]; then
+    if ! $DRY_RUN; then
+      local i=0
+      while [[ $i -lt ${#to_create[@]} ]]; do
+        git tag "${to_create[$i]}" "${to_create[$((i+1))]}"
+        ((i+=2))
+      done
+      # 批量推送所有新建 tag
+      local create_names=()
+      i=0
+      while [[ $i -lt ${#to_create[@]} ]]; do
+        create_names+=("${to_create[$i]}")
+        ((i+=2))
+      done
+      git push "$REMOTE" "${create_names[@]}"
+    else
+      local i=0
+      while [[ $i -lt ${#to_create[@]} ]]; do
+        echo "[DRY-RUN] git tag ${to_create[$i]} ${to_create[$((i+1))]}"
+        echo "[DRY-RUN] git push $REMOTE ${to_create[$i]}"
+        ((i+=2))
+      done
+    fi
+  fi
+
+  # 批量删除旧 tag
+  if [[ ${#to_delete[@]} -gt 0 ]]; then
+    batch_delete_tags "${to_delete[@]}"
+  fi
 }
 
 # 3. 删除旧的 -build.N tag（不含 Pre-release）。
 delete_old_builds() {
   echo "==> 清理旧 -build.N tag..."
+  local to_delete=()
   for tag in $(git tag -l '*-build.*' | grep -v 'Pre-release-build'); do
-    run git tag -d "$tag" 2>/dev/null || true
-    run git push "$REMOTE" :refs/tags/"$tag" 2>/dev/null || true
+    to_delete+=("$tag")
   done
+
+  if [[ ${#to_delete[@]} -gt 0 ]]; then
+    batch_delete_tags "${to_delete[@]}"
+  fi
 }
 
-# 4. 打印保留的 tag 列表用于核对。
 print_kept_tags() {
+  echo ""
   echo "==> 保留的 tags："
   git tag --sort=-v:refname
 }
@@ -121,7 +200,6 @@ main() {
   rename_to_semver
   delete_old_builds
 
-  echo ""
   print_kept_tags
 
   if $DRY_RUN; then
