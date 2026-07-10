@@ -23,5 +23,8 @@
   },
   "nsisType": "multiple",
   "obfuscated": false,
-  "garbleargs": ""
+  "garbleargs": "",
+  "postBuildHooks": {
+    "windows/*": "bash scripts/build/collect-windows-runtime-dlls.sh"
+  }
 }

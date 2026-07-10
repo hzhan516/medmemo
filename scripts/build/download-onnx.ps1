@@ -17,7 +17,7 @@ $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoot = Resolve-Path (Join-Path $ScriptDir "..\..")
 
-$OnnxVersion = if ($env:ONNX_VERSION) { $env:ONNX_VERSION } else { "1.21.0" }
+$OnnxVersion = if ($env:ONNX_VERSION) { $env:ONNX_VERSION } else { "1.26.0" }
 $BaseUrl = "https://github.com/microsoft/onnxruntime/releases/download/v${OnnxVersion}"
 
 function Download-Linux {
