@@ -129,6 +129,7 @@ jobs:
         shell: cmd
         run: |
           C:\msys64\usr\bin\pacman.exe -S --noconfirm mingw-w64-x86_64-dlfcn mingw-w64-x86_64-gcc-libs
+          choco install nsis -y
 
       - name: Build and Package
         run: ./scripts/build/wails-build.sh ${{ matrix.platform }} ${{ needs.version.outputs.version }}
