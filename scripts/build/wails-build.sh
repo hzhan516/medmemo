@@ -52,15 +52,6 @@ case "$OS" in
       echo "[TASK-027] Warning: PowerShell not found. Skipping library download."
       echo "[TASK-027] Please manually download libraries to resources/lib/windows/"
     fi
-    # 收集 MinGW 运行时 DLL，确保 NSIS 打包进安装程序
-    if command -v pwsh &>/dev/null; then
-      pwsh -ExecutionPolicy Bypass -File scripts/build/collect-windows-runtime-dlls.ps1
-    elif command -v powershell &>/dev/null; then
-      powershell -ExecutionPolicy Bypass -File scripts/build/collect-windows-runtime-dlls.ps1
-    else
-      echo "[TASK-027] Warning: PowerShell not found. Skipping runtime DLL collection."
-      echo "[TASK-027] Please manually copy MinGW DLLs to build/bin/"
-    fi
     # MinGW-w64 官方 libntdll.a 不包含 Native API 符号，必须从 ntdll.dll 现场生成
     echo "[TASK-027] Generating libntdll.a from system ntdll.dll..."
     objdump -p /c/Windows/System32/ntdll.dll | \
@@ -73,6 +64,27 @@ case "$OS" in
 
     dlltool -D ntdll.dll -d /tmp/ntdll.def -l resources/lib/windows/libntdll.a
     echo "[TASK-027] Generated libntdll.a with $(wc -l < /tmp/ntdll_exports.txt) exports"
+    
+    # 预先创建 build/bin 并收集 MinGW 运行时 DLL，供后续 NSIS 打包。
+    # NSIS 模板（project.nsi 第 54 行）需要 build/bin/*.dll 存在，而 wails build -nsis
+    # 在构建二进制后立即调用 makensis，因此必须在 wails build 前准备好 DLL。
+    mkdir -p build/bin
+    if command -v pwsh &>/dev/null; then
+      pwsh -ExecutionPolicy Bypass -File scripts/build/collect-windows-runtime-dlls.ps1
+    elif command -v powershell &>/dev/null; then
+      powershell -ExecutionPolicy Bypass -File scripts/build/collect-windows-runtime-dlls.ps1
+    else
+      echo "[TASK-027] Warning: PowerShell not found. Skipping runtime DLL collection."
+      echo "[TASK-027] Manually copying known MinGW runtime DLLs..."
+      for dll in libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll; do
+        if [ -f "/c/msys64/mingw64/bin/$dll" ]; then
+          cp "/c/msys64/mingw64/bin/$dll" build/bin/
+        else
+          echo "[TASK-027] Warning: $dll not found at /c/msys64/mingw64/bin/"
+        fi
+      done
+    fi
+    
     # choco 安装的 NSIS 不会自动写入后续 CI 步骤的 PATH（同一 job 内步骤间 PATH 不刷新），
     # 这里显式补全 makensis 所在目录，确保 `wails build -nsis` 能生成安装程序而非静默跳过。
     if ! command -v makensis &>/dev/null; then
