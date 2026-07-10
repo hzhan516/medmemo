@@ -3,7 +3,11 @@ name: Release
 on:
   push:
     tags:
+      # 仅处理正式版本 tag；预发布 rc tag（vX.Y.Z-rc.N）完全由 build-and-release.yml
+      # 负责创建，避免同一 tag 被两个工作流重复创建 Release、且 draft 状态不一致。
       - 'v*'
+      - '!v*-rc*'
+      - '!v*-Pre-release*'
 
 env:
   GOPROXY: https://proxy.golang.org,https://goproxy.cn,direct

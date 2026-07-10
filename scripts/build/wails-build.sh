@@ -73,6 +73,21 @@ case "$OS" in
 
     dlltool -D ntdll.dll -d /tmp/ntdll.def -l resources/lib/windows/libntdll.a
     echo "[TASK-027] Generated libntdll.a with $(wc -l < /tmp/ntdll_exports.txt) exports"
+    # choco 安装的 NSIS 不会自动写入后续 CI 步骤的 PATH（同一 job 内步骤间 PATH 不刷新），
+    # 这里显式补全 makensis 所在目录，确保 `wails build -nsis` 能生成安装程序而非静默跳过。
+    if ! command -v makensis &>/dev/null; then
+      for nsis_dir in "/c/Program Files (x86)/NSIS" "/c/Program Files/NSIS"; do
+        if [ -x "${nsis_dir}/makensis.exe" ]; then
+          export PATH="${nsis_dir}:${PATH}"
+          echo "[TASK-027] Added NSIS to PATH: ${nsis_dir}"
+          break
+        fi
+      done
+    fi
+    if ! command -v makensis &>/dev/null; then
+      echo "[TASK-027] Error: makensis not found; cannot build the NSIS installer." >&2
+      exit 1
+    fi
     wails build -s -clean -ldflags "-s -w -X main.version=${VERSION}" -tags "ORT" -nsis
     ./scripts/build/copy-runtime-resources.sh "build/bin" "windows"
     ;;
