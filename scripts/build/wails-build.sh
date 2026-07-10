@@ -76,7 +76,7 @@ case "$OS" in
     wails build -s -clean -ldflags "-s -w -X main.version=${VERSION}" -tags "ORT" -nsis
     ./scripts/build/copy-runtime-resources.sh "build/bin" "windows"
     ;;
-  darwin)
+  darwin|darwin-amd64|darwin-arm64)
     echo "[TASK-027] Building for macOS..."
     export MEDMEMO_ONNX_BASE_URL="https://github.com/hzhan516/medmemo/releases/download/onnx-runtime-v1.26.0"
     export MEDMEMO_TOKENIZERS_BASE_URL="https://github.com/hzhan516/medmemo/releases/download/tokenizers-v1.27.0"
