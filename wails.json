@@ -25,6 +25,6 @@
   "obfuscated": false,
   "garbleargs": "",
   "postBuildHooks": {
-    "windows/*": "bash scripts/build/collect-windows-runtime-dlls.sh"
+    "windows/*": "bash ../../scripts/build/collect-windows-runtime-dlls.sh"
   }
 }
