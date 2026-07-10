@@ -12,7 +12,9 @@ checksum:
   name_template: 'checksums.txt'
 
 release:
-  draft: true
+  # 与 build-and-release.yml 的 softprops 发布保持一致：正式版直接发布（非草稿），
+  # 预发布由 tag 后缀（-rc）经 prerelease: auto 自动判定。
+  draft: false
   prerelease: auto
   mode: append
   name_template: "MedMemo {{ .Version }}"

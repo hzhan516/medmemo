@@ -33,14 +33,15 @@ jobs:
               echo "ERROR: Branch version ($BRANCH_VER) != wails.json productVersion ($BASE_VERSION)"
               exit 1
             fi
-            # 统一使用 vX.Y.Z-rc.N 作为预发布 tag，避免 -Pre-release 重名和无限叠加 build 号
-            EXISTING=$(git tag -l "v${BASE_VERSION}-rc.*" | sort -V | tail -1)
-            if [[ -n "$EXISTING" ]]; then
-              N=$(echo "$EXISTING" | sed 's/.*-rc\.//')
-              N=$((N + 1))
-            else
-              N=1
-            fi
+            # 统一使用 vX.Y.Z-rc.N 作为预发布 tag，避免 -Pre-release 重名和无限叠加 build 号。
+            # 从远程读取该版本已有的 rc tag 并取最大 build 号自增，避免 release/** 被重复合并时
+            # 因本地（浅克隆）看不到 tag 而始终生成 rc.1、进而 push 已存在 tag 导致 CI 冲突失败。
+            ESC_VERSION=$(echo "$BASE_VERSION" | sed 's/\./\\./g')
+            MAX_N=$(git ls-remote --tags origin "v${BASE_VERSION}-rc.*" \
+              | awk '{print $2}' | sed 's|refs/tags/||; s|\^{}$||' \
+              | grep -E "^v${ESC_VERSION}-rc\.[0-9]+$" \
+              | sed 's/.*-rc\.//' | sort -n | tail -1)
+            N=$(( ${MAX_N:-0} + 1 ))
             VERSION="v${BASE_VERSION}-rc.${N}"
             PRERELEASE="true"
             DRAFT="false"
@@ -69,6 +70,31 @@ jobs:
             git tag "$VERSION"
             git push origin "$VERSION"
             echo "Created and pushed tag $VERSION."
+          fi
+
+      - name: Prune old release-candidate tags
+        if: startsWith(github.ref_name, 'release/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BASE_VERSION=$(jq -r '.info.productVersion' wails.json)
+          ESC_VERSION=$(echo "$BASE_VERSION" | sed 's/\./\\./g')
+          KEEP=3
+          # 列出该版本所有 rc tag，按 build 号升序（最旧在前）
+          TAGS=$(git ls-remote --tags origin "v${BASE_VERSION}-rc.*" \
+            | awk '{print $2}' | sed 's|refs/tags/||; s|\^{}$||' \
+            | grep -E "^v${ESC_VERSION}-rc\.[0-9]+$" \
+            | sort -t. -k4 -n | uniq)
+          COUNT=$(printf '%s\n' "$TAGS" | grep -c . || true)
+          echo "Found $COUNT rc tag(s) for v${BASE_VERSION}; keeping newest ${KEEP}."
+          if [ "$COUNT" -gt "$KEEP" ]; then
+            printf '%s\n' "$TAGS" | head -n "$((COUNT - KEEP))" | while read -r tag; do
+              [ -z "$tag" ] && continue
+              echo "Pruning old rc tag and release: $tag"
+              # 先删关联的 GitHub Release（含 tag）；无 release 时忽略错误，再兜底删除 tag
+              gh release delete "$tag" --yes --cleanup-tag 2>/dev/null || true
+              git push origin ":refs/tags/$tag" 2>/dev/null || true
+            done
           fi
 
   build:
