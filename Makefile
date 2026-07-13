@@ -38,7 +38,7 @@ build:
 # CGO 库路径（用于测试，go test 时 ${SRCDIR} 解析为临时目录，需显式指定）
 CGO_LDFLAGS_LINUX := -L$(shell pwd)/resources/lib/linux
 CGO_LDFLAGS_DARWIN := -L$(shell pwd)/resources/lib/darwin
-CGO_LDFLAGS_WINDOWS := -L$(shell pwd)/resources/lib/windows -LC:/msys64/mingw64/lib -ldl
+CGO_LDFLAGS_WINDOWS := -L$(shell pwd)/resources/lib/windows -LC:/msys64/mingw64/lib
 
 # 运行测试（含 ORT 后端）
 test:
