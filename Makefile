@@ -38,6 +38,9 @@ build:
 # CGO 库路径（用于测试，go test 时 ${SRCDIR} 解析为临时目录，需显式指定）
 CGO_LDFLAGS_LINUX := -L$(shell pwd)/resources/lib/linux
 CGO_LDFLAGS_DARWIN := -L$(shell pwd)/resources/lib/darwin
+# 注意：ortgenai 自带 `-ldl`，因此 Windows 构建仍会链接 libdl。本地 Windows 构建除设置以下
+# 库路径外，还需删除 /c/msys64/mingw64/lib/libdl.dll.a（与 /c/msys64/mingw64/bin/libdl.dll），
+# 强制 `-ldl` 解析到静态 libdl.a，避免最终 MedMemo.exe 带上不存在的 libdl.dll 运行时依赖。
 CGO_LDFLAGS_WINDOWS := -L$(shell pwd)/resources/lib/windows -LC:/msys64/mingw64/lib
 
 # 运行测试（含 ORT 后端）
