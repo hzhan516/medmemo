@@ -77,8 +77,21 @@ jobs:
         if: matrix.platform == 'windows'
         shell: cmd
         run: |
-          C:\msys64\usr\bin\pacman.exe -S --noconfirm mingw-w64-x86_64-gcc-libs
+          C:\msys64\usr\bin\pacman.exe -S --noconfirm mingw-w64-x86_64-dlfcn mingw-w64-x86_64-gcc-libs
           choco install nsis -y
+
+      - name: Force static libdl (avoid libdl.dll runtime dependency)
+        if: matrix.platform == 'windows'
+        shell: bash
+        run: |
+          # ortgenai 自带 `#cgo LDFLAGS: -ldl` 与 `#include <dlfcn.h>`（无 build-tag 保护），
+          # 因此编译必须提供 dlfcn.h 头文件与 libdl。dlfcn-win32 同时安装了共享导入库
+          # (libdl.dll.a) 与静态库 (libdl.a)；若保留共享导入库，链接器会解析到 libdl.dll，
+          # 最终 MedMemo.exe 会带上 libdl.dll 运行时依赖（Windows 上不存在，导致启动即失败）。
+          # 删除共享导入库与 DLL，强制 `-ldl` 解析到静态归档，产物不再依赖 libdl.dll。
+          ls -la /c/msys64/mingw64/lib/libdl* || true
+          rm -f /c/msys64/mingw64/lib/libdl.dll.a /c/msys64/mingw64/bin/libdl.dll
+          test -f /c/msys64/mingw64/lib/libdl.a && echo "static libdl.a present"
 
       - name: Build and Package
         run: ./scripts/build/wails-build.sh ${{ matrix.platform }} ${{ github.ref_name }}

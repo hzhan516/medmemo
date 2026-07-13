@@ -41,6 +41,11 @@ case "$OS" in
     echo "[TASK-027] Building for Windows..."
     export CGO_CFLAGS="-IC:/msys64/mingw64/include"
     export CGO_LDFLAGS="-LC:/msys64/mingw64/lib${CGO_LDFLAGS:+ ${CGO_LDFLAGS}}"
+    # ortgenai 自带 `-ldl` 与 `#include <dlfcn.h>`（无 build-tag 保护），需要 dlfcn-win32 提供
+    # 头文件与 libdl。dlfcn-win32 同时装有共享导入库 (libdl.dll.a) 与静态库 (libdl.a)；
+    # 若保留共享导入库，链接器会解析到 libdl.dll，使产物带上 libdl.dll 运行时依赖
+    # （Windows 上不存在，启动即失败）。删除共享导入库与 DLL，强制 `-ldl` 解析到静态归档。
+    rm -f /c/msys64/mingw64/lib/libdl.dll.a /c/msys64/mingw64/bin/libdl.dll
     # 下载 ONNX Runtime 与 Tokenizers Windows 库
     if command -v pwsh &>/dev/null; then
       pwsh -ExecutionPolicy Bypass -File scripts/build/download-onnx.ps1 -Platform windows
