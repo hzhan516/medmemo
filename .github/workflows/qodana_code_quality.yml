@@ -45,6 +45,7 @@ jobs:
         with:
           args: --linter qodana-go
           upload-result: true
+          pr-mode: false
         env:
           QODANA_TOKEN: ${{ secrets.QODANA_TOKEN }}
 
