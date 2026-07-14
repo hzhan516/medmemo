@@ -46,40 +46,212 @@
 
 ---
 
-## AI Model Issues
+## Database Issues
 
-### "Failed to send message" Error
+### "database key verification failed"
 
-**Symptoms:** Red error bar appears when sending a message.
+**Symptoms:** MedMemo fails to start and logs `database key verification failed`.
 
-**Solutions:**
-1. Check your internet connection
-2. Verify your API key is correct in **Settings** (re-enter if unsure)
-3. Check the AI provider's status page (e.g., [OpenAI Status](https://status.openai.com))
-4. Try switching to a different model in **Settings → Default Model**
-5. If using Ollama, ensure it's running: `ollama serve`
-
-### AI Responses Are Very Slow
-
-**Symptoms:** Long delay before first word appears, or streaming is choppy.
+**Root cause:** The OS keyring entry for the SQLCipher database key is missing, corrupted, or was created by a different user profile.
 
 **Solutions:**
-1. Switch to a faster model (Kimi Lite is typically fastest for Chinese)
-2. Check your network speed (cloud models need stable internet)
-3. If using Ollama locally:
-   - Ensure your machine has sufficient RAM (8GB+ recommended)
-   - A GPU significantly speeds up local inference
-   - Try a smaller model (e.g., Llama 3.1 8B instead of 70B)
-4. Close other resource-heavy applications
+1. Do not delete or modify files in the data directory manually.
+2. If you recently reinstalled the OS or cleared the system keyring, the database key is unrecoverable — restore from a backup if available.
+3. As a last resort, move the old data directory aside and let MedMemo create a new one:
+   - Windows: `%LOCALAPPDATA%\medmemo\`
+   - macOS: `~/Library/Application Support/medmemo/`
+   - Linux: `~/.local/share/medmemo/`
 
-### "Model Not Available" Error
+### "failed to open sqlcipher database"
 
-**Symptoms:** Error saying the selected model is unavailable.
+**Symptoms:** Startup fails with `failed to open sqlcipher database`.
+
+**Root cause:** The data directory is not writable, the disk is full, or the database file is locked by another process.
 
 **Solutions:**
-1. For cloud models: verify API key and internet connection
-2. For Ollama: ensure the model is downloaded (`ollama list`) and the server is running
-3. Check if the provider has deprecated the model (check their documentation)
+1. Check disk space.
+2. Ensure the user running MedMemo has write access to `MEDMEMO_DATA_DIR`.
+3. Close any other MedMemo instance that may be holding the database lock.
+4. Set `MEDMEMO_DATA_DIR` to a writable path if the default location is restricted.
+
+### "failed to migrate plaintext database"
+
+**Symptoms:** First launch after an older version shows a migration error.
+
+**Root cause:** MedMemo is upgrading an unencrypted SQLite database to SQLCipher.
+
+**Solutions:**
+1. Make a backup of the data directory before upgrading.
+2. Ensure the system keyring is accessible (Linux: Secret Service / GNOME Keyring is running).
+3. If migration keeps failing, restore the backup and [open an issue](https://github.com/hzhan516/medmemo/issues).
+
+---
+
+## ONNX / Embedding Issues
+
+### "ONNX Runtime library not found"
+
+**Symptoms:** Local NER or embedding is unavailable and the log shows `ONNX Runtime library not found`.
+
+**Root cause:** The ONNX Runtime native libraries were not downloaded or are not in `resources/lib/<platform>/`.
+
+**Solutions:**
+1. Run `make download-resources` (or `scripts/build/download-onnx.sh` on Linux/macOS, `.ps1` on Windows).
+2. Verify that `resources/lib/linux/libonnxruntime.so`, `resources/lib/darwin/libonnxruntime.dylib`, or `resources/lib/windows/onnxruntime.dll` exists.
+3. On Linux, ensure `LD_LIBRARY_PATH` includes `resources/lib/linux` if you are running from source.
+
+### "embedding model dir not found" / "NER model dir not found"
+
+**Symptoms:** Log shows `embedding model dir not found: ...` or `NER model dir not found: ...`.
+
+**Root cause:** The bundled DistilBERT NER model is missing from `resources/models/distilbert-ner/`.
+
+**Solutions:**
+1. Run `make download-resources` to fetch the model.
+2. Verify that `resources/models/distilbert-ner/model.onnx` exists.
+3. If you moved the model, set `MEDMEMO_MODEL_DIR` to the new directory.
+
+### "embedding pipeline creation failed"
+
+**Symptoms:** The embedding feature fails with `embedding pipeline creation failed`.
+
+**Root cause:** The ONNX model is incompatible with the ONNX Runtime library, or the tokenizer static library is missing.
+
+**Solutions:**
+1. Run `make download-resources` to ensure the tokenizer static library is present.
+2. Check that the ONNX Runtime version matches the Hugot / ortgenai version in `go.mod`.
+3. Delete `resources/lib/` and `resources/models/` and re-run `make download-resources`.
+
+---
+
+## Authentication Issues
+
+### "需要配置 OAuth client_id"
+
+**Symptoms:** Starting OAuth Device Flow returns an error containing `需要配置 OAuth client_id`.
+
+**Root cause:** OAuth Device Flow requires a per-provider `client_id` registered by you. MedMemo ships without pre-registered OAuth clients.
+
+**Solutions:**
+1. Register an OAuth application with the provider.
+2. Set the corresponding environment variable:
+   - Kimi: `MEDMEMO_KIMI_CLIENT_ID`
+   - Gemini: `MEDMEMO_GEMINI_CLIENT_ID`
+   - Microsoft: `MEDMEMO_MICROSOFT_CLIENT_ID`
+   - GitHub: `MEDMEMO_GITHUB_CLIENT_ID`
+3. Restart MedMemo and try again.
+
+See [`docs/api/auth.md`](../api/auth.md) for detailed prerequisites.
+
+### CLI Token Not Detected
+
+**Symptoms:** `DetectAuthMethods` reports `cli_token` as unavailable, or `BuildCLIProvider` fails.
+
+**Root cause:** The provider CLI credentials file does not exist, is empty, or cannot be parsed.
+
+**Solutions:**
+1. Log in with the provider CLI (e.g., `kimi auth login`, `gcloud auth login`).
+2. Check the credential file path reported by the error.
+3. Common error strings:
+   - `credential file is empty` — re-run the provider login command.
+   - `failed to parse credential` — the credential file format may have changed; update the provider CLI.
+   - `unsupported cli provider type` — the provider is not supported for CLI token detection.
+
+### Service Account JSON Parse Error
+
+**Symptoms:** `ParseServiceAccountJSON` returns `failed to parse service account JSON` or `invalid service account type`.
+
+**Root cause:** The Google Service Account JSON is malformed or was downloaded for the wrong credential type.
+
+**Solutions:**
+1. Download the JSON key from Google Cloud Console → IAM & Admin → Service Accounts.
+2. Ensure the file contains `"type": "service_account"`.
+3. Verify that `project_id`, `client_email`, and `private_key` are present.
+
+---
+
+## Ollama Issues
+
+### "ollama not reachable"
+
+**Symptoms:** Local model detection reports `ollama not reachable`.
+
+**Root cause:** The Ollama server is not running or is not listening on the expected URL.
+
+**Solutions:**
+1. Start Ollama: `ollama serve`
+2. Verify the server URL in Settings (default: `http://localhost:11434`).
+3. Check that no firewall is blocking `localhost:11434`.
+
+### "ollama server did not become ready within ..."
+
+**Symptoms:** MedMemo tried to start `ollama serve` automatically but timed out.
+
+**Root cause:** Ollama is installed but takes longer than the check timeout to initialize.
+
+**Solutions:**
+1. Start Ollama manually: `ollama serve`
+2. Wait until `ollama list` works, then retry in MedMemo.
+3. If Ollama is not installed, download it from [ollama.com](https://ollama.com).
+
+### "ollama pull ... failed"
+
+**Symptoms:** Downloading a model through MedMemo fails with `ollama pull ... failed`.
+
+**Root cause:** Network issue, disk space, or the model name is invalid.
+
+**Solutions:**
+1. Pull the model manually: `ollama pull llama3.1:8b`
+2. Ensure sufficient disk space (8B models need ~6 GB, 70B models need ~40 GB).
+3. Check that the model name is valid in Ollama's library.
+
+### "ollama returned HTTP 404"
+
+**Symptoms:** Chat with a local model returns `ollama returned HTTP 404`.
+
+**Root cause:** The requested model is not downloaded locally.
+
+**Solutions:**
+1. Run `ollama list` to see available models.
+2. Pull the missing model: `ollama pull <model>`.
+3. Select a model that exists in `ollama list` in MedMemo Settings.
+
+---
+
+## Streaming Issues
+
+### "stream execution failed"
+
+**Symptoms:** A streaming response stops abruptly and the UI shows a red error bar, or logs show `stream execution failed`.
+
+**Root cause:** Network interruption, provider error, or a panic during stream processing.
+
+**Solutions:**
+1. Check your internet connection.
+2. Switch to a different model or provider in Settings.
+3. If using a local model, ensure Ollama is still running.
+4. Restart MedMemo and retry the conversation.
+
+### Empty or Truncated Stream Response
+
+**Symptoms:** The AI message bubble appears empty or only contains part of the expected text.
+
+**Root cause:** The provider returned an empty stream, or compliance/emergency interception replaced the content.
+
+**Solutions:**
+1. Check the chat area for system notices (orange warning / blue disclaimer bars).
+2. Look at the application logs for `chat:stream:compliance` events.
+3. If the input triggered an emergency symptom, review the warning and decide whether to continue.
+
+### Repeated Panic During Streaming
+
+**Symptoms:** MedMemo crashes or becomes unresponsive during a long streaming response.
+
+**Root cause:** A runtime panic in the stream callback path (e.g., UI race) was recovered, but the app state may be inconsistent.
+
+**Solutions:**
+1. Save any important context and restart MedMemo.
+2. If reproducible, note the model, message length, and any compliance warning, then [open an issue](https://github.com/hzhan516/medmemo/issues).
 
 ---
 
@@ -149,7 +321,7 @@
 
 **If usage is excessive:**
 1. Restart MedMemo
-2. Close unused conversations (they stay in sidebar but release rendering memory)
+2. Close unused conversations (they stay in the sidebar but release rendering memory)
 3. If using local Ollama models, memory depends on model size (8B ≈ 6GB, 70B ≈ 40GB)
 
 ### App Feels Sluggish
@@ -200,4 +372,4 @@ If none of the above solutions work:
 
 ---
 
-*Last updated: 2026-05-19*
+*Last updated: 2026-07-14*
