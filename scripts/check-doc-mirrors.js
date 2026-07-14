@@ -18,7 +18,9 @@ function getMarkdownFiles(dir, base = dir) {
     return files;
 }
 
-const englishFiles = getMarkdownFiles(docsDir).filter(f => !f.startsWith('i18n' + path.sep));
+const englishFiles = getMarkdownFiles(docsDir)
+    .filter(f => !f.startsWith('i18n' + path.sep))
+    .filter(f => !f.includes(`${path.sep}_generated${path.sep}`));
 let failed = false;
 
 for (const enFile of englishFiles) {
