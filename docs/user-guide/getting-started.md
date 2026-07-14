@@ -6,6 +6,25 @@
 
 ---
 
+## First-Time Setup (3 Steps)
+
+When you launch MedMemo for the first time:
+
+1. **Accept the disclaimer**
+   - MedMemo is a health-information tool, not a medical device. Read the disclaimer and click **Continue**.
+
+2. **Choose your default model**
+   - Select a cloud provider (requires an API key) or a local Ollama model.
+   - You can change this later in **Settings → Default Model**.
+
+3. **Configure privacy settings**
+   - Pick a desensitization level: **Standard** (recommended), **Strict**, or **Off**.
+   - Set data retention (default: 30 days).
+
+After onboarding, the main chat screen appears and you can start a new conversation.
+
+---
+
 ## The Main Interface
 
 MedMemo uses a split-pane layout:
@@ -237,4 +256,4 @@ Medical terms may appear with a **dashed underline** — hover to see a tooltip 
 
 ---
 
-*Last updated: 2026-05-19*
+*Last updated: 2026-07-14*

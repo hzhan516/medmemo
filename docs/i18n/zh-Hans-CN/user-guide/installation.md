@@ -12,7 +12,7 @@
 |------|---------|------|---------|
 | Windows | Windows 10 | x64, ARM64 | 250 MB |
 | macOS | macOS 12 (Monterey) | Intel, Apple Silicon | 200 MB |
-| Linux | Ubuntu 20.04+ / Fedora 38+ | x64, ARM64 | 200 MB |
+| Linux | Ubuntu 22.04+ / Fedora 38+ | x64, ARM64 | 200 MB |
 
 > **Windows 用户注意：** 首次启动时，若安装包未捆绑 AI 运行库，MedMemo 可能会自动下载约 55 MB 的本地 AI 运行库（ONNX Runtime + Tokenizers）。首次运行需要互联网连接。
 
@@ -248,4 +248,4 @@ MedMemo 支持自动更新检测：
 
 ---
 
-*最后更新：2026-07-09*
+*最后更新：2026-07-14*

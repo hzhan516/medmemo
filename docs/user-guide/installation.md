@@ -12,7 +12,7 @@
 |----------|----------------|--------------|------------|
 | Windows | Windows 10 | x64, ARM64 | 250 MB |
 | macOS | macOS 12 (Monterey) | Intel, Apple Silicon | 200 MB |
-| Linux | Ubuntu 20.04+ / Fedora 38+ | x64, ARM64 | 200 MB |
+| Linux | Ubuntu 22.04+ / Fedora 38+ | x64, ARM64 | 200 MB |
 
 > **Note for Windows users:** On first launch, MedMemo may automatically download ~55 MB of local AI runtime libraries (ONNX Runtime + Tokenizers) if they are not bundled with the installer. This requires an internet connection during the first run.
 
@@ -248,4 +248,4 @@ When an update is available, a notification appears.
 
 ---
 
-*Last updated: 2026-07-09*
+*Last updated: 2026-07-14*
