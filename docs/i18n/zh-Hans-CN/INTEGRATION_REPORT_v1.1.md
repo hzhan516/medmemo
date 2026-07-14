@@ -33,13 +33,16 @@
 | B1 | 单元测试覆盖率 | 提升 usecase、repository 和 ai 包的覆盖率 |
 | B2 | E2E 完整流水线 | 端到端：对话 → 提取 → 评分 → 保存 → 嵌入 → 索引 → 召回 → 注入 |
 | C | 基准测试套件 | 向量搜索和记忆检索的性能与准确性验证 |
+| D1 | 置信度评估 | 通过 `confidence_scorer.go` / `confidence_aggregator.go` 进行多因素置信度评分与推理 |
+| D2 | 上下文压缩 | 通过 `compression_service.go` 减小 prompt 体积 |
+| D3 | 记忆衰减 | 通过 `decay_scorer.go` 对记忆相关性进行时间衰减评分 |
 
 ### 2.2 测试分类
 
 | 类别 | 数量 | 工具 |
 |:---|:---:|:---|
 | 单元测试 | 120+ | `go test` + testify |
-| E2E 测试 | 1 条完整流水线 | `e2e/go/memory_e2e_test.go` |
+| E2E 测试 | 4 个套件 | `e2e/go/` — memory、conversation、privacy、compliance |
 | 基准测试 | 7 个场景 | `internal/benchmark/`（构建标签：`benchmark`） |
 
 ---
@@ -103,6 +106,37 @@
 | v7 → v8 迁移添加 `is_sensitive` | 列存在 | 存在 | ✅ |
 | v8 → v9 迁移创建 `audit_logs` | 表存在 | 存在 | ✅ |
 | 幂等重运行 | 无错误 | 无错误 | ✅ |
+
+---
+
+### 3.5 置信度评估与推理
+
+**测试文件**：`internal/application/usecase/confidence_scorer_test.go`、`internal/application/usecase/confidence_aggregator_test.go`
+
+| 测试用例 | 预期 | 实际 | 状态 |
+|:---|:---|:---|:---:|
+| 综合分数结合覆盖率、特异性、来源可靠性与时间衰减 | `score` 在 `[0,1]` | 已计算 | ✅ |
+| 缺失信息检测标记低置信度声明 | `level` = `low` / `medium` / `high` | 正确 | ✅ |
+| 结果返回引用与解释 | 有证据时非空 | 非空 | ✅ |
+
+### 3.6 上下文压缩
+
+**测试文件**：`internal/application/usecase/compression_service_test.go`
+
+| 测试用例 | 预期 | 实际 | 状态 |
+|:---|:---|:---|:---:|
+| 压缩后 token 增长低于阈值 | `< 20%` | `< 20%` | ✅ |
+| 锚点与最近消息被保留 | 首/尾消息保留 | 已保留 | ✅ |
+| 配置模型驱动摘要时走对应路径 | 调用配置的 Provider | 已验证 | ✅ |
+
+### 3.7 记忆衰减
+
+**测试文件**：`internal/application/usecase/decay_scorer_test.go`
+
+| 测试用例 | 预期 | 实际 | 状态 |
+|:---|:---|:---|:---:|
+| 较旧事实获得更低的衰减分数 | `score` 随时间下降 | 已验证 | ✅ |
+| 衰减评分使用配置的半衰期 | 与配置匹配 | 匹配 | ✅ |
 
 ---
 
@@ -213,6 +247,9 @@
 - `ModelVersion` 验证
 - `FindBySession` / `FindBySubject` / `ListAllSubjects` — 仓库查询变体
 - `EnsureMemorySchema` — Schema 初始化幂等性
+- `ConfidenceScorer.Score` / `ConfidenceAggregator.Aggregate` — 置信度评估与推理路径
+- `CompressionService.Compress` — 上下文压缩策略
+- `DecayScorer.Score` — 时间衰减相关性评分
 
 ---
 
@@ -282,4 +319,4 @@
 >
 > **状态**：✅ 范围内全部测试通过。 ready for PR 审查。
 >
-> **最后更新**：2026-07-09
+> **最后更新**：2026-07-14

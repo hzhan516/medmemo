@@ -33,13 +33,16 @@
 | B1 | Unit test coverage | Coverage boost for usecase, repository, and ai packages |
 | B2 | E2E full pipeline | End-to-end: dialogue → extraction → scoring → save → embed → index → retrieve → inject |
 | C | Benchmark suite | Performance and accuracy validation of vector search and memory retrieval |
+| D1 | Confidence assessment | Multi-factor confidence scoring and reasoning via `confidence_scorer.go` / `confidence_aggregator.go` |
+| D2 | Context compression | Prompt-size reduction via `compression_service.go` |
+| D3 | Memory decay | Time-decay scoring for memory relevance via `decay_scorer.go` |
 
 ### 2.2 Test Categories
 
 | Category | Count | Tool |
 |:---|:---:|:---|
 | Unit tests | 120+ | `go test` + testify |
-| E2E tests | 1 full pipeline | `e2e/go/memory_e2e_test.go` |
+| E2E tests | 4 suites | `e2e/go/` — memory, conversation, privacy, compliance |
 | Benchmarks | 7 scenarios | `internal/benchmark/` (build tag: `benchmark`) |
 
 ---
@@ -103,6 +106,37 @@
 | v7 → v8 migration adds `is_sensitive` | Column exists | Exists | ✅ |
 | v8 → v9 migration creates `audit_logs` | Table exists | Exists | ✅ |
 | Idempotent re-run | No error | No error | ✅ |
+
+---
+
+### 3.5 Confidence Assessment & Reasoning
+
+**Test Files**: `internal/application/usecase/confidence_scorer_test.go`, `internal/application/usecase/confidence_aggregator_test.go`
+
+| Test Case | Expected | Actual | Status |
+|:---|:---|:---|:---:|
+| Overall score combines coverage, specificity, source reliability, and time decay | `score` in `[0,1]` | Calculated | ✅ |
+| Missing-info detection marks low-confidence claims | `level` = `low` / `medium` / `high` | Correct | ✅ |
+| Citations and explanations are returned with the result | Non-empty when evidence exists | Non-empty | ✅ |
+
+### 3.6 Context Compression
+
+**Test File**: `internal/application/usecase/compression_service_test.go`
+
+| Test Case | Expected | Actual | Status |
+|:---|:---|:---|:---:|
+| Token growth stays under threshold after compression | `< 20%` | `< 20%` | ✅ |
+| Anchor and recent messages are preserved | First/last messages retained | Retained | ✅ |
+| Model-based summarization path invoked when configured | Calls configured provider | Verified | ✅ |
+
+### 3.7 Memory Decay
+
+**Test File**: `internal/application/usecase/decay_scorer_test.go`
+
+| Test Case | Expected | Actual | Status |
+|:---|:---|:---|:---:|
+| Older facts receive lower decay scores | `score` decreases with age | Verified | ✅ |
+| Decay scoring uses configured half-life | Matches config | Matches | ✅ |
 
 ---
 
@@ -213,6 +247,9 @@
 - `ModelVersion` validation
 - `FindBySession` / `FindBySubject` / `ListAllSubjects` — repository query variants
 - `EnsureMemorySchema` — schema initialization idempotency
+- `ConfidenceScorer.Score` / `ConfidenceAggregator.Aggregate` — confidence assessment and reasoning paths
+- `CompressionService.Compress` — context compression strategies
+- `DecayScorer.Score` — time-decay relevance scoring
 
 ---
 
@@ -282,4 +319,4 @@
 >
 > **Status**: ✅ All in-scope tests passed. Ready for PR review.
 >
-> **Last updated**: 2026-07-09
+> **Last updated**: 2026-07-14
