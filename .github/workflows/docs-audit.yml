@@ -19,7 +19,7 @@ jobs:
           go-version-file: 'go.mod'
 
       - name: Download Go modules
-        run: GOTOOLCHAIN=go1.26.4 go mod download
+        run: GOTOOLCHAIN=go1.26.4 go mod download all
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
