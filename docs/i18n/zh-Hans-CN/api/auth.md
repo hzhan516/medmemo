@@ -6,6 +6,26 @@
 
 ---
 
+## 前置条件 — OAuth Device Flow client_id
+
+第二层（OAuth Device Flow）在通过环境变量提供目标厂商的 OAuth `client_id` 之前**不可用**。
+MedMemo 作为开源项目不预置 OAuth 客户端，因此你需要自行注册应用并设置：
+
+| 厂商      | 环境变量                       |
+|-----------|-------------------------------|
+| Kimi      | `MEDMEMO_KIMI_CLIENT_ID`      |
+| Gemini    | `MEDMEMO_GEMINI_CLIENT_ID`    |
+| Microsoft | `MEDMEMO_MICROSOFT_CLIENT_ID` |
+| GitHub    | `MEDMEMO_GITHUB_CLIENT_ID`    |
+
+未设置时的行为：
+- `StartOAuthDeviceFlow` / `StartFlow` 返回错误，文案包含「需要配置 OAuth client_id」。
+- `DetectAuthMethods` 将该厂商报告为 `Available=false`。
+
+此要求**仅适用于 Tier 2**。Tier 1（CLI token）、Tier 3（API key）和 Tier 4（本地模型）不需要 `client_id`。
+
+---
+
 ## 方法
 
 ### `SaveAPIKey(provider string, apiKey string) error`

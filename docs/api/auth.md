@@ -6,6 +6,28 @@ This document describes Wails bindings for the four-tier authentication system (
 
 ---
 
+## Prerequisites — OAuth Device Flow client_id
+
+Tier 2 (OAuth Device Flow) is **disabled until you supply an OAuth `client_id`** for
+the target provider via an environment variable. MedMemo ships without pre-registered
+OAuth clients (open-source constraint), so you must register your own app and set:
+
+| Provider  | Environment variable          |
+|-----------|-------------------------------|
+| Kimi      | `MEDMEMO_KIMI_CLIENT_ID`      |
+| Gemini    | `MEDMEMO_GEMINI_CLIENT_ID`    |
+| Microsoft | `MEDMEMO_MICROSOFT_CLIENT_ID` |
+| GitHub    | `MEDMEMO_GITHUB_CLIENT_ID`    |
+
+Behavior when unset:
+- `StartOAuthDeviceFlow` / `StartFlow` returns an error containing "需要配置 OAuth client_id".
+- The provider is reported as `Available=false` by `DetectAuthMethods`.
+
+This requirement applies **only to Tier 2**. Tier 1 (CLI token), Tier 3 (API key),
+and Tier 4 (local model) do not need a `client_id`.
+
+---
+
 ## Methods
 
 ### `SaveAPIKey(provider string, apiKey string) error`
