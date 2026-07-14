@@ -46,7 +46,7 @@ User Input
 ### L2: NER De-Identification Model
 
 - Hugot + ONNX Runtime DistilBERT-ONNX token-classification model
-- Coverage: Person names, organization names, disease names, drug names
+- Coverage: Person names (PER), locations (LOC), organization names (ORG). Disease and medication names are NOT de-identified by the L2 NER stage in v1.1.10 — they are only handled by L1 rules where a rule exists.
 - **ONNX Session is not thread-safe**; must be called serially through the 2-Worker pattern
 
 ### Sensitivity Level Classification

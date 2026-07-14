@@ -46,7 +46,7 @@ When you use a cloud AI provider (Kimi, OpenAI, Alibaba):
 ```
 Your input
   → L1 Rule Engine (regex patterns: IDs, phones, emails)
-    → L2 NER Model (names, organizations, diseases)
+    → L2 NER Model (names, locations, organizations)
       → Safe outbound text
         → Safe text sent to cloud API
 ```
