@@ -87,6 +87,12 @@ docs-check:
 	node scripts/check-terminology.js
 	node scripts/check-version-consistency.js
 
+# 生成第三方许可证清单（中英文）
+licenses:
+	./scripts/licenses/generate-go-licenses.sh
+	node scripts/licenses/generate-node-licenses.js
+	node scripts/licenses/merge-licenses.js
+
 # 格式化代码
 fmt:
 	gofmt -w .
