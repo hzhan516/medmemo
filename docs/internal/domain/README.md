@@ -14,8 +14,7 @@ The layer is deliberately free of framework, database, UI, and network dependenc
 internal/domain/
 ├── entity/       # Conversation, Message, ExtractedFact, HealthMemory, changelog
 ├── repository/   # Domain-facing repository interfaces
-├── policy/       # Compliance and sensitivity policies
-└── service/      # Domain service interfaces
+└── policy/       # Compliance and sensitivity policies
 ```
 
 ## Import Rules
