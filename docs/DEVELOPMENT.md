@@ -6,6 +6,56 @@
 
 ---
 
+## Development Environment Setup
+
+### Prerequisites
+
+- **Go** `1.26.4` (the `go.mod` toolchain directive enforces this)
+- **Node.js** `18+` and `npm`
+- **Wails v2 CLI** `2.12.0`:
+  ```bash
+  go install github.com/wailsapp/wails/v2/cmd/wails@latest
+  ```
+
+### Linux System Dependencies
+
+On Debian / Ubuntu:
+
+```bash
+sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev libsqlcipher-dev
+```
+
+On Fedora 43+:
+
+```bash
+sudo dnf install gtk3-devel webkit2gtk4.1-devel libsoup3-devel javascriptcoregtk4.1-devel sqlcipher-devel
+```
+
+> Ubuntu 22.04+ is required for `webkit2gtk-4.1` / `libsoup-3.0`.
+
+### Download Runtime Resources
+
+MedMemo needs ONNX Runtime native libraries, the tokenizer static library, and the bundled DistilBERT NER model:
+
+```bash
+make download-resources
+```
+
+This runs the following scripts in order:
+
+1. `scripts/build/download-onnx.sh` — ONNX Runtime native libraries
+2. `scripts/build/download-tokenizers.sh` — tokenizer static library
+3. `scripts/build/download-model.sh` — DistilBERT NER ONNX model
+
+### First Build
+
+```bash
+cd web && npm install && cd ..
+make build
+```
+
+---
+
 ## Clean Architecture Four-Layer Dependency Rules
 
 MedMemo strictly follows the Clean Architecture four-layer model; dependency direction always points inward toward the domain core.

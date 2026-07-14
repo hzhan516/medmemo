@@ -6,6 +6,56 @@
 
 ---
 
+## 开发环境搭建
+
+### 前置条件
+
+- **Go** `1.26.4`（`go.mod` 的工具链指令会强制该版本）
+- **Node.js** `18+` 与 `npm`
+- **Wails v2 CLI** `2.12.0`：
+  ```bash
+  go install github.com/wailsapp/wails/v2/cmd/wails@latest
+  ```
+
+### Linux 系统依赖
+
+Debian / Ubuntu：
+
+```bash
+sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev libsqlcipher-dev
+```
+
+Fedora 43+：
+
+```bash
+sudo dnf install gtk3-devel webkit2gtk4.1-devel libsoup3-devel javascriptcoregtk4.1-devel sqlcipher-devel
+```
+
+> 需要 Ubuntu 22.04+ 才能使用 `webkit2gtk-4.1` / `libsoup-3.0`。
+
+### 下载运行时资源
+
+MedMemo 需要 ONNX Runtime 原生库、tokenizer 静态库以及 bundled 的 DistilBERT NER 模型：
+
+```bash
+make download-resources
+```
+
+该命令按顺序执行以下脚本：
+
+1. `scripts/build/download-onnx.sh` — ONNX Runtime 原生库
+2. `scripts/build/download-tokenizers.sh` — tokenizer 静态库
+3. `scripts/build/download-model.sh` — DistilBERT NER ONNX 模型
+
+### 首次构建
+
+```bash
+cd web && npm install && cd ..
+make build
+```
+
+---
+
 ## Clean Architecture 四层依赖规则
 
 MedMemo 严格遵循 Clean Architecture 四层模型，依赖方向始终向内指向领域核心。
