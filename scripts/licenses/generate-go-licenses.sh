@@ -9,4 +9,9 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 cd "$ROOT_DIR"
 export GOTOOLCHAIN=go1.26.4
+
+# go list -m 不触发模块下载；若模块缓存缺失则许可证检测会全部回退为 UNKNOWN，
+# 因此生成前必须先填充模块缓存。
+go mod download
+
 node "$SCRIPT_DIR/generate-go-licenses.js"
