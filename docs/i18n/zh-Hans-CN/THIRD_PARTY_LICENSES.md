@@ -4,7 +4,7 @@
 
 > **项目**：MedMemo — 开源桌面端健康信息工具
 > **项目许可证**：[MIT License](../../../LICENSE)
-> **最后更新**：2026-05-19
+> **最后更新**：2026-07-14
 
 ---
 
@@ -24,7 +24,7 @@ MedMemo 采用 MIT 许可证。本文档列出项目使用的所有第三方依�
 
 | 生态系统 | 依赖总数 | MIT | Apache-2.0 | BSD-* | ISC | MPL-2.0 | 其他 |
 |:---------|:--------:|:---:|:----------:|:-----:|:---:|:-------:|:----:|
-| Go | 37 | 14 | 9 | 14 | 0 | 0 | 0 |
+| Go | 37 | 15 | 11 | 14 | 0 | 0 | 0 |
 | Node.js | 462 | 396 | 13 | 17 | 26 | 3 | 7 |
 
 **总体评估**：✅ 所有依赖均与 MIT 许可证兼容。未检测到 GPL/AGPL/SSPL 依赖。
@@ -48,6 +48,7 @@ MedMemo 采用 MIT 许可证。本文档列出项目使用的所有第三方依�
 | github.com/mtibben/percent | v0.2.1 | [MIT](https://github.com/mtibben/percent/blob/v0.2.1/LICENSE) | ✅ |
 | github.com/mutecomm/go-sqlcipher | — | [MIT](https://github.com/mutecomm/go-sqlcipher/blob/55dbde17881f/LICENSE) | ✅ |
 | github.com/rivo/uniseg | v0.4.7 | [MIT](https://github.com/rivo/uniseg/blob/v0.4.7/LICENSE.txt) | ✅ |
+| github.com/stretchr/testify | v1.11.1 | [MIT](https://github.com/stretchr/testify/blob/v1.11.1/LICENSE) | ✅ |
 | github.com/wailsapp/wails/v2 | v2.12.0 | [MIT](https://github.com/wailsapp/wails/blob/v2.12.0/v2/LICENSE) | ✅ |
 | github.com/x448/float16 | v0.8.4 | [MIT](https://github.com/x448/float16/blob/v0.8.4/LICENSE) | ✅ |
 | gopkg.in/yaml.v3 | v3.0.1 | [MIT](https://github.com/go-yaml/yaml/blob/v3.0.1/LICENSE) | ✅ |
@@ -56,14 +57,16 @@ MedMemo 采用 MIT 许可证。本文档列出项目使用的所有第三方依�
 
 | 包名 | 版本 | 许可证链接 | 兼容性 |
 |:-----|:-----|:-----------|:------:|
+| github.com/daulet/tokenizers | v1.27.0 | [Apache-2.0](https://github.com/daulet/tokenizers/blob/v1.27.0/LICENSE) | ✅ |
 | github.com/go-logr/logr | v1.4.3 | [Apache-2.0](https://github.com/go-logr/logr/blob/v1.4.3/LICENSE) | ✅ |
 | github.com/gomlx/exceptions | v0.0.3 | [Apache-2.0](https://github.com/gomlx/exceptions/blob/v0.0.3/LICENSE) | ✅ |
 | github.com/gomlx/go-huggingface | v0.3.5 | [Apache-2.0](https://github.com/gomlx/go-huggingface/blob/v0.3.5/LICENSE) | ✅ |
 | github.com/gomlx/gomlx | v0.27.3 | [Apache-2.0](https://github.com/gomlx/gomlx/blob/v0.27.3/LICENSE) | ✅ |
 | github.com/gomlx/onnx-gomlx | v0.4.2 | [Apache-2.0](https://github.com/gomlx/onnx-gomlx/blob/v0.4.2/LICENSE) | ✅ |
 | github.com/google/wire | v0.7.0 | [Apache-2.0](https://github.com/google/wire/blob/v0.7.0/LICENSE) | ✅ |
-| github.com/knights-analytics/hugot | v0.7.2 | [Apache-2.0](https://github.com/knights-analytics/hugot/blob/v0.7.2/LICENSE) | ✅ |
+| github.com/knights-analytics/hugot | v0.7.4 | [Apache-2.0](https://github.com/knights-analytics/hugot/blob/v0.7.4/LICENSE) | ✅ |
 | github.com/viant/afs | v1.30.0 | [Apache-2.0](https://github.com/viant/afs/blob/v1.30.0/LICENSE.txt) | ✅ |
+| github.com/viant/sqlite-vec | v0.3.0 | [Apache-2.0](https://github.com/viant/sqlite-vec/blob/v0.3.0/LICENSE) | ✅ |
 | k8s.io/klog/v2 | v2.140.0 | [Apache-2.0](https://github.com/kubernetes/klog/blob/v2.140.0/LICENSE) | ✅ |
 
 > **说明**：Apache-2.0 与 MIT 分发兼容。两种许可证均要求保留版权声明和许可证文本。无额外 copyleft 义务。
@@ -89,7 +92,7 @@ MedMemo 采用 MIT 许可证。本文档列出项目使用的所有第三方依�
 | modernc.org/libc | v1.72.3 | MIT* | [LICENSE-3RD-PARTY.md](https://gitlab.com/cznic/libc/blob/v1.72.3/LICENSE-3RD-PARTY.md) | ✅ |
 | modernc.org/mathutil | v1.7.1 | BSD-3-Clause* | 人工确认 | ✅ |
 | modernc.org/memory | v1.11.0 | BSD-3-Clause | [LICENSE-GO](https://gitlab.com/cznic/memory/blob/v1.11.0/LICENSE-GO) | ✅ |
-| modernc.org/sqlite | v1.50.1 | BSD-3-Clause | [LICENSE](https://gitlab.com/cznic/sqlite/blob/v1.50.1/LICENSE) | ✅ |
+| modernc.org/sqlite | v1.53.0 | BSD-3-Clause | [LICENSE](https://gitlab.com/cznic/sqlite/blob/v1.53.0/LICENSE) | ✅ |
 
 > **说明**：BSD 许可证（2-Clause 和 3-Clause）为宽松许可证，与 MIT 完全兼容。唯一额外要求是保留版权声明和免责声明文本。
 >
@@ -107,10 +110,9 @@ MedMemo 采用 MIT 许可证。本文档列出项目使用的所有第三方依�
 |:-----|:-----|:-------|:------:|
 | react | ^18.3.1 | MIT | ✅ |
 | react-dom | ^18.3.1 | MIT | ✅ |
-| typescript | ^5.6.2 | Apache-2.0 | ✅ |
-| tailwindcss | ^4.1.3 | MIT | ✅ |
+| typescript | 5.9.3 | Apache-2.0 | ✅ |
+| tailwindcss | ^3.4.1 | MIT | ✅ |
 | vite | ^6.3.4 | MIT | ✅ |
-| @tailwindcss/vite | ^4.1.3 | MIT | ✅ |
 | @types/react | ^18.3.12 | MIT | ✅ |
 | @types/react-dom | ^18.3.1 | MIT | ✅ |
 | @vitejs/plugin-react | ^4.3.5 | MIT | ✅ |
@@ -138,7 +140,7 @@ MedMemo 采用 MIT 许可证。本文档列出项目使用的所有第三方依�
 
 | 包名 | 版本 | 说明 |
 |:-----|:-----|:-----|
-| lightningcss | 1.32.0 | Tailwind CSS v4 使用的 CSS 解析器和转换器 |
+| lightningcss | 1.32.0 | Tailwind CSS v3 使用的 CSS 解析器和转换器 |
 | lightningcss-linux-x64-gnu | 1.32.0 | 平台特定原生二进制 |
 | lightningcss-linux-x64-musl | 1.32.0 | 平台特定原生二进制 |
 
@@ -150,7 +152,7 @@ MedMemo 采用 MIT 许可证。本文档列出项目使用的所有第三方依�
 |:-----|:-----|:-----|
 | @humanwhocodes/config-array | 0.13.0 | ESLint 内部依赖 |
 | @humanwhocodes/module-importer | 1.0.1 | ESLint 内部依赖 |
-| typescript | 5.6.2 | TypeScript 编译器 |
+| typescript | 5.9.3 | TypeScript 编译器 |
 
 > **评估**：Apache-2.0 提供明确的专利授权（第 3 条），对下游用户有利。与 MIT 分发兼容。如有 NOTICE 文件需保留。
 
@@ -251,4 +253,4 @@ cd web && npx license-checker --start . --json
 
 ---
 
-*本文档由许可证扫描工具自动生成，并经过人工审核以确保准确性。最后更新：2026-05-19。*
+*本文档由许可证扫描工具自动生成，并经过人工审核以确保准确性。最后更新：2026-07-14。*

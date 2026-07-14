@@ -4,7 +4,7 @@
 
 > **Project**: MedMemo — Open-source desktop health information tool
 > **Project License**: [MIT License](./LICENSE)
-> **Last updated**: 2026-05-19
+> **Last updated**: 2026-07-14
 
 ---
 
@@ -24,7 +24,7 @@ MedMemo is licensed under the MIT License. This document lists all third-party d
 
 | Ecosystem | Total Dependencies | MIT | Apache-2.0 | BSD-* | ISC | MPL-2.0 | Other |
 |:----------|:------------------:|:---:|:----------:|:-----:|:---:|:-------:|:-----:|
-| Go | 37 | 14 | 9 | 14 | 0 | 0 | 0 |
+| Go | 37 | 15 | 11 | 14 | 0 | 0 | 0 |
 | Node.js | 462 | 396 | 13 | 17 | 26 | 3 | 7 |
 
 **Overall Assessment**: ✅ All dependencies are compatible with the MIT License. No GPL/AGPL/SSPL dependencies detected.
@@ -48,6 +48,7 @@ MedMemo is licensed under the MIT License. This document lists all third-party d
 | github.com/mtibben/percent | v0.2.1 | [MIT](https://github.com/mtibben/percent/blob/v0.2.1/LICENSE) | ✅ |
 | github.com/mutecomm/go-sqlcipher | — | [MIT](https://github.com/mutecomm/go-sqlcipher/blob/55dbde17881f/LICENSE) | ✅ |
 | github.com/rivo/uniseg | v0.4.7 | [MIT](https://github.com/rivo/uniseg/blob/v0.4.7/LICENSE.txt) | ✅ |
+| github.com/stretchr/testify | v1.11.1 | [MIT](https://github.com/stretchr/testify/blob/v1.11.1/LICENSE) | ✅ |
 | github.com/wailsapp/wails/v2 | v2.12.0 | [MIT](https://github.com/wailsapp/wails/blob/v2.12.0/v2/LICENSE) | ✅ |
 | github.com/x448/float16 | v0.8.4 | [MIT](https://github.com/x448/float16/blob/v0.8.4/LICENSE) | ✅ |
 | gopkg.in/yaml.v3 | v3.0.1 | [MIT](https://github.com/go-yaml/yaml/blob/v3.0.1/LICENSE) | ✅ |
@@ -56,14 +57,16 @@ MedMemo is licensed under the MIT License. This document lists all third-party d
 
 | Package | Version | License URL | Compatibility |
 |:--------|:--------|:------------|:-------------:|
+| github.com/daulet/tokenizers | v1.27.0 | [Apache-2.0](https://github.com/daulet/tokenizers/blob/v1.27.0/LICENSE) | ✅ |
 | github.com/go-logr/logr | v1.4.3 | [Apache-2.0](https://github.com/go-logr/logr/blob/v1.4.3/LICENSE) | ✅ |
 | github.com/gomlx/exceptions | v0.0.3 | [Apache-2.0](https://github.com/gomlx/exceptions/blob/v0.0.3/LICENSE) | ✅ |
 | github.com/gomlx/go-huggingface | v0.3.5 | [Apache-2.0](https://github.com/gomlx/go-huggingface/blob/v0.3.5/LICENSE) | ✅ |
 | github.com/gomlx/gomlx | v0.27.3 | [Apache-2.0](https://github.com/gomlx/gomlx/blob/v0.27.3/LICENSE) | ✅ |
 | github.com/gomlx/onnx-gomlx | v0.4.2 | [Apache-2.0](https://github.com/gomlx/onnx-gomlx/blob/v0.4.2/LICENSE) | ✅ |
 | github.com/google/wire | v0.7.0 | [Apache-2.0](https://github.com/google/wire/blob/v0.7.0/LICENSE) | ✅ |
-| github.com/knights-analytics/hugot | v0.7.2 | [Apache-2.0](https://github.com/knights-analytics/hugot/blob/v0.7.2/LICENSE) | ✅ |
+| github.com/knights-analytics/hugot | v0.7.4 | [Apache-2.0](https://github.com/knights-analytics/hugot/blob/v0.7.4/LICENSE) | ✅ |
 | github.com/viant/afs | v1.30.0 | [Apache-2.0](https://github.com/viant/afs/blob/v1.30.0/LICENSE.txt) | ✅ |
+| github.com/viant/sqlite-vec | v0.3.0 | [Apache-2.0](https://github.com/viant/sqlite-vec/blob/v0.3.0/LICENSE) | ✅ |
 | k8s.io/klog/v2 | v2.140.0 | [Apache-2.0](https://github.com/kubernetes/klog/blob/v2.140.0/LICENSE) | ✅ |
 
 > **Note**: Apache-2.0 is compatible with MIT for distribution. Both licenses require preservation of copyright notices and license texts. No additional copyleft obligations apply.
@@ -89,7 +92,7 @@ MedMemo is licensed under the MIT License. This document lists all third-party d
 | modernc.org/libc | v1.72.3 | MIT* | [LICENSE-3RD-PARTY.md](https://gitlab.com/cznic/libc/blob/v1.72.3/LICENSE-3RD-PARTY.md) | ✅ |
 | modernc.org/mathutil | v1.7.1 | BSD-3-Clause* | Manually verified | ✅ |
 | modernc.org/memory | v1.11.0 | BSD-3-Clause | [LICENSE-GO](https://gitlab.com/cznic/memory/blob/v1.11.0/LICENSE-GO) | ✅ |
-| modernc.org/sqlite | v1.50.1 | BSD-3-Clause | [LICENSE](https://gitlab.com/cznic/sqlite/blob/v1.50.1/LICENSE) | ✅ |
+| modernc.org/sqlite | v1.53.0 | BSD-3-Clause | [LICENSE](https://gitlab.com/cznic/sqlite/blob/v1.53.0/LICENSE) | ✅ |
 
 > **Note**: BSD licenses (2-Clause and 3-Clause) are permissive and fully compatible with MIT. The only additional requirement is preservation of copyright notices and disclaimer text.
 > \* `modernc.org/mathutil` was not automatically detected by `go-licenses`, but its license file was manually verified to be BSD-3-Clause.
@@ -106,10 +109,9 @@ The frontend (`web/`) uses the following top-level production dependencies:
 |:--------|:--------|:--------|:-------------:|
 | react | ^18.3.1 | MIT | ✅ |
 | react-dom | ^18.3.1 | MIT | ✅ |
-| typescript | ^5.6.2 | Apache-2.0 | ✅ |
-| tailwindcss | ^4.1.3 | MIT | ✅ |
+| typescript | 5.9.3 | Apache-2.0 | ✅ |
+| tailwindcss | ^3.4.1 | MIT | ✅ |
 | vite | ^6.3.4 | MIT | ✅ |
-| @tailwindcss/vite | ^4.1.3 | MIT | ✅ |
 | @types/react | ^18.3.12 | MIT | ✅ |
 | @types/react-dom | ^18.3.1 | MIT | ✅ |
 | @vitejs/plugin-react | ^4.3.5 | MIT | ✅ |
@@ -137,7 +139,7 @@ The frontend (`web/`) uses the following top-level production dependencies:
 
 | Package | Version | Notes |
 |:--------|:--------|:------|
-| lightningcss | 1.32.0 | CSS parser and transformer used by Tailwind CSS v4 |
+| lightningcss | 1.32.0 | CSS parser and transformer used by Tailwind CSS v3 |
 | lightningcss-linux-x64-gnu | 1.32.0 | Platform-specific native binary |
 | lightningcss-linux-x64-musl | 1.32.0 | Platform-specific native binary |
 
@@ -149,7 +151,7 @@ The frontend (`web/`) uses the following top-level production dependencies:
 |:--------|:--------|:-----|
 | @humanwhocodes/config-array | 0.13.0 | ESLint internal dependency |
 | @humanwhocodes/module-importer | 1.0.1 | ESLint internal dependency |
-| typescript | 5.6.2 | TypeScript compiler |
+| typescript | 5.9.3 | TypeScript compiler |
 
 > **Assessment**: Apache-2.0 provides an explicit patent grant (Section 3), which is beneficial for downstream users. Compatible with MIT for distribution. Requires preservation of NOTICE files if present.
 
@@ -250,4 +252,4 @@ cd web && npx license-checker --start . --json
 
 ---
 
-*This document was generated automatically by license scanning tools and manually reviewed for accuracy. Last updated: 2026-05-19.*
+*This document was generated automatically by license scanning tools and manually reviewed for accuracy. Last updated: 2026-07-14.*
