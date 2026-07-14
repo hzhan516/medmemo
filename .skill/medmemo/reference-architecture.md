@@ -1,5 +1,7 @@
 # 架构参考
 
+> 📄 **权威文档**：本文件是面向 AI 速查的精简参考，完整的分层说明与数据流请优先阅读 [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md)。
+
 ## 四层拓扑
 
 ```
