@@ -1,6 +1,6 @@
 # 环境变量
 
-> 🌐 [English Version](../environment.md)
+> 🌐 [English Version](../../environment.md)
 
 > 本文档列出 MedMemo 生产代码读取的所有环境变量，按作用域分组。环境变量会覆盖对应配置文件中的值。
 
@@ -8,7 +8,7 @@
 
 ## 配置覆盖
 
-这些变量覆盖 `config.yaml` / `config.json` 中的值（详见 [`docs/DEVELOPMENT.md`](../DEVELOPMENT.md)）。
+这些变量覆盖 `config.yaml` / `config.json` 中的值（详见 [`docs/DEVELOPMENT.md`](../../DEVELOPMENT.md)）。
 
 | 变量 | 作用 | 默认值 | 示例 | 生效范围 |
 |------|------|--------|------|----------|
@@ -26,7 +26,7 @@
 
 ## 认证
 
-OAuth Device Flow 需要为每个厂商配置 `client_id`。注册前提条件见 [`docs/api/auth.md`](../api/auth.md)。
+OAuth Device Flow 需要为每个厂商配置 `client_id`。注册前提条件见 [`docs/api/auth.md`](../../api/auth.md)。
 
 | 变量 | 作用 | 默认值 | 示例 | 生效范围 |
 |------|------|--------|------|----------|

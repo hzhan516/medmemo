@@ -265,7 +265,7 @@ defer cancel()
 | `make release-local` | 构建本地发布包 | — |
 | `make release-dry-run` | 不发布，仅验证 GoReleaser 配置 | — |
 
-完整权威列表见 [`Makefile`](../../../../Makefile)。
+完整权威列表见 [`Makefile`](../../../Makefile)。
 
 ---
 

@@ -1,6 +1,6 @@
 # 故障排查
 
-> 🌐 [English Version](../troubleshooting.md)
+> 🌐 [English Version](../../../user-guide/troubleshooting.md)
 
 > 常见问题及解决方案。如果你的问题不在此处，请 [提交 GitHub Issue](https://github.com/hzhan516/medmemo/issues)。
 
@@ -144,7 +144,7 @@
    - GitHub：`MEDMEMO_GITHUB_CLIENT_ID`
 3. 重启 MedMemo 后重试。
 
-详见 [`docs/api/auth.md`](../../api/auth.md)。
+详见 [`docs/api/auth.md`](../../../api/auth.md)。
 
 ### CLI Token 未检测到
 

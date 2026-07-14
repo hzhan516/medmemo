@@ -265,7 +265,7 @@ Graceful shutdown order follows dependency inversion: close frontend bridge firs
 | `make release-local` | Build a local release package | — |
 | `make release-dry-run` | Validate GoReleaser config without publishing | — |
 
-For the full and authoritative list, see [`Makefile`](../../Makefile).
+For the full and authoritative list, see [`Makefile`](../Makefile).
 
 ---
 

@@ -1,6 +1,6 @@
 # MedMemo 术语表
 
-> 🌐 [English Version](../../../glossary.md)
+> 🌐 [English Version](../../glossary.md)
 
 本文档定义 MedMemo 全文档使用的权威中英术语对照与含义。
 
