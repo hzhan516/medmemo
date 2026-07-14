@@ -159,6 +159,66 @@ EventsOn('compliance:warning', (level: string, reason: string) => {
 
 ---
 
+## 核心类型
+
+这些共享类型在多个 Wails 绑定中出现。各模块专属的请求/响应类型见对应 API 文档。
+
+### `models.ProviderConfig`
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|:----:|:----|
+| `id` | `string` | ✅ | 唯一 Provider ID |
+| `name` | `string` | ✅ | 显示名称 |
+| `type` | `string` | ✅ | Provider 类型枚举：`kimi`、`openai`、`qwen`、`ollama`、`local`、`microsoft`、`github`、`claude`、`gemini`、`deepseek` 等 |
+| `apiHost` | `string` | ✅ | Provider API 基础地址 |
+| `apiKey` | `string` | — | API Key 或访问令牌（静态加密存储） |
+| `modelId` | `string` | ✅* | 默认模型 ID；若 `models` 列表包含启用模型则可省略 |
+| `models` | `[]ProviderModel` | — | 该 Provider 可用模型列表 |
+| `temperature` | `float64` | — | 采样温度，范围 `[0, 2]` |
+| `timeoutMs` | `int` | — | 请求超时（毫秒） |
+| `maxRetries` | `int` | — | 失败重试次数 |
+| `maxTokens` | `int` | — | 每次回复最大 token 数 |
+| `group` | `string` | — | UI 分组标签 |
+| `enabled` | `bool` | — | 是否启用 |
+| `sortOrder` | `int` | — | UI 排序权重 |
+| `createdAt` | `int64` | — | 创建时间戳（毫秒） |
+| `updatedAt` | `int64` | — | 最后更新时间戳（毫秒） |
+| `auth_method` | `string` | — | 认证方式：`api_key`、`cli_token`、`oauth_device`、`service_account` |
+| `auth_params` | `AuthParams` | — | 认证方式相关参数 |
+
+### `models.Message`
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|:----:|:----|
+| `role` | `string` | ✅ | `user`、`assistant` 或 `system` |
+| `content` | `string` | ✅ | 消息内容 |
+
+### `models.CompressionSettings`
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|:----:|:----|
+| `useModel` | `bool` | — | 是否启用模型驱动的摘要 |
+| `providerId` | `string` | — | 摘要模型 Provider ID |
+| `modelId` | `string` | — | 摘要模型 ID |
+| `anchorCount` | `int` | — | 保留不压缩的锚点消息数 |
+| `recentCount` | `int` | — | 保留不压缩的最近消息数 |
+
+### `KnowledgeDocumentDTO`
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|:----:|:----|
+| `id` | `string` | ✅ | 文档 ID |
+| `title` | `string` | ✅ | 文档标题 |
+| `source` | `string` | ✅ | 来源类型 |
+| `citation` | `string` | — | 引用字符串 |
+| `url` | `string` | — | 可选来源 URL |
+| `language` | `string` | — | 文档语言 |
+| `checksum` | `string` | — | 内容校验和 |
+| `created_at` | `int64` | — | 创建时间戳（毫秒） |
+| `updated_at` | `int64` | — | 最后更新时间戳（毫秒） |
+
+---
+
 ## 错误码定义
 
 | 错误码                    | 含义       | HTTP 等效 | 处理建议         |

@@ -26,6 +26,29 @@ type ModelInfo struct {
 
 Returns all configured providers from the backend SQLite store, including API keys (encrypted at rest), model lists, and health status.
 
+#### `models.ProviderConfig` fields
+
+| Field | Type | Required | Description |
+|-------|------|:--------:|:------------|
+| `id` | `string` | ✅ | Unique provider ID |
+| `name` | `string` | ✅ | Display name |
+| `type` | `string` | ✅ | Provider type enum |
+| `apiHost` | `string` | ✅ | Provider API base URL |
+| `apiKey` | `string` | — | API key / token (encrypted at rest) |
+| `modelId` | `string` | ✅* | Default model ID; optional if `models` has an enabled entry |
+| `models` | `[]ProviderModel` | — | Available models for this provider |
+| `temperature` | `float64` | — | Sampling temperature `[0, 2]` |
+| `timeoutMs` | `int` | — | Request timeout in ms |
+| `maxRetries` | `int` | — | Max retries |
+| `maxTokens` | `int` | — | Max tokens per response |
+| `group` | `string` | — | UI group |
+| `enabled` | `bool` | — | Enabled flag |
+| `sortOrder` | `int` | — | UI sort order |
+| `createdAt` | `int64` | — | Creation timestamp (ms) |
+| `updatedAt` | `int64` | — | Update timestamp (ms) |
+| `auth_method` | `string` | — | `api_key`, `cli_token`, `oauth_device`, `service_account` |
+| `auth_params` | `AuthParams` | — | Method-specific parameters |
+
 ---
 
 ### `CreateProvider(config models.ProviderConfig) error`

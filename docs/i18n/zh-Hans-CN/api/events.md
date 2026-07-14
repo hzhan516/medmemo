@@ -61,6 +61,11 @@ type CompliancePayload = {
 }
 ```
 
+| `level` | 前端行为 |
+|---------|---------|
+| `L2_WARNING` | 橙色警告横幅；允许继续 |
+| `L3_NOTICE` | 在消息末尾追加蓝色免责声明横幅 |
+
 ---
 
 ## `chat:title:generated`
@@ -78,12 +83,65 @@ type TitlePayload = {
 
 ## `chat:stream:replace`
 
-合规引擎替换整条最后一条 assistant 消息时发出（如 L1 阻断）。
+合规引擎替换整条最后一条 assistant 消息时发出（如 L1 阻断或脱敏还原）。
 
 ```typescript
 type ReplacePayload = {
   conversation_id: string
-  content: string   // 替换文本（标准提示语）
+  content: string   // 替换文本（标准提示语或还原后的内容）
+}
+```
+
+---
+
+## `chat:stream:confidence`
+
+流式响应完成后发出，携带置信度分数与 token 用量。
+
+```typescript
+type ConfidencePayload = {
+  conversation_id: string
+  confidence: {
+    overall_score: number
+    level: string
+    explanation: string
+    suggestion: string
+    missing_info: string[]
+    citations: string[]
+    breakdown?: Record<string, number>
+  }
+  prompt_tokens: number
+  completion_tokens: number
+  total_tokens: number
+  truncated: boolean
+}
+```
+
+---
+
+## `chat:deid:confirm`
+
+在 **严格** 脱敏模式下，当敏感内容无法被安全替换并需要用户确认后再发送时发出。
+
+```typescript
+type DeidConfirmPayload = {
+  conversation_id: string
+  preview: string[]  // 降级后的安全消息预览
+}
+```
+
+---
+
+## `chat:save_error`
+
+异步消息持久化失败时发出。
+
+```typescript
+type SaveErrorPayload = {
+  type: string            // 例如 "user_message"、"raw_dialogue"、"update_timestamp"
+  conversation_id: string
+  error: string
+  timestamp: number       // 毫秒
 }
 ```
 
@@ -145,13 +203,33 @@ Ollama 服务启动失败时发出。
 
 embedding 版本迁移开始前发出。
 
+```typescript
+type EmbeddingMigrationStart = {
+  total: number
+}
+```
+
 ### `embedding:migration:progress`
 
 迁移处理事实期间发出。
 
+```typescript
+type EmbeddingMigrationProgress = {
+  processed: number
+  total: number
+}
+```
+
 ### `embedding:migration:done`
 
 迁移完成时发出，包含处理数量和失败数量。
+
+```typescript
+type EmbeddingMigrationDone = {
+  processed: number
+  failed: number
+}
+```
 
 ---
 
@@ -161,14 +239,47 @@ embedding 版本迁移开始前发出。
 
 Provider 鉴权健康状态降级时发出，前端应刷新鉴权状态。
 
+```typescript
+type AuthDegradedPayload = {
+  provider_id: string
+  reason: string
+}
+```
+
 ### `context:usage_refresh`
 
 手动会话压缩完成后发出，前端应刷新 token 用量估算。
+
+```typescript
+type ContextUsageRefreshPayload = {
+  conversation_id: string
+}
+```
 
 ### `context:auto_compressed`
 
 自动上下文压缩完成后发出。
 
+```typescript
+type AutoCompressedPayload = {
+  conversation_id: string
+  used_after: number
+  fallback: boolean
+}
+```
+
 ---
 
-*最后更新：2026-07-09*
+## 错误码
+
+| 错误码 | 含义 | 处理建议 |
+|--------|------|----------|
+| `stream internal error` | 流式输出期间发生 panic 并已恢复 | 重新启动流或重启 MedMemo |
+| `stream failed` | 流式输出期间 Provider 返回错误 | 通过 `chat:stream_chunk` 的 `type: 'error'` 显示错误 |
+| `embedding pipeline not available` | ONNX / embedding 模型加载失败 | 回退到基于关键词的记忆检索 |
+| `context estimator not initialized` | 上下文估算器依赖缺失 | 应用启动完成后重试 |
+| `compression service not initialized` | 压缩服务依赖缺失 | 应用启动完成后重试 |
+
+---
+
+*最后更新：2026-07-14*

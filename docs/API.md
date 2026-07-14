@@ -160,6 +160,66 @@ EventsOn('compliance:warning', (level: string, reason: string) => {
 
 ---
 
+## Core Types
+
+These shared types appear in multiple Wails bindings. See the per-module API docs for request/response types specific to each binding.
+
+### `models.ProviderConfig`
+
+| Field | Type | Required | Description |
+|-------|------|:--------:|:------------|
+| `id` | `string` | ✅ | Unique provider ID |
+| `name` | `string` | ✅ | Display name |
+| `type` | `string` | ✅ | Provider type enum: `kimi`, `openai`, `qwen`, `ollama`, `local`, `microsoft`, `github`, `claude`, `gemini`, `deepseek`, ... |
+| `apiHost` | `string` | ✅ | Base URL of the provider API |
+| `apiKey` | `string` | — | API key or access token (encrypted at rest) |
+| `modelId` | `string` | ✅* | Default model ID; can be omitted if `models` list has an enabled model |
+| `models` | `[]ProviderModel` | — | List of models available for this provider |
+| `temperature` | `float64` | — | Sampling temperature, range `[0, 2]` |
+| `timeoutMs` | `int` | — | Request timeout in milliseconds |
+| `maxRetries` | `int` | — | Max retry attempts for failed requests |
+| `maxTokens` | `int` | — | Max tokens per response |
+| `group` | `string` | — | UI grouping label |
+| `enabled` | `bool` | — | Whether the provider is enabled |
+| `sortOrder` | `int` | — | UI sort order |
+| `createdAt` | `int64` | — | Creation timestamp (ms) |
+| `updatedAt` | `int64` | — | Last update timestamp (ms) |
+| `auth_method` | `string` | — | `api_key`, `cli_token`, `oauth_device`, or `service_account` |
+| `auth_params` | `AuthParams` | — | Method-specific parameters |
+
+### `models.Message`
+
+| Field | Type | Required | Description |
+|-------|------|:--------:|:------------|
+| `role` | `string` | ✅ | `user`, `assistant`, or `system` |
+| `content` | `string` | ✅ | Message content |
+
+### `models.CompressionSettings`
+
+| Field | Type | Required | Description |
+|-------|------|:--------:|:------------|
+| `useModel` | `bool` | — | Enable model-powered summarization |
+| `providerId` | `string` | — | Provider ID for the summarization model |
+| `modelId` | `string` | — | Model ID for summarization |
+| `anchorCount` | `int` | — | Number of anchor messages to keep uncompressed |
+| `recentCount` | `int` | — | Number of recent messages to keep uncompressed |
+
+### `KnowledgeDocumentDTO`
+
+| Field | Type | Required | Description |
+|-------|------|:--------:|:------------|
+| `id` | `string` | ✅ | Document ID |
+| `title` | `string` | ✅ | Document title |
+| `source` | `string` | ✅ | Source type |
+| `citation` | `string` | — | Citation string |
+| `url` | `string` | — | Optional source URL |
+| `language` | `string` | — | Document language |
+| `checksum` | `string` | — | Content checksum |
+| `created_at` | `int64` | — | Creation timestamp (ms) |
+| `updated_at` | `int64` | — | Last update timestamp (ms) |
+
+---
+
 ## Error Code Definitions
 
 | Error Code | Meaning | HTTP Equivalent | Handling Suggestion |

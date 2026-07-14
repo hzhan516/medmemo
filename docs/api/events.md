@@ -61,6 +61,11 @@ type CompliancePayload = {
 }
 ```
 
+| `level` | Frontend Behavior |
+|---------|-------------------|
+| `L2_WARNING` | Orange warning banner; allow continuing |
+| `L3_NOTICE` | Blue disclaimer banner appended to the message |
+
 ---
 
 ## `chat:title:generated`
@@ -78,12 +83,65 @@ type TitlePayload = {
 
 ## `chat:stream:replace`
 
-Emitted when the compliance engine replaces the entire last assistant message (e.g., L1 block).
+Emitted when the compliance engine replaces the entire last assistant message (e.g., L1 block or de-identification restoration).
 
 ```typescript
 type ReplacePayload = {
   conversation_id: string
-  content: string   // replacement text (standard prompt)
+  content: string   // replacement text (standard prompt or restored content)
+}
+```
+
+---
+
+## `chat:stream:confidence`
+
+Emitted after a streaming response completes, carrying the confidence score and token usage.
+
+```typescript
+type ConfidencePayload = {
+  conversation_id: string
+  confidence: {
+    overall_score: number
+    level: string
+    explanation: string
+    suggestion: string
+    missing_info: string[]
+    citations: string[]
+    breakdown?: Record<string, number>
+  }
+  prompt_tokens: number
+  completion_tokens: number
+  total_tokens: number
+  truncated: boolean
+}
+```
+
+---
+
+## `chat:deid:confirm`
+
+Emitted in **Strict** de-identification mode when sensitive content cannot be safely replaced and requires user confirmation before sending.
+
+```typescript
+type DeidConfirmPayload = {
+  conversation_id: string
+  preview: string[]  // degraded (safe) message preview
+}
+```
+
+---
+
+## `chat:save_error`
+
+Emitted when asynchronous message persistence fails.
+
+```typescript
+type SaveErrorPayload = {
+  type: string            // e.g. "user_message", "raw_dialogue", "update_timestamp"
+  conversation_id: string
+  error: string
+  timestamp: number       // ms
 }
 ```
 
@@ -145,13 +203,33 @@ Emitted when model download fails.
 
 Emitted before embedding-version migration starts.
 
+```typescript
+type EmbeddingMigrationStart = {
+  total: number
+}
+```
+
 ### `embedding:migration:progress`
 
 Emitted while migration is processing facts.
 
+```typescript
+type EmbeddingMigrationProgress = {
+  processed: number
+  total: number
+}
+```
+
 ### `embedding:migration:done`
 
 Emitted when migration completes, with processed and failed counts.
+
+```typescript
+type EmbeddingMigrationDone = {
+  processed: number
+  failed: number
+}
+```
 
 ---
 
@@ -161,14 +239,47 @@ Emitted when migration completes, with processed and failed counts.
 
 Emitted when provider auth health degrades and the frontend should refresh auth state.
 
+```typescript
+type AuthDegradedPayload = {
+  provider_id: string
+  reason: string
+}
+```
+
 ### `context:usage_refresh`
 
 Emitted after manual session compression so the frontend can refresh token-usage estimates.
+
+```typescript
+type ContextUsageRefreshPayload = {
+  conversation_id: string
+}
+```
 
 ### `context:auto_compressed`
 
 Emitted after automatic context compression.
 
+```typescript
+type AutoCompressedPayload = {
+  conversation_id: string
+  used_after: number
+  fallback: boolean
+}
+```
+
 ---
 
-*Last updated: 2026-07-09*
+## Error Codes
+
+| Code | Meaning | Handling |
+|------|---------|----------|
+| `stream internal error` | A panic was recovered during streaming | Restart the stream or restart MedMemo |
+| `stream failed` | Provider returned an error during streaming | Display error via `chat:stream_chunk` with `type: 'error'` |
+| `embedding pipeline not available` | ONNX / embedding model failed to load | Fall back to keyword-based memory retrieval |
+| `context estimator not initialized` | Context estimator dependency missing | Retry after app startup completes |
+| `compression service not initialized` | Compression dependency missing | Retry after app startup completes |
+
+---
+
+*Last updated: 2026-07-14*

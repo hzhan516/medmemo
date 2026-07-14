@@ -12,26 +12,24 @@ This document describes Wails bindings related to conversation management and me
 
 Sends a non-streaming chat message. The backend orchestrates the full pipeline: de-identification → memory retrieval → context assembly → LLM invocation → output restoration → compliance check.
 
-**Request:**
+#### `SendMessageRequest`
 
-```go
-type SendMessageRequest struct {
-    ConversationID string           `json:"conversation_id"`
-    Messages       []models.Message `json:"messages"`
-    Model          string           `json:"model"`
-    ProviderID     string           `json:"provider_id"`
-}
-```
+| Field | Type | Required | Description |
+|-------|------|:--------:|:------------|
+| `conversation_id` | `string` | ✅ | Target conversation ID |
+| `messages` | `[]models.Message` | ✅ | Current message context, including the new user message as the last element |
+| `model` | `string` | ✅ | Model ID to use |
+| `provider_id` | `string` | ✅ | Provider ID to use |
+| `ai_message_id` | `string` | — | Optional pre-generated ID for the assistant reply (used for feedback correlation) |
+| `force_send` | `bool` | — | `true` if the user confirmed sending under strict de-identification degradation |
 
-**Response:**
+#### `SendMessageResponse`
 
-```go
-type SendMessageResponse struct {
-    Reply      string   `json:"reply"`
-    Confidence float64  `json:"confidence"`
-    Warnings   []string `json:"warnings"`
-}
-```
+| Field | Type | Description |
+|-------|------|:------------|
+| `reply` | `string` | Assistant reply content |
+| `confidence_result` | `map[string]interface{}` | Confidence scoring result (overall score, level, explanation, ...) |
+| `warnings` | `[]string` | Compliance / risk warnings |
 
 **Errors:**
 - `ErrInvalidConfig` — provider or model not configured
@@ -48,6 +46,8 @@ Sends a streaming chat message. The response is pushed to the frontend via Wails
 **Events emitted:**
 - `chat:stream_chunk` — see [Events API](events.md)
 - `chat:stream:compliance` — compliance warning/notice
+- `chat:stream:confidence` — confidence score and token usage after stream ends
+- `chat:stream:replace` — replaces the streamed text when compliance restores placeholders
 - `chat:title:generated` — auto-generated conversation title (after first message)
 
 **Errors:**
@@ -73,14 +73,14 @@ Creates a new conversation and returns its unique ID. The conversation is persis
 
 Returns the list of all non-deleted conversations, sorted by `updated_at` descending.
 
-```go
-type ConversationSummary struct {
-    ID        string `json:"id"`
-    Title     string `json:"title"`
-    UpdatedAt string `json:"updated_at"`
-    DeletedAt string `json:"deleted_at"` // empty if not soft-deleted
-}
-```
+#### `ConversationSummary`
+
+| Field | Type | Description |
+|-------|------|:------------|
+| `id` | `string` | Conversation ID |
+| `title` | `string` | Conversation title |
+| `updated_at` | `string` | Last update timestamp (ms) |
+| `deleted_at` | `string` | Soft-delete timestamp (ms); empty if not deleted |
 
 ---
 
@@ -88,14 +88,18 @@ type ConversationSummary struct {
 
 Retrieves all messages for a given conversation.
 
-```go
-type MessageResponse struct {
-    ID        string `json:"id"`
-    Role      string `json:"role"`      // "user" | "assistant" | "system"
-    Content   string `json:"content"`
-    Timestamp string `json:"timestamp"` // Unix timestamp (ms)
-}
-```
+#### `MessageResponse`
+
+| Field | Type | Description |
+|-------|------|:------------|
+| `id` | `string` | Message ID |
+| `role` | `string` | `user` \| `assistant` \| `system` |
+| `content` | `string` | Message content |
+| `timestamp` | `string` | Unix timestamp (ms) |
+| `prompt_tokens` | `int` | Prompt tokens consumed |
+| `completion_tokens` | `int` | Completion tokens consumed |
+| `total_tokens` | `int` | Total tokens consumed |
+| `confidence` | `map[string]interface{}` | Confidence result, omitted if absent |
 
 ---
 
@@ -139,18 +143,43 @@ Resolves the maximum context length for a provider/model pair.
 
 Estimates token usage for the current messages and assembled prompt.
 
-```go
-type ContextUsageResponse struct {
-    UsedTokens  int     `json:"usedTokens"`
-    MaxTokens   int     `json:"maxTokens"`
-    Ratio       float64 `json:"ratio"`
-    Approximate bool    `json:"approximate"`
-}
-```
+#### `EstimateContextUsageRequest`
+
+| Field | Type | Required | Description |
+|-------|------|:--------:|:------------|
+| `conversationId` | `string` | ✅ | Conversation ID |
+| `messages` | `[]models.Message` | ✅ | Messages to estimate |
+| `providerId` | `string` | ✅ | Provider ID |
+| `modelId` | `string` | ✅ | Model ID |
+| `assembledPrompt` | `[]models.Message` | — | Optional pre-assembled prompt; if omitted, the backend assembles it |
+
+#### `ContextUsageResponse`
+
+| Field | Type | Description |
+|-------|------|:------------|
+| `usedTokens` | `int` | Estimated used tokens |
+| `maxTokens` | `int` | Maximum context tokens for the model |
+| `ratio` | `float64` | `usedTokens / maxTokens` |
+| `approximate` | `bool` | Whether the estimate is approximate |
+
+---
 
 ### `CompressSession(req CompressSessionRequest) error`
 
 Compresses a conversation session and emits `context:usage_refresh` when done.
+
+#### `CompressSessionRequest`
+
+| Field | Type | Required | Description |
+|-------|------|:--------:|:------------|
+| `conversationId` | `string` | ✅ | Conversation ID |
+| `providerId` | `string` | ✅ | Provider ID for model-based summarization |
+| `modelId` | `string` | ✅ | Model ID for summarization |
+| `strategy` | `string` | — | `drop_earliest_n`, `summarize_and_replace`, or `llm_self_summarize` |
+| `anchorCount` | `int` | — | Number of anchor messages to keep |
+| `recentCount` | `int` | — | Number of recent messages to keep |
+
+---
 
 ### `GetCompressionSettings() models.CompressionSettings`
 
