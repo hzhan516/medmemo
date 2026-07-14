@@ -55,6 +55,39 @@ jobs:
       - name: Run golangci-lint
         run: golangci-lint run --timeout=10m ./...
 
+  docs-check:
+    name: Documentation Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install lychee
+        run: |
+          curl -LO https://github.com/lycheeverse/lychee/releases/download/v0.15.1/lychee-v0.15.1-x86_64-unknown-linux-gnu.tar.gz
+          tar -xzf lychee-v0.15.1-x86_64-unknown-linux-gnu.tar.gz
+          sudo mv lychee /usr/local/bin/
+
+      - name: Check Markdown links
+        run: ./scripts/check-doc-links.sh
+        continue-on-error: true
+
+      - name: Check doc mirrors
+        run: node scripts/check-doc-mirrors.js
+        continue-on-error: true
+
+      - name: Check terminology
+        run: node scripts/check-terminology.js
+        continue-on-error: true
+
+      - name: Check version consistency
+        run: node scripts/check-version-consistency.js
+        continue-on-error: true
+
   unit-test:
     name: Unit Test
     runs-on: ubuntu-latest

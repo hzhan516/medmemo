@@ -80,6 +80,13 @@ download-resources:
 	./scripts/build/download-tokenizers.sh
 	./scripts/build/download-model.sh
 
+# 文档一致性校验（CI 文档守卫的本地入口）
+docs-check:
+	./scripts/check-doc-links.sh
+	node scripts/check-doc-mirrors.js
+	node scripts/check-terminology.js
+	node scripts/check-version-consistency.js
+
 # 格式化代码
 fmt:
 	gofmt -w .
