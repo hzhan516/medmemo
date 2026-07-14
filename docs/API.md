@@ -30,6 +30,9 @@ All runtime environment variables are documented in [`docs/environment.md`](./en
 
 ## Internal Interface Contracts
 
+> ⚙️ **Authoritative interface definitions are auto-generated in [`_generated/ports.md`](./api/_generated/ports.md).**  
+> The summaries below are kept for quick reference; see the generated doc for the latest signatures.
+
 ### LLMClient
 
 ```go
@@ -120,6 +123,8 @@ type FamilyRepository interface {
 
 Wails v2 automatically generates frontend TypeScript bindings from Go struct methods.
 
+> ⚙️ **The complete, up-to-date binding method index is auto-generated in [`_generated/bindings.md`](./api/_generated/bindings.md).**
+
 ### Binding Example
 
 **Go side (`wails_app.go`)**:
@@ -163,6 +168,9 @@ EventsOn('compliance:warning', (level: string, reason: string) => {
 ## Core Types
 
 These shared types appear in multiple Wails bindings. See the per-module API docs for request/response types specific to each binding.
+
+> ⚙️ **Authoritative type definitions with full field tables are auto-generated in [`_generated/core-types.md`](./api/_generated/core-types.md).**  
+> The tables below provide a curated quick reference only.
 
 ### `models.ProviderConfig`
 

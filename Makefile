@@ -1,4 +1,4 @@
-.PHONY: all dev build test lint wire clean install-tools
+.PHONY: all dev build test lint wire clean install-tools docs docs-check licenses fmt
 
 # 强制使用项目要求的 Go 工具链，避免本地旧版本导致解析 go.mod 失败
 GOTOOLCHAIN ?= go1.26.4
@@ -79,6 +79,11 @@ download-resources:
 	./scripts/build/download-onnx.sh
 	./scripts/build/download-tokenizers.sh
 	./scripts/build/download-model.sh
+
+# 从源码生成 API 文档到 docs/api/_generated/
+# 修改 pkg/models、internal/application/port 或 wails_app_*.go 后须运行此目标并提交生成物
+docs:
+	go run scripts/api-docs/generate-api-docs.go
 
 # 文档一致性校验（CI 文档守卫的本地入口）
 docs-check:
