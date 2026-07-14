@@ -243,4 +243,30 @@ defer cancel()
 
 ---
 
-*最后更新：2026-07-09*
+## Make 构建目标
+
+| 目标 | 用途 | 常用参数 |
+|------|------|----------|
+| `make dev` | 启动 Wails 开发模式（热重载） | — |
+| `make build` | 当前平台生产构建 | — |
+| `make build-linux` | 交叉编译 `linux/amd64` | — |
+| `make build-darwin` | macOS 交叉编译 | `DARWIN_PLATFORM=darwin/arm64` 或 `darwin/universal` |
+| `make build-windows` | 交叉编译 `windows/amd64` | — |
+| `make test` | 运行带 race detector 与覆盖率的单元测试 | — |
+| `make test-integration` | 运行集成测试 | — |
+| `make test-e2e` | 运行端到端测试 | — |
+| `make coverage` | 从 `coverage.out` 生成 `coverage.html` | — |
+| `make lint` | 全项目运行 `golangci-lint` | — |
+| `make fmt` | 格式化 Go 代码并自动修复前端 lint | — |
+| `make wire` | 重新生成 `wire_gen.go` | — |
+| `make download-resources` | 下载 ONNX / tokenizer / 模型资源 | — |
+| `make install-tools` | 安装 `wire`、`golangci-lint`、`mockery` | — |
+| `make clean` | 移除构建产物与覆盖率文件 | — |
+| `make release-local` | 构建本地发布包 | — |
+| `make release-dry-run` | 不发布，仅验证 GoReleaser 配置 | — |
+
+完整权威列表见 [`Makefile`](../../../../Makefile)。
+
+---
+
+*最后更新：2026-07-14*

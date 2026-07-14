@@ -243,4 +243,30 @@ Graceful shutdown order follows dependency inversion: close frontend bridge firs
 
 ---
 
-*Last updated: 2026-07-09*
+## Make Targets
+
+| Target | Purpose | Common Parameters |
+|--------|---------|-------------------|
+| `make dev` | Start Wails development mode with hot reload | — |
+| `make build` | Production build for the current platform | — |
+| `make build-linux` | Cross-compile for `linux/amd64` | — |
+| `make build-darwin` | Cross-compile for macOS | `DARWIN_PLATFORM=darwin/arm64` or `darwin/universal` |
+| `make build-windows` | Cross-compile for `windows/amd64` | — |
+| `make test` | Run unit tests with race detector and coverage | — |
+| `make test-integration` | Run integration tests | — |
+| `make test-e2e` | Run end-to-end tests | — |
+| `make coverage` | Generate `coverage.html` from `coverage.out` | — |
+| `make lint` | Run `golangci-lint` on the whole project | — |
+| `make fmt` | Format Go code and auto-fix frontend lint | — |
+| `make wire` | Regenerate `wire_gen.go` | — |
+| `make download-resources` | Download ONNX / tokenizer / model resources | — |
+| `make install-tools` | Install `wire`, `golangci-lint`, `mockery` | — |
+| `make clean` | Remove build artifacts and coverage files | — |
+| `make release-local` | Build a local release package | — |
+| `make release-dry-run` | Validate GoReleaser config without publishing | — |
+
+For the full and authoritative list, see [`Makefile`](../../Makefile).
+
+---
+
+*Last updated: 2026-07-14*
