@@ -282,16 +282,24 @@ func (m *MemoryRetriever) retrieveWithDiagnostics(ctx context.Context, query, se
 	// 8. 诊断日志
 	logDiagnostics(diag)
 
-	// 9. 转换为 HealthMemory
+	// 9. 转换为 HealthMemory，并过滤敏感事实（合规红线：敏感事实不注入提示词）
 	var memories []*entity.HealthMemory
 	for _, c := range diag.SelectedMemories {
+		if c.IsSensitive {
+			r := c
+			r.RejectReason = "sensitive fact excluded"
+			diag.RejectedCandidates = append(diag.RejectedCandidates, r)
+			continue
+		}
 		memories = append(memories, &entity.HealthMemory{
-			ID:         models.MemoryID(c.FactID),
-			Content:    c.Content,
-			Confidence: c.Confidence,
-			CreatedAt:  c.CreatedAt,
+			ID:          models.MemoryID(c.FactID),
+			Content:     c.Content,
+			Confidence:  c.Confidence,
+			IsSensitive: c.IsSensitive,
+			CreatedAt:   c.CreatedAt,
 		})
 	}
+	diag.TotalRejected = len(diag.RejectedCandidates)
 
 	return diag, memories, nil
 }
@@ -319,6 +327,7 @@ func (m *MemoryRetriever) recallByIntent(ctx context.Context, req *RetrievalRequ
 			Snippet:      truncateSnippet(content, 50),
 			CreatedAt:    f.CreatedAt,
 			Confidence:   f.Confidence,
+			IsSensitive:  f.IsSensitive,
 			MatchedPaths: []RetrievalPath{PathIntent},
 			IntentLevel:  intentConfidenceToLevel(req.Intent.Confidence),
 			RecencyScore: m.decayScorer.ScoreFromCreatedAt(1.0, f.CreatedAt, now),
@@ -399,6 +408,7 @@ func (m *MemoryRetriever) recallByKeyword(ctx context.Context, req *RetrievalReq
 				Snippet:      truncateSnippet(content, 50),
 				CreatedAt:    f.CreatedAt,
 				Confidence:   f.Confidence,
+				IsSensitive:  f.IsSensitive,
 				MatchedPaths: []RetrievalPath{PathKeyword},
 				KeywordScore: score,
 				RecencyScore: m.decayScorer.ScoreFromCreatedAt(1.0, f.CreatedAt, now),
@@ -498,6 +508,7 @@ func (m *MemoryRetriever) recallByVector(ctx context.Context, req *RetrievalRequ
 			Snippet:          truncateSnippet(content, 50),
 			CreatedAt:        fact.CreatedAt,
 			Confidence:       weightedConf,
+			IsSensitive:      fact.IsSensitive,
 			MatchedPaths:     []RetrievalPath{PathVector},
 			VectorSimilarity: se.Similarity,
 			RecencyScore:     decayScore,
@@ -542,6 +553,7 @@ func (m *MemoryRetriever) recallRecentSameIntent(ctx context.Context, req *Retri
 			Snippet:      truncateSnippet(content, 50),
 			CreatedAt:    f.CreatedAt,
 			Confidence:   f.Confidence,
+			IsSensitive:  f.IsSensitive,
 			MatchedPaths: []RetrievalPath{PathRecent},
 			IntentLevel:  intentConfidenceToLevel(req.Intent.Confidence),
 			RecencyScore: m.decayScorer.ScoreFromCreatedAt(1.0, f.CreatedAt, now),
@@ -576,6 +588,7 @@ func (m *MemoryRetriever) recallBySessionGap(ctx context.Context, sessionID stri
 			Snippet:      truncateSnippet(content, 50),
 			CreatedAt:    f.CreatedAt,
 			Confidence:   f.Confidence,
+			IsSensitive:  f.IsSensitive,
 			MatchedPaths: []RetrievalPath{PathSessionGap},
 			RecencyScore: m.decayScorer.ScoreFromCreatedAt(1.0, f.CreatedAt, now),
 			Reasons:      []string{fmt.Sprintf("session gap recall: %s", sessionID)},
@@ -982,13 +995,22 @@ func (m *MemoryRetriever) ArchiveConversation(ctx context.Context, convID models
 }
 
 // FormatMemoriesForInjection 将记忆列表格式化为系统提示注入文本。
+// 敏感事实会被跳过（纵深防御，即使调用方绕过检索收敛点也不应泄漏）。
 func FormatMemoriesForInjection(memories []*entity.HealthMemory) string {
 	if len(memories) == 0 {
 		return ""
 	}
 	var parts []string
-	for i, m := range memories {
-		parts = append(parts, fmt.Sprintf("%d. %s (可信度: %.0f%%)", i+1, m.Content, m.Confidence*100))
+	idx := 1
+	for _, m := range memories {
+		if m.IsSensitive {
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%d. %s (可信度: %.0f%%)", idx, m.Content, m.Confidence*100))
+		idx++
+	}
+	if len(parts) == 0 {
+		return ""
 	}
 	return "[相关记忆]\n" + strings.Join(parts, "\n")
 }

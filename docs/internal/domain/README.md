@@ -2,35 +2,11 @@
 
 > 🌐 [中文版本](../../i18n/zh-Hans-CN/internal/domain/README.md)
 
-## Role
+The domain layer contains MedMemo's core entities, policies, domain services, and repository abstractions. It is deliberately free of framework, database, UI, and network dependencies.
 
-The domain layer contains MedMemo's core entities, policies, domain services, and repository abstractions.
-
-The layer is deliberately free of framework, database, UI, and network dependencies.
-
-## Structure
-
-```
-internal/domain/
-├── entity/       # Conversation, Message, ExtractedFact, HealthMemory, changelog
-├── repository/   # Domain-facing repository interfaces
-├── policy/       # Compliance and sensitivity policies
-└── service/      # Domain service interfaces
-```
-
-## Import Rules
-
-| Allowed | Prohibited |
-|---------|------------|
-| Go standard library | any `internal/*` package |
-| `pkg/models/` | `pkg/desensitizer/` |
-
-## When to Add Code Here
-
-- Add or change core business entities.
-- Define domain errors and invariants.
-- Define repository contracts consumed by domain/application logic.
+> 📄 **Authoritative documentation for this layer lives in [`internal/domain/README.md`](../../../internal/domain/README.md).**  
+> This file only provides a pointer; please edit the source-side README to avoid drift.
 
 ---
 
-*Last updated: 2026-07-09*
+*Last updated: 2026-07-14*

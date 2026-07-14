@@ -1,6 +1,6 @@
 /**
  * Provider 模板类型定义。
- * 对应 assets/provider-templates.json 中的静态模板数据。
+ * 对应 src/data/provider-templates.json 中的静态模板数据。
  */
 export interface ProviderTemplate {
   id: string

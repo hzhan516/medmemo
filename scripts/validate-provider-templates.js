@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 /**
  * Provider 模板 JSON 验证脚本。
- * 校验 assets/provider-templates.json 的格式和必填字段完整性。
+ * 校验 src/data/provider-templates.json 的格式和必填字段完整性。
  * 在 CI 中执行，阻断格式错误的提交。
  */
 
 const fs = require('fs')
 const path = require('path')
 
-const TEMPLATE_PATH = path.join(__dirname, '..', 'web', 'public', 'assets', 'provider-templates.json')
+const TEMPLATE_PATH = path.join(__dirname, '..', 'web', 'src', 'data', 'provider-templates.json')
 
 const REQUIRED_FIELDS = ['id', 'name', 'apiHost', 'defaultModel', 'models', 'description', 'docsUrl', 'type']
 const VALID_TYPES = new Set(['cloud', 'local'])

@@ -17,8 +17,36 @@ permissions:
   packages: write
 
 jobs:
+  licenses-check:
+    name: License Consistency Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install frontend dependencies
+        run: cd web && npm ci
+
+      - name: Generate licenses
+        run: make licenses
+
+      - name: Verify no license drift
+        run: git diff --exit-code THIRD_PARTY_LICENSES.md
+
   build:
     name: Build ${{ matrix.platform }}
+    needs: licenses-check
     strategy:
       fail-fast: false
       matrix:

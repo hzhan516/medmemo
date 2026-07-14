@@ -103,6 +103,8 @@ L1 Rule Engine ──(missed spans)──► L2 NER ONNX
 
 ## Consequences
 
+> **Implementation note (v1.1.10):** The active label mapper (`mapNERLabel`) currently emits only PER / LOC / ORG. Disease and medication labels, even if produced by the model, are dropped and thus not de-identified by L2. This is a known gap between the ADR's target scope and the shipped implementation.
+
 ### Positive Impacts
 
 - **Privacy guarantee**: User health text never leaves the device for entity recognition; the NER model runs entirely in-process.

@@ -6,6 +6,56 @@
 
 ---
 
+## Development Environment Setup
+
+### Prerequisites
+
+- **Go** `1.26.4` (the `go.mod` toolchain directive enforces this)
+- **Node.js** `18+` and `npm`
+- **Wails v2 CLI** `2.12.0`:
+  ```bash
+  go install github.com/wailsapp/wails/v2/cmd/wails@latest
+  ```
+
+### Linux System Dependencies
+
+On Debian / Ubuntu:
+
+```bash
+sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev libsqlcipher-dev
+```
+
+On Fedora 43+:
+
+```bash
+sudo dnf install gtk3-devel webkit2gtk4.1-devel libsoup3-devel javascriptcoregtk4.1-devel sqlcipher-devel
+```
+
+> Ubuntu 22.04+ is required for `webkit2gtk-4.1` / `libsoup-3.0`.
+
+### Download Runtime Resources
+
+MedMemo needs ONNX Runtime native libraries, the tokenizer static library, and the bundled DistilBERT NER model:
+
+```bash
+make download-resources
+```
+
+This runs the following scripts in order:
+
+1. `scripts/build/download-onnx.sh` — ONNX Runtime native libraries
+2. `scripts/build/download-tokenizers.sh` — tokenizer static library
+3. `scripts/build/download-model.sh` — DistilBERT NER ONNX model
+
+### First Build
+
+```bash
+cd web && npm install && cd ..
+make build
+```
+
+---
+
 ## Clean Architecture Four-Layer Dependency Rules
 
 MedMemo strictly follows the Clean Architecture four-layer model; dependency direction always points inward toward the domain core.
@@ -128,6 +178,12 @@ if err != nil {
 
 Prioritize Tailwind CSS utility classes; custom styles should use CSS variables for theme switching.
 
+### Provider Template Files
+
+`web/src/data/provider-templates.json` is the **single source of truth** for provider templates. It is bundled by the build and imported at runtime by `APIKeyPanel`, `OAuthDevicePanel`, and `ProviderTemplateList`.
+
+When adding or editing provider templates, modify only `web/src/data/provider-templates.json`. Run `node scripts/validate-provider-templates.js` before submitting provider-template changes; the validator checks the bundled source file.
+
 ---
 
 ## Testing Strategy
@@ -187,4 +243,30 @@ Graceful shutdown order follows dependency inversion: close frontend bridge firs
 
 ---
 
-*Last updated: 2026-07-09*
+## Make Targets
+
+| Target | Purpose | Common Parameters |
+|--------|---------|-------------------|
+| `make dev` | Start Wails development mode with hot reload | — |
+| `make build` | Production build for the current platform | — |
+| `make build-linux` | Cross-compile for `linux/amd64` | — |
+| `make build-darwin` | Cross-compile for macOS | `DARWIN_PLATFORM=darwin/arm64` or `darwin/universal` |
+| `make build-windows` | Cross-compile for `windows/amd64` | — |
+| `make test` | Run unit tests with race detector and coverage | — |
+| `make test-integration` | Run integration tests | — |
+| `make test-e2e` | Run end-to-end tests | — |
+| `make coverage` | Generate `coverage.html` from `coverage.out` | — |
+| `make lint` | Run `golangci-lint` on the whole project | — |
+| `make fmt` | Format Go code and auto-fix frontend lint | — |
+| `make wire` | Regenerate `wire_gen.go` | — |
+| `make download-resources` | Download ONNX / tokenizer / model resources | — |
+| `make install-tools` | Install `wire`, `golangci-lint`, `mockery` | — |
+| `make clean` | Remove build artifacts and coverage files | — |
+| `make release-local` | Build a local release package | — |
+| `make release-dry-run` | Validate GoReleaser config without publishing | — |
+
+For the full and authoritative list, see [`Makefile`](../Makefile).
+
+---
+
+*Last updated: 2026-07-14*

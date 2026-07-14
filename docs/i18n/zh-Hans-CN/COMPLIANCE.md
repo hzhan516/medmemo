@@ -46,7 +46,7 @@
 ### L2：NER 脱敏模型
 
 - Hugot + ONNX Runtime DistilBERT-ONNX token-classification 模型
-- 覆盖：人名、机构名、疾病名、药品名
+- 覆盖范围：人名（PER）、地点（LOC）、机构名（ORG）。v1.1.10 中 L2 NER 阶段不对疾病名/药品名做去标识化，此类内容仅在存在对应 L1 规则时才被处理。
 - **ONNX Session 非线程安全**，必须通过 2-Worker 串行化调用
 
 ### 分级标记体系

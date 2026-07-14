@@ -19,8 +19,7 @@ By isolating business concepts from technical details, we ensure that:
 internal/domain/
 ├── entity/       # Core business entities: Conversation, Memory, FamilyMember, HealthMemory...
 ├── repository/   # Repository interfaces (Ports): MemoryRepository, FamilyRepository...
-├── policy/       # Policy interfaces: de-identification strategies, compliance policies
-└── service/      # Domain service interfaces: complex cross-entity business rules
+└── policy/       # Policy interfaces: de-identification strategies, compliance policies
 ```
 
 | Package | Purpose | Example Types |
@@ -28,7 +27,6 @@ internal/domain/
 | `entity/` | Pure business objects with behavior | `Conversation`, `HealthMemory`, `FamilyMember` |
 | `repository/` | Contracts for data persistence | `MemoryRepository`, `FamilyRepository` |
 | `policy/` | Abstractions for compliance & sensitivity | `DeidentifyPolicy`, `CompliancePolicy` |
-| `service/` | Operations spanning multiple entities | `HealthRiskEvaluator` |
 
 ---
 

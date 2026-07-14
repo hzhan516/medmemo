@@ -763,6 +763,29 @@ func TestInjectMemories_Authoritative(t *testing.T) {
 	assert.Equal(t, "你是健康信息助手", result[0].Content)
 }
 
+func TestInjectMemories_SensitiveExcluded(t *testing.T) {
+	t.Parallel()
+
+	msgs := []models.Message{
+		{Role: models.RoleUser, Content: "hello"},
+	}
+	memories := []*entity.HealthMemory{
+		{Content: "用户 身高是 180cm", IsSensitive: false},
+		{Content: "用户 患有 高血压", IsSensitive: true},
+	}
+
+	result := injectMemories(msgs, memories)
+	require.Len(t, result, 2)
+	assert.Equal(t, models.RoleSystem, result[0].Role)
+	assert.Contains(t, result[0].Content, "- 用户 身高是 180cm")
+	assert.NotContains(t, result[0].Content, "高血压")
+
+	// 全部为敏感事实时，不注入系统消息
+	result = injectMemories(msgs, []*entity.HealthMemory{{Content: "用户 手机 13800138000", IsSensitive: true}})
+	require.Len(t, result, 1)
+	assert.Equal(t, models.RoleUser, result[0].Role)
+}
+
 func TestCitationSourceType(t *testing.T) {
 	t.Parallel()
 

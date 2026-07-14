@@ -116,8 +116,7 @@ medmemo/
 │   ├── domain/              # [Entities Layer] Zero external dependencies
 │   │   ├── entity/          # Conversation, Memory, FamilyMember...
 │   │   ├── repository/      # Repository interfaces (Ports)
-│   │   ├── policy/          # Compliance and sensitivity policies
-│   │   └── service/         # Domain service interfaces
+│   │   └── policy/          # Compliance and sensitivity policies
 │   ├── application/         # [Use Cases Layer]
 │   │   ├── usecase/         # ChatOrchestrator, MemoryRetriever...
 │   │   ├── port/            # LLMClient, repositories, detectors...

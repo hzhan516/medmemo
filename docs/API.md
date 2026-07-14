@@ -22,9 +22,16 @@ Detailed Wails binding documentation is organized by module in [`docs/api/`](./a
 | Knowledge | Local knowledge document import and management | [`api/knowledge.md`](./api/knowledge.md) |
 | Events | Wails Events emitted by the backend | [`api/events.md`](./api/events.md) |
 
+## Environment Variables
+
+All runtime environment variables are documented in [`docs/environment.md`](./environment.md).
+
 ---
 
 ## Internal Interface Contracts
+
+> ⚙️ **Authoritative interface definitions are auto-generated in [`_generated/ports.md`](./api/_generated/ports.md).**  
+> The summaries below are kept for quick reference; see the generated doc for the latest signatures.
 
 ### LLMClient
 
@@ -116,19 +123,23 @@ type FamilyRepository interface {
 
 Wails v2 automatically generates frontend TypeScript bindings from Go struct methods.
 
+> ⚙️ **The complete, up-to-date binding method index is auto-generated in [`_generated/bindings.md`](./api/_generated/bindings.md).**
+
 ### Binding Example
 
 **Go side (`wails_app.go`)**:
 
 ```go
 type WailsApp struct {
-    chatUC *usecase.ChatOrchestrator
+    ctx              context.Context
+    chatOrchestrator *usecase.ChatOrchestrator
 }
 
-// StartConversation creates a new conversation; frontend calls via window.go.main.WailsApp.StartConversation.
-func (a *WailsApp) StartConversation(model string) (dto.ConversationDTO, error) {
-    conv := entity.NewConversation(models.ProviderType(model))
-    return dto.ToConversationDTO(conv), nil
+// CreateConversation creates a new conversation and returns its ID;
+// frontend calls via window.go.main.WailsApp.CreateConversation.
+func (a *WailsApp) CreateConversation() (string, error) {
+    // Persisted via ConversationRepository; returns the new conversation ID.
+    return "", nil
 }
 
 // SendMessage sends a message and triggers a streaming response.
@@ -151,6 +162,69 @@ EventsOn('compliance:warning', (level: string, reason: string) => {
   // Display compliance warning banner
 })
 ```
+
+---
+
+## Core Types
+
+These shared types appear in multiple Wails bindings. See the per-module API docs for request/response types specific to each binding.
+
+> ⚙️ **Authoritative type definitions with full field tables are auto-generated in [`_generated/core-types.md`](./api/_generated/core-types.md).**  
+> The tables below provide a curated quick reference only.
+
+### `models.ProviderConfig`
+
+| Field | Type | Required | Description |
+|-------|------|:--------:|:------------|
+| `id` | `string` | ✅ | Unique provider ID |
+| `name` | `string` | ✅ | Display name |
+| `type` | `string` | ✅ | Provider type enum: `kimi`, `openai`, `qwen`, `ollama`, `local`, `microsoft`, `github`, `claude`, `gemini`, `deepseek`, ... |
+| `apiHost` | `string` | ✅ | Base URL of the provider API |
+| `apiKey` | `string` | — | API key or access token (encrypted at rest) |
+| `modelId` | `string` | ✅* | Default model ID; can be omitted if `models` list has an enabled model |
+| `models` | `[]ProviderModel` | — | List of models available for this provider |
+| `temperature` | `float64` | — | Sampling temperature, range `[0, 2]` |
+| `timeoutMs` | `int` | — | Request timeout in milliseconds |
+| `maxRetries` | `int` | — | Max retry attempts for failed requests |
+| `maxTokens` | `int` | — | Max tokens per response |
+| `group` | `string` | — | UI grouping label |
+| `enabled` | `bool` | — | Whether the provider is enabled |
+| `sortOrder` | `int` | — | UI sort order |
+| `createdAt` | `int64` | — | Creation timestamp (ms) |
+| `updatedAt` | `int64` | — | Last update timestamp (ms) |
+| `auth_method` | `string` | — | `api_key`, `cli_token`, `oauth_device`, or `service_account` |
+| `auth_params` | `AuthParams` | — | Method-specific parameters |
+
+### `models.Message`
+
+| Field | Type | Required | Description |
+|-------|------|:--------:|:------------|
+| `role` | `string` | ✅ | `user`, `assistant`, or `system` |
+| `content` | `string` | ✅ | Message content |
+
+### `models.CompressionSettings`
+
+| Field | Type | Required | Description |
+|-------|------|:--------:|:------------|
+| `useModel` | `bool` | — | Enable model-powered summarization |
+| `providerId` | `string` | — | Provider ID for the summarization model |
+| `modelId` | `string` | — | Model ID for summarization |
+| `anchorCount` | `int` | — | Number of anchor messages to keep uncompressed |
+| `recentCount` | `int` | — | Number of recent messages to keep uncompressed |
+
+### `KnowledgeDocumentDTO`
+
+| Field | Type | Required | Description |
+|-------|------|:--------:|:------------|
+| `id` | `string` | ✅ | Document ID |
+| `title` | `string` | ✅ | Document title |
+| `source` | `string` | ✅ | Source type |
+| `citation` | `string` | — | Citation string |
+| `url` | `string` | — | Optional source URL |
+| `language` | `string` | — | Document language |
+| `checksum` | `string` | — | Content checksum |
+| `created_at` | `int64` | — | Creation timestamp (ms) |
+| `updated_at` | `int64` | — | Last update timestamp (ms) |
 
 ---
 

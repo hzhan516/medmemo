@@ -37,11 +37,12 @@ type RetrievalRequest struct {
 
 // RetrievalCandidate 统一的多路召回候选记忆。
 type RetrievalCandidate struct {
-	FactID     string
-	Content    string // subject + predicate + object，用于注入 LLM 上下文
-	Snippet    string // 截断 50 字符的短文本，用于诊断日志
-	CreatedAt  time.Time
-	Confidence float64
+	FactID      string
+	Content     string // subject + predicate + object，用于注入 LLM 上下文
+	Snippet     string // 截断 50 字符的短文本，用于诊断日志
+	CreatedAt   time.Time
+	Confidence  float64
+	IsSensitive bool // 是否包含敏感信息（PII / 疾病 / 药品等）
 
 	// 召回路径追踪
 	MatchedPaths []RetrievalPath

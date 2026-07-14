@@ -14,13 +14,17 @@
 |------|------|------|
 | Chat | 会话管理与消息流式输出 | [`api/chat.md`](../../api/chat.md) |
 | Provider | AI 模型提供商配置与健康检测 | [`api/provider.md`](../../api/provider.md) |
-| Auth | 四层鉴权体系 | [`api/auth.md`](../../api/auth.md) |
+| Auth | 四层认证体系 | [`api/auth.md`](../../api/auth.md) |
 | System | 设置、更新、免责声明与诊断 | [`api/system.md`](../../api/system.md) |
 | Ollama | 本地模型检测与管理 | [`api/ollama.md`](../../api/ollama.md) |
 | Memory | 个人记忆审核、搜索和注入开关 | [`api/memory.md`](../../api/memory.md) |
 | Embedding | 本地 embedding 模型状态与模型目录辅助方法 | [`api/embedding.md`](../../api/embedding.md) |
 | Knowledge | 本地知识文档导入与管理 | [`api/knowledge.md`](../../api/knowledge.md) |
 | Events | 后端发出的 Wails Events | [`api/events.md`](../../api/events.md) |
+
+## 环境变量
+
+所有运行时环境变量见 [`docs/environment.md`](../../environment.md)。
 
 ---
 
@@ -122,13 +126,14 @@ Wails v2 通过 Go 结构体方法自动生成前端 TypeScript 绑定。
 
 ```go
 type WailsApp struct {
-    chatUC *usecase.ChatOrchestrator
+    ctx              context.Context
+    chatOrchestrator *usecase.ChatOrchestrator
 }
 
-// StartConversation 创建新会话，前端通过 window.go.main.WailsApp.StartConversation 调用。
-func (a *WailsApp) StartConversation(model string) (dto.ConversationDTO, error) {
-    conv := entity.NewConversation(models.ProviderType(model))
-    return dto.ToConversationDTO(conv), nil
+// CreateConversation 创建新会话并返回其 ID，前端通过 window.go.main.WailsApp.CreateConversation 调用。
+func (a *WailsApp) CreateConversation() (string, error) {
+    // 通过 ConversationRepository 持久化后返回新会话 ID。
+    return "", nil
 }
 
 // SendMessage 发送消息并触发流式响应。
@@ -151,6 +156,66 @@ EventsOn('compliance:warning', (level: string, reason: string) => {
   // 显示合规警告横幅
 })
 ```
+
+---
+
+## 核心类型
+
+这些共享类型在多个 Wails 绑定中出现。各模块专属的请求/响应类型见对应 API 文档。
+
+### `models.ProviderConfig`
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|:----:|:----|
+| `id` | `string` | ✅ | 唯一 Provider ID |
+| `name` | `string` | ✅ | 显示名称 |
+| `type` | `string` | ✅ | Provider 类型枚举：`kimi`、`openai`、`qwen`、`ollama`、`local`、`microsoft`、`github`、`claude`、`gemini`、`deepseek` 等 |
+| `apiHost` | `string` | ✅ | Provider API 基础地址 |
+| `apiKey` | `string` | — | API Key 或访问令牌（静态加密存储） |
+| `modelId` | `string` | ✅* | 默认模型 ID；若 `models` 列表包含启用模型则可省略 |
+| `models` | `[]ProviderModel` | — | 该 Provider 可用模型列表 |
+| `temperature` | `float64` | — | 采样温度，范围 `[0, 2]` |
+| `timeoutMs` | `int` | — | 请求超时（毫秒） |
+| `maxRetries` | `int` | — | 失败重试次数 |
+| `maxTokens` | `int` | — | 每次回复最大 token 数 |
+| `group` | `string` | — | UI 分组标签 |
+| `enabled` | `bool` | — | 是否启用 |
+| `sortOrder` | `int` | — | UI 排序权重 |
+| `createdAt` | `int64` | — | 创建时间戳（毫秒） |
+| `updatedAt` | `int64` | — | 最后更新时间戳（毫秒） |
+| `auth_method` | `string` | — | 认证方式：`api_key`、`cli_token`、`oauth_device`、`service_account` |
+| `auth_params` | `AuthParams` | — | 认证方式相关参数 |
+
+### `models.Message`
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|:----:|:----|
+| `role` | `string` | ✅ | `user`、`assistant` 或 `system` |
+| `content` | `string` | ✅ | 消息内容 |
+
+### `models.CompressionSettings`
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|:----:|:----|
+| `useModel` | `bool` | — | 是否启用模型驱动的摘要 |
+| `providerId` | `string` | — | 摘要模型 Provider ID |
+| `modelId` | `string` | — | 摘要模型 ID |
+| `anchorCount` | `int` | — | 保留不压缩的锚点消息数 |
+| `recentCount` | `int` | — | 保留不压缩的最近消息数 |
+
+### `KnowledgeDocumentDTO`
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|:----:|:----|
+| `id` | `string` | ✅ | 文档 ID |
+| `title` | `string` | ✅ | 文档标题 |
+| `source` | `string` | ✅ | 来源类型 |
+| `citation` | `string` | — | 引用字符串 |
+| `url` | `string` | — | 可选来源 URL |
+| `language` | `string` | — | 文档语言 |
+| `checksum` | `string` | — | 内容校验和 |
+| `created_at` | `int64` | — | 创建时间戳（毫秒） |
+| `updated_at` | `int64` | — | 最后更新时间戳（毫秒） |
 
 ---
 

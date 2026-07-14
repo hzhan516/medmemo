@@ -1,4 +1,4 @@
-.PHONY: all dev build test lint wire clean install-tools
+.PHONY: all dev build test lint wire clean install-tools docs docs-check licenses fmt
 
 # 强制使用项目要求的 Go 工具链，避免本地旧版本导致解析 go.mod 失败
 GOTOOLCHAIN ?= go1.26.4
@@ -74,10 +74,29 @@ install-tools:
 	$(GOLANGCI_LINT) version
 	go install github.com/vektra/mockery/v2@latest
 
-# 下载模型资源（开发环境）
+# 下载模型 / 运行时资源（开发环境）
 download-resources:
-	python scripts/download_models.py --output resources/models
-	python scripts/download_dicts.py --output resources/dict
+	./scripts/build/download-onnx.sh
+	./scripts/build/download-tokenizers.sh
+	./scripts/build/download-model.sh
+
+# 从源码生成 API 文档到 docs/api/_generated/
+# 修改 pkg/models、internal/application/port 或 wails_app_*.go 后须运行此目标并提交生成物
+docs:
+	go run scripts/api-docs/generate-api-docs.go
+
+# 文档一致性校验（CI 文档守卫的本地入口）
+docs-check:
+	./scripts/check-doc-links.sh
+	node scripts/check-doc-mirrors.js
+	node scripts/check-terminology.js
+	node scripts/check-version-consistency.js
+
+# 生成第三方许可证清单（中英文）
+licenses:
+	./scripts/licenses/generate-go-licenses.sh
+	node scripts/licenses/generate-node-licenses.js
+	node scripts/licenses/merge-licenses.js
 
 # 格式化代码
 fmt:

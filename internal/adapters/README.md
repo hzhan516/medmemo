@@ -21,8 +21,7 @@ By isolating external system details here, we ensure that:
 internal/adapters/
 ├── ai/           # AI model client adapters: OpenAI, Kimi, Ollama, Local...
 ├── repository/   # Data persistence adapters: DuckDB, SQLite, Kùzǔ implementations...
-├── detector/     # Sensitive detection adapters: rule engine, NER model...
-└── dto/          # Data Transfer Object layer: external format ↔ domain format
+└── detector/     # Sensitive detection adapters: rule engine, NER model...
 ```
 
 | Package | Purpose | Example Types |
@@ -30,7 +29,6 @@ internal/adapters/
 | `ai/` | LLM provider integrations | `OpenAIAdapter`, `KimiAdapter`, `OllamaAdapter` |
 | `repository/` | Database access implementations | `MemoryRepo`, `FamilyRepo` |
 | `detector/` | PII and sensitive data detection | `RuleDetector`, `NERDetector` |
-| `dto/` | Pure transformation functions | `ToDomain()`, `FromDomain()` |
 
 ---
 
@@ -47,7 +45,7 @@ internal/adapters/
 ## Core Responsibilities
 
 1. **Interface Implementation** — Fulfill contracts defined in `application/port/` (e.g., `LLMClient`, `MemoryRepository`)
-2. **Data Transformation** — Convert external API responses and database records into domain entities via the DTO layer
+2. **Data Transformation** — Convert external API responses and database records into domain entities via pure transformation functions
 3. **Error Mapping** — Translate external errors (HTTP timeouts, database connection failures) into domain errors
 
 ---
@@ -55,7 +53,7 @@ internal/adapters/
 ## Design Principles
 
 - **One external system, one adapter**. OpenAI has its own adapter; Kimi has its own. Differences in headers, authentication, and response shapes are encapsulated locally.
-- **DTO conversions are pure functions**. Functions in `dto/` are stateless, side-effect-free, and return `error` rather than panicking.
+- **DTO conversions are pure functions**. Transformation helpers are stateless, side-effect-free, and return `error` rather than panicking.
 - **Graceful degradation**. Adapters implement `CheckAvailability()`. If an LLM provider is unreachable, the system can fall back to a local model or cached responses.
 
 ---

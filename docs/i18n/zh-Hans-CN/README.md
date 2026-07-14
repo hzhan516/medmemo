@@ -116,8 +116,7 @@ medmemo/
 │   ├── domain/              # [Entities层] 零外部依赖
 │   │   ├── entity/          # Conversation, Memory, FamilyMember...
 │   │   ├── repository/      # 仓库接口（Port）
-│   │   ├── policy/          # 合规策略、敏感分级策略
-│   │   └── service/         # 领域服务接口
+│   │   └── policy/          # 合规策略、敏感分级策略
 │   ├── application/         # [Use Cases层]
 │   │   ├── usecase/         # ChatOrchestrator, MemoryRetriever...
 │   │   ├── port/            # LLMClient、仓库、检测器等端口

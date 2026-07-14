@@ -1,0 +1,135 @@
+name: Documentation Health Audit
+
+on:
+  schedule:
+    # 每月 1 日 03:17 UTC（避开整点，降低 GitHub Actions 队列拥堵概率）
+    - cron: '17 3 1 * *'
+  workflow_dispatch:
+
+jobs:
+  audit:
+    name: Documentation Health Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install lychee
+        run: |
+          curl -LO https://github.com/lycheeverse/lychee/releases/download/v0.15.1/lychee-v0.15.1-x86_64-unknown-linux-gnu.tar.gz
+          tar -xzf lychee-v0.15.1-x86_64-unknown-linux-gnu.tar.gz
+          sudo mv lychee /usr/local/bin/
+
+      - name: Check Markdown links
+        id: links
+        run: ./scripts/check-doc-links.sh
+        continue-on-error: true
+
+      - name: Check doc mirrors
+        id: mirrors
+        run: node scripts/check-doc-mirrors.js
+        continue-on-error: true
+
+      - name: Check terminology
+        id: terminology
+        run: node scripts/check-terminology.js
+        continue-on-error: true
+
+      - name: Check version consistency
+        id: version
+        run: node scripts/check-version-consistency.js
+        continue-on-error: true
+
+      - name: Generate API docs
+        id: api_docs
+        run: make docs
+        continue-on-error: true
+
+      - name: Verify API docs are up-to-date
+        id: api_docs_drift
+        run: git diff --exit-code docs/api/_generated/
+        continue-on-error: true
+
+      - name: Generate third-party licenses
+        id: licenses
+        run: make licenses
+        continue-on-error: true
+
+      - name: Verify licenses are up-to-date
+        id: licenses_drift
+        run: git diff --exit-code THIRD_PARTY_LICENSES.md
+        continue-on-error: true
+
+      - name: Produce health report
+        run: |
+          mkdir -p docs-health-report
+          REPORT="docs-health-report/docs-health-report.md"
+          DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          SHA=$(git rev-parse HEAD)
+
+          echo "# MedMemo Documentation Health Report" > "$REPORT"
+          echo "" >> "$REPORT"
+          echo "- **Date**: $DATE" >> "$REPORT"
+          echo "- **Commit**: $SHA" >> "$REPORT"
+          echo "- **Workflow**: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> "$REPORT"
+          echo "" >> "$REPORT"
+
+          echo "## Summary" >> "$REPORT"
+          echo "" >> "$REPORT"
+          echo "| Check | Status |" >> "$REPORT"
+          echo "|-------|--------|" >> "$REPORT"
+          echo "| Markdown links | ${{ steps.links.outcome == 'success' && '✅ Pass' || '❌ Fail' }} |" >> "$REPORT"
+          echo "| Doc mirrors | ${{ steps.mirrors.outcome == 'success' && '✅ Pass' || '❌ Fail' }} |" >> "$REPORT"
+          echo "| Terminology | ${{ steps.terminology.outcome == 'success' && '✅ Pass' || '❌ Fail' }} |" >> "$REPORT"
+          echo "| Version consistency | ${{ steps.version.outcome == 'success' && '✅ Pass' || '❌ Fail' }} |" >> "$REPORT"
+          echo "| API docs generation | ${{ steps.api_docs.outcome == 'success' && '✅ Pass' || '❌ Fail' }} |" >> "$REPORT"
+          echo "| API docs drift | ${{ steps.api_docs_drift.outcome == 'success' && '✅ Pass' || '❌ Fail' }} |" >> "$REPORT"
+          echo "| Licenses generation | ${{ steps.licenses.outcome == 'success' && '✅ Pass' || '❌ Fail' }} |" >> "$REPORT"
+          echo "| Licenses drift | ${{ steps.licenses_drift.outcome == 'success' && '✅ Pass' || '❌ Fail' }} |" >> "$REPORT"
+          echo "" >> "$REPORT"
+
+          echo "## Metrics" >> "$REPORT"
+          echo "" >> "$REPORT"
+          echo "- **Broken links**: ${{ steps.links.outcome == 'success' && '0' || '≥1' }}" >> "$REPORT"
+          echo "- **Missing Chinese mirrors**: ${{ steps.mirrors.outcome == 'success' && '0' || '≥1' }}" >> "$REPORT"
+          echo "- **Terminology deviations**: ${{ steps.terminology.outcome == 'success' && '0' || '≥1' }}" >> "$REPORT"
+          echo "- **Version drifts**: ${{ steps.version.outcome == 'success' && '0' || '≥1' }}" >> "$REPORT"
+          echo "- **API docs drift**: ${{ steps.api_docs_drift.outcome == 'success' && 'No' || 'Yes' }}" >> "$REPORT"
+          echo "- **License list drift**: ${{ steps.licenses_drift.outcome == 'success' && 'No' || 'Yes' }}" >> "$REPORT"
+          echo "" >> "$REPORT"
+
+          echo "## Notes" >> "$REPORT"
+          echo "" >> "$REPORT"
+          echo "Drift in generated artifacts indicates the committed files are out of sync with source. Run \`make docs\` and \`make licenses\` locally, then commit the regenerated files." >> "$REPORT"
+          echo "" >> "$REPORT"
+          echo "For remediation tracking, update \`medmemo/开发日志/issues.md\` following AGENTS.md rule 8." >> "$REPORT"
+
+      - name: Upload health report
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-health-report
+          path: docs-health-report/
+          retention-days: 90
+
+      - name: Fail on any drift
+        if: |
+          steps.links.outcome == 'failure' ||
+          steps.mirrors.outcome == 'failure' ||
+          steps.terminology.outcome == 'failure' ||
+          steps.version.outcome == 'failure' ||
+          steps.api_docs.outcome == 'failure' ||
+          steps.api_docs_drift.outcome == 'failure' ||
+          steps.licenses.outcome == 'failure' ||
+          steps.licenses_drift.outcome == 'failure'
+        run: |
+          echo "Documentation health check failed. See the uploaded report for details."
+          exit 1

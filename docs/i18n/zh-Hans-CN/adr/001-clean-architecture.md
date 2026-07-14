@@ -2,7 +2,7 @@
 
 > 🌐 [English Version](../../../adr/001-clean-architecture.md)
 
-- **状态**: Accepted
+- **状态**: 已采纳 (Accepted)
 - **日期**: 2026-05
 - **决策者**: 后端技术负责人
 

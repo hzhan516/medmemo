@@ -6,6 +6,56 @@
 
 ---
 
+## 开发环境搭建
+
+### 前置条件
+
+- **Go** `1.26.4`（`go.mod` 的工具链指令会强制该版本）
+- **Node.js** `18+` 与 `npm`
+- **Wails v2 CLI** `2.12.0`：
+  ```bash
+  go install github.com/wailsapp/wails/v2/cmd/wails@latest
+  ```
+
+### Linux 系统依赖
+
+Debian / Ubuntu：
+
+```bash
+sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev libsqlcipher-dev
+```
+
+Fedora 43+：
+
+```bash
+sudo dnf install gtk3-devel webkit2gtk4.1-devel libsoup3-devel javascriptcoregtk4.1-devel sqlcipher-devel
+```
+
+> 需要 Ubuntu 22.04+ 才能使用 `webkit2gtk-4.1` / `libsoup-3.0`。
+
+### 下载运行时资源
+
+MedMemo 需要 ONNX Runtime 原生库、tokenizer 静态库以及 bundled 的 DistilBERT NER 模型：
+
+```bash
+make download-resources
+```
+
+该命令按顺序执行以下脚本：
+
+1. `scripts/build/download-onnx.sh` — ONNX Runtime 原生库
+2. `scripts/build/download-tokenizers.sh` — tokenizer 静态库
+3. `scripts/build/download-model.sh` — DistilBERT NER ONNX 模型
+
+### 首次构建
+
+```bash
+cd web && npm install && cd ..
+make build
+```
+
+---
+
 ## Clean Architecture 四层依赖规则
 
 MedMemo 严格遵循 Clean Architecture 四层模型，依赖方向始终向内指向领域核心。
@@ -128,6 +178,12 @@ if err != nil {
 
 优先使用 Tailwind CSS 工具类，自定义样式通过 CSS 变量实现主题切换。
 
+### Provider 模板文件
+
+`web/src/data/provider-templates.json` 是 Provider 模板的**唯一真源**。构建时被打包，并由 `APIKeyPanel`、`OAuthDevicePanel`、`ProviderTemplateList` 在运行时引入。
+
+新增或修改 provider 模板时，请只修改 `web/src/data/provider-templates.json`。提交 provider 模板变更前请先运行 `node scripts/validate-provider-templates.js`，该脚本现在校验的是打包源文件。
+
 ---
 
 ## 测试策略
@@ -187,4 +243,30 @@ defer cancel()
 
 ---
 
-*最后更新：2026-07-09*
+## Make 构建目标
+
+| 目标 | 用途 | 常用参数 |
+|------|------|----------|
+| `make dev` | 启动 Wails 开发模式（热重载） | — |
+| `make build` | 当前平台生产构建 | — |
+| `make build-linux` | 交叉编译 `linux/amd64` | — |
+| `make build-darwin` | macOS 交叉编译 | `DARWIN_PLATFORM=darwin/arm64` 或 `darwin/universal` |
+| `make build-windows` | 交叉编译 `windows/amd64` | — |
+| `make test` | 运行带 race detector 与覆盖率的单元测试 | — |
+| `make test-integration` | 运行集成测试 | — |
+| `make test-e2e` | 运行端到端测试 | — |
+| `make coverage` | 从 `coverage.out` 生成 `coverage.html` | — |
+| `make lint` | 全项目运行 `golangci-lint` | — |
+| `make fmt` | 格式化 Go 代码并自动修复前端 lint | — |
+| `make wire` | 重新生成 `wire_gen.go` | — |
+| `make download-resources` | 下载 ONNX / tokenizer / 模型资源 | — |
+| `make install-tools` | 安装 `wire`、`golangci-lint`、`mockery` | — |
+| `make clean` | 移除构建产物与覆盖率文件 | — |
+| `make release-local` | 构建本地发布包 | — |
+| `make release-dry-run` | 不发布，仅验证 GoReleaser 配置 | — |
+
+完整权威列表见 [`Makefile`](../../../Makefile)。
+
+---
+
+*最后更新：2026-07-14*

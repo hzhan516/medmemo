@@ -127,8 +127,8 @@ finish() {
 }
 
 # Pre-compute total step count so the progress indicator is accurate.
-# 11 core steps + 3 cross-compile checks + 2 platform test compiles = 16.
-STEP_COUNT=16
+# 11 core steps + 3 cross-compile checks + 2 platform test compiles + 4 docs checks = 20.
+STEP_COUNT=20
 
 # ----------------------------- Core validation -----------------------------
 run_step "Go lint"                           make lint
@@ -166,5 +166,12 @@ run_step "Test compile updater (windows)"    env GOOS=windows GOARCH=amd64 go te
 
 # Clean up test binaries produced by the platform-specific compile steps.
 rm -f "$REPO_ROOT/updater.test" "$REPO_ROOT/updater.test.exe"
+
+# ----------------------------- Documentation checks -----------------------------
+# Link check is best-effort locally because lychee is not always installed.
+run_warn_step "Docs Markdown link check"        ./scripts/check-doc-links.sh
+run_step "Docs Chinese mirror check"            node scripts/check-doc-mirrors.js
+run_step "Docs terminology check"               node scripts/check-terminology.js
+run_step "Docs version consistency check"       node scripts/check-version-consistency.js
 
 finish
