@@ -10,7 +10,6 @@ on:
 jobs:
   qodana:
     name: Qodana
-    if: ${{ secrets.QODANA_TOKEN != '' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -20,12 +19,28 @@ jobs:
       security-events: write
 
     steps:
+      # secrets 上下文不能在 job-level if 中使用，否则工作流文件会被判定为无效。
+      # 这里先通过一步检测 token 是否存在，再条件执行后续步骤。
+      - name: Check Qodana token presence
+        id: qodana-token
+        env:
+          QODANA_TOKEN: ${{ secrets.QODANA_TOKEN }}
+        run: |
+          if [ -n "$QODANA_TOKEN" ]; then
+            echo "has_token=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_token=false" >> "$GITHUB_OUTPUT"
+            echo "QODANA_TOKEN is not configured; skipping Qodana scan."
+          fi
+
       - name: Checkout repository
+        if: steps.qodana-token.outputs.has_token == 'true'
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Qodana Scan
+        if: steps.qodana-token.outputs.has_token == 'true'
         uses: JetBrains/qodana-action@v2026.1
         with:
           args: --linter qodana-go
@@ -34,7 +49,7 @@ jobs:
           QODANA_TOKEN: ${{ secrets.QODANA_TOKEN }}
 
       - name: Upload Qodana SARIF
-        if: always()
+        if: always() && steps.qodana-token.outputs.has_token == 'true'
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: ${{ runner.temp }}/qodana/results/qodana.sarif.json

@@ -399,7 +399,7 @@ MedMemo is licensed under the MIT License. This document lists all third-party d
 | property-information | 7.2.0 | MIT | https://github.com/wooorm/property-information |
 | queue-microtask | 1.2.3 | MIT | https://github.com/feross/queue-microtask |
 | react-dom | 18.3.1 | MIT | https://github.com/facebook/react |
-| react-hook-form | 7.80.0 | MIT | https://github.com/react-hook-form/react-hook-form |
+| react-hook-form | 7.81.0 | MIT | https://github.com/react-hook-form/react-hook-form |
 | react-markdown | 10.1.0 | MIT | https://github.com/remarkjs/react-markdown |
 | react-router-dom | 7.18.1 | MIT | https://github.com/remix-run/react-router |
 | react-router | 7.18.1 | MIT | https://github.com/remix-run/react-router |
