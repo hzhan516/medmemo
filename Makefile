@@ -74,10 +74,11 @@ install-tools:
 	$(GOLANGCI_LINT) version
 	go install github.com/vektra/mockery/v2@latest
 
-# 下载模型资源（开发环境）
+# 下载模型 / 运行时资源（开发环境）
 download-resources:
-	python scripts/download_models.py --output resources/models
-	python scripts/download_dicts.py --output resources/dict
+	./scripts/build/download-onnx.sh
+	./scripts/build/download-tokenizers.sh
+	./scripts/build/download-model.sh
 
 # 格式化代码
 fmt:
