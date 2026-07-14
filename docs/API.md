@@ -22,6 +22,10 @@ Detailed Wails binding documentation is organized by module in [`docs/api/`](./a
 | Knowledge | Local knowledge document import and management | [`api/knowledge.md`](./api/knowledge.md) |
 | Events | Wails Events emitted by the backend | [`api/events.md`](./api/events.md) |
 
+## Environment Variables
+
+All runtime environment variables are documented in [`docs/environment.md`](./environment.md).
+
 ---
 
 ## Internal Interface Contracts

@@ -22,6 +22,10 @@
 | Knowledge | 本地知识文档导入与管理 | [`api/knowledge.md`](../../api/knowledge.md) |
 | Events | 后端发出的 Wails Events | [`api/events.md`](../../api/events.md) |
 
+## 环境变量
+
+所有运行时环境变量见 [`docs/environment.md`](../../environment.md)。
+
 ---
 
 ## 内部接口契约
