@@ -46,6 +46,10 @@ coverage.out
 coverage.html
 *.cover
 
+# === License generation intermediates ===
+/scripts/licenses/go-licenses.md
+/scripts/licenses/node-licenses.md
+
 # === Local Data ===
 /.medmemo/
 /data/
