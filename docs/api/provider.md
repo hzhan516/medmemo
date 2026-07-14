@@ -26,7 +26,7 @@ type ModelInfo struct {
 
 Returns all configured providers from the backend SQLite store, including API keys (encrypted at rest), model lists, and health status.
 
-> ⚙️ **The authoritative, auto-generated field table for `models.ProviderConfig` is in [`../_generated/core-types.md`](../_generated/core-types.md).**
+> ⚙️ **The authoritative, auto-generated field table for `models.ProviderConfig` is in [`_generated/core-types.md`](./_generated/core-types.md).**
 
 #### `models.ProviderConfig` fields (quick reference)
 
