@@ -2,7 +2,7 @@
 
 > 🌐 [English Version](../../../api/auth.md)
 
-本文档描述四层鉴权体系（CLI Token、OAuth Device Flow、API Key、本地模型）的 Wails 绑定方法。
+本文档描述四层认证体系（CLI Token、OAuth Device Flow、API Key、本地模型）的 Wails 绑定方法。
 
 ---
 

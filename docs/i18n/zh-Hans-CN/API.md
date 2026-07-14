@@ -14,7 +14,7 @@
 |------|------|------|
 | Chat | 会话管理与消息流式输出 | [`api/chat.md`](../../api/chat.md) |
 | Provider | AI 模型提供商配置与健康检测 | [`api/provider.md`](../../api/provider.md) |
-| Auth | 四层鉴权体系 | [`api/auth.md`](../../api/auth.md) |
+| Auth | 四层认证体系 | [`api/auth.md`](../../api/auth.md) |
 | System | 设置、更新、免责声明与诊断 | [`api/system.md`](../../api/system.md) |
 | Ollama | 本地模型检测与管理 | [`api/ollama.md`](../../api/ollama.md) |
 | Memory | 个人记忆审核、搜索和注入开关 | [`api/memory.md`](../../api/memory.md) |

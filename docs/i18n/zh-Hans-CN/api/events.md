@@ -233,11 +233,11 @@ type EmbeddingMigrationDone = {
 
 ---
 
-## 鉴权与上下文事件
+## 认证与上下文事件
 
 ### `auth:degraded`
 
-Provider 鉴权健康状态降级时发出，前端应刷新鉴权状态。
+Provider 认证健康状态降级时发出，前端应刷新认证状态。
 
 ```typescript
 type AuthDegradedPayload = {
