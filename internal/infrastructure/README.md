@@ -22,8 +22,7 @@ internal/infrastructure/
 ├── onnx/       # Hugot ONNX Runtime inference runtime wrapper
 ├── database/   # DuckDB / SQLite connection pool, migrations, and transaction management
 ├── config/     # Viper configuration loading and validation
-├── secret/     # System keychain wrapper (macOS Keychain / Windows Credential / Linux Secret Service)
-└── network/    # HTTP client: retry, timeout, circuit breaker
+└── secret/     # System keychain wrapper (macOS Keychain / Windows Credential / Linux Secret Service)
 ```
 
 | Package | Purpose | Example Types |
@@ -32,7 +31,6 @@ internal/infrastructure/
 | `database/` | Database connectivity | `DuckDBConnector`, `SQLiteConnector` |
 | `config/` | Application configuration | `AppConfig`, `Load()` |
 | `secret/` | Secure credential storage | `KeychainStore` |
-| `network/` | Resilient HTTP communication | `RetryClient`, `CircuitBreaker` |
 
 ---
 

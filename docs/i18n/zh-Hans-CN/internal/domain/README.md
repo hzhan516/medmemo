@@ -14,8 +14,7 @@ Domain Layer 是 Clean Architecture 的最内层，承载 MedMemo 的核心业�
 internal/domain/
 ├── entity/       # 核心业务实体：Conversation, Memory, FamilyMember, HealthMemory...
 ├── repository/   # 仓库接口（Port）：MemoryRepository, FamilyRepository...
-├── policy/       # 策略接口：脱敏策略、合规策略抽象
-└── service/      # 领域服务接口：跨实体的复杂业务规则
+└── policy/       # 策略接口：脱敏策略、合规策略抽象
 ```
 
 ## 导入约束（铁律）
