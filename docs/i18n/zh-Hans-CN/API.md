@@ -122,13 +122,14 @@ Wails v2 通过 Go 结构体方法自动生成前端 TypeScript 绑定。
 
 ```go
 type WailsApp struct {
-    chatUC *usecase.ChatOrchestrator
+    ctx              context.Context
+    chatOrchestrator *usecase.ChatOrchestrator
 }
 
-// StartConversation 创建新会话，前端通过 window.go.main.WailsApp.StartConversation 调用。
-func (a *WailsApp) StartConversation(model string) (dto.ConversationDTO, error) {
-    conv := entity.NewConversation(models.ProviderType(model))
-    return dto.ToConversationDTO(conv), nil
+// CreateConversation 创建新会话并返回其 ID，前端通过 window.go.main.WailsApp.CreateConversation 调用。
+func (a *WailsApp) CreateConversation() (string, error) {
+    // 通过 ConversationRepository 持久化后返回新会话 ID。
+    return "", nil
 }
 
 // SendMessage 发送消息并触发流式响应。

@@ -122,13 +122,15 @@ Wails v2 automatically generates frontend TypeScript bindings from Go struct met
 
 ```go
 type WailsApp struct {
-    chatUC *usecase.ChatOrchestrator
+    ctx              context.Context
+    chatOrchestrator *usecase.ChatOrchestrator
 }
 
-// StartConversation creates a new conversation; frontend calls via window.go.main.WailsApp.StartConversation.
-func (a *WailsApp) StartConversation(model string) (dto.ConversationDTO, error) {
-    conv := entity.NewConversation(models.ProviderType(model))
-    return dto.ToConversationDTO(conv), nil
+// CreateConversation creates a new conversation and returns its ID;
+// frontend calls via window.go.main.WailsApp.CreateConversation.
+func (a *WailsApp) CreateConversation() (string, error) {
+    // Persisted via ConversationRepository; returns the new conversation ID.
+    return "", nil
 }
 
 // SendMessage sends a message and triggers a streaming response.
