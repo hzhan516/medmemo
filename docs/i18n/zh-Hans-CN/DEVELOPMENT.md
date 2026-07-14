@@ -128,6 +128,12 @@ if err != nil {
 
 优先使用 Tailwind CSS 工具类，自定义样式通过 CSS 变量实现主题切换。
 
+### Provider 模板文件
+
+`web/src/data/provider-templates.json` 是 Provider 模板的**唯一真源**。构建时被打包，并由 `APIKeyPanel`、`OAuthDevicePanel`、`ProviderTemplateList` 在运行时引入。
+
+新增或修改 provider 模板时，请只修改 `web/src/data/provider-templates.json`。提交 provider 模板变更前请先运行 `node scripts/validate-provider-templates.js`，该脚本现在校验的是打包源文件。
+
 ---
 
 ## 测试策略

@@ -128,6 +128,12 @@ if err != nil {
 
 Prioritize Tailwind CSS utility classes; custom styles should use CSS variables for theme switching.
 
+### Provider Template Files
+
+`web/src/data/provider-templates.json` is the **single source of truth** for provider templates. It is bundled by the build and imported at runtime by `APIKeyPanel`, `OAuthDevicePanel`, and `ProviderTemplateList`.
+
+When adding or editing provider templates, modify only `web/src/data/provider-templates.json`. Run `node scripts/validate-provider-templates.js` before submitting provider-template changes; the validator checks the bundled source file.
+
 ---
 
 ## Testing Strategy
