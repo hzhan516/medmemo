@@ -291,13 +291,13 @@ func TestE2E_Memory_FullPipeline(t *testing.T) {
 	factRepo := repository.NewFactRepoSQLite(conn)
 	embedRepo := repository.NewEmbeddingRepoSQLite(conn)
 
-	// 1. 模拟用户对话
-	dialogue := entity.NewRawDialogue("sess_full", entity.RoleUser, "我有高血压，最近在服用降压药", "kimi")
+	// 1. 模拟用户对话（使用非敏感事实，避免被 SensitiveDetector 标记）
+	dialogue := entity.NewRawDialogue("sess_full", entity.RoleUser, "我身高175cm，体重70kg", "kimi")
 
 	// 2. 事实提取（模拟 LLM 输出）
 	facts := []*entity.ExtractedFact{
-		entity.NewExtractedFact("用户", "患有", "高血压", 0.9, []string{dialogue.MessageID}),
-		entity.NewExtractedFact("用户", "服用", "降压药", 0.85, []string{dialogue.MessageID}),
+		entity.NewExtractedFact("用户", "身高是", "175cm", 0.9, []string{dialogue.MessageID}),
+		entity.NewExtractedFact("用户", "体重是", "70kg", 0.85, []string{dialogue.MessageID}),
 	}
 
 	// 3. 置信度评分 + 审核 + 保存
@@ -322,7 +322,7 @@ func TestE2E_Memory_FullPipeline(t *testing.T) {
 	mockSvc := &e2eMockEmbeddingService{}
 	retriever := usecase.NewMemoryRetriever(mockSvc, embedRepo, factRepo, nil, usecase.NewDecayScorer(), nil, nil, nil)
 
-	memories, err := retriever.RetrieveForContext(ctx, "我的血压情况", "sess_full", 3)
+	memories, err := retriever.RetrieveForContext(ctx, "我的身高和体重", "sess_full", 3)
 	require.NoError(t, err)
 	require.Len(t, memories, 2)
 
@@ -331,12 +331,44 @@ func TestE2E_Memory_FullPipeline(t *testing.T) {
 	for _, m := range memories {
 		contents[m.Content] = true
 	}
-	assert.True(t, contents["用户 患有 高血压"], "应召回高血压相关记忆")
-	assert.True(t, contents["用户 服用 降压药"], "应召回降压药相关记忆")
+	assert.True(t, contents["用户 身高是 175cm"], "应召回身高相关记忆")
+	assert.True(t, contents["用户 体重是 70kg"], "应召回体重相关记忆")
 
 	// 7. 验证格式化注入文本
 	injectionText := usecase.FormatMemoriesForInjection(memories)
 	assert.Contains(t, injectionText, "[相关记忆]")
-	assert.Contains(t, injectionText, "高血压")
-	assert.Contains(t, injectionText, "降压药")
+	assert.Contains(t, injectionText, "身高是 175cm")
+	assert.Contains(t, injectionText, "体重是 70kg")
+}
+
+// TestE2E_Memory_SensitiveFactExcluded 验证敏感且已审批的事实不会进入召回结果和注入文本。
+func TestE2E_Memory_SensitiveFactExcluded(t *testing.T) {
+	conn := setupTestDB(t)
+	defer conn.Close()
+
+	ctx := context.Background()
+	factRepo := repository.NewFactRepoSQLite(conn)
+	embedRepo := repository.NewEmbeddingRepoSQLite(conn)
+
+	// 包含医学敏感关键词的事实，评分后会被 SensitiveDetector 标记为敏感
+	fact := entity.NewExtractedFact("用户", "患有", "高血压", 0.9, []string{"msg_sensitive"})
+	scorer := usecase.NewConfidenceScorer()
+	status := scorer.EvaluateStatus(fact)
+	fact.Status = status
+	require.True(t, fact.IsSensitive, "敏感事实应被标记为 IsSensitive")
+	require.NoError(t, factRepo.Save(ctx, fact))
+
+	v := make([]float32, entity.EmbeddingDimension)
+	v[0] = 1.0
+	require.NoError(t, embedRepo.Save(ctx, entity.NewSemanticEmbedding(fact.FactID, v, "all-MiniLM-L6-v2")))
+
+	mockSvc := &e2eMockEmbeddingService{}
+	retriever := usecase.NewMemoryRetriever(mockSvc, embedRepo, factRepo, nil, usecase.NewDecayScorer(), nil, nil, nil)
+
+	memories, err := retriever.RetrieveForContext(ctx, "我的血压情况", "sess_sensitive", 3)
+	require.NoError(t, err)
+	assert.Empty(t, memories, "敏感事实不应被召回用于注入")
+
+	injectionText := usecase.FormatMemoriesForInjection(memories)
+	assert.Equal(t, "", injectionText, "敏感事实不应产生注入文本")
 }

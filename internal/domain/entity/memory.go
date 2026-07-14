@@ -20,14 +20,15 @@ const (
 
 // HealthMemory 表示一条健康相关的结构化记忆单元。
 type HealthMemory struct {
-	ID         models.MemoryID
-	Tier       MemoryTier
-	Content    string
-	Tags       []string // 如 "症状", "诊断", "用药"
-	SourceConv models.ConversationID
-	Confidence float64 // 0-1，记忆可信度
-	CreatedAt  time.Time
-	AccessedAt time.Time // 最近访问时间，用于时间衰减计算
+	ID          models.MemoryID
+	Tier        MemoryTier
+	Content     string
+	Tags        []string // 如 "症状", "诊断", "用药"
+	SourceConv  models.ConversationID
+	Confidence  float64 // 0-1，记忆可信度
+	IsSensitive bool    // 是否包含敏感信息（PII / 疾病 / 药品等），注入时必须排除
+	CreatedAt   time.Time
+	AccessedAt  time.Time // 最近访问时间，用于时间衰减计算
 }
 
 // NewHealthMemory 创建新的健康记忆。

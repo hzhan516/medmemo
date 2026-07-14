@@ -391,6 +391,49 @@ func TestMemoryRetriever_FilterUnapproved(t *testing.T) {
 	assert.Equal(t, "用户 患有 高血压", memories[0].Content)
 }
 
+func TestMemoryRetriever_ExcludeSensitive(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+
+	facts := map[string]*entity.ExtractedFact{
+		"fact_normal": {
+			FactID: "fact_normal", Subject: "用户", Predicate: "身高是", Object: "180cm",
+			Confidence: 0.9, Status: entity.FactStatusApproved, IsSensitive: false, CreatedAt: now,
+		},
+		"fact_sensitive": {
+			FactID: "fact_sensitive", Subject: "用户", Predicate: "患有", Object: "高血压",
+			Confidence: 0.9, Status: entity.FactStatusApproved, IsSensitive: true, CreatedAt: now,
+		},
+	}
+
+	embeddings := []*entity.ScoredEmbedding{
+		{SemanticEmbedding: &entity.SemanticEmbedding{FactID: "fact_normal"}, Similarity: 0.9},
+		{SemanticEmbedding: &entity.SemanticEmbedding{FactID: "fact_sensitive"}, Similarity: 0.95},
+	}
+
+	retriever := NewMemoryRetriever(
+		&stubEmbeddingService{},
+		&stubEmbeddingRepository{results: embeddings},
+		&stubFactRepository{facts: facts}, nil,
+		NewDecayScorer(),
+		nil,
+		nil,
+		nil,
+	)
+
+	diag, memories, err := retriever.retrieveWithDiagnostics(context.Background(), "query", "session_001", 10)
+	require.NoError(t, err)
+	require.Len(t, memories, 1)
+	assert.Equal(t, "用户 身高是 180cm", memories[0].Content)
+	assert.False(t, memories[0].IsSensitive)
+
+	// 敏感候选应被记录到 RejectedCandidates，便于合规审计
+	require.Len(t, diag.RejectedCandidates, 1)
+	assert.Equal(t, "fact_sensitive", diag.RejectedCandidates[0].FactID)
+	assert.Equal(t, "sensitive fact excluded", diag.RejectedCandidates[0].RejectReason)
+	assert.Equal(t, 1, diag.TotalRejected)
+}
+
 func TestMemoryRetriever_MinConfidenceFilter(t *testing.T) {
 	t.Parallel()
 	now := time.Now().UTC()
@@ -639,6 +682,19 @@ func TestFormatMemoriesForInjection_Empty(t *testing.T) {
 	t.Parallel()
 	result := FormatMemoriesForInjection(nil)
 	assert.Equal(t, "", result)
+}
+
+func TestFormatMemoriesForInjection_SensitiveExcluded(t *testing.T) {
+	t.Parallel()
+	memories := []*entity.HealthMemory{
+		{Content: "用户 身高是 180cm", Confidence: 0.9, IsSensitive: false},
+		{Content: "用户 患有 高血压", Confidence: 0.85, IsSensitive: true},
+	}
+	result := FormatMemoriesForInjection(memories)
+	assert.Contains(t, result, "[相关记忆]")
+	assert.Contains(t, result, "用户 身高是 180cm")
+	assert.NotContains(t, result, "高血压")
+	assert.NotContains(t, result, "0.85")
 }
 
 func TestMemoryRetriever_retrieveSemantic_error(t *testing.T) {
