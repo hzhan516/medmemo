@@ -29,8 +29,8 @@ type UpdateInfo struct {
 }
 
 // HasUpdate 语义化版本比较：remote 是否比 current 更新。
-// 支持 "v" 前缀、四段版本号（如 1.1.2.54）、build 后缀（如 1.1.2-build.54）。
-// 当核心版本号相同时，优先比较 build 号；无法比较时若完整字符串不同则视为有更新。
+// 支持 "v" 前缀、四段版本号、build 后缀以及带尾号的预发布标签（如 rc.12）。
+// 比较顺序：核心版本号 > build 号 > 预发布标签等级 > 同标签尾号 > 字符串回退。
 func HasUpdate(current, remote string) (bool, error) {
 	cv, err := parseSemver(current)
 	if err != nil {
@@ -50,7 +50,7 @@ func HasUpdate(current, remote string) (bool, error) {
 		}
 	}
 
-	// 核心版本号相同，优先比较 build 号
+	// 核心版本相同，优先比较 build 号（保留 4 段版本号与 build 后缀兼容性）
 	if rv.build != -1 && cv.build != -1 {
 		if rv.build > cv.build {
 			return true, nil
@@ -58,20 +58,43 @@ func HasUpdate(current, remote string) (bool, error) {
 		if rv.build < cv.build {
 			return false, nil
 		}
-		// build 号相同视为同版本（忽略 format 差异，如 1.1.2.54 与 1.1.2-build.54）
+		// build 号相同视为同版本
 		return false, nil
 	}
 
-	// 至少一边无 build 号，回退到完整字符串比较
+	// build 号路径无法比较时，对非 build 预发布标签进行等级比较
+	if cv.label != "build" && rv.label != "build" {
+		// 稳定版（空标签）高于任何预发布版
+		if rv.label == "" && cv.label != "" {
+			return true, nil
+		}
+		if rv.label != "" && cv.label == "" {
+			return false, nil
+		}
+		// 同标签预发布版比较尾号
+		if rv.label != "" && rv.label == cv.label {
+			if rv.preN > cv.preN {
+				return true, nil
+			}
+			if rv.preN < cv.preN {
+				return false, nil
+			}
+			return false, nil
+		}
+	}
+
+	// 至少一边无 build 号或存在 build 标签，回退到完整字符串比较
 	currentClean := strings.TrimPrefix(current, "v")
 	remoteClean := strings.TrimPrefix(remote, "v")
 	return currentClean != remoteClean, nil
 }
 
-// semver 内部表示，含核心三段式版本号与可选的 build 号。
+// semver 内部表示，含核心三段式版本号、可选 build 号以及预发布标签信息。
 type semver struct {
 	core  [3]int // major, minor, patch
 	build int    // build/revision 序号，-1 表示无 build 号
+	label string // 预发布标签，空字符串表示稳定版
+	preN  int    // 预发布标签尾号，-1 表示无尾号
 }
 
 // parseSemver 解析语义化版本字符串，支持以下格式：
@@ -79,12 +102,14 @@ type semver struct {
 //   - 1~3 段核心版本（缺失段补 0）
 //   - 四段版本号：第 4 段作为 build 号（如 1.1.2.54）
 //   - build 后缀：-build.N（如 1.1.2-build.54）
-//   - 预发布标签：-alpha、-Pre-release-build.N 等（build 号仍可提取）
+//   - 带尾号的预发布标签：-rc.12、-Pre-release-build.86 等
+//   - 无尾号的预发布标签：-alpha、-rc 等
 func parseSemver(v string) (semver, error) {
 	v = strings.TrimPrefix(v, "v")
 
 	var s semver
 	s.build = -1
+	s.preN = -1
 
 	// 分离主版本号与后缀
 	raw := v
@@ -97,13 +122,23 @@ func parseSemver(v string) (semver, error) {
 		preStr := raw[idx+1:]
 		raw = raw[:idx]
 
-		if strings.HasPrefix(preStr, "build.") {
-			// 标准 build 后缀，如 1.1.2-build.54
-			if n, err := strconv.Atoi(preStr[len("build."):]); err == nil {
-				s.build = n
+		// 解析预发布标签与尾号：最后一个 "." 后若为数字则作为尾号
+		if dotIdx := strings.LastIndex(preStr, "."); dotIdx != -1 {
+			s.label = preStr[:dotIdx]
+			if n, err := strconv.Atoi(preStr[dotIdx+1:]); err == nil {
+				s.preN = n
 			}
 		} else {
-			// 其他预发布标签，尝试提取其中可能包含的 build 号
+			s.label = preStr
+		}
+
+		if strings.HasPrefix(preStr, "build.") {
+			// 标准 build 后缀，如 1.1.2-build.54
+			if s.preN != -1 {
+				s.build = s.preN
+			}
+		} else {
+			// 其他预发布标签，仍尝试提取其中可能包含的 build 号
 			// 如 Pre-release-build.53
 			if buildIdx := strings.LastIndex(preStr, "build."); buildIdx != -1 {
 				if n, err := strconv.Atoi(preStr[buildIdx+len("build."):]); err == nil {

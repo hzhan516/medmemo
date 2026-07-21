@@ -33,8 +33,16 @@ func TestHasUpdate(t *testing.T) {
 		{"with prerelease tag remote newer", "v1.0.0", "v1.0.1-beta", true, false},
 		{"same version different build", "0.1.0-build.10", "0.1.0-build.20", true, false},
 		{"same version same build", "0.1.0-build.10", "0.1.0-build.10", false, false},
-		{"stable to pre-release same core", "0.1.0", "0.1.0-Pre-release-build.5", true, false},
+		{"stable to pre-release same core", "0.1.0", "0.1.0-Pre-release-build.5", false, false},
 		{"pre-release to stable same core", "0.1.0-Pre-release-build.5", "0.1.0", true, false},
+		// rc 标签尾号比较
+		{"rc tail newer", "v1.1.10-rc.12", "v1.1.10-rc.13", true, false},
+		{"rc tail older", "v1.1.10-rc.13", "v1.1.10-rc.12", false, false},
+		{"rc tail same", "v1.1.10-rc.12", "v1.1.10-rc.12", false, false},
+		{"rc to stable same core", "v1.1.10-rc.12", "v1.1.10", true, false},
+		{"stable to rc same core", "v1.1.10", "v1.1.10-rc.12", false, false},
+		{"core differs with pre-release", "v1.1.9-Pre-release-build.86", "v1.1.10-rc.12", true, false},
+		{"cross-label fallback", "v1.1.10-rc.12", "v1.1.10-Pre-release-build.86", true, false},
 		// 四段版本号与 build 后缀兼容场景
 		{"4-segment prerelease to 4-segment newer", "1.1.2-Pre-release-build.53", "1.1.2.54", true, false},
 		{"4-segment same", "1.1.2.54", "1.1.2.54", false, false},
