@@ -107,7 +107,8 @@ func (g *GitHubUpdater) FetchLatest(ctx context.Context, channel models.UpdateCh
 		return nil, fmt.Errorf("failed to decode github response: %w", err)
 	}
 
-	// 遍历 releases 列表，找到适合当前通道且包含当前平台产物的第一个 release
+	// 收集所有通过通道过滤且包含当前平台产物的 release，再从中选出最高版本
+	var best *entity.UpdateInfo
 	for _, release := range releases {
 		// 通道过滤：stable 通道跳过 prerelease
 		if channel == models.ChannelStable && release.Prerelease {
@@ -128,7 +129,7 @@ func (g *GitHubUpdater) FetchLatest(ctx context.Context, channel models.UpdateCh
 			displayVersion = release.Name
 		}
 
-		info := &entity.UpdateInfo{
+		candidate := &entity.UpdateInfo{
 			Version:         release.TagName,
 			DisplayVersion:  displayVersion,
 			Name:            release.Name,
@@ -143,10 +144,25 @@ func (g *GitHubUpdater) FetchLatest(ctx context.Context, channel models.UpdateCh
 			PreReleaseLabel: version.PrereleaseLabel,
 		}
 
-		return info, nil
+		if best == nil {
+			best = candidate
+			continue
+		}
+
+		cmp, err := entity.CompareVersions(best.Version, candidate.Version)
+		if err != nil {
+			// 版本解析失败时跳过异常候选，避免中断整个流程
+			continue
+		}
+		if cmp > 0 {
+			best = candidate
+		}
 	}
 
-	return nil, fmt.Errorf("no suitable release found for channel %s on platform %s/%s", channel, runtime.GOOS, runtime.GOARCH)
+	if best == nil {
+		return nil, fmt.Errorf("no suitable release found for channel %s on platform %s/%s", channel, runtime.GOOS, runtime.GOARCH)
+	}
+	return best, nil
 }
 
 // Download 下载指定 URL 的资产到本地路径，支持进度回调。

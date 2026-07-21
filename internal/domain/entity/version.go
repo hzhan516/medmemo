@@ -28,65 +28,80 @@ type UpdateInfo struct {
 	PreReleaseLabel string               `json:"prerelease_label"` // 预发布标签，如 "Pre-release"
 }
 
-// HasUpdate 语义化版本比较：remote 是否比 current 更新。
+// CompareVersions 语义化版本比较。
+// 返回值大于 0 表示 b 比 a 新，小于 0 表示 a 比 b 新，等于 0 表示相同。
 // 支持 "v" 前缀、四段版本号、build 后缀以及带尾号的预发布标签（如 rc.12）。
 // 比较顺序：核心版本号 > build 号 > 预发布标签等级 > 同标签尾号 > 字符串回退。
-func HasUpdate(current, remote string) (bool, error) {
-	cv, err := parseSemver(current)
+func CompareVersions(a, b string) (int, error) {
+	av, err := parseSemver(a)
 	if err != nil {
-		return false, fmt.Errorf("failed to parse current version %q: %w", current, err)
+		return 0, fmt.Errorf("failed to parse version %q: %w", a, err)
 	}
-	rv, err := parseSemver(remote)
+	bv, err := parseSemver(b)
 	if err != nil {
-		return false, fmt.Errorf("failed to parse remote version %q: %w", remote, err)
+		return 0, fmt.Errorf("failed to parse version %q: %w", b, err)
 	}
 
 	for i := 0; i < 3; i++ {
-		if rv.core[i] > cv.core[i] {
-			return true, nil
+		if av.core[i] < bv.core[i] {
+			return 1, nil
 		}
-		if rv.core[i] < cv.core[i] {
-			return false, nil
+		if av.core[i] > bv.core[i] {
+			return -1, nil
 		}
 	}
 
 	// 核心版本相同，优先比较 build 号（保留 4 段版本号与 build 后缀兼容性）
-	if rv.build != -1 && cv.build != -1 {
-		if rv.build > cv.build {
-			return true, nil
+	if av.build != -1 && bv.build != -1 {
+		if av.build < bv.build {
+			return 1, nil
 		}
-		if rv.build < cv.build {
-			return false, nil
+		if av.build > bv.build {
+			return -1, nil
 		}
-		// build 号相同视为同版本
-		return false, nil
+		return 0, nil
 	}
 
 	// build 号路径无法比较时，对非 build 预发布标签进行等级比较
-	if cv.label != "build" && rv.label != "build" {
+	if av.label != "build" && bv.label != "build" {
 		// 稳定版（空标签）高于任何预发布版
-		if rv.label == "" && cv.label != "" {
-			return true, nil
+		if av.label == "" && bv.label != "" {
+			return -1, nil
 		}
-		if rv.label != "" && cv.label == "" {
-			return false, nil
+		if av.label != "" && bv.label == "" {
+			return 1, nil
 		}
 		// 同标签预发布版比较尾号
-		if rv.label != "" && rv.label == cv.label {
-			if rv.preN > cv.preN {
-				return true, nil
+		if av.label != "" && av.label == bv.label {
+			if av.preN < bv.preN {
+				return 1, nil
 			}
-			if rv.preN < cv.preN {
-				return false, nil
+			if av.preN > bv.preN {
+				return -1, nil
 			}
-			return false, nil
+			return 0, nil
 		}
 	}
 
 	// 至少一边无 build 号或存在 build 标签，回退到完整字符串比较
-	currentClean := strings.TrimPrefix(current, "v")
-	remoteClean := strings.TrimPrefix(remote, "v")
-	return currentClean != remoteClean, nil
+	aClean := strings.TrimPrefix(a, "v")
+	bClean := strings.TrimPrefix(b, "v")
+	if aClean < bClean {
+		return 1, nil
+	}
+	if aClean > bClean {
+		return -1, nil
+	}
+	return 0, nil
+}
+
+// HasUpdate 语义化版本比较：remote 是否比 current 更新。
+func HasUpdate(current, remote string) (bool, error) {
+	cmp, err := CompareVersions(current, remote)
+	if err != nil {
+		return false, err
+	}
+	return cmp > 0, nil
 }
 
 // semver 内部表示，含核心三段式版本号、可选 build 号以及预发布标签信息。

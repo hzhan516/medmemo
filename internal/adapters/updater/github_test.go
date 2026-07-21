@@ -75,18 +75,18 @@ func TestFetchLatest_StableSkipsPrerelease(t *testing.T) {
 	assetName := platformAssetName()
 	body := fmt.Sprintf(`[
 		{
-			"tag_name": "0.1.0-Pre-release-build.20",
-			"name": "Pre-release",
+			"tag_name": "v1.1.10-rc.5",
+			"name": "v1.1.10-rc.5",
 			"body": "beta",
 			"prerelease": true,
 			"published_at": "2026-05-20T00:00:00Z",
 			"assets": [
-				{"name": "%s", "browser_download_url": "https://example.com/pre-release", "size": 100}
+				{"name": "%s", "browser_download_url": "https://example.com/rc5", "size": 100}
 			]
 		},
 		{
-			"tag_name": "0.1.0-build.10",
-			"name": "Stable",
+			"tag_name": "v1.1.10",
+			"name": "v1.1.10",
 			"body": "stable",
 			"prerelease": false,
 			"published_at": "2026-05-19T00:00:00Z",
@@ -101,8 +101,8 @@ func TestFetchLatest_StableSkipsPrerelease(t *testing.T) {
 
 	info, err := g.FetchLatest(context.Background(), models.ChannelStable)
 	require.NoError(t, err)
-	assert.Equal(t, "0.1.0-build.10", info.Version)
-	assert.Equal(t, "Stable", info.Name)
+	assert.Equal(t, "v1.1.10", info.Version)
+	assert.Equal(t, "v1.1.10", info.Name)
 	assert.Equal(t, "https://example.com/stable", info.DownloadURL)
 	assert.False(t, info.Mandatory)
 }
@@ -111,23 +111,23 @@ func TestFetchLatest_BetaIncludesPrerelease(t *testing.T) {
 	assetName := platformAssetName()
 	body := fmt.Sprintf(`[
 		{
-			"tag_name": "0.1.0-Pre-release-build.20",
-			"name": "Pre-release",
+			"tag_name": "v1.1.10-rc.12",
+			"name": "v1.1.10-rc.12",
+			"body": "beta",
+			"prerelease": true,
+			"published_at": "2026-05-21T00:00:00Z",
+			"assets": [
+				{"name": "%s", "browser_download_url": "https://example.com/rc12", "size": 100}
+			]
+		},
+		{
+			"tag_name": "v1.1.10-rc.5",
+			"name": "v1.1.10-rc.5",
 			"body": "beta",
 			"prerelease": true,
 			"published_at": "2026-05-20T00:00:00Z",
 			"assets": [
-				{"name": "%s", "browser_download_url": "https://example.com/pre-release", "size": 100}
-			]
-		},
-		{
-			"tag_name": "0.1.0-build.10",
-			"name": "Stable",
-			"body": "stable",
-			"prerelease": false,
-			"published_at": "2026-05-19T00:00:00Z",
-			"assets": [
-				{"name": "%s", "browser_download_url": "https://example.com/stable", "size": 100}
+				{"name": "%s", "browser_download_url": "https://example.com/rc5", "size": 100}
 			]
 		}
 	]`, assetName, assetName)
@@ -137,8 +137,52 @@ func TestFetchLatest_BetaIncludesPrerelease(t *testing.T) {
 
 	info, err := g.FetchLatest(context.Background(), models.ChannelBeta)
 	require.NoError(t, err)
-	assert.Equal(t, "0.1.0-Pre-release-build.20", info.Version)
-	assert.Equal(t, "https://example.com/pre-release", info.DownloadURL)
+	assert.Equal(t, "v1.1.10-rc.12", info.Version)
+	assert.Equal(t, "https://example.com/rc12", info.DownloadURL)
+}
+
+func TestFetchLatest_SelectsHighestVersionWhenOutOfOrder(t *testing.T) {
+	assetName := platformAssetName()
+	body := fmt.Sprintf(`[
+		{
+			"tag_name": "v1.1.10-rc.1",
+			"name": "v1.1.10-rc.1",
+			"body": "beta",
+			"prerelease": true,
+			"published_at": "2026-05-19T00:00:00Z",
+			"assets": [
+				{"name": "%s", "browser_download_url": "https://example.com/rc1", "size": 100}
+			]
+		},
+		{
+			"tag_name": "v1.1.10-rc.12",
+			"name": "v1.1.10-rc.12",
+			"body": "beta",
+			"prerelease": true,
+			"published_at": "2026-05-21T00:00:00Z",
+			"assets": [
+				{"name": "%s", "browser_download_url": "https://example.com/rc12", "size": 100}
+			]
+		},
+		{
+			"tag_name": "v1.1.10-rc.5",
+			"name": "v1.1.10-rc.5",
+			"body": "beta",
+			"prerelease": true,
+			"published_at": "2026-05-20T00:00:00Z",
+			"assets": [
+				{"name": "%s", "browser_download_url": "https://example.com/rc5", "size": 100}
+			]
+		}
+	]`, assetName, assetName, assetName)
+
+	client := &http.Client{Transport: &mockTransport{statusCode: http.StatusOK, body: body}}
+	g := NewGitHubUpdater(client)
+
+	info, err := g.FetchLatest(context.Background(), models.ChannelBeta)
+	require.NoError(t, err)
+	assert.Equal(t, "v1.1.10-rc.12", info.Version)
+	assert.Equal(t, "https://example.com/rc12", info.DownloadURL)
 }
 
 func TestFetchLatest_StableNoReleaseAvailable(t *testing.T) {

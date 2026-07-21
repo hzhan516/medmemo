@@ -42,7 +42,8 @@ func TestHasUpdate(t *testing.T) {
 		{"rc to stable same core", "v1.1.10-rc.12", "v1.1.10", true, false},
 		{"stable to rc same core", "v1.1.10", "v1.1.10-rc.12", false, false},
 		{"core differs with pre-release", "v1.1.9-Pre-release-build.86", "v1.1.10-rc.12", true, false},
-		{"cross-label fallback", "v1.1.10-rc.12", "v1.1.10-Pre-release-build.86", true, false},
+		{"cross-label fallback", "v1.1.10-Pre-release-build.86", "v1.1.10-rc.12", true, false},
+		{"cross-label fallback reverse", "v1.1.10-rc.12", "v1.1.10-Pre-release-build.86", false, false},
 		// 四段版本号与 build 后缀兼容场景
 		{"4-segment prerelease to 4-segment newer", "1.1.2-Pre-release-build.53", "1.1.2.54", true, false},
 		{"4-segment same", "1.1.2.54", "1.1.2.54", false, false},
@@ -63,6 +64,44 @@ func TestHasUpdate(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Errorf("HasUpdate(%q, %q) = %v, want %v", tt.current, tt.remote, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCompareVersions(t *testing.T) {
+	tests := []struct {
+		name    string
+		a       string
+		b       string
+		want    int
+		wantErr bool
+	}{
+		{"major newer", "v0.1.0", "v1.0.0", 1, false},
+		{"major older", "v1.0.0", "v0.1.0", -1, false},
+		{"same version", "v0.1.0", "v0.1.0", 0, false},
+		{"patch newer", "v0.1.0", "v0.1.1", 1, false},
+		{"patch older", "v0.1.1", "v0.1.0", -1, false},
+		{"rc tail newer", "v1.1.10-rc.12", "v1.1.10-rc.13", 1, false},
+		{"rc tail older", "v1.1.10-rc.13", "v1.1.10-rc.12", -1, false},
+		{"rc tail same", "v1.1.10-rc.12", "v1.1.10-rc.12", 0, false},
+		{"rc to stable", "v1.1.10-rc.12", "v1.1.10", 1, false},
+		{"stable to rc", "v1.1.10", "v1.1.10-rc.12", -1, false},
+		{"build newer", "0.1.0-build.10", "0.1.0-build.20", 1, false},
+		{"build same", "0.1.0-build.10", "0.1.0-build.10", 0, false},
+		{"invalid a", "abc", "v0.1.0", 0, true},
+		{"invalid b", "v0.1.0", "abc", 0, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := CompareVersions(tt.a, tt.b)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("CompareVersions(%q, %q) error = %v, wantErr %v", tt.a, tt.b, err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("CompareVersions(%q, %q) = %v, want %v", tt.a, tt.b, got, tt.want)
 			}
 		})
 	}
