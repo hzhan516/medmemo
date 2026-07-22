@@ -129,7 +129,7 @@
 
 ### `GenerateTitle(convID string, userMessage string)`
 
-基于首条用户消息异步生成会话标题。结果通过 `chat:title:generated` 事件送达。此方法不阻塞调用方。
+基于首条用户消息使用本地规则生成会话标题。结果通过 `chat:title:generated` 事件送达。此方法不阻塞调用方。
 
 ---
 

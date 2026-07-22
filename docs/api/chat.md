@@ -129,7 +129,7 @@ Returns soft-deleted conversations that are still within the retention window.
 
 ### `GenerateTitle(convID string, userMessage string)`
 
-Asynchronously generates a conversation title based on the first user message. The result is delivered via `chat:title:generated` event. This method does not block the caller.
+Generates a conversation title based on the first user message using local rules. The result is delivered via `chat:title:generated` event. This method does not block the caller.
 
 ---
 
