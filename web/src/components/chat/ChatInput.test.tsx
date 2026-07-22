@@ -112,7 +112,7 @@ describe('ChatInput', () => {
         <>
           <ChatInput ref={inputRef} onSend={onSend} />
           <button
-            onClick={() => inputRef.current?.setValue('症状持续多久了？')}
+            onClick={() => inputRef.current?.setValue('症状持续时间（开始时间、持续多久）：')}
             data-testid="fill-button"
           >
             填充
@@ -130,7 +130,39 @@ describe('ChatInput', () => {
       screen.getByTestId('fill-button').click()
     })
 
-    expect(textarea).toHaveValue('症状持续多久了？')
+    expect(textarea).toHaveValue('症状持续时间（开始时间、持续多久）：')
+    expect(onSend).not.toHaveBeenCalled()
+  })
+
+  it('通过 ref.setValue 在已有内容后追加文案', async () => {
+    const onSend = vi.fn()
+
+    function Wrapper() {
+      const inputRef = useRef<ChatInputHandle>(null)
+      return (
+        <>
+          <ChatInput ref={inputRef} onSend={onSend} />
+          <button
+            onClick={() => inputRef.current?.setValue('发热情况（有无、体温）：')}
+            data-testid="fill-button"
+          >
+            填充
+          </button>
+        </>
+      )
+    }
+
+    render(<Wrapper />)
+
+    const textarea = screen.getByPlaceholderText(/输入你的健康问题/)
+    await userEvent.type(textarea, '我已经发烧了')
+    expect(textarea).toHaveValue('我已经发烧了')
+
+    await act(async () => {
+      screen.getByTestId('fill-button').click()
+    })
+
+    expect(textarea).toHaveValue('我已经发烧了\n发热情况（有无、体温）：')
     expect(onSend).not.toHaveBeenCalled()
   })
 })

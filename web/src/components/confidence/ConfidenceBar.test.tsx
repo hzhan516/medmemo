@@ -39,7 +39,7 @@ describe('ConfidenceBar follow-up', () => {
     await user.click(button)
 
     expect(onFollowupClick).toHaveBeenCalledTimes(1)
-    expect(onFollowupClick).toHaveBeenCalledWith('症状持续多久了？')
+    expect(onFollowupClick).toHaveBeenCalledWith('症状持续时间（开始时间、持续多久）：')
   })
 
   it('未知缺失项回退为通用追问文案', async () => {
@@ -57,7 +57,7 @@ describe('ConfidenceBar follow-up', () => {
     const button = screen.getByRole('button', { name: /未知项/ })
     await user.click(button)
 
-    expect(onFollowupClick).toHaveBeenCalledWith('请补充一下未知项的信息')
+    expect(onFollowupClick).toHaveBeenCalledWith('补充信息——未知项：')
   })
 
   it('展开面板的最大高度限制为 300px', async () => {

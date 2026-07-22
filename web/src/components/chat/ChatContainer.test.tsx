@@ -52,6 +52,6 @@ describe('ChatContainer follow-up forwarding', () => {
     await user.click(button)
 
     expect(onFollowupClick).toHaveBeenCalledTimes(1)
-    expect(onFollowupClick).toHaveBeenCalledWith('症状持续多久了？')
+    expect(onFollowupClick).toHaveBeenCalledWith('症状持续时间（开始时间、持续多久）：')
   })
 })
