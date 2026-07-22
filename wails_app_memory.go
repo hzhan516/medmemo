@@ -31,12 +31,30 @@ type MemoryStats struct {
 	Pending  int64 `json:"pending"`
 }
 
+// maskSensitiveText 对敏感文本做展示层打码：长度大于 7 个 rune 时保留前 3、后 4，
+// 中间用 **** 替代；否则整体替换为 ****。仅影响展示，不修改存储。
+func maskSensitiveText(text string) string {
+	runes := []rune(text)
+	if len(runes) <= 7 {
+		return "****"
+	}
+	return string(runes[:3]) + "****" + string(runes[len(runes)-4:])
+}
+
 func factToMemoryItem(f *entity.ExtractedFact) MemoryItem {
+	subject := f.Subject
+	predicate := f.Predicate
+	object := f.Object
+	if f.IsSensitive {
+		subject = maskSensitiveText(subject)
+		predicate = maskSensitiveText(predicate)
+		object = maskSensitiveText(object)
+	}
 	return MemoryItem{
 		FactID:      f.FactID,
-		Subject:     f.Subject,
-		Predicate:   f.Predicate,
-		Object:      f.Object,
+		Subject:     subject,
+		Predicate:   predicate,
+		Object:      object,
 		Confidence:  f.Confidence,
 		Status:      string(f.Status),
 		IsSensitive: f.IsSensitive,

@@ -347,6 +347,50 @@ func TestWailsApp_ApproveFact_NotFound(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestMaskSensitiveText_Long(t *testing.T) {
+	assert.Equal(t, "138****8000", maskSensitiveText("13800138000"))
+}
+
+func TestMaskSensitiveText_Short(t *testing.T) {
+	assert.Equal(t, "****", maskSensitiveText("高血压"))
+}
+
+func TestFactToMemoryItem_SensitiveMasksDisplay(t *testing.T) {
+	f := &entity.ExtractedFact{
+		FactID:      "fact_sensitive",
+		Subject:     "用户",
+		Predicate:   "电话是",
+		Object:      "13800138000",
+		Confidence:  0.9,
+		Status:      entity.FactStatusApproved,
+		IsSensitive: true,
+		CreatedAt:   time.Now().UTC(),
+	}
+	item := factToMemoryItem(f)
+	assert.Equal(t, "****", item.Subject)
+	assert.Equal(t, "****", item.Predicate)
+	assert.Equal(t, "138****8000", item.Object)
+	assert.True(t, item.IsSensitive)
+}
+
+func TestFactToMemoryItem_NonSensitiveUnchanged(t *testing.T) {
+	f := &entity.ExtractedFact{
+		FactID:      "fact_normal",
+		Subject:     "用户",
+		Predicate:   "患有",
+		Object:      "偏头痛",
+		Confidence:  0.9,
+		Status:      entity.FactStatusApproved,
+		IsSensitive: false,
+		CreatedAt:   time.Now().UTC(),
+	}
+	item := factToMemoryItem(f)
+	assert.Equal(t, "用户", item.Subject)
+	assert.Equal(t, "患有", item.Predicate)
+	assert.Equal(t, "偏头痛", item.Object)
+	assert.False(t, item.IsSensitive)
+}
+
 // ========== Capture stubs for embedding verification ==========
 
 type captureEmbeddingService struct {
