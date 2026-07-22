@@ -16,6 +16,9 @@ type Updater interface {
 	// channel 为 stable 时过滤掉 prerelease，为 beta 时包含全部。
 	FetchLatest(ctx context.Context, channel models.UpdateChannel) (*entity.UpdateInfo, error)
 
+	// FetchByTag 根据指定 tag 查询 Release 信息，用于下载用户点击的特定版本。
+	FetchByTag(ctx context.Context, tag string) (*entity.UpdateInfo, error)
+
 	// Download 下载指定 URL 的资产到本地路径，并通过 progress 回调推送进度。
 	// progress 参数可为 nil，表示不接收进度通知。
 	Download(ctx context.Context, url, destPath string, progress func(downloaded, total int64)) error

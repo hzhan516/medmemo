@@ -13,17 +13,33 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// mockUpdater 是 port.Updater 的测试替身，仅返回预设的 UpdateInfo。
+// mockUpdater 是 port.Updater 的测试替身。
 type mockUpdater struct {
 	info *entity.UpdateInfo
 	err  error
+
+	fetchByTagInfo    *entity.UpdateInfo
+	fetchByTagErr     error
+	fetchByTagTag     string
+	fetchByTagCalled  bool
+	fetchLatestCalled bool
+
+	downloadTo string
 }
 
 func (m *mockUpdater) FetchLatest(_ context.Context, _ models.UpdateChannel) (*entity.UpdateInfo, error) {
+	m.fetchLatestCalled = true
 	return m.info, m.err
 }
 
-func (m *mockUpdater) Download(_ context.Context, _, _ string, _ func(int64, int64)) error {
+func (m *mockUpdater) FetchByTag(_ context.Context, tag string) (*entity.UpdateInfo, error) {
+	m.fetchByTagCalled = true
+	m.fetchByTagTag = tag
+	return m.fetchByTagInfo, m.fetchByTagErr
+}
+
+func (m *mockUpdater) Download(_ context.Context, _, destPath string, _ func(int64, int64)) error {
+	m.downloadTo = destPath
 	return nil
 }
 
@@ -165,4 +181,46 @@ func TestApplyUpdate_RestartFails(t *testing.T) {
 	err := app.ApplyUpdate("/tmp/update.AppImage")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "update installed but failed to restart")
+}
+
+// TestDownloadUpdate_ByVersion 验证指定版本时使用 FetchByTag 并正确进入下载流程。
+func TestDownloadUpdate_ByVersion(t *testing.T) {
+	old := version
+	version = "v1.1.10"
+	defer func() { version = old }()
+
+	t.Setenv("HOME", t.TempDir())
+
+	info := &entity.UpdateInfo{
+		Version:     "v1.1.9",
+		DownloadURL: "https://example.com/v1.1.9.AppImage",
+		Checksum:    "",
+	}
+	mockU := &mockUpdater{fetchByTagInfo: info}
+	svc := updater.NewService(mockU, &mockInstaller{}, models.ChannelStable)
+	app := &WailsApp{ctx: t.Context(), updaterSvc: svc}
+
+	path, err := app.DownloadUpdate(DownloadUpdateRequest{Version: "v1.1.9"})
+	require.NoError(t, err)
+	assert.Contains(t, path, "MedMemo-v1.1.9")
+	assert.True(t, mockU.fetchByTagCalled)
+	assert.Equal(t, "v1.1.9", mockU.fetchByTagTag)
+	assert.False(t, mockU.fetchLatestCalled)
+	assert.NotEmpty(t, mockU.downloadTo)
+}
+
+// TestDownloadUpdate_NoUpdateInfoNilError 验证返回 (nil, nil) 时提示无可用更新，且错误格式正确。
+func TestDownloadUpdate_NoUpdateInfoNilError(t *testing.T) {
+	old := version
+	version = "v1.1.10"
+	defer func() { version = old }()
+
+	mockU := &mockUpdater{}
+	svc := updater.NewService(mockU, &mockInstaller{}, models.ChannelStable)
+	app := &WailsApp{ctx: t.Context(), updaterSvc: svc}
+
+	_, err := app.DownloadUpdate(DownloadUpdateRequest{Version: "v1.1.9"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no update available for version v1.1.9")
+	assert.NotContains(t, err.Error(), "%!w")
 }

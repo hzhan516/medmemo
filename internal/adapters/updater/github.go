@@ -121,28 +121,7 @@ func (g *GitHubUpdater) FetchLatest(ctx context.Context, channel models.UpdateCh
 			continue
 		}
 
-		// 解析 tag 得到结构化版本信息，供前端展示与后续版本比较
-		version := models.ParseAppVersion(release.TagName)
-		displayVersion := version.DisplayVersion
-		if displayVersion == "" {
-			// 解析失败时回退到发布标题，避免 UI 展示空值
-			displayVersion = release.Name
-		}
-
-		candidate := &entity.UpdateInfo{
-			Version:         release.TagName,
-			DisplayVersion:  displayVersion,
-			Name:            release.Name,
-			Body:            release.Body,
-			PublishedAt:     release.PublishedAt,
-			DownloadURL:     asset.BrowserDownloadURL,
-			Checksum:        checksum,
-			Mandatory:       g.isMandatory(release),
-			Channel:         channel,
-			Prerelease:      release.Prerelease,
-			BuildNumber:     version.BuildNumber,
-			PreReleaseLabel: version.PrereleaseLabel,
-		}
+		candidate := g.releaseToUpdateInfo(release, channel, asset, checksum)
 
 		if best == nil {
 			best = candidate
@@ -163,6 +142,46 @@ func (g *GitHubUpdater) FetchLatest(ctx context.Context, channel models.UpdateCh
 		return nil, fmt.Errorf("no suitable release found for channel %s on platform %s/%s", channel, runtime.GOOS, runtime.GOARCH)
 	}
 	return best, nil
+}
+
+// FetchByTag 根据指定 tag 查询 GitHub Release，用于下载用户点击的特定版本。
+func (g *GitHubUpdater) FetchByTag(ctx context.Context, tag string) (*entity.UpdateInfo, error) {
+	url := fmt.Sprintf("%s/repos/%s/%s/releases/tags/%s", githubAPIBase, githubRepoOwner, githubRepoName, tag)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+
+	resp, err := g.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("github api request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("github api returned %d: %s", resp.StatusCode, string(body))
+	}
+
+	var release githubRelease
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return nil, fmt.Errorf("failed to decode github response: %w", err)
+	}
+
+	asset, checksum := g.matchPlatformAsset(ctx, release.Assets)
+	if asset == nil {
+		return nil, fmt.Errorf("no suitable asset found for tag %s on platform %s/%s", tag, runtime.GOOS, runtime.GOARCH)
+	}
+
+	channel := models.ChannelStable
+	if release.Prerelease {
+		channel = models.ChannelBeta
+	}
+
+	return g.releaseToUpdateInfo(release, channel, asset, checksum), nil
 }
 
 // Download 下载指定 URL 的资产到本地路径，支持进度回调。
@@ -392,6 +411,31 @@ func (g *GitHubUpdater) isMandatory(release githubRelease) bool {
 		strings.Contains(lowerBody, "security") ||
 		strings.Contains(lowerName, "critical") ||
 		strings.Contains(lowerBody, "critical")
+}
+
+// releaseToUpdateInfo 将 GitHub Release 转换为领域层 UpdateInfo。
+func (g *GitHubUpdater) releaseToUpdateInfo(release githubRelease, channel models.UpdateChannel, asset *githubAsset, checksum string) *entity.UpdateInfo {
+	version := models.ParseAppVersion(release.TagName)
+	displayVersion := version.DisplayVersion
+	if displayVersion == "" {
+		// 解析失败时回退到发布标题，避免 UI 展示空值
+		displayVersion = release.Name
+	}
+
+	return &entity.UpdateInfo{
+		Version:         release.TagName,
+		DisplayVersion:  displayVersion,
+		Name:            release.Name,
+		Body:            release.Body,
+		PublishedAt:     release.PublishedAt,
+		DownloadURL:     asset.BrowserDownloadURL,
+		Checksum:        checksum,
+		Mandatory:       g.isMandatory(release),
+		Channel:         channel,
+		Prerelease:      release.Prerelease,
+		BuildNumber:     version.BuildNumber,
+		PreReleaseLabel: version.PrereleaseLabel,
+	}
 }
 
 // githubRelease 表示 GitHub API 返回的 Release 结构。
