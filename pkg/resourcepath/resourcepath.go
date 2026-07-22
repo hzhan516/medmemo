@@ -93,7 +93,8 @@ func ResolveSafe(subpath string) (string, error) {
 	return resolvedAbs, nil
 }
 
-func candidateDirs() []string {
+// candidateDirs 为包级变量，便于测试替换为与环境无关的候选列表。
+var candidateDirs = func() []string {
 	var candidates []string
 	if exe, err := os.Executable(); err == nil {
 		exeDir := filepath.Dir(exe)

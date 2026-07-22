@@ -127,6 +127,13 @@ func TestResolve_EmptyPath(t *testing.T) {
 // TestDir_FallbackToRelativeResources 验证无环境变量且候选目录均不存在时回退到相对 resources。
 func TestDir_FallbackToRelativeResources(t *testing.T) {
 	t.Setenv(EnvDir, "")
+	// 桩掉候选目录探测，避免宿主机（如已安装 DEB/RPM）环境差异影响回退断言
+	original := candidateDirs
+	candidateDirs = func() []string {
+		return []string{filepath.Join(t.TempDir(), "nonexistent")}
+	}
+	t.Cleanup(func() { candidateDirs = original })
+
 	got := Dir()
 	assert.Equal(t, "resources", got)
 }
