@@ -61,7 +61,7 @@ func TestManualPackageInstallRequired_Error(t *testing.T) {
 		Kind:        "deb",
 		Command:     "sudo dpkg -i /tmp/MedMemo.deb",
 	}
-	assert.Contains(t, err.Error(), "manual package install required")
+	assert.Contains(t, err.Error(), "manual install required")
 	assert.Contains(t, err.Error(), "dpkg")
 }
 

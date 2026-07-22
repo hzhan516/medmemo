@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import type { UpdateInfo } from '@/hooks/useUpdate'
 
 const IS_MACOS = /mac/i.test(navigator.platform)
+const IS_LINUX = /linux/i.test(navigator.platform)
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B'
@@ -11,6 +12,19 @@ function formatBytes(bytes: number): string {
   const sizes = ['B', 'KB', 'MB', 'GB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+}
+
+// LinuxManualInstallMessage 从错误文本中提取命令并展示包管理手动安装指引。
+function LinuxManualInstallMessage({ error }: { error: string }) {
+  const command = error.includes(':') ? error.split(':', 2)[1].trim() : ''
+  return (
+    <div className="space-y-2">
+      <p>Linux 包管理安装需要手动执行。请在终端运行以下命令完成更新：</p>
+      {command && (
+        <code className="block rounded bg-muted p-2 font-mono text-xs break-all">{command}</code>
+      )}
+    </div>
+  )
 }
 
 interface UpdateModalProps {
@@ -131,10 +145,16 @@ export function UpdateModal({
             </div>
           )}
 
-          {/* macOS 授权失败回退提示 */}
+          {/* 手动安装回退提示 */}
           {error && error.toLowerCase().includes('manual install') && (
             <div className="rounded-md bg-orange-50 p-3 text-sm text-orange-800 dark:bg-orange-900/20 dark:text-orange-300">
-              macOS 自动替换需要管理员授权。请打开下载的 DMG 文件，手动将 MedMemo.app 拖拽到 Applications 文件夹完成安装。
+              {IS_MACOS ? (
+                <span>macOS 自动替换需要管理员授权。请打开下载的 DMG 文件，手动将 MedMemo.app 拖拽到 Applications 文件夹完成安装。</span>
+              ) : IS_LINUX ? (
+                <LinuxManualInstallMessage error={error} />
+              ) : (
+                <span>{error}</span>
+              )}
             </div>
           )}
 
