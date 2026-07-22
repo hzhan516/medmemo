@@ -71,6 +71,17 @@ func TestApplyFactQualityGate_PassesNormalFact(t *testing.T) {
 	assert.Len(t, result, 2)
 }
 
+func TestApplyFactQualityGate_RejectsResidualPlaceholder(t *testing.T) {
+	t.Parallel()
+	facts := []*entity.ExtractedFact{
+		entity.NewExtractedFact("{{name_a1b2c3d4}}", "患有", "偏头痛", 0.9, []string{"msg_1"}),
+		entity.NewExtractedFact("用户", "{{phone_1234abcd}}", "阿司匹林", 0.8, []string{"msg_1"}),
+		entity.NewExtractedFact("用户", "服用", "{{idcard_abcdef12}}", 0.8, []string{"msg_1"}),
+	}
+	result := ApplyFactQualityGate(facts)
+	assert.Empty(t, result, "残留占位符应被全部拒绝")
+}
+
 func TestApplyFactQualityGate_EmptyInput(t *testing.T) {
 	t.Parallel()
 	var facts []*entity.ExtractedFact
