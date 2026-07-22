@@ -159,7 +159,7 @@ export function UpdateModal({
             <Button
               size="sm"
               onClick={() => {
-                const url = `https://github.com/hzhan516/medmemo/releases/download/${info.version}/MedMemo.dmg`
+                const url = `https://github.com/hzhan516/medmemo/releases/tag/${info.version}`
                 onOpenDownloadPage(url)
                 onDismiss()
               }}

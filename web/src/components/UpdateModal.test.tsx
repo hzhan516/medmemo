@@ -67,4 +67,40 @@ describe('UpdateModal', () => {
     expect(screen.getByText(/macOS 自动替换需要管理员授权/)).toBeInTheDocument()
     expect(screen.getByText(/手动将 MedMemo.app 拖拽到 Applications/)).toBeInTheDocument()
   })
+
+  it('macOS 下“前往下载”按钮打开 release tag 页面', async () => {
+    vi.resetModules()
+    const originalPlatform = navigator.platform
+    Object.defineProperty(navigator, 'platform', { value: 'MacIntel', configurable: true })
+
+    try {
+      const { UpdateModal: MacUpdateModal } = await import('./UpdateModal')
+      const onOpenDownloadPage = vi.fn()
+      const onDismiss = vi.fn()
+
+      render(
+        <MacUpdateModal
+          info={baseInfo}
+          isDownloading={false}
+          isRestarting={false}
+          downloadProgress={null}
+          downloadPath=""
+          error=""
+          onDownload={vi.fn()}
+          onApply={vi.fn()}
+          onSkip={vi.fn()}
+          onDismiss={onDismiss}
+          onOpenDownloadPage={onOpenDownloadPage}
+        />
+      )
+
+      await userEvent.click(screen.getByRole('button', { name: '前往下载' }))
+      expect(onOpenDownloadPage).toHaveBeenCalledWith(
+        `https://github.com/hzhan516/medmemo/releases/tag/${baseInfo.version}`
+      )
+      expect(onDismiss).toHaveBeenCalled()
+    } finally {
+      Object.defineProperty(navigator, 'platform', { value: originalPlatform, configurable: true })
+    }
+  })
 })
