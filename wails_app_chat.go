@@ -429,7 +429,7 @@ func (a *WailsApp) saveMessages(ctx context.Context, convID string, messages []m
 					userContent = lastUser.Content
 				}
 			}
-			go a.extractFactsAsync(userContent, aiReply, providerID)
+			go a.extractFactsAsync(userContent, aiReply, providerID, a.config.DesensitizationLevel)
 		}
 	}
 	// 更新会话时间
@@ -442,10 +442,10 @@ func (a *WailsApp) saveMessages(ctx context.Context, convID string, messages []m
 
 // extractFactsAsync 异步从完整对话（用户消息 + AI 回复）中提取事实并保存到 factRepo。
 // 由 ChatOrchestrator 统一调度限流，避免与主对话竞争 API 配额触发 429。
-func (a *WailsApp) extractFactsAsync(userContent, aiReply, providerID string) {
+func (a *WailsApp) extractFactsAsync(userContent, aiReply, providerID string, level models.DesensitizationLevel) {
 	ctx, cancel := context.WithTimeout(a.ctx, 60*time.Second)
 	defer cancel()
-	facts, err := a.chatOrchestrator.ExtractFactsFromReply(ctx, userContent, aiReply, providerID)
+	facts, err := a.chatOrchestrator.ExtractFactsFromReply(ctx, userContent, aiReply, providerID, level)
 	if err != nil {
 		// 429 限流时静默跳过，不记录错误（这是预期行为）
 		if strings.Contains(err.Error(), "429") || strings.Contains(err.Error(), "rate limit") || strings.Contains(err.Error(), "rate limited") {

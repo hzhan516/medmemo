@@ -65,7 +65,7 @@ func (s *Service) CheckUpdate(ctx context.Context, currentVersion string) (*enti
 }
 
 // GetUpdateInfoByVersion 根据请求版本获取更新信息。
-// version 为空时回退到最新版本检测；否则直接查询指定 tag，跳过跳过版本与版本比较逻辑。
+// version 为空时回退到最新版本检测；否则直接查询指定 tag，跳过 SkipVersion 与版本比较逻辑。
 func (s *Service) GetUpdateInfoByVersion(ctx context.Context, currentVersion, version string) (*entity.UpdateInfo, error) {
 	if version == "" {
 		return s.CheckUpdate(ctx, currentVersion)

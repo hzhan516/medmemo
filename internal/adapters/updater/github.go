@@ -79,11 +79,9 @@ var getLinuxInstallKind = func() string {
 // Ensure GitHubUpdater 实现了 port.Updater 接口。
 var _ port.Updater = (*GitHubUpdater)(nil)
 
-// FetchLatest 查询 GitHub Releases API 获取适合当前通道的最新版本。
-// stable 通道过滤掉 prerelease，beta 通道包含全部。
-func (g *GitHubUpdater) FetchLatest(ctx context.Context, channel models.UpdateChannel) (*entity.UpdateInfo, error) {
-	url := fmt.Sprintf("%s/repos/%s/%s/releases?per_page=30", githubAPIBase, githubRepoOwner, githubRepoName)
-
+// doGitHubGET 向 GitHub API 发送 GET 请求并返回响应体。
+// 调用方负责关闭返回的 ReadCloser。
+func (g *GitHubUpdater) doGitHubGET(ctx context.Context, url string) (io.ReadCloser, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -95,15 +93,28 @@ func (g *GitHubUpdater) FetchLatest(ctx context.Context, channel models.UpdateCh
 	if err != nil {
 		return nil, fmt.Errorf("github api request failed: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
 		return nil, fmt.Errorf("github api returned %d: %s", resp.StatusCode, string(body))
 	}
+	return resp.Body, nil
+}
+
+// FetchLatest 查询 GitHub Releases API 获取适合当前通道的最新版本。
+// stable 通道过滤掉 prerelease，beta 通道包含全部。
+func (g *GitHubUpdater) FetchLatest(ctx context.Context, channel models.UpdateChannel) (*entity.UpdateInfo, error) {
+	url := fmt.Sprintf("%s/repos/%s/%s/releases?per_page=30", githubAPIBase, githubRepoOwner, githubRepoName)
+
+	body, err := g.doGitHubGET(ctx, url)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = body.Close() }()
 
 	var releases []githubRelease
-	if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
+	if err := json.NewDecoder(body).Decode(&releases); err != nil {
 		return nil, fmt.Errorf("failed to decode github response: %w", err)
 	}
 
@@ -148,26 +159,14 @@ func (g *GitHubUpdater) FetchLatest(ctx context.Context, channel models.UpdateCh
 func (g *GitHubUpdater) FetchByTag(ctx context.Context, tag string) (*entity.UpdateInfo, error) {
 	url := fmt.Sprintf("%s/repos/%s/%s/releases/tags/%s", githubAPIBase, githubRepoOwner, githubRepoName, tag)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	body, err := g.doGitHubGET(ctx, url)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, err
 	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-
-	resp, err := g.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("github api request failed: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("github api returned %d: %s", resp.StatusCode, string(body))
-	}
+	defer func() { _ = body.Close() }()
 
 	var release githubRelease
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+	if err := json.NewDecoder(body).Decode(&release); err != nil {
 		return nil, fmt.Errorf("failed to decode github response: %w", err)
 	}
 

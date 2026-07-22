@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -884,7 +885,7 @@ func TestChatOrchestrator_resolveLLMClient_cancelledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // 立即取消
 
-	_, err := orch.resolveLLMClient(ctx, "test-provider")
+	_, _, err := orch.resolveLLMClient(ctx, "test-provider")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to get provider")
 }
@@ -909,9 +910,10 @@ func TestChatOrchestrator_resolveLLMClient_contextDeadline(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	client, err := orch.resolveLLMClient(ctx, "test-provider")
+	client, provider, err := orch.resolveLLMClient(ctx, "test-provider")
 	require.NoError(t, err)
 	assert.NotNil(t, client)
+	assert.NotNil(t, provider)
 }
 
 // TestChatOrchestrator_ExtractFactsFromReply_UsesUserContentOnly 验证事实提取仅使用用户内容。
@@ -942,7 +944,7 @@ func TestChatOrchestrator_ExtractFactsFromReply_UsesUserContentOnly(t *testing.T
 		LocalAnswer:          NewLocalAnswerService(NewLocalAnswerConfig()),
 	})
 
-	facts, err = orch.ExtractFactsFromReply(context.Background(), "我体重110公斤", "AI无法知道你的体重", "test-provider")
+	facts, err = orch.ExtractFactsFromReply(context.Background(), "我体重110公斤", "AI无法知道你的体重", "test-provider", models.DesensitizationStandard)
 	require.NoError(t, err)
 	// AI 回复内容不应被抽成事实，质量门禁也会过滤 AI subject
 	assert.Empty(t, facts, "不应从 AI 回复中提取事实")
@@ -1477,4 +1479,137 @@ func TestChatOrchestrator_Standard_KeepsRawFallback(t *testing.T) {
 	lastIdx := findLastUserMessage(prepared.Messages)
 	require.GreaterOrEqual(t, lastIdx, 0)
 	assert.Equal(t, "原始内容 X", prepared.Messages[lastIdx].Content, "标准级失败保持原文回退")
+}
+
+// phoneMockDeidentifier 将特定手机号替换为固定占位符，用于验证事实提取脱敏路径。
+type phoneMockDeidentifier struct{}
+
+func (m *phoneMockDeidentifier) Execute(_ context.Context, raw string, _ models.DesensitizationLevel) (models.DeidentifyResult, error) {
+	const phone = "13800138000"
+	placeholder := "{{PHONE_1234}}"
+	if strings.Contains(raw, phone) {
+		return models.DeidentifyResult{
+			OriginalText: raw,
+			SafeText:     strings.ReplaceAll(raw, phone, placeholder),
+			Placeholder:  map[string]string{placeholder: phone},
+			LocalRestore: map[string]string{placeholder: phone},
+		}, nil
+	}
+	return models.DeidentifyResult{OriginalText: raw, SafeText: raw}, nil
+}
+
+var _ Deidentifier = (*phoneMockDeidentifier)(nil)
+
+// errMockDeidentifier 始终返回错误，用于验证脱敏失败降级路径。
+type errMockDeidentifier struct{}
+
+func (m *errMockDeidentifier) Execute(_ context.Context, _ string, _ models.DesensitizationLevel) (models.DeidentifyResult, error) {
+	return models.DeidentifyResult{}, fmt.Errorf("pipeline down")
+}
+
+var _ Deidentifier = (*errMockDeidentifier)(nil)
+
+// newFactExtractionTestOrchestrator 创建用于事实提取测试的编排器，允许注入指定 provider 与脱敏器。
+func newFactExtractionTestOrchestrator(t *testing.T, client port.LLMClient, provider *models.ProviderConfig, deid Deidentifier) *ChatOrchestrator {
+	t.Helper()
+	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
+	factory := &mockLLMClientFactory{client: client}
+	store := &mockProviderStore{provider: provider}
+	return NewChatOrchestrator(ChatOrchestratorDeps{
+		LLMFactory:           factory,
+		ProviderStore:        store,
+		Compliance:           comp,
+		DeidPipeline:         deid,
+		ConfidenceAggregator: NewConfidenceAggregator(),
+		FactRepo:             &mockFactRepository{},
+		IntentResolver:       NewIntentResolver(NewQueryExpansionService()),
+		LocalAnswer:          NewLocalAnswerService(NewLocalAnswerConfig()),
+	})
+}
+
+// TestExtractFactsFromReply_CloudDeidentifies 验证云端模型事实提取前对用户输入脱敏，并在抽取后本地还原。
+func TestExtractFactsFromReply_CloudDeidentifies(t *testing.T) {
+	t.Parallel()
+	mock := &mockLLMClient{chatReply: `[{"subject":"用户","predicate":"电话是","object":"{{PHONE_1234}}","confidence":0.9}]`}
+	provider := &models.ProviderConfig{ID: "cloud", Type: models.ProviderKimi, APIHost: "https://api.example.com", ModelID: "kimi-v1"}
+	orch := newFactExtractionTestOrchestrator(t, mock, provider, &phoneMockDeidentifier{})
+
+	facts, err := orch.ExtractFactsFromReply(context.Background(), "我的电话是13800138000", "AI回复", "cloud", models.DesensitizationStandard)
+	require.NoError(t, err)
+	require.Len(t, mock.lastMessages, 1)
+	prompt := mock.lastMessages[0].Content
+	assert.Contains(t, prompt, "{{PHONE_1234}}")
+	assert.NotContains(t, prompt, "13800138000")
+
+	require.Len(t, facts, 1)
+	assert.Equal(t, "13800138000", facts[0].Object, "本地还原后应恢复原始手机号")
+}
+
+// TestExtractFactsFromReply_LocalSkipsDeid 验证本地 provider 跳过脱敏，LLM 收到原始文本。
+func TestExtractFactsFromReply_LocalSkipsDeid(t *testing.T) {
+	t.Parallel()
+	mock := &mockLLMClient{chatReply: `[{"subject":"用户","predicate":"电话是","object":"13800138000","confidence":0.9}]`}
+	provider := &models.ProviderConfig{ID: "local", Type: models.ProviderOllama, APIHost: "http://localhost:11434", ModelID: "llama3"}
+	orch := newFactExtractionTestOrchestrator(t, mock, provider, &phoneMockDeidentifier{})
+
+	facts, err := orch.ExtractFactsFromReply(context.Background(), "我的电话是13800138000", "AI回复", "local", models.DesensitizationStandard)
+	require.NoError(t, err)
+	require.Len(t, mock.lastMessages, 1)
+	assert.Contains(t, mock.lastMessages[0].Content, "13800138000")
+	assert.NotContains(t, mock.lastMessages[0].Content, "{{PHONE_1234}}")
+
+	require.Len(t, facts, 1)
+	assert.Equal(t, "13800138000", facts[0].Object)
+}
+
+// TestExtractFactsFromReply_OffLevelSkipsDeid 验证 off 级别跳过脱敏，使用原始文本。
+func TestExtractFactsFromReply_OffLevelSkipsDeid(t *testing.T) {
+	t.Parallel()
+	mock := &mockLLMClient{chatReply: `[{"subject":"用户","predicate":"电话是","object":"13800138000","confidence":0.9}]`}
+	provider := &models.ProviderConfig{ID: "cloud", Type: models.ProviderKimi, APIHost: "https://api.example.com", ModelID: "kimi-v1"}
+	orch := newFactExtractionTestOrchestrator(t, mock, provider, &phoneMockDeidentifier{})
+
+	facts, err := orch.ExtractFactsFromReply(context.Background(), "我的电话是13800138000", "AI回复", "cloud", models.DesensitizationOff)
+	require.NoError(t, err)
+	require.Len(t, mock.lastMessages, 1)
+	assert.Contains(t, mock.lastMessages[0].Content, "13800138000")
+	assert.NotContains(t, mock.lastMessages[0].Content, "{{PHONE_1234}}")
+
+	require.Len(t, facts, 1)
+	assert.Equal(t, "13800138000", facts[0].Object)
+}
+
+// TestExtractFactsFromReply_DeidFailureDegrades 验证脱敏流水线失败时降级为规则脱敏，不出原文。
+func TestExtractFactsFromReply_DeidFailureDegrades(t *testing.T) {
+	t.Parallel()
+	mock := &mockLLMClient{chatReply: `[{"subject":"用户","predicate":"电话是","object":"{{PHONE_1234}}","confidence":0.9}]`}
+	provider := &models.ProviderConfig{ID: "cloud", Type: models.ProviderKimi, APIHost: "https://api.example.com", ModelID: "kimi-v1"}
+	orch := newFactExtractionTestOrchestrator(t, mock, provider, &errMockDeidentifier{})
+
+	facts, err := orch.ExtractFactsFromReply(context.Background(), "我的电话是13800138000", "AI回复", "cloud", models.DesensitizationStandard)
+	require.NoError(t, err)
+	require.Len(t, mock.lastMessages, 1)
+	prompt := mock.lastMessages[0].Content
+	assert.NotContains(t, prompt, "13800138000", "脱敏失败降级后不应包含明文手机号")
+	assert.Contains(t, prompt, "{{PHONE_", "降级规则脱敏应产生占位符")
+
+	require.Len(t, facts, 1)
+	// 降级路径无还原映射，事实保留占位符
+	assert.Contains(t, facts[0].Object, "{{PHONE_")
+}
+
+// TestExtractFactsFromReply_NilPipelineGuard 验证 deidPipeline 为 nil 时不 panic 且使用原始文本。
+func TestExtractFactsFromReply_NilPipelineGuard(t *testing.T) {
+	t.Parallel()
+	mock := &mockLLMClient{chatReply: `[{"subject":"用户","predicate":"电话是","object":"13800138000","confidence":0.9}]`}
+	provider := &models.ProviderConfig{ID: "cloud", Type: models.ProviderKimi, APIHost: "https://api.example.com", ModelID: "kimi-v1"}
+	orch := newFactExtractionTestOrchestrator(t, mock, provider, nil)
+
+	facts, err := orch.ExtractFactsFromReply(context.Background(), "我的电话是13800138000", "AI回复", "cloud", models.DesensitizationStandard)
+	require.NoError(t, err)
+	require.Len(t, mock.lastMessages, 1)
+	assert.Contains(t, mock.lastMessages[0].Content, "13800138000")
+
+	require.Len(t, facts, 1)
+	assert.Equal(t, "13800138000", facts[0].Object)
 }

@@ -83,14 +83,12 @@ func CompareVersions(a, b string) (int, error) {
 		}
 	}
 
-	// 至少一边无 build 号或存在 build 标签，回退到完整字符串比较
+	// 至少一边无 build 号或存在 build 标签，回退到字符串不等兜底：
+	// 只要两个完整字符串不同，就认为 remote (b) 比 current (a) 新。
 	aClean := strings.TrimPrefix(a, "v")
 	bClean := strings.TrimPrefix(b, "v")
-	if aClean < bClean {
+	if aClean != bClean {
 		return 1, nil
-	}
-	if aClean > bClean {
-		return -1, nil
 	}
 	return 0, nil
 }
