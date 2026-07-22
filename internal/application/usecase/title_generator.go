@@ -13,8 +13,9 @@ import (
 	"github.com/hzhan516/medmemo/pkg/models"
 )
 
-// TitleGenerator 编排会话标题的自动生成。
-// 优先调用 AI 模型提炼标题，超时或失败时降级到本地规则提取。
+// TitleGenerator 编排会话标题的 AI 自动生成。
+// 当前已停用：WailsApp.GenerateTitle 直接使用 FallbackTitle，避免将用户首条消息原文发往云端。
+// 类型与构造函数保留，减少 Wire 变动；云端标题恢复方案见 TODO(#041)。
 type TitleGenerator struct {
 	llmClient port.LLMClient
 }
@@ -24,8 +25,8 @@ func NewTitleGenerator(llm port.LLMClient) *TitleGenerator {
 	return &TitleGenerator{llmClient: llm}
 }
 
-// Generate 基于用户首条消息生成会话标题。
-// 3 秒超时内调用 AI 模型；超时或出错时降级到 fallbackTitle。
+// Generate 基于用户首条消息调用 AI 模型生成标题。
+// 当前无生产调用方，保留用于未来随会话 provider 判定并脱敏后的云端标题恢复方案。
 func (g *TitleGenerator) Generate(ctx context.Context, userMessage string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()

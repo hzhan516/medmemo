@@ -477,18 +477,16 @@ func (a *WailsApp) StopGeneration() {
 	a.streamMu.Unlock()
 }
 
-// GenerateTitle 异步生成会话标题，通过 Wails Events 推送结果。
+// GenerateTitle 异步生成本地会话标题，通过 Wails Events 推送结果。
 // 前端应在首条用户消息发送后调用此方法。
+// 当前直接采用本地规则，避免将用户首条消息原文发往云端标题模型；
+// 云端标题恢复方案见 TODO(#041)。
 func (a *WailsApp) GenerateTitle(convID string, userMessage string) {
 	go func() {
 		ctx, cancel := context.WithTimeout(a.ctx, 3*time.Second)
 		defer cancel()
 
-		title, err := a.titleGen.Generate(ctx, userMessage)
-		if err != nil {
-			// AI 生成失败或超时，降级到本地规则
-			title = usecase.FallbackTitle(userMessage)
-		}
+		title := usecase.FallbackTitle(userMessage)
 
 		// 持久化到数据库
 		if a.convRepo != nil {
