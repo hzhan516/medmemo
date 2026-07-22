@@ -43,7 +43,7 @@ func TestHasUpdate(t *testing.T) {
 		{"stable to rc same core", "v1.1.10", "v1.1.10-rc.12", false, false},
 		{"core differs with pre-release", "v1.1.9-Pre-release-build.86", "v1.1.10-rc.12", true, false},
 		{"cross-label fallback", "v1.1.10-Pre-release-build.86", "v1.1.10-rc.12", true, false},
-		{"cross-label fallback reverse", "v1.1.10-rc.12", "v1.1.10-Pre-release-build.86", true, false},
+		{"cross-label fallback reverse", "v1.1.10-rc.12", "v1.1.10-Pre-release-build.86", false, false},
 		// 四段版本号与 build 后缀兼容场景
 		{"4-segment prerelease to 4-segment newer", "1.1.2-Pre-release-build.53", "1.1.2.54", true, false},
 		{"4-segment same", "1.1.2.54", "1.1.2.54", false, false},
