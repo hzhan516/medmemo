@@ -28,4 +28,5 @@ type DeidentifyResult struct {
 	SafeText     string
 	Entities     []SensitiveEntity
 	Placeholder  map[string]string // 占位符 -> 原始值映射（P2 级用于还原）
+	LocalRestore map[string]string // 本地还原映射（P2+P3），仅用于本地事实还原等场景，不出网。
 }

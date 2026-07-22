@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"testing"
 
@@ -330,4 +331,70 @@ func TestL2NERStage_SelectsDetectorByLevel(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotContains(t, outStrict.Text, "张三", "严格级检测器召回，姓名被遮蔽")
 	assert.Contains(t, outStrict.Text, "{{per_")
+}
+
+// TestDeidentifyPipeline_LocalRestoreRecordsP3 验证 LocalRestore 记录 L2 NER 生成的 P3 占位符，且 Placeholder 不收录 P3。
+func TestDeidentifyPipeline_LocalRestoreRecordsP3(t *testing.T) {
+	t.Parallel()
+	entities := []models.SensitiveEntity{
+		{Text: "张三", Type: "姓名", StartPos: 0, EndPos: 6, Score: 0.95},
+	}
+	mock := &mockNERDetector{available: true, entities: entities}
+	p := NewDeidentifyPipeline(NewL1RuleStage(), NewL2NERStage(mock, mock))
+	ctx := context.Background()
+
+	result, err := p.Execute(ctx, "张三", models.DesensitizationStandard)
+	require.NoError(t, err)
+
+	hash := fmt.Sprintf("%x", sha256.Sum256([]byte("张三_l2_0")))[:8]
+	placeholder := fmt.Sprintf("{{per_%s}}", hash)
+
+	assert.Contains(t, result.SafeText, placeholder)
+	assert.NotContains(t, result.SafeText, "张三")
+	assert.Equal(t, "张三", result.LocalRestore[placeholder])
+	assert.NotContains(t, result.Placeholder, placeholder)
+}
+
+// TestDeidentifyPipeline_LocalRestoreIncludesP2 验证 LocalRestore 同时收录 L1 规则产生的 P2 占位符，Placeholder 保持收录 P2。
+func TestDeidentifyPipeline_LocalRestoreIncludesP2(t *testing.T) {
+	t.Parallel()
+	p := NewDeidentifyPipeline(NewL1RuleStage())
+	ctx := context.Background()
+
+	const original = "test@example.com"
+	result, err := p.Execute(ctx, original, models.DesensitizationStandard)
+	require.NoError(t, err)
+
+	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(fmt.Sprintf("%s_0_%d", original, len(original)))))[:8]
+	placeholder := fmt.Sprintf("{{EMAIL_%s}}", hash)
+
+	assert.Contains(t, result.SafeText, placeholder)
+	assert.NotContains(t, result.SafeText, original)
+	assert.Equal(t, original, result.LocalRestore[placeholder])
+	assert.Equal(t, original, result.Placeholder[placeholder])
+}
+
+// TestDeidentifyPipeline_StrictP3GoesToLocalRestoreOnly 验证严格级 L1Extended 产生的 P3 占位符
+// 只进入 LocalRestore，不会进入 Placeholder。
+func TestDeidentifyPipeline_StrictP3GoesToLocalRestoreOnly(t *testing.T) {
+	t.Parallel()
+	p := NewDefaultDeidentifyPipeline(NewL1RuleStage(), NewL2NERStage(&mockNERDetector{available: false}, &mockNERDetector{available: false}), NewL1ExtendedRuleStage())
+	ctx := context.Background()
+
+	const original = "住址：北京市朝阳区建国路88号"
+	result, err := p.Execute(ctx, original, models.DesensitizationStrict)
+	require.NoError(t, err)
+	assert.NotContains(t, result.SafeText, "北京市朝阳区建国路88号")
+
+	// 找出地址占位符
+	var addrPlaceholder string
+	for k, v := range result.LocalRestore {
+		if v == "北京市朝阳区建国路88号" {
+			addrPlaceholder = k
+			break
+		}
+	}
+	require.NotEmpty(t, addrPlaceholder, "LocalRestore 中应包含地址占位符")
+	assert.Contains(t, result.SafeText, addrPlaceholder)
+	assert.NotContains(t, result.Placeholder, addrPlaceholder, "P3 占位符不应进入 Placeholder")
 }
