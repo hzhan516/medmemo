@@ -13,9 +13,8 @@ import (
 // =============================================================================
 
 // SensitiveDetector 检测事实三元组中是否包含敏感信息。
-// 敏感信息分为两类：
-//  1. PII（个人身份信息）：身份证号、手机号、银行卡、邮箱
-//  2. 医学敏感信息：疾病名、药品名等
+// 当前仅标记 PII（个人身份信息）：身份证号、手机号、银行卡、邮箱。
+// 医学关键词列表保留给 M04 展示策略复用，不再驱动 IsSensitive。
 //
 // 检测仅作标记用途，不影响事实的正常存储与检索流程。
 type SensitiveDetector struct {
@@ -40,6 +39,7 @@ func NewSensitiveDetector() *SensitiveDetector {
 	}
 
 	// 构建医学关键词快速查找集合
+	// TODO(doyle): 当前医学关键词不再驱动 IsSensitive，列表与集合保留给 M04 展示策略复用 [Issue#040]
 	sd.medicalKeywordSet = make(map[string]struct{}, len(sd.medicalKeywords))
 	for _, kw := range sd.medicalKeywords {
 		sd.medicalKeywordSet[strings.ToLower(kw)] = struct{}{}
@@ -57,17 +57,9 @@ func (sd *SensitiveDetector) Detect(f *entity.ExtractedFact) bool {
 	// 合并三元组文本进行统一检测
 	combined := f.Subject + " " + f.Predicate + " " + f.Object
 
-	// PII 检测
+	// PII 检测（医学关键词不再驱动 IsSensitive，保留给 M04 复用）
 	for _, re := range sd.piiPatterns {
 		if re.MatchString(combined) {
-			return true
-		}
-	}
-
-	// 医学敏感关键词检测
-	lower := strings.ToLower(combined)
-	for kw := range sd.medicalKeywordSet {
-		if strings.Contains(lower, kw) {
 			return true
 		}
 	}

@@ -40,7 +40,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
 
   useImperativeHandle(ref, () => ({
     setValue: (value: string) => {
-      setContent(value)
+      setContent((prev) => (prev ? prev + '\n' + value : value))
       textareaRef.current?.focus()
     },
   }))

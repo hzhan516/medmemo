@@ -64,6 +64,20 @@ func (s *Service) CheckUpdate(ctx context.Context, currentVersion string) (*enti
 	return info, nil
 }
 
+// GetUpdateInfoByVersion 根据请求版本获取更新信息。
+// version 为空时回退到最新版本检测；否则直接查询指定 tag，跳过 SkipVersion 与版本比较逻辑。
+func (s *Service) GetUpdateInfoByVersion(ctx context.Context, currentVersion, version string) (*entity.UpdateInfo, error) {
+	if version == "" {
+		return s.CheckUpdate(ctx, currentVersion)
+	}
+
+	info, err := s.updater.FetchByTag(ctx, version)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch release %s: %w", version, err)
+	}
+	return info, nil
+}
+
 // DownloadUpdate 下载指定版本的更新包到本地。
 // 下载路径按平台区分：非 Windows 为 ~/.medmemo/updates；Windows 为当前 exe 所在目录下的
 // data\updates，与安装目录保持一致。

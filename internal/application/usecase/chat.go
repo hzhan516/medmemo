@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -18,6 +19,10 @@ import (
 	"github.com/hzhan516/medmemo/pkg/models"
 	"github.com/hzhan516/medmemo/pkg/resourcepath"
 )
+
+// deidFailureSentinel 是严格级脱敏完全失败后的兜底占位文本，
+// 出现该文本表示无任何可还原映射，出网内容已被完全遮蔽。
+const deidFailureSentinel = "[内容因严格级脱敏失败已被完全屏蔽]"
 
 // Deidentifier 脱敏流水线接口。
 // level 决定分级执行策略（standard/strict/off 由上层预先判定后传入）。
@@ -242,7 +247,7 @@ func degradeUserContent(content string) string {
 		return res.SafeText
 	}
 	// L1 也失败：完全遮蔽，避免任何原文出网。
-	return "[内容因严格级脱敏失败已被完全屏蔽]"
+	return deidFailureSentinel
 }
 
 // prepareMessages 执行输入脱敏、记忆检索与知识库检索，返回完整预组装结果。
@@ -372,7 +377,7 @@ func (c *ChatOrchestrator) Execute(ctx context.Context, req ChatRequest) (*ChatR
 	messages, deidResult, citations := prepared.Messages, prepared.Deid, prepared.Citations
 
 	// 根据 ProviderID 动态创建 LLMClient
-	llmClient, err := c.resolveLLMClient(ctx, req.ProviderID)
+	llmClient, _, err := c.resolveLLMClient(ctx, req.ProviderID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve llm client: %w", err)
 	}
@@ -466,7 +471,7 @@ func (c *ChatOrchestrator) StreamExecute(ctx context.Context, req ChatRequest, o
 	// provider 查询使用独立 context，确保不受预处理耗时影响
 	resolveCtx, resolveCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer resolveCancel()
-	llmClient, err := c.resolveLLMClient(resolveCtx, req.ProviderID)
+	llmClient, _, err := c.resolveLLMClient(resolveCtx, req.ProviderID)
 	if err != nil {
 		return nil, nil, "", fmt.Errorf("failed to resolve llm client: %w", err)
 	}
@@ -619,9 +624,9 @@ func citationSourceType(ci entity.KnowledgeCitation) entity.SourceType {
 }
 
 // resolveLLMClient 根据 ProviderID 从 store 查找配置并动态创建 LLMClient。
-func (c *ChatOrchestrator) resolveLLMClient(ctx context.Context, providerID string) (port.LLMClient, error) {
+func (c *ChatOrchestrator) resolveLLMClient(ctx context.Context, providerID string) (port.LLMClient, *models.ProviderConfig, error) {
 	if providerID == "" {
-		return nil, fmt.Errorf("provider_id is required")
+		return nil, nil, fmt.Errorf("provider_id is required")
 	}
 
 	// 诊断日志：检查传入 context 的剩余时间
@@ -634,15 +639,15 @@ func (c *ChatOrchestrator) resolveLLMClient(ctx context.Context, providerID stri
 
 	provider, err := c.providerStore.Get(ctx, providerID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get provider %s: %w", providerID, err)
+		return nil, nil, fmt.Errorf("failed to get provider %s: %w", providerID, err)
 	}
 
 	client, err := c.llmFactory.CreateClient(provider)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create llm client for provider %s: %w", providerID, err)
+		return nil, nil, fmt.Errorf("failed to create llm client for provider %s: %w", providerID, err)
 	}
 
-	return client, nil
+	return client, provider, nil
 }
 
 // llmClientAdapter 将 port.LLMClient 适配为 FactLLMClient。
@@ -662,7 +667,7 @@ func (a *llmClientAdapter) Chat(ctx context.Context, messages []string) (string,
 // ExtractFactsFromReply 从完整对话轮次（用户消息 + AI 回复）中提取结构化事实三元组。
 // 使用当前会话的 Provider 创建 LLM client，异步调用时不阻塞主流程。
 // 全局限流：确保事实提取与主对话、其他事实提取之间有足够间隔，避免触发 429。
-func (c *ChatOrchestrator) ExtractFactsFromReply(ctx context.Context, userContent, _, providerID string) ([]*entity.ExtractedFact, error) {
+func (c *ChatOrchestrator) ExtractFactsFromReply(ctx context.Context, userContent, aiReply, providerID string, level models.DesensitizationLevel) ([]*entity.ExtractedFact, error) {
 	if providerID == "" {
 		return nil, nil
 	}
@@ -688,17 +693,70 @@ func (c *ChatOrchestrator) ExtractFactsFromReply(ctx context.Context, userConten
 	if userContent == "" {
 		return nil, nil
 	}
-	client, err := c.resolveLLMClient(ctx, providerID)
+
+	client, provider, err := c.resolveLLMClient(ctx, providerID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve llm client for fact extraction: %w", err)
 	}
+
+	// 输入脱敏（仅云端模型且级别非 off）
+	content := userContent
+	var localRestore map[string]string
+	if !isLocalProvider(provider) && c.deidPipeline != nil && level != models.DesensitizationOff {
+		r, err := c.deidPipeline.Execute(ctx, userContent, level)
+		if err != nil {
+			content = degradeUserContent(userContent)
+		} else {
+			content = r.SafeText
+			localRestore = r.LocalRestore
+		}
+		// 完全遮蔽哨兵：无映射可还原，直接放弃本次抽取
+		if content == deidFailureSentinel {
+			return nil, nil
+		}
+	}
+
 	adapter := &llmClientAdapter{client: client}
 	extractor := NewFactExtractor(adapter)
-	facts, err := extractor.ParseFacts(ctx, userContent)
+	facts, err := extractor.ParseFacts(ctx, content)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse facts: %w", err)
 	}
-	return ApplyFactQualityGate(facts), nil
+	facts = ApplyFactQualityGate(facts)
+
+	// 本地还原：将 LLM 在脱敏文本上提取的占位符还原为原始值
+	if len(localRestore) > 0 {
+		for _, f := range facts {
+			f.Subject = restoreFactText(f.Subject, localRestore)
+			f.Predicate = restoreFactText(f.Predicate, localRestore)
+			f.Object = restoreFactText(f.Object, localRestore)
+		}
+	}
+
+	// 对存活事实标记 PII 敏感信息（医学关键词不再驱动 IsSensitive，见 M04 TODO#040）
+	sd := NewSensitiveDetector()
+	for _, f := range facts {
+		f.IsSensitive = sd.Detect(f)
+	}
+
+	return facts, nil
+}
+
+// restoreFactText 使用本地还原映射将占位符替换回原始文本。
+// 占位符之间不存在包含关系是正常情况；为防御性避免短占位符先替换破坏长占位符，
+// 按占位符长度降序处理（长的先替换）。
+func restoreFactText(text string, mapping map[string]string) string {
+	keys := make([]string, 0, len(mapping))
+	for k := range mapping {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		return len(keys[i]) > len(keys[j])
+	})
+	for _, placeholder := range keys {
+		text = strings.ReplaceAll(text, placeholder, mapping[placeholder])
+	}
+	return text
 }
 
 // CheckCompliance 对文本执行合规检测。

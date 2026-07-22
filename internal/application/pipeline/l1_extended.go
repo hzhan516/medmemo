@@ -162,7 +162,10 @@ func (s *L1ExtendedRuleStage) Process(_ context.Context, input Input) (Output, e
 		hash := fmt.Sprintf("%x", sha256.Sum256([]byte(original+fmt.Sprintf("_%s_%d", m.rule.name, i))))[:8]
 		placeholder := fmt.Sprintf("{{%s_%s}}", m.rule.prefix, hash)
 		text = text[:m.start] + placeholder + text[m.end:]
-		placeholders[placeholder] = original
+		// 占位符映射仅收录 P2：P3 走 LocalRestore，避免可还原映射外泄。
+		if m.rule.level == models.P2Internal {
+			placeholders[placeholder] = original
+		}
 		newEntities = append(newEntities, models.SensitiveEntity{
 			Text:        original,
 			Type:        m.rule.name,

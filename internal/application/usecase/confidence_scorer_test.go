@@ -107,13 +107,13 @@ func TestConfidenceScorer_SingleSource(t *testing.T) {
 	assert.InDelta(t, 0.84, score, 0.001)
 }
 
-func TestConfidenceScorer_SensitiveFact_Medical(t *testing.T) {
+func TestConfidenceScorer_SensitiveFact_Medical_NotSensitive(t *testing.T) {
 	t.Parallel()
 	scorer := NewConfidenceScorer()
 	f := entity.NewExtractedFact("用户", "患有", "高血压", 0.9, []string{"msg_001"})
 
 	scorer.Score(f)
-	assert.True(t, f.IsSensitive, "医学敏感词应被标记为敏感")
+	assert.False(t, f.IsSensitive, "医学敏感词不再驱动 IsSensitive")
 }
 
 func TestConfidenceScorer_SensitiveFact_PII(t *testing.T) {

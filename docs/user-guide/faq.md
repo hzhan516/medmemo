@@ -104,6 +104,8 @@
 
 **A:** It's an automatic process that replaces sensitive personal information (names, phone numbers, IDs, addresses) with placeholders like `<NAME_1>` or `<PHONE_1>` before sending to cloud AI. The original text is restored locally after receiving the response.
 
+> **Important:** Desensitization protects only the content sent to cloud AI providers. The chat interface and local data always remain the original text.
+
 ### Q21: Can MedMemo staff read my conversations?
 
 **A:** No. All data is stored locally on your device. There is no remote server or cloud storage for conversations.

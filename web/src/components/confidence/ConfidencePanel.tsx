@@ -68,7 +68,7 @@ export function ConfidencePanel({ result, onSwitchMode, currentMode }: Confidenc
             💡 为什么不是 100%？
           </div>
           <div className="text-xs text-amber-600 dark:text-amber-300">
-            缺少: {result.missingInfo.join('、')}
+            建议补充: {result.missingInfo.join('、')}
           </div>
         </div>
       )}

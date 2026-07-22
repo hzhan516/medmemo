@@ -15,15 +15,23 @@ import (
 
 // mockUpdater 是 port.Updater 的测试替身。
 type mockUpdater struct {
-	latestInfo  *entity.UpdateInfo
-	fetchErr    error
-	downloadTo  string
-	downloadErr error
-	verifyErr   error
+	latestInfo   *entity.UpdateInfo
+	fetchErr     error
+	tagInfo      *entity.UpdateInfo
+	tagErr       error
+	tagRequested string
+	downloadTo   string
+	downloadErr  error
+	verifyErr    error
 }
 
 func (m *mockUpdater) FetchLatest(_ context.Context, _ models.UpdateChannel) (*entity.UpdateInfo, error) {
 	return m.latestInfo, m.fetchErr
+}
+
+func (m *mockUpdater) FetchByTag(_ context.Context, tag string) (*entity.UpdateInfo, error) {
+	m.tagRequested = tag
+	return m.tagInfo, m.tagErr
 }
 
 func (m *mockUpdater) Download(_ context.Context, _, destPath string, _ func(downloaded, total int64)) error {

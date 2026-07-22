@@ -64,9 +64,12 @@ func (a *WailsApp) DownloadUpdate(req DownloadUpdateRequest) (string, error) {
 	}
 
 	// 先重新获取 UpdateInfo（包含正确的下载 URL）
-	info, err := a.updaterSvc.CheckUpdate(a.ctx, version)
-	if err != nil || info == nil {
+	info, err := a.updaterSvc.GetUpdateInfoByVersion(a.ctx, version, req.Version)
+	if err != nil {
 		return "", fmt.Errorf("failed to get update info for version %s: %w", req.Version, err)
+	}
+	if info == nil {
+		return "", fmt.Errorf("no update available for version %s", req.Version)
 	}
 
 	progressCb := func(downloaded, total int64) {

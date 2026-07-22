@@ -34,9 +34,9 @@ type ManualPackageInstallRequired struct {
 	Command     string
 }
 
-// Error 返回可展示给用户的错误信息。
+// Error 返回可展示给用户的错误信息，与 Darwin 和前端统一使用 "manual install"。
 func (e *ManualPackageInstallRequired) Error() string {
-	return fmt.Sprintf("manual package install required: %s", e.Command)
+	return fmt.Sprintf("manual install required: %s", e.Command)
 }
 
 // Install 根据当前 Linux 安装方式执行更新。

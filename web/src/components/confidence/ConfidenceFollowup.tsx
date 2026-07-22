@@ -27,15 +27,15 @@ export function ConfidenceFollowup({ result, onQuestionClick }: ConfidenceFollow
   const { level, missingInfo } = result
 
   const handleQuestionClick = (item: string) => {
-    // 将缺失信息转换为追问问题格式
+    // 将缺失信息转换为用户视角的补充模板，填入输入框后由用户补全具体内容
     const questionMap: Record<string, string> = {
-      '疼痛持续时间': '症状持续多久了？',
-      '既往病史': '您有什么既往病史吗？',
-      '过敏史': '您有过敏史吗？',
-      '用药情况': '您目前在服用什么药物？',
-      '是否发热': '您有发热吗？体温多少？',
+      '疼痛持续时间': '症状持续时间（开始时间、持续多久）：',
+      '既往病史': '既往病史（有无、简述）：',
+      '过敏史': '过敏史（药物/食物，有无）：',
+      '用药情况': '当前用药（药名、用量）：',
+      '是否发热': '发热情况（有无、体温）：',
     }
-    const text = questionMap[item] || `请补充一下${item}的信息`
+    const text = questionMap[item] || `补充信息——${item}：`
     onQuestionClick?.(text)
   }
 

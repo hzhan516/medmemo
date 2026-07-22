@@ -58,13 +58,100 @@ describe('UpdateModal', () => {
     expect(onApply).not.toHaveBeenCalled()
   })
 
-  it('macOS 授权失败时显示手动安装提示', () => {
-    renderModal({
-      downloadPath: '/tmp/MedMemo.dmg',
-      error: 'manual install required: open /Users/alice/Downloads/MedMemo.dmg',
-    })
+  it('macOS 授权失败时显示手动安装提示', async () => {
+    vi.resetModules()
+    const originalPlatform = navigator.platform
+    Object.defineProperty(navigator, 'platform', { value: 'MacIntel', configurable: true })
 
-    expect(screen.getByText(/macOS 自动替换需要管理员授权/)).toBeInTheDocument()
-    expect(screen.getByText(/手动将 MedMemo.app 拖拽到 Applications/)).toBeInTheDocument()
+    try {
+      const { UpdateModal: MacUpdateModal } = await import('./UpdateModal')
+      render(
+        <MacUpdateModal
+          info={baseInfo}
+          isDownloading={false}
+          isRestarting={false}
+          downloadProgress={null}
+          downloadPath="/tmp/MedMemo.dmg"
+          error="manual install required: open /Users/alice/Downloads/MedMemo.dmg"
+          onDownload={vi.fn()}
+          onApply={vi.fn()}
+          onSkip={vi.fn()}
+          onDismiss={vi.fn()}
+          onOpenDownloadPage={vi.fn()}
+        />
+      )
+
+      expect(screen.getByText(/macOS 自动替换需要管理员授权/)).toBeInTheDocument()
+      expect(screen.getByText(/手动将 MedMemo.app 拖拽到 Applications/)).toBeInTheDocument()
+    } finally {
+      Object.defineProperty(navigator, 'platform', { value: originalPlatform, configurable: true })
+    }
+  })
+
+  it('Linux 包管理安装失败时显示命令行手动安装提示', async () => {
+    vi.resetModules()
+    const originalPlatform = navigator.platform
+    Object.defineProperty(navigator, 'platform', { value: 'Linux x86_64', configurable: true })
+
+    try {
+      const { UpdateModal: LinuxUpdateModal } = await import('./UpdateModal')
+      render(
+        <LinuxUpdateModal
+          info={baseInfo}
+          isDownloading={false}
+          isRestarting={false}
+          downloadProgress={null}
+          downloadPath=""
+          error='manual install required: sudo dpkg -i "/tmp/MedMemo.deb"'
+          onDownload={vi.fn()}
+          onApply={vi.fn()}
+          onSkip={vi.fn()}
+          onDismiss={vi.fn()}
+          onOpenDownloadPage={vi.fn()}
+        />
+      )
+
+      expect(screen.getByText(/Linux 包管理安装需要手动执行/)).toBeInTheDocument()
+      expect(screen.getByText(/sudo dpkg -i/)).toBeInTheDocument()
+      expect(screen.getByText(/"\/tmp\/MedMemo.deb"/)).toBeInTheDocument()
+    } finally {
+      Object.defineProperty(navigator, 'platform', { value: originalPlatform, configurable: true })
+    }
+  })
+
+  it('macOS 下“前往下载”按钮打开 release tag 页面', async () => {
+    vi.resetModules()
+    const originalPlatform = navigator.platform
+    Object.defineProperty(navigator, 'platform', { value: 'MacIntel', configurable: true })
+
+    try {
+      const { UpdateModal: MacUpdateModal } = await import('./UpdateModal')
+      const onOpenDownloadPage = vi.fn()
+      const onDismiss = vi.fn()
+
+      render(
+        <MacUpdateModal
+          info={baseInfo}
+          isDownloading={false}
+          isRestarting={false}
+          downloadProgress={null}
+          downloadPath=""
+          error=""
+          onDownload={vi.fn()}
+          onApply={vi.fn()}
+          onSkip={vi.fn()}
+          onDismiss={onDismiss}
+          onOpenDownloadPage={onOpenDownloadPage}
+        />
+      )
+
+      await userEvent.click(screen.getByRole('button', { name: '前往下载' }))
+      expect(onOpenDownloadPage).toHaveBeenCalledWith(
+        `https://github.com/hzhan516/medmemo/releases/tag/${baseInfo.version}`
+      )
+      expect(onDismiss).toHaveBeenCalled()
+    } finally {
+      Object.defineProperty(navigator, 'platform', { value: originalPlatform, configurable: true })
+    }
   })
 })

@@ -429,7 +429,7 @@ func (a *WailsApp) saveMessages(ctx context.Context, convID string, messages []m
 					userContent = lastUser.Content
 				}
 			}
-			go a.extractFactsAsync(userContent, aiReply, providerID)
+			go a.extractFactsAsync(userContent, aiReply, providerID, a.config.DesensitizationLevel)
 		}
 	}
 	// 更新会话时间
@@ -442,10 +442,10 @@ func (a *WailsApp) saveMessages(ctx context.Context, convID string, messages []m
 
 // extractFactsAsync 异步从完整对话（用户消息 + AI 回复）中提取事实并保存到 factRepo。
 // 由 ChatOrchestrator 统一调度限流，避免与主对话竞争 API 配额触发 429。
-func (a *WailsApp) extractFactsAsync(userContent, aiReply, providerID string) {
+func (a *WailsApp) extractFactsAsync(userContent, aiReply, providerID string, level models.DesensitizationLevel) {
 	ctx, cancel := context.WithTimeout(a.ctx, 60*time.Second)
 	defer cancel()
-	facts, err := a.chatOrchestrator.ExtractFactsFromReply(ctx, userContent, aiReply, providerID)
+	facts, err := a.chatOrchestrator.ExtractFactsFromReply(ctx, userContent, aiReply, providerID, level)
 	if err != nil {
 		// 429 限流时静默跳过，不记录错误（这是预期行为）
 		if strings.Contains(err.Error(), "429") || strings.Contains(err.Error(), "rate limit") || strings.Contains(err.Error(), "rate limited") {
@@ -477,18 +477,16 @@ func (a *WailsApp) StopGeneration() {
 	a.streamMu.Unlock()
 }
 
-// GenerateTitle 异步生成会话标题，通过 Wails Events 推送结果。
+// GenerateTitle 异步生成本地会话标题，通过 Wails Events 推送结果。
 // 前端应在首条用户消息发送后调用此方法。
+// 当前直接采用本地规则，避免将用户首条消息原文发往云端标题模型；
+// 云端标题恢复方案见 TODO(#041)。
 func (a *WailsApp) GenerateTitle(convID string, userMessage string) {
 	go func() {
 		ctx, cancel := context.WithTimeout(a.ctx, 3*time.Second)
 		defer cancel()
 
-		title, err := a.titleGen.Generate(ctx, userMessage)
-		if err != nil {
-			// AI 生成失败或超时，降级到本地规则
-			title = usecase.FallbackTitle(userMessage)
-		}
+		title := usecase.FallbackTitle(userMessage)
 
 		// 持久化到数据库
 		if a.convRepo != nil {

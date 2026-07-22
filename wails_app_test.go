@@ -327,7 +327,7 @@ func TestExtractFactsAsync_Timeout(t *testing.T) {
 	// 空 providerID 应快速返回，不需要等待 60s
 	done := make(chan struct{})
 	go func() {
-		app.extractFactsAsync("user content", "ai reply", "")
+		app.extractFactsAsync("user content", "ai reply", "", models.DesensitizationStandard)
 		close(done)
 	}()
 
@@ -344,7 +344,7 @@ func TestExtractFactsAsync_ObservableError(t *testing.T) {
 	app := &WailsApp{ctx: t.Context()}
 
 	// 空 providerID 不应 panic，且应快速返回
-	app.extractFactsAsync("test", "reply", "")
+	app.extractFactsAsync("test", "reply", "", models.DesensitizationStandard)
 	// 无 panic 即通过
 }
 

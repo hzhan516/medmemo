@@ -73,11 +73,19 @@ func (p *DeidentifyPipeline) Execute(ctx context.Context, raw string, level mode
 		// Output 不携带 Level，用传入的 level 重建 Input 以贯穿后续阶段。
 		input = Input{Text: output.Text, Metadata: output.Metadata, Level: level}
 	}
+	localRestore := make(map[string]string)
+	for _, e := range allEntities {
+		if e.Placeholder != "" {
+			localRestore[e.Placeholder] = e.Text
+		}
+	}
+
 	return models.DeidentifyResult{
 		OriginalText: raw,
 		SafeText:     input.Text,
 		Entities:     allEntities,
 		Placeholder:  allPlaceholders,
+		LocalRestore: localRestore,
 	}, nil
 }
 
@@ -186,6 +194,7 @@ func (s *L2NERStage) Process(ctx context.Context, input Input) (Output, error) {
 		if e.StartPos < 0 || e.EndPos > len(text) || e.StartPos >= e.EndPos {
 			continue
 		}
+		entities[i].Placeholder = placeholder
 		text = text[:e.StartPos] + placeholder + text[e.EndPos:]
 	}
 

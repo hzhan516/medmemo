@@ -57,14 +57,15 @@ func TestL1ExtendedRuleStage_PerRule(t *testing.T) {
 	}
 }
 
-// TestL1ExtendedRuleStage_RecordsPlaceholders 验证占位符映射写入 metadata，供还原使用。
+// TestL1ExtendedRuleStage_RecordsPlaceholders 验证占位符映射仅收录 P2，P3 仅进入实体。
 func TestL1ExtendedRuleStage_RecordsPlaceholders(t *testing.T) {
 	t.Parallel()
 	stage := NewL1ExtendedRuleStage()
 	ctx := context.Background()
 
 	in := Input{
-		Text:     "IP 192.168.0.1",
+		// 逗号隔断，避免 age_name 规则误匹配“年龄 35岁”，仅触发独立的 age 规则（P2）。
+		Text:     "IP 192.168.0.1，35岁",
 		Level:    models.DesensitizationStrict,
 		Metadata: map[string]any{"l1_placeholders": map[string]string{"{{EMAIL_x}}": "a@b.com"}},
 	}
@@ -75,19 +76,37 @@ func TestL1ExtendedRuleStage_RecordsPlaceholders(t *testing.T) {
 	require.True(t, ok)
 	// 保留既有 L1 占位符
 	assert.Equal(t, "a@b.com", ph["{{EMAIL_x}}"])
-	// 新增本阶段占位符
-	found := false
+	// P2（年龄）占位符应被收录
+	foundP2 := false
 	for k, v := range ph {
-		if v == "192.168.0.1" && len(k) > 0 {
-			found = true
+		if v == "35岁" && len(k) > 0 {
+			foundP2 = true
 		}
 	}
-	assert.True(t, found, "新增 IP 占位符应记录在 l1_placeholders")
+	assert.True(t, foundP2, "P2 年龄占位符应记录在 l1_placeholders")
+	// P3（IP）占位符不应出现在映射中
+	for _, v := range ph {
+		assert.NotEqual(t, "192.168.0.1", v, "P3 IP 占位符不应进入 l1_placeholders")
+	}
 
 	ents, ok := out.Metadata["l1_entities"].([]models.SensitiveEntity)
 	require.True(t, ok)
-	require.Len(t, ents, 1)
-	assert.Equal(t, "ip_address", ents[0].Type)
+	require.Len(t, ents, 2)
+	var gotIP, gotAge bool
+	for _, e := range ents {
+		switch e.Type {
+		case "ip_address":
+			gotIP = true
+			assert.Equal(t, models.P3Confidential, e.Level)
+			assert.Equal(t, "192.168.0.1", e.Text)
+		case "age":
+			gotAge = true
+			assert.Equal(t, models.P2Internal, e.Level)
+			assert.Equal(t, "35岁", e.Text)
+		}
+	}
+	assert.True(t, gotIP, "实体中应包含 IP")
+	assert.True(t, gotAge, "实体中应包含年龄")
 }
 
 // TestDeidentifyPipeline_StrictMasksMoreThanStandard 验证 NER 关闭时，

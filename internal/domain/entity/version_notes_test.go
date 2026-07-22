@@ -58,27 +58,31 @@ func TestLoadVersionNotes(t *testing.T) {
 
 func TestAllVersionNotesAscending(t *testing.T) {
 	for i := 1; i < len(AllVersionNotes); i++ {
-		prev, err := parseSemver(AllVersionNotes[i-1].Version)
+		prevStr := AllVersionNotes[i-1].Version
+		currStr := AllVersionNotes[i].Version
+
+		cmp, err := CompareVersions(prevStr, currStr)
 		if err != nil {
-			t.Fatalf("parseSemver(%q) failed: %v", AllVersionNotes[i-1].Version, err)
+			t.Fatalf("CompareVersions(%q, %q) failed: %v", prevStr, currStr, err)
 		}
-		curr, err := parseSemver(AllVersionNotes[i].Version)
-		if err != nil {
-			t.Fatalf("parseSemver(%q) failed: %v", AllVersionNotes[i].Version, err)
+		if cmp > 0 {
+			continue
 		}
 
-		hasUpdate := false
-		for j := 0; j < 3; j++ {
-			if curr.core[j] > prev.core[j] {
-				hasUpdate = true
-				break
-			}
-			if curr.core[j] < prev.core[j] {
-				break
-			}
+		// 允许热修复 rc 紧跟同核心稳定版之后（如 v1.1.10 -> v1.1.10-rc.13）。
+		// 按语义化版本 rc < stable，但 changelog 按发布时间排序时会出现此情况。
+		prev, err := parseSemver(prevStr)
+		if err != nil {
+			t.Fatalf("parseSemver(%q) failed: %v", prevStr, err)
 		}
-		if !hasUpdate {
-			t.Errorf("versions not ascending: %s -> %s", AllVersionNotes[i-1].Version, AllVersionNotes[i].Version)
+		curr, err := parseSemver(currStr)
+		if err != nil {
+			t.Fatalf("parseSemver(%q) failed: %v", currStr, err)
 		}
+		if cmp < 0 && prev.core == curr.core && prev.label == "" && curr.label != "" {
+			continue
+		}
+
+		t.Errorf("versions not ascending: %s -> %s", prevStr, currStr)
 	}
 }

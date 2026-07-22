@@ -1,10 +1,15 @@
 package usecase
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/hzhan516/medmemo/internal/domain/entity"
 )
+
+// residualPlaceholderPattern 匹配反识别后残留的占位符，例如 {{name_a1b2c3d4}}。
+// 作为 B3 防御性回退：正常 B2 还原后不应出现，但降级路径或未来 FactExtractorWorker 路径可能残留。
+var residualPlaceholderPattern = regexp.MustCompile(`\{\{[A-Za-z_]+_[0-9a-f]{8}\}\}`)
 
 // FactQualityGate 对 LLM 返回的事实做确定性后过滤。
 // 不依赖外部模型，仅基于规则拒绝常见噪音模式，
@@ -30,6 +35,13 @@ func isQualityFact(f *entity.ExtractedFact) bool {
 	sub := strings.ToLower(strings.TrimSpace(f.Subject))
 	pred := strings.ToLower(strings.TrimSpace(f.Predicate))
 	obj := strings.ToLower(strings.TrimSpace(f.Object))
+
+	// 0. 拒绝 subject / predicate / object 中残留反识别占位符
+	if residualPlaceholderPattern.MatchString(sub) ||
+		residualPlaceholderPattern.MatchString(pred) ||
+		residualPlaceholderPattern.MatchString(obj) {
+		return false
+	}
 
 	// 1. 拒绝 subject 是 AI / 助手 / 模型 / 系统
 	aiSubjects := []string{"ai", "助手", "模型", "系统", "assistant", "model", "system"}
