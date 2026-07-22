@@ -62,16 +62,17 @@ func generateCoreTypes() error {
 			return fmt.Errorf("parse %s: %w", path, err)
 		}
 		for _, decl := range f.Decls {
-			switch d := decl.(type) {
-			case *ast.GenDecl:
-				if d.Tok == token.TYPE {
-					for _, spec := range d.Specs {
-						ts := spec.(*ast.TypeSpec)
-						types = append(types, parseTypeSpec(ts, d.Doc))
-					}
-				} else if d.Tok == token.CONST {
-					consts = append(consts, parseConstBlock(d)...)
+			d, ok := decl.(*ast.GenDecl)
+			if !ok {
+				continue
+			}
+			if d.Tok == token.TYPE {
+				for _, spec := range d.Specs {
+					ts := spec.(*ast.TypeSpec)
+					types = append(types, parseTypeSpec(ts, d.Doc))
 				}
+			} else if d.Tok == token.CONST {
+				consts = append(consts, parseConstBlock(d)...)
 			}
 		}
 	}
@@ -92,19 +93,19 @@ func generateCoreTypes() error {
 }
 
 type typeInfo struct {
-	Name        string
-	Doc         string
-	Kind        string // struct, alias, interface
-	Underlying  string
-	Fields      []fieldInfo
-	EnumConsts  []constInfo
+	Name       string
+	Doc        string
+	Kind       string // struct, alias, interface
+	Underlying string
+	Fields     []fieldInfo
+	EnumConsts []constInfo
 }
 
 type fieldInfo struct {
-	Name     string
-	Type     string
-	JSONTag  string
-	Doc      string
+	Name    string
+	Type    string
+	JSONTag string
+	Doc     string
 }
 
 type constInfo struct {
@@ -229,9 +230,9 @@ type portInfo struct {
 }
 
 type methodInfo struct {
-	Name    string
-	Sig     string
-	Doc     string
+	Name string
+	Sig  string
+	Doc  string
 }
 
 func generatePorts() error {
