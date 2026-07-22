@@ -1598,6 +1598,31 @@ func TestExtractFactsFromReply_DeidFailureDegrades(t *testing.T) {
 	assert.Contains(t, facts[0].Object, "{{PHONE_")
 }
 
+// sentinelMockDeidentifier 返回完全遮蔽哨兵，用于验证 fail-closed 分支。
+type sentinelMockDeidentifier struct{}
+
+func (m *sentinelMockDeidentifier) Execute(_ context.Context, _ string, _ models.DesensitizationLevel) (models.DeidentifyResult, error) {
+	return models.DeidentifyResult{
+		OriginalText: "我的电话是13800138000",
+		SafeText:     "[内容因严格级脱敏失败已被完全屏蔽]",
+	}, nil
+}
+
+var _ Deidentifier = (*sentinelMockDeidentifier)(nil)
+
+// TestExtractFactsFromReply_DeidSentinelAborts 验证严格级完全遮蔽时放弃本次抽取。
+func TestExtractFactsFromReply_DeidSentinelAborts(t *testing.T) {
+	t.Parallel()
+	mock := &mockLLMClient{chatReply: `[{"subject":"用户","predicate":"电话是","object":"13800138000","confidence":0.9}]`}
+	provider := &models.ProviderConfig{ID: "cloud", Type: models.ProviderKimi, APIHost: "https://api.example.com", ModelID: "kimi-v1"}
+	orch := newFactExtractionTestOrchestrator(t, mock, provider, &sentinelMockDeidentifier{})
+
+	facts, err := orch.ExtractFactsFromReply(context.Background(), "我的电话是13800138000", "AI回复", "cloud", models.DesensitizationStrict)
+	require.NoError(t, err)
+	assert.Empty(t, facts, "完全遮蔽哨兵应导致放弃抽取")
+	assert.Empty(t, mock.lastMessages, "哨兵分支不应调用 LLM")
+}
+
 // TestExtractFactsFromReply_NilPipelineGuard 验证 deidPipeline 为 nil 时不 panic 且使用原始文本。
 func TestExtractFactsFromReply_NilPipelineGuard(t *testing.T) {
 	t.Parallel()

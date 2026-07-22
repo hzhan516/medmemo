@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -18,6 +19,10 @@ import (
 	"github.com/hzhan516/medmemo/pkg/models"
 	"github.com/hzhan516/medmemo/pkg/resourcepath"
 )
+
+// deidFailureSentinel 是严格级脱敏完全失败后的兜底占位文本，
+// 出现该文本表示无任何可还原映射，出网内容已被完全遮蔽。
+const deidFailureSentinel = "[内容因严格级脱敏失败已被完全屏蔽]"
 
 // Deidentifier 脱敏流水线接口。
 // level 决定分级执行策略（standard/strict/off 由上层预先判定后传入）。
@@ -242,7 +247,7 @@ func degradeUserContent(content string) string {
 		return res.SafeText
 	}
 	// L1 也失败：完全遮蔽，避免任何原文出网。
-	return "[内容因严格级脱敏失败已被完全屏蔽]"
+	return deidFailureSentinel
 }
 
 // prepareMessages 执行输入脱敏、记忆检索与知识库检索，返回完整预组装结果。
@@ -706,7 +711,7 @@ func (c *ChatOrchestrator) ExtractFactsFromReply(ctx context.Context, userConten
 			localRestore = r.LocalRestore
 		}
 		// 完全遮蔽哨兵：无映射可还原，直接放弃本次抽取
-		if content == "[内容因严格级脱敏失败已被完全屏蔽]" {
+		if content == deidFailureSentinel {
 			return nil, nil
 		}
 	}
@@ -732,9 +737,18 @@ func (c *ChatOrchestrator) ExtractFactsFromReply(ctx context.Context, userConten
 }
 
 // restoreFactText 使用本地还原映射将占位符替换回原始文本。
+// 占位符之间不存在包含关系是正常情况；为防御性避免短占位符先替换破坏长占位符，
+// 按占位符长度降序处理（长的先替换）。
 func restoreFactText(text string, mapping map[string]string) string {
-	for placeholder, original := range mapping {
-		text = strings.ReplaceAll(text, placeholder, original)
+	keys := make([]string, 0, len(mapping))
+	for k := range mapping {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		return len(keys[i]) > len(keys[j])
+	})
+	for _, placeholder := range keys {
+		text = strings.ReplaceAll(text, placeholder, mapping[placeholder])
 	}
 	return text
 }
