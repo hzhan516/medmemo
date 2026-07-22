@@ -1638,3 +1638,31 @@ func TestExtractFactsFromReply_NilPipelineGuard(t *testing.T) {
 	require.Len(t, facts, 1)
 	assert.Equal(t, "13800138000", facts[0].Object)
 }
+
+// TestExtractFactsFromReply_PhoneFact_IsSensitive 验证提取到含手机号的事实会标记 IsSensitive。
+func TestExtractFactsFromReply_PhoneFact_IsSensitive(t *testing.T) {
+	t.Parallel()
+	mock := &mockLLMClient{chatReply: `[{"subject":"用户","predicate":"电话是","object":"13800138000","confidence":0.9}]`}
+	provider := &models.ProviderConfig{ID: "local", Type: models.ProviderOllama, APIHost: "http://localhost:11434", ModelID: "llama3"}
+	orch := newFactExtractionTestOrchestrator(t, mock, provider, nil)
+
+	facts, err := orch.ExtractFactsFromReply(context.Background(), "我的电话是13800138000", "AI回复", "local", models.DesensitizationOff)
+	require.NoError(t, err)
+	require.Len(t, facts, 1)
+	assert.Equal(t, "13800138000", facts[0].Object)
+	assert.True(t, facts[0].IsSensitive, "含手机号的事实应标记 IsSensitive=true")
+}
+
+// TestExtractFactsFromReply_MedicalFact_NotSensitive 验证提取到仅含医学词的事实不标记 IsSensitive。
+func TestExtractFactsFromReply_MedicalFact_NotSensitive(t *testing.T) {
+	t.Parallel()
+	mock := &mockLLMClient{chatReply: `[{"subject":"用户","predicate":"患有","object":"糖尿病","confidence":0.9}]`}
+	provider := &models.ProviderConfig{ID: "local", Type: models.ProviderOllama, APIHost: "http://localhost:11434", ModelID: "llama3"}
+	orch := newFactExtractionTestOrchestrator(t, mock, provider, nil)
+
+	facts, err := orch.ExtractFactsFromReply(context.Background(), "我患有糖尿病", "AI回复", "local", models.DesensitizationOff)
+	require.NoError(t, err)
+	require.Len(t, facts, 1)
+	assert.Equal(t, "糖尿病", facts[0].Object)
+	assert.False(t, facts[0].IsSensitive, "仅含医学关键词的事实不应标记 IsSensitive")
+}

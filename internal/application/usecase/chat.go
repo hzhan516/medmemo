@@ -733,6 +733,12 @@ func (c *ChatOrchestrator) ExtractFactsFromReply(ctx context.Context, userConten
 		}
 	}
 
+	// 对存活事实标记 PII 敏感信息（医学关键词不再驱动 IsSensitive，见 M04 TODO#040）
+	sd := NewSensitiveDetector()
+	for _, f := range facts {
+		f.IsSensitive = sd.Detect(f)
+	}
+
 	return facts, nil
 }
 
