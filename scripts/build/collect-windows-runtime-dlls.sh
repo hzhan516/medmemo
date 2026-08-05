@@ -31,6 +31,17 @@ else
       fi
     done
     if [ "$found" -eq 0 ]; then
+      # 回退：在 MSYS2 根目录递归搜索 DLL
+      if [ -d "/c/msys64" ]; then
+        candidate=$(find /c/msys64 -name "$dll" -type f 2>/dev/null | head -1)
+        if [ -n "$candidate" ]; then
+          cp "$candidate" "$OUTPUT_DIR/"
+          echo "Copied $dll from recursive search: $candidate"
+          found=1
+        fi
+      fi
+    fi
+    if [ "$found" -eq 0 ]; then
       echo "Warning: $dll not found in any MinGW bin directory"
       missing=1
     fi

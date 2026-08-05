@@ -143,7 +143,6 @@ wails build -platform linux/amd64
 
 ## 相关文档
 
-- [`AGENTS.md`](../../../AGENTS.md) — 完整的开发标准和技术栈版本锁定。
 - [`.github/dependabot.yml`](../../../.github/dependabot.yml) — 包含 `ignore` 规则的 Dependabot 配置。
 - [`docs/DEVELOPMENT.md`](../../DEVELOPMENT.md) — Clean Architecture 和编码规范。
 

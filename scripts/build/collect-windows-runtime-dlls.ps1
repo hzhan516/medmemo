@@ -64,6 +64,19 @@ foreach ($dll in $requiredDlls) {
         }
     }
     if (-not $found) {
+        # 回退：在 MSYS2 根目录递归搜索 DLL（覆盖 ucrt64/clang64 或自定义安装路径）
+        $msysRoot = "C:/msys64"
+        if (Test-Path $msysRoot) {
+            $candidate = Get-ChildItem -Path $msysRoot -Recurse -Filter $dll -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($candidate) {
+                $dest = Join-Path $OutputDir $dll
+                Copy-Item -Path $candidate.FullName -Destination $dest -Force
+                Write-Host "Copied $dll -> $dest (from recursive search: $($candidate.DirectoryName))"
+                $found = $true
+            }
+        }
+    }
+    if (-not $found) {
         $missing += $dll
         Write-Warning "Missing required DLL: $dll"
     }
