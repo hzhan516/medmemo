@@ -108,9 +108,9 @@ func (g *GitHubUpdater) doGitHubGET(ctx context.Context, url string) (io.ReadClo
 // FetchLatest 查询 GitHub Releases API 获取适合当前通道的最新版本。
 // stable 通道过滤掉 prerelease，beta 通道包含全部。
 func (g *GitHubUpdater) FetchLatest(ctx context.Context, channel models.UpdateChannel) (*entity.UpdateInfo, error) {
-	url := fmt.Sprintf("%s/repos/%s/%s/releases?per_page=30", g.apiBaseURL, githubRepoOwner, githubRepoName)
+	apiURL := fmt.Sprintf("%s/repos/%s/%s/releases?per_page=30", g.apiBaseURL, githubRepoOwner, githubRepoName)
 
-	body, err := g.doGitHubGET(ctx, url)
+	body, err := g.doGitHubGET(ctx, apiURL)
 	if err != nil {
 		return nil, err
 	}

@@ -56,12 +56,12 @@ func (e *ContextEstimator) Estimate(ctx context.Context, in EstimatorInput) (Est
 		used += n + perMessageOverhead
 	}
 
-	max := e.resolver.Resolve(ctx, in.ProviderID, in.ModelID)
+	maxTokens := e.resolver.Resolve(ctx, in.ProviderID, in.ModelID)
 
 	return EstimateResult{
 		UsedTokens:  used,
-		MaxTokens:   max,
-		Ratio:       boundedRatio(used, max),
+		MaxTokens:   maxTokens,
+		Ratio:       boundedRatio(used, maxTokens),
 		Approximate: approximate,
 	}, nil
 }

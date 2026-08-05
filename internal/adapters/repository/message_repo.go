@@ -180,7 +180,7 @@ func (r *messageRepoTx) Save(ctx context.Context, convID models.ConversationID, 
 	return nil
 }
 
-func (r *messageRepoTx) ListByConversation(ctx context.Context, convID models.ConversationID, cursor string, limit int) ([]*entity.Message, string, error) {
+func (r *messageRepoTx) ListByConversation(_ context.Context, _ models.ConversationID, _ string, _ int) ([]*entity.Message, string, error) {
 	return nil, "", fmt.Errorf("ListByConversation not supported inside transaction")
 }
 
@@ -204,7 +204,7 @@ func (r *messageRepoTx) Restore(ctx context.Context, msgID string) error {
 	return nil
 }
 
-func (r *messageRepoTx) WithTx(ctx context.Context, fn func(tx port.MessageRepository) error) error {
+func (r *messageRepoTx) WithTx(_ context.Context, fn func(tx port.MessageRepository) error) error {
 	return fn(r)
 }
 

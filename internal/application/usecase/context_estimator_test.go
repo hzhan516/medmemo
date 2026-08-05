@@ -14,7 +14,7 @@ type fakeTokenCounter struct {
 	ok bool
 }
 
-func (f *fakeTokenCounter) Count(ctx context.Context, modelID, text string) (int, bool) {
+func (f *fakeTokenCounter) Count(_ context.Context, _ string, text string) (int, bool) {
 	return len(text), f.ok
 }
 
@@ -23,23 +23,23 @@ type fakeProviderStore struct {
 	provider *models.ProviderConfig
 }
 
-func (f *fakeProviderStore) Create(ctx context.Context, provider *models.ProviderConfig) error {
+func (f *fakeProviderStore) Create(_ context.Context, _ *models.ProviderConfig) error {
 	return nil
 }
 
-func (f *fakeProviderStore) Update(ctx context.Context, provider *models.ProviderConfig) error {
+func (f *fakeProviderStore) Update(_ context.Context, _ *models.ProviderConfig) error {
 	return nil
 }
 
-func (f *fakeProviderStore) Delete(ctx context.Context, id string) error {
+func (f *fakeProviderStore) Delete(_ context.Context, _ string) error {
 	return nil
 }
 
-func (f *fakeProviderStore) Get(ctx context.Context, id string) (*models.ProviderConfig, error) {
+func (f *fakeProviderStore) Get(_ context.Context, _ string) (*models.ProviderConfig, error) {
 	return f.provider, nil
 }
 
-func (f *fakeProviderStore) List(ctx context.Context) ([]*models.ProviderConfig, error) {
+func (f *fakeProviderStore) List(_ context.Context) ([]*models.ProviderConfig, error) {
 	if f.provider == nil {
 		return nil, nil
 	}

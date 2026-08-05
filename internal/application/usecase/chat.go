@@ -679,6 +679,9 @@ func (a *llmClientAdapter) Chat(ctx context.Context, messages []string) (string,
 // 使用当前会话的 Provider 创建 LLM client，异步调用时不阻塞主流程。
 // 全局限流：确保事实提取与主对话、其他事实提取之间有足够间隔，避免触发 429。
 func (c *ChatOrchestrator) ExtractFactsFromReply(ctx context.Context, userContent, aiReply, providerID string, level models.DesensitizationLevel) ([]*entity.ExtractedFact, error) {
+	// 只从用户消息中提取事实，避免把 AI 回复中的建议、能力限制等抽成记忆。
+	_ = aiReply
+
 	if providerID == "" {
 		return nil, nil
 	}

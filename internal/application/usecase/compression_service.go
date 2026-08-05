@@ -378,9 +378,6 @@ func applySummarizeAndReplace(history []models.Message, anchorCount, recentCount
 
 	middleStart := anchorCount
 	middleEnd := len(history) - recentCount
-	if middleStart < 0 {
-		middleStart = 0
-	}
 	if middleEnd < middleStart {
 		middleEnd = middleStart
 	}
