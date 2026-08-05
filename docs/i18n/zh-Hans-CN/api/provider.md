@@ -26,6 +26,31 @@ type ModelInfo struct {
 
 从后端 SQLite 返回所有已配置的 Provider，包括 API Key（静态加密存储）、模型列表和健康状态。
 
+> ⚙️ **`models.ProviderConfig` 的权威自动生成字段表见 [`_generated/core-types.md`](../../../api/_generated/core-types.md)。**
+
+#### `models.ProviderConfig` 字段（快速参考）
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|:----:|:----|
+| `id` | `string` | ✅ | 唯一 Provider ID |
+| `name` | `string` | ✅ | 显示名称 |
+| `type` | `string` | ✅ | Provider 类型枚举 |
+| `apiHost` | `string` | ✅ | Provider API 基础地址 |
+| `apiKey` | `string` | — | API Key / 访问令牌（静态加密存储） |
+| `modelId` | `string` | ✅* | 默认模型 ID；若 `models` 存在启用项则可省略 |
+| `models` | `[]ProviderModel` | — | 该 Provider 可用模型列表 |
+| `temperature` | `float64` | — | 采样温度 `[0, 2]` |
+| `timeoutMs` | `int` | — | 请求超时（毫秒） |
+| `maxRetries` | `int` | — | 最大重试次数 |
+| `maxTokens` | `int` | — | 每次回复最大 token 数 |
+| `group` | `string` | — | UI 分组 |
+| `enabled` | `bool` | — | 是否启用 |
+| `sortOrder` | `int` | — | UI 排序权重 |
+| `createdAt` | `int64` | — | 创建时间戳（毫秒） |
+| `updatedAt` | `int64` | — | 最后更新时间戳（毫秒） |
+| `auth_method` | `string` | — | `api_key`、`cli_token`、`oauth_device`、`service_account` |
+| `auth_params` | `AuthParams` | — | 认证方式相关参数 |
+
 ---
 
 ### `CreateProvider(config models.ProviderConfig) error`
