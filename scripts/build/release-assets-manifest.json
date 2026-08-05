@@ -1,0 +1,49 @@
+{
+  "schemaVersion": "1.0",
+  "description": "MedMemo release installer asset manifest. This is the single source of truth for staging, checksums, GoReleaser extra_files, and evidence verification.",
+  "versionTemplate": "${VERSION}",
+  "assets": [
+    {
+      "name": "MedMemoSetup.exe",
+      "platform": "windows",
+      "arch": "amd64",
+      "kind": "nsis-installer",
+      "sourceDir": "artifacts/windows"
+    },
+    {
+      "name": "MedMemo_x86_64.dmg",
+      "platform": "darwin",
+      "arch": "x86_64",
+      "kind": "dmg-installer",
+      "sourceDir": "artifacts/darwin-amd64"
+    },
+    {
+      "name": "MedMemo_arm64.dmg",
+      "platform": "darwin",
+      "arch": "arm64",
+      "kind": "dmg-installer",
+      "sourceDir": "artifacts/darwin-arm64"
+    },
+    {
+      "name": "MedMemo-x86_64.AppImage",
+      "platform": "linux",
+      "arch": "x86_64",
+      "kind": "appimage-installer",
+      "sourceDir": "artifacts/linux"
+    },
+    {
+      "name": "MedMemo_${VERSION}_amd64.deb",
+      "platform": "linux",
+      "arch": "amd64",
+      "kind": "deb-package",
+      "sourceDir": "artifacts/linux"
+    },
+    {
+      "name": "MedMemo-${VERSION}-1.x86_64.rpm",
+      "platform": "linux",
+      "arch": "x86_64",
+      "kind": "rpm-package",
+      "sourceDir": "artifacts/linux"
+    }
+  ]
+}

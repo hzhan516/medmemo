@@ -1,29 +1,27 @@
 version: 2
 project_name: MedMemo
 
+# 前端构建与四平台产物已在 CI 中完成；这里只负责把 staging 后的六资产 + checksums 发布为 Draft。
 before:
-  hooks:
-    - bash -c 'cd web && npm ci && npm run build'
+  hooks: []
 
 builds:
   - skip: true
 
 checksum:
   name_template: 'checksums.txt'
+  extra_files:
+    # 单一事实源：scripts/build/release-assets-manifest.json
+    - glob: release-assets/*
 
 release:
-  # 与 build-and-release.yml 的 softprops 发布保持一致：正式版直接发布（非草稿），
-  # 预发布由 tag 后缀（-rc）经 prerelease: auto 自动判定。
-  draft: false
-  prerelease: auto
-  mode: append
+  # 正式发布采用 Draft 两阶段；prerelease 由 release.yml / finalize-release.yml 按 tag 类型调整。
+  draft: true
+  prerelease: false
   name_template: "MedMemo {{ .Version }}"
   extra_files:
-    - glob: build/bin/*.AppImage
-    - glob: build/bin/*.deb
-    - glob: build/bin/*.rpm
-    - glob: build/bin/*.dmg
-    - glob: build/bin/*-installer.exe
+    # 单一事实源：scripts/build/release-assets-manifest.json
+    - glob: release-assets/*
 
 changelog:
   use: github

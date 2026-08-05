@@ -1,0 +1,133 @@
+name: Reset Draft Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Draft tag to reset (e.g., v1.1.10)'
+        required: true
+        type: string
+      release_id:
+        description: 'GitHub release database ID'
+        required: true
+        type: string
+      approved_main_sha:
+        description: 'Approved-Main-SHA'
+        required: true
+        type: string
+      reason:
+        description: 'Reason for reset'
+        required: true
+        type: string
+
+env:
+  GOPROXY: https://proxy.golang.org,https://goproxy.cn,direct
+
+permissions:
+  contents: write
+
+concurrency:
+  group: stable-release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  reset:
+    name: Reset ${{ inputs.tag }}
+    runs-on: ubuntu-latest
+    environment: production-release
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Assert main branch
+        run: |
+          set -euo pipefail
+          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "ERROR: this workflow must be dispatched from main"
+            exit 1
+          fi
+
+      - name: Verify no active finalize run
+        run: |
+          set -euo pipefail
+          ACTIVE=$(gh api "repos/${{ github.repository }}/actions/workflows/finalize-release.yml/runs" \
+            --jq '.workflow_runs[] | select(.status == "queued" or .status == "in_progress" or .status == "waiting") | .id')
+          if [ -n "$ACTIVE" ]; then
+            echo "ERROR: active finalize-release runs exist; cancel them before reset"
+            echo "$ACTIVE"
+            exit 1
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate Draft state
+        run: |
+          set -euo pipefail
+          RELEASE=$(gh api "repos/${{ github.repository }}/releases/${{ inputs.release_id }}")
+          echo "$RELEASE" | jq '.'
+
+          RELEASE_TAG=$(echo "$RELEASE" | jq -r '.tag_name')
+          RELEASE_DRAFT=$(echo "$RELEASE" | jq -r '.draft')
+          RELEASE_PRERELEASE=$(echo "$RELEASE" | jq -r '.prerelease')
+          RELEASE_LATEST=$(echo "$RELEASE" | jq -r '.prerelease') # 无法直接取 latest；通过 latest 端点校验
+
+          if [ "$RELEASE_TAG" != "${{ inputs.tag }}" ]; then
+            echo "ERROR: release tag mismatch"
+            exit 1
+          fi
+          if [ "$RELEASE_DRAFT" != "true" ]; then
+            echo "ERROR: release must be Draft to reset"
+            exit 1
+          fi
+          if [ "$RELEASE_PRERELEASE" != "false" ]; then
+            echo "ERROR: only stable Draft can be reset via this workflow"
+            exit 1
+          fi
+
+          LATEST_TAG=$(gh api "repos/${{ github.repository }}/releases/latest" --jq '.tag_name' 2>/dev/null || echo "")
+          if [ "$LATEST_TAG" = "${{ inputs.tag }}" ]; then
+            echo "ERROR: release is currently latest; cannot reset"
+            exit 1
+          fi
+
+          TAG_SHA=$(gh api "repos/${{ github.repository }}/git/ref/tags/${{ inputs.tag }}" --jq '.object.sha')
+          TAG_COMMIT=$(gh api "repos/${{ github.repository }}/git/tags/$TAG_SHA" --jq '.object.sha' 2>/dev/null || echo "$TAG_SHA")
+          if [ "$TAG_COMMIT" != "${{ inputs.approved_main_sha }}" ]; then
+            echo "ERROR: tag does not point to Approved-Main-SHA"
+            exit 1
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Delete Draft release and tag
+        run: |
+          set -euo pipefail
+          gh release delete "${{ inputs.tag }}" --yes --cleanup-tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify deletion
+        run: |
+          set -euo pipefail
+          if gh api "repos/${{ github.repository }}/releases/${{ inputs.release_id }}" >/dev/null 2>&1; then
+            echo "ERROR: release still exists after deletion"
+            exit 1
+          fi
+
+          REMOTE_TAG=$(gh api "repos/${{ github.repository }}/git/ref/tags/${{ inputs.tag }}" 2>/dev/null || true)
+          if [ -n "$REMOTE_TAG" ]; then
+            echo "ERROR: remote tag still exists after deletion"
+            exit 1
+          fi
+
+          echo "Reset completed for ${{ inputs.tag }}"
+          echo "Reason: ${{ inputs.reason }}"
+          echo "Approver: ${{ github.actor }}"
+          echo "Run ID: ${{ github.run_id }}"
+          echo ""
+          echo "Local cleanup command (run manually if needed):"
+          echo "  git tag -d ${{ inputs.tag }} 2>/dev/null || true"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
