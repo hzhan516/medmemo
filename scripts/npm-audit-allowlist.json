@@ -1,0 +1,20 @@
+[
+  {
+    "package": "react-router",
+    "advisory": "1124282",
+    "scope": "production",
+    "justification": "GHSA-qwww-vcr4-c8h2 (RSC Mode CSRF Bypass) targets React Server Components / SSR action execution. MedMemo uses HashRouter inside a desktop Wails shell without RSC, SSR, or server actions, so the attack vector is not reachable in this product context.",
+    "mitigation": "Monitor react-router releases and upgrade to a patched version (>=8.3.0 or a fixed 7.x patch) as soon as available; reassess before the next release.",
+    "reviewTargetVersion": ">=8.3.0 or fixed 7.x patch",
+    "expires": "2026-09-05"
+  },
+  {
+    "package": "react-router-dom",
+    "advisory": "1124282",
+    "scope": "production",
+    "justification": "Same underlying advisory as react-router (GHSA-qwww-vcr4-c8h2). MedMemo uses react-router-dom only for client-side HashRouter navigation in a desktop Wails application; the RSC/SSR action execution path required by the exploit does not exist.",
+    "mitigation": "Upgrade react-router-dom together with react-router once a patched release is available; verify the exploit remains unreachable before the next release.",
+    "reviewTargetVersion": ">=8.3.0 or fixed 7.x patch",
+    "expires": "2026-09-05"
+  }
+]
