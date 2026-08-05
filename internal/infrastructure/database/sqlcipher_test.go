@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"runtime"
 	"testing"
 	"time"
 
@@ -12,6 +13,16 @@ import (
 	"github.com/stretchr/testify/require"
 	_ "modernc.org/sqlite"
 )
+
+// setHomeEnv 按平台设置用户主目录环境变量：Windows 使用 USERPROFILE，Unix 使用 HOME。
+func setHomeEnv(t *testing.T, home string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Setenv("USERPROFILE", home)
+	} else {
+		t.Setenv("HOME", home)
+	}
+}
 
 // mockSecretStore 是 secret.Store 的内存实现，用于测试。
 type mockSecretStore struct {
@@ -382,6 +393,32 @@ func TestSQLCipherConnector_MigrateFromPlaintext_EmptyPlaintext(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, conn)
 	require.NoError(t, conn.Close())
+}
+
+// TestResolveDataDir 验证数据目录解析的三种来源与相对路径回退。
+func TestResolveDataDir(t *testing.T) {
+	t.Run("explicit path is kept", func(t *testing.T) {
+		assert.Equal(t, "/tmp/medmemo-data", resolveDataDir("/tmp/medmemo-data"))
+	})
+
+	t.Run("env var overrides empty", func(t *testing.T) {
+		t.Setenv("MEDMEMO_DATA_DIR", "/tmp/env-data")
+		assert.Equal(t, "/tmp/env-data", resolveDataDir(""))
+	})
+
+	t.Run("default falls back to home .medmemo/data", func(t *testing.T) {
+		home := t.TempDir()
+		setHomeEnv(t, home)
+		got := resolveDataDir("")
+		assert.Equal(t, home+"/.medmemo/data", got)
+	})
+
+	t.Run("relative path resolves against home", func(t *testing.T) {
+		home := t.TempDir()
+		setHomeEnv(t, home)
+		got := resolveDataDir("custom/data")
+		assert.Equal(t, home+"/custom/data", got)
+	})
 }
 
 // TestValidateAttachPath 验证 ATTACH DATABASE 路径校验逻辑。

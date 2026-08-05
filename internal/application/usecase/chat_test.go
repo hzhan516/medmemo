@@ -1481,6 +1481,26 @@ func TestChatOrchestrator_Standard_KeepsRawFallback(t *testing.T) {
 	assert.Equal(t, "原始内容 X", prepared.Messages[lastIdx].Content, "标准级失败保持原文回退")
 }
 
+// TestChatOrchestrator_AssemblePromptForEstimate 验证估算组装与 PreparePrompt 返回一致的消息。
+func TestChatOrchestrator_AssemblePromptForEstimate(t *testing.T) {
+	t.Parallel()
+	mock := &mockLLMClient{chatReply: "收到"}
+	comp := newTestComplianceChecker(t, mustEmptyRulesPath(t))
+	deid := &mockDeidentifier{}
+	orch := newTestOrchestrator(mock, comp, deid, nil, nil)
+
+	req := ChatRequest{
+		Messages:             []models.Message{{Role: models.RoleUser, Content: "估算测试"}},
+		Model:                models.ProviderKimi,
+		ProviderID:           "test-provider",
+		DesensitizationLevel: models.DesensitizationStandard,
+	}
+
+	estimated := orch.AssemblePromptForEstimate(context.Background(), req)
+	prepared := orch.PreparePrompt(context.Background(), req)
+	assert.Equal(t, prepared.Messages, estimated, "AssemblePromptForEstimate 应返回与 PreparePrompt 相同的消息")
+}
+
 // phoneMockDeidentifier 将特定手机号替换为固定占位符，用于验证事实提取脱敏路径。
 type phoneMockDeidentifier struct{}
 

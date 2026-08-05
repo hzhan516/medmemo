@@ -163,6 +163,67 @@ func TestServiceDownloadUpdate(t *testing.T) {
 	assert.NotEmpty(t, mockU.downloadTo)
 }
 
+// TestServiceGetUpdateInfoByVersion 验证按版本查询更新信息。
+func TestServiceGetUpdateInfoByVersion(t *testing.T) {
+	t.Parallel()
+
+	t.Run("empty version falls back to CheckUpdate", func(t *testing.T) {
+		mockU := &mockUpdater{latestInfo: &entity.UpdateInfo{Version: "v0.3.0", Channel: models.ChannelStable}}
+		mockI := &mockInstaller{}
+		svc := NewService(mockU, mockI, models.ChannelStable)
+
+		info, err := svc.GetUpdateInfoByVersion(context.Background(), "v0.1.0", "")
+		require.NoError(t, err)
+		require.NotNil(t, info)
+		assert.Equal(t, "v0.3.0", info.Version)
+	})
+
+	t.Run("specific version uses FetchByTag", func(t *testing.T) {
+		mockU := &mockUpdater{tagInfo: &entity.UpdateInfo{Version: "v1.1.10", Channel: models.ChannelStable}}
+		mockI := &mockInstaller{}
+		svc := NewService(mockU, mockI, models.ChannelStable)
+
+		info, err := svc.GetUpdateInfoByVersion(context.Background(), "v1.1.9", "v1.1.10")
+		require.NoError(t, err)
+		require.NotNil(t, info)
+		assert.Equal(t, "v1.1.10", info.Version)
+		assert.Equal(t, "v1.1.10", mockU.tagRequested)
+	})
+
+	t.Run("fetch error is wrapped", func(t *testing.T) {
+		mockU := &mockUpdater{tagErr: fmt.Errorf("not found")}
+		mockI := &mockInstaller{}
+		svc := NewService(mockU, mockI, models.ChannelStable)
+
+		_, err := svc.GetUpdateInfoByVersion(context.Background(), "v1.1.9", "v1.1.10")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to fetch release v1.1.10")
+	})
+}
+
+// TestDirWritable 验证目录可写性探测。
+func TestDirWritable(t *testing.T) {
+	t.Parallel()
+
+	t.Run("writable directory", func(t *testing.T) {
+		assert.True(t, dirWritable(t.TempDir()))
+	})
+
+	t.Run("non-existent parent is created", func(t *testing.T) {
+		assert.True(t, dirWritable(filepath.Join(t.TempDir(), "new", "nested")))
+	})
+
+	t.Run("read-only directory is not writable", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("permission bits behave differently on Windows")
+		}
+		readOnly := filepath.Join(t.TempDir(), "ro")
+		require.NoError(t, os.Mkdir(readOnly, 0555))
+		t.Cleanup(func() { _ = os.Chmod(readOnly, 0755) })
+		assert.False(t, dirWritable(readOnly))
+	})
+}
+
 func TestServiceApplyUpdate(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
