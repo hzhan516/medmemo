@@ -347,11 +347,11 @@ jobs:
         if: runner.os == 'Windows'
         run: .\scripts\build\download-tokenizers.ps1
 
-      - name: Install dlfcn-win32 for ortgenai (Windows)
+      - name: Install dlfcn-win32 and gcc-libs for ortgenai (Windows)
         if: runner.os == 'Windows'
         shell: cmd
         run: |
-          C:\msys64\usr\bin\pacman.exe -S --noconfirm mingw-w64-x86_64-dlfcn
+          C:\msys64\usr\bin\pacman.exe -S --noconfirm mingw-w64-x86_64-dlfcn mingw-w64-x86_64-gcc-libs
 
       - name: Force static libdl (avoid libdl.dll runtime dependency)
         if: runner.os == 'Windows'
