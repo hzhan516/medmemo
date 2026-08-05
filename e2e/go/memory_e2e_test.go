@@ -350,8 +350,8 @@ func TestE2E_Memory_SensitiveFactExcluded(t *testing.T) {
 	factRepo := repository.NewFactRepoSQLite(conn)
 	embedRepo := repository.NewEmbeddingRepoSQLite(conn)
 
-	// 包含医学敏感关键词的事实，评分后会被 SensitiveDetector 标记为敏感
-	fact := entity.NewExtractedFact("用户", "患有", "高血压", 0.9, []string{"msg_sensitive"})
+	// 包含 PII 的事实，评分后会被 SensitiveDetector 标记为敏感
+	fact := entity.NewExtractedFact("用户", "联系电话是", "13812345678", 0.9, []string{"msg_sensitive"})
 	scorer := usecase.NewConfidenceScorer()
 	status := scorer.EvaluateStatus(fact)
 	fact.Status = status
@@ -365,7 +365,7 @@ func TestE2E_Memory_SensitiveFactExcluded(t *testing.T) {
 	mockSvc := &e2eMockEmbeddingService{}
 	retriever := usecase.NewMemoryRetriever(mockSvc, embedRepo, factRepo, nil, usecase.NewDecayScorer(), nil, nil, nil)
 
-	memories, err := retriever.RetrieveForContext(ctx, "我的血压情况", "sess_sensitive", 3)
+	memories, err := retriever.RetrieveForContext(ctx, "我的联系电话", "sess_sensitive", 3)
 	require.NoError(t, err)
 	assert.Empty(t, memories, "敏感事实不应被召回用于注入")
 
