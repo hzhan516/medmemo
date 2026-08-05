@@ -91,7 +91,6 @@ make licenses     # 重生成第三方许可证
 
 ## 6. 相关文档
 
-- [`AGENTS.md`](../../../AGENTS.md) — 项目约定与红线
 - [`docs/ARCHITECTURE.md`](../../ARCHITECTURE.md) — 系统架构
 - [`docs/API.md`](../../API.md) — API 参考入口
 - [`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml) — PR 级文档检查

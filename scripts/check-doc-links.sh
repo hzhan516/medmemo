@@ -12,6 +12,10 @@ lychee \
   --no-progress \
   --exclude-path "node_modules" \
   --exclude-path "web/node_modules" \
+  --exclude-path "AGENTS.md" \
+  --exclude-path "docs/i18n/zh-Hans-CN/AGENTS.md" \
   --exclude "https://github.com/.*/releases/download/.*" \
   --exclude "https://opensource.org/licenses/.*" \
+  --exclude "https://openai.com/privacy" \
+  --exclude "https://platform.openai.com/" \
   'docs/**/*.md' '*.md'

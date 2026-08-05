@@ -91,7 +91,6 @@ Documentation gaps are classified by impact and urgency. Use these labels when o
 
 ## 6. Related Documents
 
-- [`AGENTS.md`](../AGENTS.md) — Project conventions and red lines
 - [`docs/ARCHITECTURE.md`](./ARCHITECTURE.md) — System architecture
 - [`docs/API.md`](./API.md) — API reference entry point
 - [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) — Per-PR documentation checks

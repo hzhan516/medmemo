@@ -1,9 +1,9 @@
 # Third-Party Licenses
 
-> 🌐 [中文版本](./docs/i18n/zh-Hans-CN/THIRD_PARTY_LICENSES.md)
+> 🌐 [English version](../../../THIRD_PARTY_LICENSES.md)
 
 > **Project**: MedMemo — Open-source desktop health information tool
-> **Project License**: [MIT License](./LICENSE)
+> **Project License**: [MIT License](../../../LICENSE)
 > **Last updated**: 2026-07-14
 
 ---

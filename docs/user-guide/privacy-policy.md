@@ -145,7 +145,7 @@ When the privacy policy is updated, you will be prompted to review and re-accept
 For privacy-related questions or concerns:
 
 - Open a GitHub issue (general questions): [github.com/hzhan516/medmemo/issues](https://github.com/hzhan516/medmemo/issues)
-- Email (security/privacy): doyle_zhang@outlook.com
+- Email (security/privacy): [doyle_zhang@outlook.com](mailto:doyle_zhang@outlook.com)
 
 ---
 
