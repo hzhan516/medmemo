@@ -58,9 +58,9 @@ func (s *ConfidenceScorer) Score(f *entity.ExtractedFact) float64 {
 		score += s.MultiSourceWeight
 	}
 
-	// 敏感信息检测：自动标记 is_sensitive 字段
-	if s.sensitiveDetector != nil {
-		f.IsSensitive = s.sensitiveDetector.Detect(f)
+	// 仅命中 PII 时标记敏感，不覆盖已有标记；医学关键词不驱动 IsSensitive（见 M04 TODO#040）
+	if s.sensitiveDetector != nil && s.sensitiveDetector.Detect(f) {
+		f.IsSensitive = true
 	}
 
 	return score

@@ -1500,7 +1500,7 @@ func (m *phoneMockDeidentifier) Execute(_ context.Context, raw string, _ models.
 
 var _ Deidentifier = (*phoneMockDeidentifier)(nil)
 
-// errMockDeidentifier 始终返回错误，用于验证脱敏失败降级路径。
+// errMockDeidentifier 始终返回错误，用于验证云端事实提取脱敏失败时放弃抽取。
 type errMockDeidentifier struct{}
 
 func (m *errMockDeidentifier) Execute(_ context.Context, _ string, _ models.DesensitizationLevel) (models.DeidentifyResult, error) {
@@ -1543,6 +1543,7 @@ func TestExtractFactsFromReply_CloudDeidentifies(t *testing.T) {
 
 	require.Len(t, facts, 1)
 	assert.Equal(t, "13800138000", facts[0].Object, "本地还原后应恢复原始手机号")
+	assert.True(t, facts[0].IsSensitive, "发生过本地还原的事实应标记为敏感")
 }
 
 // TestExtractFactsFromReply_LocalSkipsDeid 验证本地 provider 跳过脱敏，LLM 收到原始文本。
@@ -1579,23 +1580,20 @@ func TestExtractFactsFromReply_OffLevelSkipsDeid(t *testing.T) {
 	assert.Equal(t, "13800138000", facts[0].Object)
 }
 
-// TestExtractFactsFromReply_DeidFailureDegrades 验证脱敏流水线失败时降级为规则脱敏，不出原文。
-func TestExtractFactsFromReply_DeidFailureDegrades(t *testing.T) {
+// TestExtractFactsFromReply_DeidFailureAborts 验证云端事实提取脱敏流水线失败时放弃抽取，
+// 不调用 LLM，也不发送可能仍含 NER PII 的降级文本。
+func TestExtractFactsFromReply_DeidFailureAborts(t *testing.T) {
 	t.Parallel()
-	mock := &mockLLMClient{chatReply: `[{"subject":"用户","predicate":"电话是","object":"{{PHONE_1234}}","confidence":0.9}]`}
+	mock := &mockLLMClient{chatReply: `[{"subject":"用户","predicate":"电话是","object":"13800138000","confidence":0.9}]`}
 	provider := &models.ProviderConfig{ID: "cloud", Type: models.ProviderKimi, APIHost: "https://api.example.com", ModelID: "kimi-v1"}
 	orch := newFactExtractionTestOrchestrator(t, mock, provider, &errMockDeidentifier{})
 
 	facts, err := orch.ExtractFactsFromReply(context.Background(), "我的电话是13800138000", "AI回复", "cloud", models.DesensitizationStandard)
-	require.NoError(t, err)
-	require.Len(t, mock.lastMessages, 1)
-	prompt := mock.lastMessages[0].Content
-	assert.NotContains(t, prompt, "13800138000", "脱敏失败降级后不应包含明文手机号")
-	assert.Contains(t, prompt, "{{PHONE_", "降级规则脱敏应产生占位符")
-
-	require.Len(t, facts, 1)
-	// 降级路径无还原映射，事实保留占位符
-	assert.Contains(t, facts[0].Object, "{{PHONE_")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "fact extraction aborted")
+	assert.Empty(t, facts, "脱敏失败时应放弃抽取")
+	assert.Empty(t, mock.lastMessages, "脱敏失败时不应调用 LLM")
+	assert.Equal(t, int64(1), orch.FactExtractDeidAbortCount(), "应记录一次 deid abort 指标")
 }
 
 // sentinelMockDeidentifier 返回完全遮蔽哨兵，用于验证 fail-closed 分支。
@@ -1665,4 +1663,68 @@ func TestExtractFactsFromReply_MedicalFact_NotSensitive(t *testing.T) {
 	require.Len(t, facts, 1)
 	assert.Equal(t, "糖尿病", facts[0].Object)
 	assert.False(t, facts[0].IsSensitive, "仅含医学关键词的事实不应标记 IsSensitive")
+}
+
+// TestRestoreFactFields_Restored 验证 restoreFactFields 正确还原占位符并返回 true。
+func TestRestoreFactFields_Restored(t *testing.T) {
+	t.Parallel()
+	f := entity.NewExtractedFact("用户{{PHONE_1}}", "拨打", "{{PHONE_1}}", 0.9, nil)
+	mapping := map[string]string{"{{PHONE_1}}": "13800138000"}
+
+	restored := restoreFactFields(f, mapping)
+
+	assert.True(t, restored)
+	assert.Equal(t, "用户13800138000", f.Subject)
+	assert.Equal(t, "13800138000", f.Object)
+}
+
+// TestRestoreFactFields_Unrestored 验证无匹配占位符时返回 false 且不修改字段。
+func TestRestoreFactFields_Unrestored(t *testing.T) {
+	t.Parallel()
+	f := entity.NewExtractedFact("用户", "患有", "头痛", 0.9, nil)
+	mapping := map[string]string{"{{PHONE_1}}": "13800138000"}
+
+	restored := restoreFactFields(f, mapping)
+
+	assert.False(t, restored)
+	assert.Equal(t, "用户", f.Subject)
+	assert.Equal(t, "头痛", f.Object)
+}
+
+// TestRestoreFactFields_Mixed 验证混合事实中仅部分字段还原仍返回 true。
+func TestRestoreFactFields_Mixed(t *testing.T) {
+	t.Parallel()
+	f := entity.NewExtractedFact("用户", "电话是", "{{PHONE_1}}", 0.9, nil)
+	mapping := map[string]string{"{{PHONE_1}}": "13800138000"}
+
+	restored := restoreFactFields(f, mapping)
+
+	assert.True(t, restored)
+	assert.Equal(t, "用户", f.Subject)
+	assert.Equal(t, "13800138000", f.Object)
+}
+
+// TestRestoreFactFields_NilMapping 验证空映射安全返回 false。
+func TestRestoreFactFields_NilMapping(t *testing.T) {
+	t.Parallel()
+	f := entity.NewExtractedFact("用户", "电话是", "13800138000", 0.9, nil)
+
+	restored := restoreFactFields(f, nil)
+
+	assert.False(t, restored)
+	assert.Equal(t, "13800138000", f.Object)
+}
+
+// TestExtractFactsFromReply_DeidAbortMetric_OnlyCloud 验证只有云端脱敏失败才增加 abort 指标，
+// 本地 provider 和 off 级别不应误增。
+func TestExtractFactsFromReply_DeidAbortMetric_OnlyCloud(t *testing.T) {
+	t.Parallel()
+	mock := &mockLLMClient{chatReply: `[{"subject":"用户","predicate":"电话是","object":"13800138000","confidence":0.9}]`}
+	provider := &models.ProviderConfig{ID: "local", Type: models.ProviderOllama, APIHost: "http://localhost:11434", ModelID: "llama3"}
+	orch := newFactExtractionTestOrchestrator(t, mock, provider, &errMockDeidentifier{})
+
+	facts, err := orch.ExtractFactsFromReply(context.Background(), "我的电话是13800138000", "AI回复", "local", models.DesensitizationStandard)
+	require.NoError(t, err)
+	require.Len(t, facts, 1)
+	assert.Equal(t, int64(0), orch.FactExtractDeidAbortCount(), "本地 provider 不应触发云端 deid abort 指标")
 }

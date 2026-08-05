@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/wire"
@@ -68,6 +69,8 @@ type ChatOrchestrator struct {
 	factExtractMu       sync.Mutex
 	factExtractLastCall time.Time
 	factExtractMinGap   time.Duration // 最小 15 秒间隔，避免与主对话竞争
+	// 云端事实提取因脱敏失败而放弃的次数（fail-closed 审计指标）
+	factExtractDeidAborts atomic.Int64
 }
 
 // NewChatOrchestrator 构造函数，供 Wire 注入。
@@ -89,6 +92,14 @@ func NewChatOrchestrator(deps ChatOrchestratorDeps) *ChatOrchestrator {
 		citationBuilder:      deps.CitationBuilder,
 		factExtractMinGap:    15 * time.Second,
 	}
+}
+
+// FactExtractDeidAbortCount 返回云端事实提取因脱敏失败而放弃的次数
+func (c *ChatOrchestrator) FactExtractDeidAbortCount() int64 {
+	if c == nil {
+		return 0
+	}
+	return c.factExtractDeidAborts.Load()
 }
 
 // ChatRequest 对话请求 DTO。
@@ -699,17 +710,17 @@ func (c *ChatOrchestrator) ExtractFactsFromReply(ctx context.Context, userConten
 		return nil, fmt.Errorf("failed to resolve llm client for fact extraction: %w", err)
 	}
 
-	// 输入脱敏（仅云端模型且级别非 off）
+	// 云端事实提取脱敏失败时直接放弃：防止 NER PII 通过降级文本出网，并记录 abort 指标
 	content := userContent
 	var localRestore map[string]string
 	if !isLocalProvider(provider) && c.deidPipeline != nil && level != models.DesensitizationOff {
 		r, err := c.deidPipeline.Execute(ctx, userContent, level)
 		if err != nil {
-			content = degradeUserContent(userContent)
-		} else {
-			content = r.SafeText
-			localRestore = r.LocalRestore
+			c.factExtractDeidAborts.Add(1)
+			return nil, fmt.Errorf("fact extraction aborted due to deidentification failure: %w", err)
 		}
+		content = r.SafeText
+		localRestore = r.LocalRestore
 		// 完全遮蔽哨兵：无映射可还原，直接放弃本次抽取
 		if content == deidFailureSentinel {
 			return nil, nil
@@ -724,28 +735,24 @@ func (c *ChatOrchestrator) ExtractFactsFromReply(ctx context.Context, userConten
 	}
 	facts = ApplyFactQualityGate(facts)
 
-	// 本地还原：将 LLM 在脱敏文本上提取的占位符还原为原始值
-	if len(localRestore) > 0 {
-		for _, f := range facts {
-			f.Subject = restoreFactText(f.Subject, localRestore)
-			f.Predicate = restoreFactText(f.Predicate, localRestore)
-			f.Object = restoreFactText(f.Object, localRestore)
-		}
-	}
-
-	// 对存活事实标记 PII 敏感信息（医学关键词不再驱动 IsSensitive，见 M04 TODO#040）
+	// 本地还原：发生过还原的事实直接标记敏感，再与 PII 检测结果取 OR
 	sd := NewSensitiveDetector()
 	for _, f := range facts {
-		f.IsSensitive = sd.Detect(f)
+		restored := restoreFactFields(f, localRestore)
+		if restored || sd.Detect(f) { // 医学关键词不驱动 IsSensitive（见 M04 TODO#040）
+			f.IsSensitive = true
+		}
 	}
 
 	return facts, nil
 }
 
-// restoreFactText 使用本地还原映射将占位符替换回原始文本。
-// 占位符之间不存在包含关系是正常情况；为防御性避免短占位符先替换破坏长占位符，
-// 按占位符长度降序处理（长的先替换）。
-func restoreFactText(text string, mapping map[string]string) string {
+// restoreFactFields 将事实三元组中的占位符还原为原始文本，返回是否发生还原
+// 按占位符长度降序替换，避免短占位符先替换破坏长占位符
+func restoreFactFields(f *entity.ExtractedFact, mapping map[string]string) bool {
+	if f == nil || len(mapping) == 0 {
+		return false
+	}
 	keys := make([]string, 0, len(mapping))
 	for k := range mapping {
 		keys = append(keys, k)
@@ -753,10 +760,23 @@ func restoreFactText(text string, mapping map[string]string) string {
 	sort.Slice(keys, func(i, j int) bool {
 		return len(keys[i]) > len(keys[j])
 	})
-	for _, placeholder := range keys {
-		text = strings.ReplaceAll(text, placeholder, mapping[placeholder])
+
+	restored := false
+	replace := func(text string) string {
+		original := text
+		for _, placeholder := range keys {
+			text = strings.ReplaceAll(text, placeholder, mapping[placeholder])
+		}
+		if text != original {
+			restored = true
+		}
+		return text
 	}
-	return text
+
+	f.Subject = replace(f.Subject)
+	f.Predicate = replace(f.Predicate)
+	f.Object = replace(f.Object)
+	return restored
 }
 
 // CheckCompliance 对文本执行合规检测。

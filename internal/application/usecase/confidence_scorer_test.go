@@ -133,3 +133,15 @@ func TestConfidenceScorer_NonSensitiveFact(t *testing.T) {
 	scorer.Score(f)
 	assert.False(t, f.IsSensitive, "非敏感事实不应被标记")
 }
+
+// TestConfidenceScorer_PreservesExistingSensitiveMark 验证 scorer 不会覆盖已有的敏感标记。
+func TestConfidenceScorer_PreservesExistingSensitiveMark(t *testing.T) {
+	t.Parallel()
+	scorer := NewConfidenceScorer()
+	// 先被人为标记为敏感（例如事实提取阶段因本地还原而标记），但内容本身不含 PII
+	f := entity.NewExtractedFact("用户", "喜欢", "跑步", 0.9, []string{"msg_001"})
+	f.IsSensitive = true
+
+	scorer.Score(f)
+	assert.True(t, f.IsSensitive, "已有的敏感标记不应被 scorer 覆盖为 false")
+}
