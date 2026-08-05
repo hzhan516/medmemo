@@ -24,6 +24,10 @@ func (n *NoopInstaller) CurrentBinaryPath() string {
 	return exe
 }
 
+func (n *NoopInstaller) InstallKind() string {
+	return "unknown"
+}
+
 // NewInstaller 为不支持的平台返回 NoopInstaller。
 func NewInstaller() *NoopInstaller {
 	return &NoopInstaller{}

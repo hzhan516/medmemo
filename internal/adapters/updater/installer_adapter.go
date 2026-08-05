@@ -33,6 +33,11 @@ func (a *InstallerAdapter) CurrentBinaryPath() string {
 	return a.installer.CurrentBinaryPath()
 }
 
+// InstallKind 委托给底层 installer。
+func (a *InstallerAdapter) InstallKind() string {
+	return a.installer.InstallKind()
+}
+
 // InstallerAdapterSet 供 Wire 使用的 ProviderSet。
 //
 //goland:noinspection GoUnusedGlobalVariable

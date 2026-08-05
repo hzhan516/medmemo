@@ -3,8 +3,11 @@
 package updater
 
 import (
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -339,4 +342,125 @@ func TestDetectInstallKind(t *testing.T) {
 	t.Run("unknown", func(t *testing.T) {
 		assert.Equal(t, "unknown", DetectInstallKind("/opt/MedMemo"))
 	})
+}
+
+// TestLinuxInstaller_InstallKind 验证 Installer 返回 DetectInstallKind 结果。
+func TestLinuxInstaller_InstallKind(t *testing.T) {
+	tmpDir := t.TempDir()
+	currentBinary := filepath.Join(tmpDir, "MedMemo")
+	require.NoError(t, os.WriteFile(currentBinary, []byte("x"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".install_kind"), []byte("deb"), 0644))
+
+	inst := &LinuxInstaller{currentPath: currentBinary}
+	assert.Equal(t, "deb", inst.InstallKind())
+}
+
+// TestDetectInstallKind_LegacyDeb 验证 legacy package 探测返回 deb。
+func TestDetectInstallKind_LegacyDeb(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("Linux-only test")
+	}
+	orig := packageDetector
+	packageDetector = func(_ string) string { return "deb" }
+	defer func() { packageDetector = orig }()
+
+	tmpDir := t.TempDir()
+	binary := filepath.Join(tmpDir, "MedMemo")
+	require.NoError(t, os.WriteFile(binary, []byte("x"), 0755))
+	assert.Equal(t, "deb", DetectInstallKind(binary))
+}
+
+// TestDetectInstallKind_LegacyRPM 验证 legacy package 探测返回 rpm。
+func TestDetectInstallKind_LegacyRPM(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("Linux-only test")
+	}
+	orig := packageDetector
+	packageDetector = func(_ string) string { return "rpm" }
+	defer func() { packageDetector = orig }()
+
+	tmpDir := t.TempDir()
+	binary := filepath.Join(tmpDir, "MedMemo")
+	require.NoError(t, os.WriteFile(binary, []byte("x"), 0755))
+	assert.Equal(t, "rpm", DetectInstallKind(binary))
+}
+
+// TestDetectInstallKind_LegacyUnknown 验证 legacy package 探测失败时回退 unknown。
+func TestDetectInstallKind_LegacyUnknown(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("Linux-only test")
+	}
+	orig := packageDetector
+	packageDetector = func(_ string) string { return "unknown" }
+	defer func() { packageDetector = orig }()
+
+	tmpDir := t.TempDir()
+	binary := filepath.Join(tmpDir, "MedMemo")
+	require.NoError(t, os.WriteFile(binary, []byte("x"), 0755))
+	assert.Equal(t, "unknown", DetectInstallKind(binary))
+}
+
+// TestDetectInstallKind_MarkerWinsOverLegacy 验证标记文件优先级高于 legacy 探测。
+func TestDetectInstallKind_MarkerWinsOverLegacy(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("Linux-only test")
+	}
+	orig := packageDetector
+	packageDetector = func(_ string) string { return "rpm" }
+	defer func() { packageDetector = orig }()
+
+	tmpDir := t.TempDir()
+	binary := filepath.Join(tmpDir, "MedMemo")
+	require.NoError(t, os.WriteFile(binary, []byte("x"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".install_kind"), []byte("deb"), 0644))
+	assert.Equal(t, "deb", DetectInstallKind(binary))
+}
+
+// TestDetectPackageKindWith_DebSuccess 验证 dpkg-query 成功时识别为 deb。
+func TestDetectPackageKindWith_DebSuccess(t *testing.T) {
+	lookPath := func(name string) (string, error) {
+		if name == "dpkg-query" {
+			return "/usr/bin/dpkg-query", nil
+		}
+		return "", fmt.Errorf("not found")
+	}
+	command := func(name string, args ...string) *exec.Cmd {
+		return exec.Command("echo", "medmemo: /usr/bin/medmemo")
+	}
+	assert.Equal(t, "deb", detectPackageKindWith("/usr/bin/medmemo", lookPath, command))
+}
+
+// TestDetectPackageKindWith_DebFailureFallbackRPM 验证 dpkg 失败后回退 rpm 探测。
+func TestDetectPackageKindWith_DebFailureFallbackRPM(t *testing.T) {
+	lookPath := func(name string) (string, error) {
+		return "/usr/bin/" + name, nil
+	}
+	command := func(name string, args ...string) *exec.Cmd {
+		if name == "dpkg-query" {
+			return exec.Command("false")
+		}
+		return exec.Command("echo", "medmemo-1.1.10-1.x86_64")
+	}
+	assert.Equal(t, "rpm", detectPackageKindWith("/usr/bin/medmemo", lookPath, command))
+}
+
+// TestDetectPackageKindWith_RPMNotOwned 验证 rpm 报告未拥有时回退 unknown。
+func TestDetectPackageKindWith_RPMNotOwned(t *testing.T) {
+	lookPath := func(name string) (string, error) {
+		if name == "dpkg-query" {
+			return "", fmt.Errorf("not found")
+		}
+		return "/usr/bin/rpm", nil
+	}
+	command := func(name string, args ...string) *exec.Cmd {
+		return exec.Command("echo", "file /usr/bin/medmemo is not owned by any package")
+	}
+	assert.Equal(t, "unknown", detectPackageKindWith("/usr/bin/medmemo", lookPath, command))
+}
+
+// TestDetectPackageKindWith_NoPackageManager 验证无包管理器时回退 unknown。
+func TestDetectPackageKindWith_NoPackageManager(t *testing.T) {
+	lookPath := func(string) (string, error) { return "", fmt.Errorf("not found") }
+	command := func(string, ...string) *exec.Cmd { return exec.Command("false") }
+	assert.Equal(t, "unknown", detectPackageKindWith("/usr/bin/medmemo", lookPath, command))
 }

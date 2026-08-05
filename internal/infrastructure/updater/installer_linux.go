@@ -66,7 +66,7 @@ func (l *LinuxInstaller) Install(assetPath string) (string, error) {
 		return "", &ManualPackageInstallRequired{
 			PackagePath: assetPath,
 			Kind:        "unknown",
-			Command:     fmt.Sprintf("please install %q manually", assetPath),
+			Command:     "",
 		}
 	}
 }
@@ -122,6 +122,11 @@ func (l *LinuxInstaller) Rollback() error {
 // CurrentBinaryPath 返回当前二进制路径。
 func (l *LinuxInstaller) CurrentBinaryPath() string {
 	return l.currentPath
+}
+
+// InstallKind 返回当前 Linux 安装方式。
+func (l *LinuxInstaller) InstallKind() string {
+	return DetectInstallKind(l.currentPath)
 }
 
 // resolveAppImagePath 解析用户实际启动的 AppImage 路径。
