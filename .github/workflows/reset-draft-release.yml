@@ -71,8 +71,8 @@ jobs:
           RELEASE_TAG=$(echo "$RELEASE" | jq -r '.tag_name')
           RELEASE_DRAFT=$(echo "$RELEASE" | jq -r '.draft')
           RELEASE_PRERELEASE=$(echo "$RELEASE" | jq -r '.prerelease')
-          RELEASE_LATEST=$(echo "$RELEASE" | jq -r '.prerelease') # 无法直接取 latest；通过 latest 端点校验
 
+          # release 对象没有直接暴露 isLatest；通过 releases/latest 端点校验。
           if [ "$RELEASE_TAG" != "${{ inputs.tag }}" ]; then
             echo "ERROR: release tag mismatch"
             exit 1
