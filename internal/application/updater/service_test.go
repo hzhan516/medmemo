@@ -3,8 +3,10 @@ package updater
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/hzhan516/medmemo/internal/domain/entity"
@@ -36,6 +38,10 @@ func (m *mockUpdater) FetchByTag(_ context.Context, tag string) (*entity.UpdateI
 
 func (m *mockUpdater) Download(_ context.Context, _, destPath string, _ func(downloaded, total int64)) error {
 	m.downloadTo = destPath
+	if m.downloadErr == nil {
+		_ = os.MkdirAll(filepath.Dir(destPath), 0755)
+		_ = os.WriteFile(destPath, []byte("payload"), 0644)
+	}
 	return m.downloadErr
 }
 
@@ -49,6 +55,7 @@ type mockInstaller struct {
 	installErr  error
 	rollbackErr error
 	currentPath string
+	kind        string
 }
 
 func (m *mockInstaller) Install(_ string) (string, error) {
@@ -61,6 +68,13 @@ func (m *mockInstaller) Rollback() error {
 
 func (m *mockInstaller) CurrentBinaryPath() string {
 	return m.currentPath
+}
+
+func (m *mockInstaller) InstallKind() string {
+	if m.kind == "" {
+		return "unknown"
+	}
+	return m.kind
 }
 
 func TestServiceCheckUpdate(t *testing.T) {
@@ -140,7 +154,7 @@ func TestServiceDownloadUpdate(t *testing.T) {
 	info := &entity.UpdateInfo{
 		Version:     "v0.2.0",
 		DownloadURL: "https://example.com/update.AppImage",
-		Checksum:    "",
+		Checksum:    "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3",
 	}
 
 	path, err := svc.DownloadUpdate(context.Background(), info, nil)
@@ -222,6 +236,23 @@ func TestServiceDefaultChannel(t *testing.T) {
 
 // TestServiceDownloadUpdate_Errors 验证下载各阶段失败均被包装。
 func TestServiceDownloadUpdate_Errors(t *testing.T) {
+	t.Run("missing checksum rejects download", func(t *testing.T) {
+		mockU := &mockUpdater{}
+		mockI := &mockInstaller{}
+		svc := NewService(mockU, mockI, models.ChannelStable)
+
+		info := &entity.UpdateInfo{
+			Version:     "v0.2.0",
+			DownloadURL: "https://example.com/update.AppImage",
+			Checksum:    "",
+		}
+
+		_, err := svc.DownloadUpdate(context.Background(), info, nil)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "update checksum is not available")
+		assert.Empty(t, mockU.downloadTo)
+	})
+
 	t.Run("download failure", func(t *testing.T) {
 		mockU := &mockUpdater{downloadErr: fmt.Errorf("connection reset")}
 		mockI := &mockInstaller{}
@@ -231,7 +262,7 @@ func TestServiceDownloadUpdate_Errors(t *testing.T) {
 		info := &entity.UpdateInfo{
 			Version:     "v0.2.0",
 			DownloadURL: "https://example.com/update.AppImage",
-			Checksum:    "",
+			Checksum:    "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3",
 		}
 
 		_, err := svc.DownloadUpdate(context.Background(), info, nil)
@@ -293,22 +324,30 @@ func TestPlatformAssetName(t *testing.T) {
 
 // TestUpdateDownloadDirFor_HomeError 验证无法获取用户主目录时返回错误。
 func TestUpdateDownloadDirFor_HomeError(t *testing.T) {
-	_, err := updateDownloadDirFor("linux", func() (string, error) { return "", fmt.Errorf("no exe") }, func() (string, error) { return "", fmt.Errorf("no home") })
+	_, err := updateDownloadDirFor("linux", func() (string, error) { return "", fmt.Errorf("no exe") }, func() (string, error) { return "", fmt.Errorf("no home") }, func(string) bool { return true })
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to get home directory")
 }
 
-// TestUpdateDownloadDirFor_Windows 验证 Windows 分支使用 exe 所在目录。
+// TestUpdateDownloadDirFor_Windows 验证 Windows 分支使用 exe 所在目录（可写时）。
 func TestUpdateDownloadDirFor_Windows(t *testing.T) {
-	got, err := updateDownloadDirFor("windows", func() (string, error) { return "/opt/MedMemo/MedMemo.exe", nil }, func() (string, error) { return "", fmt.Errorf("no home") })
+	got, err := updateDownloadDirFor("windows", func() (string, error) { return "/opt/MedMemo/MedMemo.exe", nil }, func() (string, error) { return "", fmt.Errorf("no home") }, func(string) bool { return true })
 	require.NoError(t, err)
 	assert.Equal(t, filepath.Join("/opt/MedMemo", "data", "updates"), got)
+}
+
+// TestUpdateDownloadDirFor_WindowsUnwritable 验证 Windows 安装目录不可写时回退到用户目录。
+func TestUpdateDownloadDirFor_WindowsUnwritable(t *testing.T) {
+	home := t.TempDir()
+	got, err := updateDownloadDirFor("windows", func() (string, error) { return "/opt/MedMemo/MedMemo.exe", nil }, func() (string, error) { return home, nil }, func(string) bool { return false })
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(home, ".medmemo", "updates"), got)
 }
 
 // TestUpdateDownloadDirFor_WindowsFallbackHome 验证 Windows 无法获取 exe 时回退到主目录。
 func TestUpdateDownloadDirFor_WindowsFallbackHome(t *testing.T) {
 	home := t.TempDir()
-	got, err := updateDownloadDirFor("windows", func() (string, error) { return "", fmt.Errorf("no exe") }, func() (string, error) { return home, nil })
+	got, err := updateDownloadDirFor("windows", func() (string, error) { return "", fmt.Errorf("no exe") }, func() (string, error) { return home, nil }, func(string) bool { return true })
 	require.NoError(t, err)
 	assert.Equal(t, filepath.Join(home, ".medmemo", "updates"), got)
 }
@@ -356,4 +395,87 @@ func TestAssetExt(t *testing.T) {
 			assert.Equal(t, tt.want, assetExt(tt.goos))
 		})
 	}
+}
+
+// TestLinuxAssetExt 验证 Linux 安装方式与扩展名映射。
+func TestLinuxAssetExt(t *testing.T) {
+	tests := []struct {
+		kind string
+		want string
+	}{
+		{"appimage", ".AppImage"},
+		{"deb", ".deb"},
+		{"rpm", ".rpm"},
+		{"unknown", ".AppImage"},
+		{"", ".AppImage"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.kind, func(t *testing.T) {
+			assert.Equal(t, tt.want, linuxAssetExt(tt.kind))
+		})
+	}
+}
+
+// TestServiceDownloadUpdate_LinuxKindSelectsExtension 验证 Linux 下按 InstallKind 选择扩展名。
+func TestServiceDownloadUpdate_LinuxKindSelectsExtension(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("Linux-only test")
+	}
+
+	tests := []struct {
+		name    string
+		kind    string
+		wantExt string
+	}{
+		{"appimage", "appimage", ".AppImage"},
+		{"deb", "deb", ".deb"},
+		{"rpm", "rpm", ".rpm"},
+		{"unknown fallback", "unknown", ".AppImage"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("HOME", t.TempDir())
+			mockU := &mockUpdater{}
+			mockI := &mockInstaller{kind: tt.kind}
+			svc := NewService(mockU, mockI, models.ChannelStable)
+
+			info := &entity.UpdateInfo{
+				Version:     "v1.1.10",
+				DownloadURL: "https://example.com/update",
+				Checksum:    "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3",
+			}
+
+			path, err := svc.DownloadUpdate(context.Background(), info, nil)
+			require.NoError(t, err)
+			assert.True(t, strings.HasSuffix(path, tt.wantExt), "path %s should end with %s", path, tt.wantExt)
+			assert.True(t, strings.HasSuffix(mockU.downloadTo, tt.wantExt))
+		})
+	}
+}
+
+// TestServiceDownloadUpdate_AppImageExecutablePermission 验证 AppImage 下载后被赋予可执行权限。
+func TestServiceDownloadUpdate_AppImageExecutablePermission(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("Linux-only test")
+	}
+
+	t.Setenv("HOME", t.TempDir())
+	mockU := &mockUpdater{}
+	mockI := &mockInstaller{kind: "appimage"}
+	svc := NewService(mockU, mockI, models.ChannelStable)
+
+	info := &entity.UpdateInfo{
+		Version:     "v1.1.10",
+		DownloadURL: "https://example.com/update",
+		Checksum:    "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3",
+	}
+
+	path, err := svc.DownloadUpdate(context.Background(), info, nil)
+	require.NoError(t, err)
+
+	stat, err := os.Stat(path)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0755), stat.Mode().Perm())
 }

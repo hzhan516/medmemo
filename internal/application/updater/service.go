@@ -82,8 +82,13 @@ func (s *Service) GetUpdateInfoByVersion(ctx context.Context, currentVersion, ve
 // 下载路径按平台区分：非 Windows 为 ~/.medmemo/updates；Windows 为当前 exe 所在目录下的
 // data\updates，与安装目录保持一致。
 // 文件名格式：MedMemo-<version>-<os>-<arch>.<ext>
+// Linux 下扩展名按 InstallKind() 选择（appimage/deb/rpm/unknown）。
 // 下载过程中通过 progress 回调推送字节进度。
 func (s *Service) DownloadUpdate(ctx context.Context, info *entity.UpdateInfo, progress func(downloaded, total int64)) (string, error) {
+	if info.Checksum == "" {
+		return "", fmt.Errorf("update checksum is not available; please try again later")
+	}
+
 	updateDir, err := updateDownloadDir()
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve update directory: %w", err)
@@ -93,11 +98,23 @@ func (s *Service) DownloadUpdate(ctx context.Context, info *entity.UpdateInfo, p
 	}
 
 	ext := assetExt(runtime.GOOS)
+	if runtime.GOOS == "linux" {
+		ext = linuxAssetExt(s.installer.InstallKind())
+	}
 	destName := fmt.Sprintf("MedMemo-%s-%s-%s%s", info.Version, runtime.GOOS, runtime.GOARCH, ext)
 	destPath := filepath.Join(updateDir, destName)
 
 	if err := s.updater.Download(ctx, info.DownloadURL, destPath, progress); err != nil {
+		_ = os.Remove(destPath)
 		return "", fmt.Errorf("failed to download update: %w", err)
+	}
+
+	// AppImage 下载后需要可执行权限
+	if ext == ".AppImage" {
+		if err := os.Chmod(destPath, 0755); err != nil {
+			_ = os.Remove(destPath)
+			return "", fmt.Errorf("failed to set AppImage executable permission: %w", err)
+		}
 	}
 
 	if err := s.updater.VerifyChecksum(destPath, info.Checksum); err != nil {
@@ -110,11 +127,15 @@ func (s *Service) DownloadUpdate(ctx context.Context, info *entity.UpdateInfo, p
 }
 
 // updateDownloadDirFor 返回指定平台更新包下载目录，依赖注入便于测试。
-func updateDownloadDirFor(goos string, exeFunc func() (string, error), homeFunc func() (string, error)) (string, error) {
+func updateDownloadDirFor(goos string, exeFunc func() (string, error), homeFunc func() (string, error), writableFunc func(string) bool) (string, error) {
 	if goos == "windows" {
 		exe, err := exeFunc()
 		if err == nil {
-			return filepath.Join(filepath.Dir(exe), "data", "updates"), nil
+			installDir := filepath.Dir(exe)
+			candidate := filepath.Join(installDir, "data", "updates")
+			if writableFunc(candidate) {
+				return candidate, nil
+			}
 		}
 	}
 	home, err := homeFunc()
@@ -124,11 +145,24 @@ func updateDownloadDirFor(goos string, exeFunc func() (string, error), homeFunc 
 	return filepath.Join(home, ".medmemo", "updates"), nil
 }
 
+// dirWritable 探测目录是否可写：尝试创建目录并写入临时文件，成功后删除探针。
+func dirWritable(path string) bool {
+	if err := os.MkdirAll(path, 0755); err != nil {
+		return false
+	}
+	tmp := filepath.Join(path, ".write-test")
+	if err := os.WriteFile(tmp, []byte{}, 0644); err != nil {
+		return false
+	}
+	_ = os.Remove(tmp)
+	return true
+}
+
 // updateDownloadDir 返回当前平台更新包下载目录。
-// Windows 下优先使用当前 exe 所在目录的 data\updates，便于安装版统一管理数据；
-// 若无法获取 exe 路径则回退到用户主目录。非 Windows 保持 ~/.medmemo/updates。
+// Windows 下优先使用当前 exe 所在目录的 data\updates；若不可写则回退到 %USERPROFILE%\.medmemo\updates。
+// 非 Windows 保持 ~/.medmemo/updates。
 func updateDownloadDir() (string, error) {
-	return updateDownloadDirFor(runtime.GOOS, os.Executable, os.UserHomeDir)
+	return updateDownloadDirFor(runtime.GOOS, os.Executable, os.UserHomeDir, dirWritable)
 }
 
 // ApplyUpdate 应用已下载的更新包。
@@ -188,6 +222,21 @@ func assetExt(goos string) string {
 		return ".exe"
 	default:
 		return ""
+	}
+}
+
+// linuxAssetExt 根据 Linux 安装方式返回对应的资产扩展名。
+// unknown 时回退到 .AppImage，与 GitHub asset 匹配回退策略一致。
+func linuxAssetExt(kind string) string {
+	switch kind {
+	case "appimage":
+		return ".AppImage"
+	case "deb":
+		return ".deb"
+	case "rpm":
+		return ".rpm"
+	default:
+		return ".AppImage"
 	}
 }
 
