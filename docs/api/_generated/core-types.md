@@ -121,6 +121,7 @@ DeidentifyResult 脱敏处理结果。
 | `SafeText` | `string` | — | — |
 | `Entities` | `[]SensitiveEntity` | — | — |
 | `Placeholder` | `map[string]string` | — | — |
+| `LocalRestore` | `map[string]string` | — | — |
 
 ## `DesensitizationLevel`
 

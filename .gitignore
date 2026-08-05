@@ -72,7 +72,10 @@ coverage.html
 /tmp/
 *.tmp
 *.bak
+
+# Local-only AI guidance and personal development records
 /AGENTS.md
+/docs/i18n/zh-Hans-CN/AGENTS.md
 /medmemo/
 /web/test-report/
 /.github/FUNDING.yml
