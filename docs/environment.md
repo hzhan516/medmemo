@@ -12,7 +12,7 @@ These variables override values in `config.yaml` / `config.json` (see [`docs/DEV
 
 | Variable | Purpose | Default | Example | Scope |
 |----------|---------|---------|---------|-------|
-| `MEDMEMO_DATA_DIR` | Root directory for encrypted local data (database, logs, memories) | `~/.medmemo/data` (platform-specific) | `/home/user/.medmemo/data` | config / database |
+| `MEDMEMO_DATA_DIR` | Root directory for encrypted local data (database, logs, memories, embedding models) | `~/.medmemo/data` on macOS/Linux; see [Windows selection](#windows-data-directory-selection) | `/home/user/.medmemo/data` | config / database |
 | `MEDMEMO_DEFAULT_MODEL` | Default model ID for new conversations | `kimi-lite` | `kimi-pro` | config |
 | `MEDMEMO_PROVIDER_TYPE` | Default provider type | `kimi` | `openai` | config |
 | `MEDMEMO_API_ENDPOINT` | Custom API endpoint URL (overrides provider default) | *(empty)* | `https://api.openai.com/v1` | config |
@@ -39,7 +39,19 @@ OAuth Device Flow requires a per-provider `client_id`. See [`docs/api/auth.md`](
 
 | Variable | Purpose | Default | Example | Scope |
 |----------|---------|---------|---------|-------|
-| `MEDMEMO_INSTALL_KIND` | Linux packaging format (used by the updater to pick the right package) | `unknown` | `deb` / `rpm` | updater |
+| `MEDMEMO_INSTALL_KIND` | Linux packaging format (overrides marker files and legacy `dpkg`/`rpm` detection) | `unknown` | `deb` / `rpm` | updater |
+
+---
+
+## Windows Data Directory Selection
+
+On Windows, MedMemo uses the following priority order when no explicit `MEDMEMO_DATA_DIR` or `config.yaml` value is set:
+
+1. **Legacy data first** — If `%USERPROFILE%\.medmemo\data\medmemo.db` exists, MedMemo uses `%USERPROFILE%\.medmemo\data`. This keeps existing data visible for users upgrading from v1.1.9 or earlier.
+2. **Writable install directory** — If the registry records an install directory (for example, `%LOCALAPPDATA%\Programs\MedMemo`) and `<installDir>\data` is writable, MedMemo uses that directory.
+3. **User-profile fallback** — If the install directory is missing or not writable (for example, a read-only `Program Files` install), MedMemo falls back to `%USERPROFILE%\.medmemo\data`.
+
+MedMemo does not automatically move, copy, or merge databases between these locations. To force a specific location, set `MEDMEMO_DATA_DIR` or `data_dir` in `config.yaml`.
 
 ---
 
@@ -48,7 +60,8 @@ OAuth Device Flow requires a per-provider `client_id`. See [`docs/api/auth.md`](
 - Boolean values accept `true` / `1` (truthy) or `false` / `0` (falsy).
 - `MEDMEMO_DATA_DIR` is read by both the configuration loader and the SQLCipher connector.
 - If both a config file and an environment variable are set, the environment variable wins.
+- On Windows, `MEDMEMO_DATA_DIR` or `data_dir` in `config.yaml` overrides the automatic selection above.
 
 ---
 
-*Last updated: 2026-07-14*
+*Last updated: 2026-08-05*

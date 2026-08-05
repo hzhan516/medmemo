@@ -12,7 +12,7 @@
 
 | 变量 | 作用 | 默认值 | 示例 | 生效范围 |
 |------|------|--------|------|----------|
-| `MEDMEMO_DATA_DIR` | 本地加密数据根目录（数据库、日志、记忆） | `~/.medmemo/data`（平台相关） | `/home/user/.medmemo/data` | config / database |
+| `MEDMEMO_DATA_DIR` | 本地加密数据根目录（数据库、日志、记忆、embedding 模型） | macOS/Linux 默认 `~/.medmemo/data`；Windows 选择规则见[下文](#windows-数据目录选择) | `/home/user/.medmemo/data` | config / database |
 | `MEDMEMO_DEFAULT_MODEL` | 新会话默认模型 ID | `kimi-lite` | `kimi-pro` | config |
 | `MEDMEMO_PROVIDER_TYPE` | 默认厂商类型 | `kimi` | `openai` | config |
 | `MEDMEMO_API_ENDPOINT` | 自定义 API 端点（覆盖厂商默认） | *(空)* | `https://api.openai.com/v1` | config |
@@ -39,7 +39,19 @@ OAuth Device Flow 需要为每个厂商配置 `client_id`。注册前提条件�
 
 | 变量 | 作用 | 默认值 | 示例 | 生效范围 |
 |------|------|--------|------|----------|
-| `MEDMEMO_INSTALL_KIND` | Linux 包格式（更新器据此选择安装包） | `unknown` | `deb` / `rpm` | updater |
+| `MEDMEMO_INSTALL_KIND` | Linux 包格式（覆盖标记文件与 legacy `dpkg`/`rpm` 探测） | `unknown` | `deb` / `rpm` | updater |
+
+---
+
+## Windows 数据目录选择
+
+在 Windows 上，当未显式设置 `MEDMEMO_DATA_DIR` 或 `config.yaml` 中的 `data_dir` 时，MedMemo 按以下优先级选择默认数据目录：
+
+1. **旧库优先** — 若 `%USERPROFILE%\.medmemo\data\medmemo.db` 存在，则使用 `%USERPROFILE%\.medmemo\data`，保证从 v1.1.9 及更早版本升级的用户历史数据可见。
+2. **可写的安装目录** — 若注册表中记录了安装目录（例如 `%LOCALAPPDATA%\Programs\MedMemo`），且其 `data` 子目录可写，则使用 `<installDir>\data`。
+3. **用户目录兜底** — 若安装目录缺失或不可写（例如只读的 `Program Files` 安装），则回退到 `%USERPROFILE%\.medmemo\data`。
+
+MedMemo 不会在这些位置之间自动移动、复制或合并数据库。如需强制指定位置，请设置 `MEDMEMO_DATA_DIR` 或 `config.yaml` 中的 `data_dir`。
 
 ---
 
@@ -48,7 +60,8 @@ OAuth Device Flow 需要为每个厂商配置 `client_id`。注册前提条件�
 - 布尔值接受 `true` / `1`（真）或 `false` / `0`（假）。
 - `MEDMEMO_DATA_DIR` 同时被配置加载器和 SQLCipher 连接器读取。
 - 若配置文件与环境变量同时设置，环境变量优先级更高。
+- 在 Windows 上，`MEDMEMO_DATA_DIR` 或 `config.yaml` 中的 `data_dir` 会覆盖上述自动选择。
 
 ---
 
-*最后更新：2026-07-14*
+*最后更新：2026-08-05*

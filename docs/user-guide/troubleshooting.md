@@ -58,9 +58,9 @@
 1. Do not delete or modify files in the data directory manually.
 2. If you recently reinstalled the OS or cleared the system keyring, the database key is unrecoverable — restore from a backup if available.
 3. As a last resort, move the old data directory aside and let MedMemo create a new one:
-   - Windows: `%LOCALAPPDATA%\medmemo\`
-   - macOS: `~/Library/Application Support/medmemo/`
-   - Linux: `~/.local/share/medmemo/`
+   - Windows: `%USERPROFILE%\.medmemo\data` (or `<installDir>\data` if you configured a custom install location)
+   - macOS: `~/.medmemo/data`
+   - Linux: `~/.medmemo/data`
 
 ### "failed to open sqlcipher database"
 
@@ -73,6 +73,8 @@
 2. Ensure the user running MedMemo has write access to `MEDMEMO_DATA_DIR`.
 3. Close any other MedMemo instance that may be holding the database lock.
 4. Set `MEDMEMO_DATA_DIR` to a writable path if the default location is restricted.
+
+On Windows, MedMemo prefers the legacy directory `%USERPROFILE%\.medmemo\data` when a previous database exists; otherwise it uses `<installDir>\data` if writable, or falls back to `%USERPROFILE%\.medmemo\data`. An unwritable install directory (for example, `Program Files`) is a common cause of this error on new installs.
 
 ### "failed to migrate plaintext database"
 
@@ -269,9 +271,11 @@ See [`docs/api/auth.md`](../api/auth.md) for detailed prerequisites.
 ### Forgot Where My Data Is Stored
 
 **Locations:**
-- **Windows**: `%LOCALAPPDATA%\medmemo\`
-- **macOS**: `~/Library/Application Support/medmemo/`
-- **Linux**: `~/.local/share/medmemo/`
+- **Windows**: see [Installation Guide → Where Your Windows Data Is Stored](./installation.md#where-your-windows-data-is-stored). The most common locations are:
+  - Legacy or fallback: `%USERPROFILE%\.medmemo\data`
+  - Per-user install: `%LOCALAPPDATA%\Programs\MedMemo\data`
+- **macOS**: `~/.medmemo/data`
+- **Linux**: `~/.medmemo/data`
 
 > ⚠️ These folders contain encrypted data. Do not manually edit them.
 
@@ -356,6 +360,20 @@ See [`docs/api/auth.md`](../api/auth.md) for detailed prerequisites.
 1. The update will retry automatically on next launch
 2. Or manually download from GitHub Releases and reinstall
 
+### Linux Update Shows Release Page Instead of Install Command
+
+**Symptoms:** On Linux, the update dialog shows "Please download the package manually" and a link to the Release page instead of a `dpkg`/`rpm` command.
+
+**Root cause:** MedMemo could not determine whether the current binary was installed from a DEB, RPM, or AppImage package. This can happen for portable builds, custom install paths, or when both `dpkg` and `rpm` are unavailable.
+
+**Solutions:**
+1. Download the correct package for your system from the Release page (DEB for Debian/Ubuntu, RPM for Fedora/openSUSE, AppImage for portable use).
+2. To avoid this in the future, set the environment variable before launching MedMemo:
+   ```bash
+   export MEDMEMO_INSTALL_KIND=deb   # or rpm
+   ```
+3. Ensure the `.install_kind` marker file shipped with the DEB/RPM package is present next to the `medmemo` binary.
+
 ---
 
 ## Reporting Issues
@@ -372,4 +390,4 @@ If none of the above solutions work:
 
 ---
 
-*Last updated: 2026-07-14*
+*Last updated: 2026-08-05*

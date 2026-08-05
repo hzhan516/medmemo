@@ -65,12 +65,25 @@
 
 首次启动将显示引导向导。详见 [首次设置](./README.md#首次设置3-步)。
 
+### Windows 数据存储位置
+
+MedMemo 在 Windows 上将数据存放在以下位置之一：
+
+| 场景 | 默认数据位置 |
+|------|-------------|
+| 从 v1.1.9 或更早版本升级（存在旧库） | `%USERPROFILE%\.medmemo\data` |
+| 全新安装且安装目录可写 | `<installDir>\data`（例如 `%LOCALAPPDATA%\Programs\MedMemo\data`） |
+| 安装目录缺失或不可写 | `%USERPROFILE%\.medmemo\data` |
+| 已设置 `MEDMEMO_DATA_DIR` 或 `config.yaml` 中的 `data_dir` | 配置指定的路径 |
+
+MedMemo 不会在不同位置之间自动移动或合并数据库。如果旧库文件夹和安装目录同时存在数据，默认优先使用旧库，直到你通过 `MEDMEMO_DATA_DIR` 显式切换。
+
 ### 卸载
 
 1. 打开**设置 → 应用 → 已安装的应用**
 2. 找到 **MedMemo**
 3. 点击**卸载**
-4. （可选）删除用户数据文件夹 `%LOCALAPPDATA%\medmemo`（包含已下载的 AI 运行库）
+4. （可选）删除用户数据文件夹。根据上述场景，可能是 `<installDir>\data` 或 `%USERPROFILE%\.medmemo\data`。
 
 ---
 
@@ -105,7 +118,7 @@ xattr -d com.apple.quarantine /Applications/MedMemo.app
 ### 卸载
 
 1. 将 **MedMemo.app** 从应用程序拖到废纸篓
-2. （可选）删除用户数据 `~/Library/Application Support/medmemo`
+2. （可选）删除用户数据 `~/.medmemo/data`
 
 ---
 
@@ -242,10 +255,13 @@ MedMemo 支持自动更新检测：
 有可用更新时，会弹出通知。
 
 - **Windows / macOS / Linux AppImage：** 应用会在可能的情况下自动下载并安装更新。
-- **Linux DEB / RPM：** 应用会下载对应安装包并提示文件路径。请使用与初次安装相同的命令手动安装。
+- **Linux DEB / RPM：** 应用会探测当前安装的包类型（通过 `.install_kind` 标记文件或查询 `dpkg`/`rpm`），然后下载对应安装包并提示文件路径。请使用与初次安装相同的命令手动安装。
+- **无法识别的 Linux 安装方式：** 如果 MedMemo 无法确定你安装的是 DEB、RPM 还是 AppImage，会打开 Release 页面，由你手动下载适合的安装包。
 
+> ⚠️ 如果你之前安装的是候选版本（rc）的 DEB/RPM 包，在 v1.1.10 正式版发布后需要手动下载并覆盖安装一次正式版 DEB/RPM。更新器不会自动切换包格式。
+>
 > ⚠️ 安全更新可能被标记为**强制更新**，不安装将无法继续使用。
 
 ---
 
-*最后更新：2026-07-14*
+*最后更新：2026-08-05*
