@@ -16,7 +16,7 @@
 param(
     [string]$BinaryPath = "build/bin/MedMemo.exe",
     [string]$OutputDir = "build/bin",
-    [string]$MinGWBinDir = "C:/msys64/mingw64/bin"
+    [string[]]$MinGWBinDirs = @("C:/msys64/mingw64/bin", "C:/msys64/ucrt64/bin", "C:/msys64/clang64/bin")
 )
 
 Set-StrictMode -Version Latest
@@ -32,10 +32,17 @@ if (-not (Test-Path $OutputDir)) {
     New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 }
 
-if (-not (Test-Path $MinGWBinDir)) {
-    Write-Error "MinGW bin directory not found: $MinGWBinDir"
+$availableBinDirs = @()
+foreach ($dir in $MinGWBinDirs) {
+    if (Test-Path $dir) {
+        $availableBinDirs += $dir
+    }
+}
+if ($availableBinDirs.Count -eq 0) {
+    Write-Error "No MinGW bin directory found. Searched: $($MinGWBinDirs -join ', ')"
     exit 1
 }
+Write-Host "Using MinGW bin directories: $($availableBinDirs -join ', ')"
 
 if (Test-Path $BinaryPath) {
     Write-Host "Inspecting binary: $BinaryPath"
@@ -45,15 +52,20 @@ if (Test-Path $BinaryPath) {
 
 $missing = @()
 foreach ($dll in $requiredDlls) {
-    $source = Join-Path $MinGWBinDir $dll
-    $dest = Join-Path $OutputDir $dll
-
-    if (Test-Path $source) {
-        Copy-Item -Path $source -Destination $dest -Force
-        Write-Host "Copied $dll -> $dest"
-    } else {
+    $found = $false
+    foreach ($binDir in $availableBinDirs) {
+        $source = Join-Path $binDir $dll
+        if (Test-Path $source) {
+            $dest = Join-Path $OutputDir $dll
+            Copy-Item -Path $source -Destination $dest -Force
+            Write-Host "Copied $dll -> $dest (from $binDir)"
+            $found = $true
+            break
+        }
+    }
+    if (-not $found) {
         $missing += $dll
-        Write-Warning "Missing required DLL: $source"
+        Write-Warning "Missing required DLL: $dll"
     }
 }
 

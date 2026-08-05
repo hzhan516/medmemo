@@ -3,12 +3,23 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/hzhan516/medmemo/pkg/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// setHomeEnv 按平台设置用户主目录环境变量：Windows 使用 USERPROFILE，Unix 使用 HOME。
+func setHomeEnv(t *testing.T, home string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Setenv("USERPROFILE", home)
+	} else {
+		t.Setenv("HOME", home)
+	}
+}
 
 func TestLoader_Load_Defaults(t *testing.T) {
 	loader := NewLoader("", models.ChannelBeta)
@@ -32,9 +43,13 @@ func TestLoader_Load_EnvOverride_DataDir(t *testing.T) {
 	assert.Equal(t, tmpDir, cfg.DataDir)
 }
 
+// TestDefaultDataDirPath_Unix 仅验证 Unix 平台默认数据目录；Windows 有自己的注册表感知实现。
 func TestDefaultDataDirPath_Unix(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix-only default data directory test")
+	}
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHomeEnv(t, home)
 
 	got := defaultDataDirPath()
 	assert.Equal(t, filepath.Join(home, ".medmemo", "data"), got)
@@ -281,7 +296,7 @@ func TestLoader_Load_DefaultChannelEmptyFallback(t *testing.T) {
 // TestSaveDataRetentionDays 验证数据留存天数持久化不丢失其他字段。
 func TestSaveDataRetentionDays(t *testing.T) {
 	t.Run("create new file", func(t *testing.T) {
-		t.Setenv("HOME", t.TempDir())
+		setHomeEnv(t, t.TempDir())
 		require.NoError(t, SaveDataRetentionDays(90))
 
 		loader := NewLoader("", models.ChannelBeta)
@@ -292,7 +307,7 @@ func TestSaveDataRetentionDays(t *testing.T) {
 
 	t.Run("preserve existing fields", func(t *testing.T) {
 		home := t.TempDir()
-		t.Setenv("HOME", home)
+		setHomeEnv(t, home)
 
 		configPath := filepath.Join(home, ".medmemo", "config.yaml")
 		require.NoError(t, os.MkdirAll(filepath.Dir(configPath), 0755))
@@ -312,7 +327,7 @@ func TestSaveDataRetentionDays(t *testing.T) {
 // TestSaveDesensitizationLevel 验证脱敏级别持久化不丢失其他字段。
 func TestSaveDesensitizationLevel(t *testing.T) {
 	t.Run("create new file", func(t *testing.T) {
-		t.Setenv("HOME", t.TempDir())
+		setHomeEnv(t, t.TempDir())
 		require.NoError(t, SaveDesensitizationLevel("off"))
 
 		loader := NewLoader("", models.ChannelBeta)
@@ -323,7 +338,7 @@ func TestSaveDesensitizationLevel(t *testing.T) {
 
 	t.Run("preserve existing fields", func(t *testing.T) {
 		home := t.TempDir()
-		t.Setenv("HOME", home)
+		setHomeEnv(t, home)
 
 		configPath := filepath.Join(home, ".medmemo", "config.yaml")
 		require.NoError(t, os.MkdirAll(filepath.Dir(configPath), 0755))
@@ -364,7 +379,7 @@ func TestLoader_Load_DesensitizationLevel_Normalize(t *testing.T) {
 // TestSaveDesensitizationLevel_Accept 验证合法级别（含大小写变体）被规范化后持久化。
 func TestSaveDesensitizationLevel_Accept(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHomeEnv(t, home)
 
 	require.NoError(t, SaveDesensitizationLevel("OFF"))
 
@@ -376,7 +391,7 @@ func TestSaveDesensitizationLevel_Accept(t *testing.T) {
 // TestSaveDesensitizationLevel_Reject 验证非法级别被拒绝且不写入配置文件。
 func TestSaveDesensitizationLevel_Reject(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHomeEnv(t, home)
 
 	err := SaveDesensitizationLevel("xyz")
 	require.Error(t, err)
