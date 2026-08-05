@@ -1,6 +1,6 @@
 module github.com/hzhan516/medmemo
 
-go 1.26.4
+go 1.26.5
 
 require (
 	github.com/99designs/keyring v1.2.2
@@ -70,7 +70,7 @@ require (
 	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/sync v0.21.0 // indirect
 	golang.org/x/term v0.43.0 // indirect
-	golang.org/x/text v0.38.0 // indirect
+	golang.org/x/text v0.39.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
 	modernc.org/libc v1.73.4 // indirect
