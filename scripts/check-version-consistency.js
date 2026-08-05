@@ -10,10 +10,13 @@ function readJSON(p) {
 
 const wails = readJSON('wails.json');
 const webPkg = readJSON('web/package.json');
+const webLock = readJSON('web/package-lock.json');
 const changelog = readJSON('internal/domain/entity/changelog/zh-Hans.json');
 
 const wailsVersion = wails.info.productVersion;
 const webVersion = webPkg.version;
+const lockVersion = webLock.version;
+const lockRootVersion = webLock.packages && webLock.packages[''] && webLock.packages[''].version;
 const changelogHasVersion = Array.isArray(changelog) && changelog.some(v => {
     const cv = String(v.version);
     return cv === wailsVersion || cv === `v${wailsVersion}`;
@@ -22,6 +25,14 @@ const changelogHasVersion = Array.isArray(changelog) && changelog.some(v => {
 let failed = false;
 if (wailsVersion !== webVersion) {
     console.error(`Version mismatch: wails.json=${wailsVersion}, web/package.json=${webVersion}`);
+    failed = true;
+}
+if (lockVersion !== wailsVersion) {
+    console.error(`Version mismatch: wails.json=${wailsVersion}, web/package-lock.json version=${lockVersion}`);
+    failed = true;
+}
+if (lockRootVersion !== wailsVersion) {
+    console.error(`Version mismatch: wails.json=${wailsVersion}, web/package-lock.json packages[""].version=${lockRootVersion}`);
     failed = true;
 }
 if (!changelogHasVersion) {

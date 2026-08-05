@@ -2,7 +2,7 @@ name: Build and Release
 
 on:
   push:
-    branches: [main, 'release/**']
+    branches: ['release/**']
 
 env:
   GOPROXY: https://proxy.golang.org,https://goproxy.cn,direct
@@ -10,92 +10,60 @@ env:
 permissions:
   contents: write
 
+concurrency:
+  group: rc-release-${{ github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
-  version:
-    name: Generate Version
+  rc-unit-test:
+    name: RC Unit Test
     runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-      prerelease: ${{ steps.version.outputs.prerelease }}
-      draft: ${{ steps.version.outputs.draft }}
     steps:
       - uses: actions/checkout@v6
 
-      - name: Generate version
-        id: version
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Install SQLCipher
+        run: sudo apt-get update && sudo apt-get install -y libsqlcipher-dev
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install frontend dependencies
+        run: cd web && npm ci
+
+      - name: Build frontend
+        run: cd web && npm run build
+
+      - name: Download native libraries for unit tests
         run: |
-          BASE_VERSION=$(jq -r '.info.productVersion' wails.json)
-          REF="${GITHUB_REF_NAME}"
+          ./scripts/build/download-onnx.sh --platform=linux
+          ./scripts/build/download-tokenizers.sh --platform=linux
 
-          if [[ "$REF" == release/* ]]; then
-            BRANCH_VER=$(echo "$REF" | sed 's|release/v||')
-            if [[ "$BRANCH_VER" != "$BASE_VERSION" ]]; then
-              echo "ERROR: Branch version ($BRANCH_VER) != wails.json productVersion ($BASE_VERSION)"
-              exit 1
-            fi
-            # 统一使用 vX.Y.Z-rc.N 作为预发布 tag，避免 -Pre-release 重名和无限叠加 build 号。
-            # 从远程读取该版本已有的 rc tag 并取最大 build 号自增，避免 release/** 被重复合并时
-            # 因本地（浅克隆）看不到 tag 而始终生成 rc.1、进而 push 已存在 tag 导致 CI 冲突失败。
-            ESC_VERSION=$(echo "$BASE_VERSION" | sed 's/\./\\./g')
-            MAX_N=$(git ls-remote --tags origin "v${BASE_VERSION}-rc.*" \
-              | awk '{print $2}' | sed 's|refs/tags/||; s|\^{}$||' \
-              | grep -E "^v${ESC_VERSION}-rc\.[0-9]+$" \
-              | sed 's/.*-rc\.//' | sort -n | tail -1)
-            N=$(( ${MAX_N:-0} + 1 ))
-            VERSION="v${BASE_VERSION}-rc.${N}"
-            PRERELEASE="true"
-            DRAFT="false"
-          elif [[ "$REF" == "main" ]]; then
-            VERSION="v${BASE_VERSION}"
-            PRERELEASE="false"
-            DRAFT="false"
-          else
-            echo "Unsupported ref: $REF"
-            exit 1
-          fi
+      - name: Run unit tests
+        run: make test
 
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "prerelease=$PRERELEASE" >> $GITHUB_OUTPUT
-          echo "draft=$DRAFT" >> $GITHUB_OUTPUT
-          echo "Generated version: $VERSION (prerelease=$PRERELEASE, draft=$DRAFT)"
-
-      - name: Create or reuse tag
+      - name: Generate HTML coverage report
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          if git rev-parse "$VERSION" >/dev/null 2>&1; then
-            echo "Tag $VERSION already exists, reusing it."
-          else
-            git tag "$VERSION"
-            git push origin "$VERSION"
-            echo "Created and pushed tag $VERSION."
-          fi
+          go tool cover -html=coverage.out -o coverage.html
+          go tool cover -func=coverage.out -o coverage-summary.txt
 
-      - name: Prune old release-candidate tags
-        if: startsWith(github.ref_name, 'release/')
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          BASE_VERSION=$(jq -r '.info.productVersion' wails.json)
-          ESC_VERSION=$(echo "$BASE_VERSION" | sed 's/\./\\./g')
-          KEEP=3
-          # 列出该版本所有 rc tag，按 build 号升序（最旧在前）
-          TAGS=$(git ls-remote --tags origin "v${BASE_VERSION}-rc.*" \
-            | awk '{print $2}' | sed 's|refs/tags/||; s|\^{}$||' \
-            | grep -E "^v${ESC_VERSION}-rc\.[0-9]+$" \
-            | sort -t. -k4 -n | uniq)
-          COUNT=$(printf '%s\n' "$TAGS" | grep -c . || true)
-          echo "Found $COUNT rc tag(s) for v${BASE_VERSION}; keeping newest ${KEEP}."
-          if [ "$COUNT" -gt "$KEEP" ]; then
-            printf '%s\n' "$TAGS" | head -n "$((COUNT - KEEP))" | while read -r tag; do
-              [ -z "$tag" ] && continue
-              echo "Pruning old rc tag and release: $tag"
-              # 先删关联的 GitHub Release（含 tag）；无 release 时忽略错误，再兜底删除 tag
-              gh release delete "$tag" --yes --cleanup-tag 2>/dev/null || true
-              git push origin ":refs/tags/$tag" 2>/dev/null || true
-            done
-          fi
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: rc-coverage-report
+          path: |
+            ./coverage.out
+            ./coverage.html
+            ./coverage-summary.txt
+          retention-days: 7
 
   licenses-check:
     name: License Consistency Check
@@ -126,6 +94,55 @@ jobs:
 
       - name: Verify no license drift
         run: git diff --exit-code THIRD_PARTY_LICENSES.md
+
+  version:
+    name: Generate Version
+    needs: [rc-unit-test, licenses-check]
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Generate version
+        id: version
+        run: |
+          BASE_VERSION=$(jq -r '.info.productVersion' wails.json)
+          REF="${GITHUB_REF_NAME}"
+
+          if [[ "$REF" != release/* ]]; then
+            echo "ERROR: Unsupported ref for RC workflow: $REF"
+            exit 1
+          fi
+
+          BRANCH_VER=$(echo "$REF" | sed 's|release/v||')
+          if [[ "$BRANCH_VER" != "$BASE_VERSION" ]]; then
+            echo "ERROR: Branch version ($BRANCH_VER) != wails.json productVersion ($BASE_VERSION)"
+            exit 1
+          fi
+
+          # 统一使用 vX.Y.Z-rc.N 作为预发布 tag，避免 -Pre-release 重名和无限叠加 build 号。
+          # 从远程读取该版本已有的 rc tag 并取最大 build 号自增，避免 release/** 被重复合并时
+          # 因本地（浅克隆）看不到 tag 而始终生成 rc.1、进而 push 已存在 tag 导致 CI 冲突失败。
+          ESC_VERSION=$(echo "$BASE_VERSION" | sed 's/\./\\./g')
+          MAX_N=$(git ls-remote --tags origin "v${BASE_VERSION}-rc.*" \
+            | awk '{print $2}' | sed 's|refs/tags/||; s|\^{}$||' \
+            | grep -E "^v${ESC_VERSION}-rc\.[0-9]+$" \
+            | sed 's/.*-rc\.//' | sort -n | tail -1)
+          N=$(( ${MAX_N:-0} + 1 ))
+          VERSION="v${BASE_VERSION}-rc.${N}"
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Generated version: $VERSION"
+
+      - name: Create RC tag
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "$VERSION"
+          git push origin "$VERSION"
+          echo "Created and pushed tag $VERSION."
 
   build:
     name: Build ${{ matrix.platform }}
@@ -281,62 +298,17 @@ jobs:
 
       - name: Prepare release assets
         run: |
-          mkdir -p release-assets
+          set -euo pipefail
           VERSION="${{ needs.version.outputs.version }}"
-
-          # Windows: only ship the NSIS installer, never fall back to a bare exe.
-          if [ -f "artifacts/windows/MedMemo-amd64-installer.exe" ]; then
-              cp "artifacts/windows/MedMemo-amd64-installer.exe" "release-assets/MedMemoSetup.exe"
-          else
-              echo "ERROR: Windows installer not found"
-              exit 1
-          fi
-
-          # macOS Intel
-          if [ -f "artifacts/darwin-amd64/MedMemo_x86_64.dmg" ]; then
-              cp "artifacts/darwin-amd64/MedMemo_x86_64.dmg" "release-assets/MedMemo_x86_64.dmg"
-          else
-              echo "ERROR: macOS Intel DMG missing"
-              exit 1
-          fi
-
-          # macOS Apple Silicon
-          if [ -f "artifacts/darwin-arm64/MedMemo_arm64.dmg" ]; then
-              cp "artifacts/darwin-arm64/MedMemo_arm64.dmg" "release-assets/MedMemo_arm64.dmg"
-          else
-              echo "ERROR: macOS Apple Silicon DMG missing"
-              exit 1
-          fi
-
-          # Linux: AppImage, DEB and RPM packages.
-          if [ -f "artifacts/linux/MedMemo-x86_64.AppImage" ]; then
-              cp "artifacts/linux/MedMemo-x86_64.AppImage" "release-assets/MedMemo-x86_64.AppImage"
-          else
-              echo "ERROR: Linux AppImage missing"
-              exit 1
-          fi
-
-          DEB_FILE="artifacts/linux/MedMemo_${VERSION}_amd64.deb"
-          if [ -f "$DEB_FILE" ]; then
-              cp "$DEB_FILE" "release-assets/$(basename "$DEB_FILE")"
-          else
-              echo "ERROR: Linux DEB package missing: $DEB_FILE"
-              exit 1
-          fi
-
-          RPM_FILE="artifacts/linux/MedMemo-${VERSION}-1.x86_64.rpm"
-          if [ -f "$RPM_FILE" ]; then
-              cp "$RPM_FILE" "release-assets/$(basename "$RPM_FILE")"
-          else
-              echo "ERROR: Linux RPM package missing: $RPM_FILE"
-              exit 1
-          fi
-
+          ./scripts/build/prepare-release-assets.sh "$VERSION" "release-assets" \
+            "artifacts/linux" "artifacts/windows" \
+            "artifacts/darwin-amd64" "artifacts/darwin-arm64"
           echo "Release assets:"
           ls -la release-assets/
 
       - name: Generate checksums
         run: |
+          set -euo pipefail
           cd release-assets
           sha256sum * > checksums.txt
           cd ..
@@ -344,14 +316,14 @@ jobs:
           cat release-assets/checksums.txt
 
       - name: Verify release asset whitelist
-        run: ./scripts/build/verify-release-assets.sh release-assets
+        run: ./scripts/build/verify-release-assets.sh release-assets "$VERSION"
 
-      - name: Create GitHub Release
+      - name: Create Draft GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           name: MedMemo ${{ needs.version.outputs.version }}
           tag_name: ${{ needs.version.outputs.version }}
-          prerelease: ${{ needs.version.outputs.prerelease == 'true' }}
+          prerelease: true
           draft: true
           files: release-assets/*
           generate_release_notes: true
@@ -359,7 +331,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish GitHub Release
-        run: gh release edit "${{ needs.version.outputs.version }}" --draft=false
+      - name: Publish GitHub Release as Pre-release
+        run: gh release edit "${{ needs.version.outputs.version }}" --draft=false --prerelease=true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
