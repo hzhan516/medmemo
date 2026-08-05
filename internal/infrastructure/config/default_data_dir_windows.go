@@ -11,13 +11,55 @@ import (
 )
 
 // defaultDataDirPath 返回 Windows 平台的默认数据目录。
-// 优先使用注册表中记录的安装目录下的 data 子目录；若未安装或未写入注册表，
-// 则回退到 ~/.medmemo/data，保证便携模式与开发调试仍可运行。
+//
+// 选择优先级（显式配置在 Loader 层处理，此处仅计算默认值）：
+//  1. 若旧库 %USERPROFILE%\.medmemo\data\medmemo.db 存在，返回旧目录，保证已升级用户的历史数据可见。
+//  2. 若注册表中存在安装目录，且其 data 子目录可写，返回 <installDir>\data。
+//  3. 否则回退到 %USERPROFILE%\.medmemo\data，覆盖便携模式与 Program Files 等不可写安装场景。
 func defaultDataDirPath() string {
-	if dir := installDirFromRegistry(); dir != "" {
-		return filepath.Join(dir, "data")
+	legacyDir := fallbackDataDir()
+	installDir := installDirFromRegistry()
+	return selectWindowsDataDir(installDir, legacyDir, osFileExists, osDirWritable)
+}
+
+// selectWindowsDataDir 是 Windows 默认数据目录的可测试选择函数。
+// 显式配置（config.yaml / MEDMEMO_DATA_DIR）由调用方在加载阶段覆盖，不进入本函数。
+func selectWindowsDataDir(installDir, legacyDir string, fileExists func(string) bool, dirWritable func(string) bool) string {
+	legacyDB := filepath.Join(legacyDir, "medmemo.db")
+	if fileExists(legacyDB) {
+		return legacyDir
 	}
-	return fallbackDataDir()
+	if installDir == "" {
+		return legacyDir
+	}
+	installData := filepath.Join(installDir, "data")
+	if dirWritable(installData) {
+		return installData
+	}
+	return legacyDir
+}
+
+// osFileExists 使用 os.Stat 判断文件是否存在。
+func osFileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// osDirWritable 探测目录是否可写：必要时创建目录，写入并删除临时文件。
+func osDirWritable(dir string) bool {
+	if dir == "" {
+		return false
+	}
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return false
+	}
+	f, err := os.CreateTemp(dir, ".medmemo-write-test-*")
+	if err != nil {
+		return false
+	}
+	_ = f.Close()
+	_ = os.Remove(f.Name())
+	return true
 }
 
 // installDirFromRegistry 从 HKCU\Software\MedMemo 读取 InstallPath 并归一化为目录。
