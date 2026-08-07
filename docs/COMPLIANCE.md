@@ -89,6 +89,46 @@ address unless you are certain the endpoint keeps data on-device.
 
 ---
 
+## Fact Extraction De-Identification and Sensitive Marking
+
+Structured facts are extracted from user messages only; AI replies are excluded to avoid memorizing
+suggestions, capability limitations, or hypothetical content.
+
+### Cloud extraction path
+
+For cloud providers, user content runs through the same two-level de-identification pipeline before being
+sent to the fact-extraction LLM:
+
+1. The L1 rule engine and L2 NER model mask PII such as names, locations, ID numbers, phone numbers,
+   bank cards, emails, and URLs.
+2. Masked placeholders are sent to the LLM for fact extraction.
+3. After extraction, the local `LocalRestore` map reverts placeholders to their original values on-device.
+4. Any fact whose fields were restored is marked `IsSensitive=true`.
+5. The `SensitiveDetector` then checks for any remaining PII and uses an **OR** semantic for
+   `IsSensitive`: once a fact is sensitive, it stays sensitive.
+
+Medical keywords (diseases, medications) are intentionally **not** used to drive `IsSensitive`; they are
+kept available for health-information retrieval, while PII remains flagged for access control and display
+policy.
+
+### Fail-closed on de-identification failure
+
+If the cloud de-identification pipeline fails for fact extraction, the operation aborts immediately:
+
+- The LLM is **not** called.
+- No degraded or partially-masked text leaves the device.
+- A `factExtractDeidAborts` counter is incremented for audit and monitoring.
+
+This prevents a failure mode where low-confidence NER entities could leak through a degraded prompt.
+
+### Local provider behavior
+
+Local providers (Ollama / llama.cpp) skip outbound de-identification, so the fact-extraction path also
+skips masking. `IsSensitive` is still evaluated after extraction, so any PII that appears in extracted
+facts is flagged before persistence.
+
+---
+
 ## Four-Level Compliance Message Interception
 
 The interception layer sits between AI response generation and user display, using a dual-layer detection of "rule matching + local lightweight model classification."
@@ -138,4 +178,4 @@ A persistent compliance notice bar at the top of the conversation interface (hei
 
 ---
 
-*Last updated: 2026-07-09*
+*Last updated: 2026-08-05*

@@ -23,6 +23,12 @@ contents:
     dst: /usr/share/applications/medmemo.desktop
   - src: build/appicon.png
     dst: /usr/share/icons/hicolor/256x256/apps/medmemo.png
+  - src: build/package/linux/.install_kind.deb
+    dst: /opt/medmemo/.install_kind
+    packager: deb
+  - src: build/package/linux/.install_kind.rpm
+    dst: /opt/medmemo/.install_kind
+    packager: rpm
 depends:
   - libgtk-3-0
   - libwebkit2gtk-4.1-0

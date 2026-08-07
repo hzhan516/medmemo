@@ -1,0 +1,164 @@
+name: Record Release Test Evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Test platform identifier'
+        required: true
+        type: choice
+        options:
+          - windows-11
+          - fedora-rpm-appimage
+          - debian-deb-container
+          - macos-intel-quickemu
+          - macos-arm-ci
+      release_id:
+        description: 'GitHub release database ID'
+        required: true
+        type: string
+      tag:
+        description: 'Release tag (e.g., v1.1.10)'
+        required: true
+        type: string
+      approved_main_sha:
+        description: 'Approved-Main-SHA'
+        required: true
+        type: string
+      checksums_file_sha256:
+        description: 'SHA256 of checksums.txt'
+        required: true
+        type: string
+      notes:
+        description: 'Test notes or evidence URL'
+        required: false
+        type: string
+        default: ''
+
+env:
+  GOPROXY: https://proxy.golang.org,https://goproxy.cn,direct
+
+permissions:
+  contents: read
+
+concurrency:
+  group: record-release-test-${{ inputs.tag }}-${{ inputs.platform }}
+  cancel-in-progress: false
+
+jobs:
+  record:
+    name: Record ${{ inputs.platform }} evidence
+    runs-on: ubuntu-latest
+    steps:
+      - name: Assert main branch
+        run: |
+          set -euo pipefail
+          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "ERROR: this workflow must be dispatched from main"
+            exit 1
+          fi
+
+      - name: Validate inputs
+        run: |
+          set -euo pipefail
+          PLATFORM="${{ inputs.platform }}"
+          TAG="${{ inputs.tag }}"
+          RELEASE_ID="${{ inputs.release_id }}"
+          APPROVED_SHA="${{ inputs.approved_main_sha }}"
+          CHECKSUMS_SHA256="${{ inputs.checksums_file_sha256 }}"
+
+          if [ -z "$PLATFORM" ] || [ -z "$TAG" ] || [ -z "$RELEASE_ID" ] || \
+             [ -z "$APPROVED_SHA" ] || [ -z "$CHECKSUMS_SHA256" ]; then
+            echo "ERROR: missing required input"
+            exit 1
+          fi
+
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "ERROR: invalid stable tag format: $TAG"
+            exit 1
+          fi
+
+      - name: Query release and verify metadata
+        run: |
+          set -euo pipefail
+          RELEASE_JSON=$(gh api "repos/${{ github.repository }}/releases/${{ inputs.release_id }}")
+          echo "$RELEASE_JSON" | jq '.'
+
+          RELEASE_TAG=$(echo "$RELEASE_JSON" | jq -r '.tag_name')
+          RELEASE_DRAFT=$(echo "$RELEASE_JSON" | jq -r '.draft')
+          RELEASE_PRERELEASE=$(echo "$RELEASE_JSON" | jq -r '.prerelease')
+
+          if [ "$RELEASE_TAG" != "${{ inputs.tag }}" ]; then
+            echo "ERROR: release tag mismatch"
+            exit 1
+          fi
+          if [ "$RELEASE_DRAFT" != "true" ]; then
+            echo "ERROR: release must be Draft"
+            exit 1
+          fi
+          if [ "$RELEASE_PRERELEASE" != "false" ]; then
+            echo "ERROR: stable release must not be prerelease"
+            exit 1
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download release assets and verify checksums
+        run: |
+          set -euo pipefail
+          mkdir -p evidence-assets
+          cd evidence-assets
+
+          gh release download "${{ inputs.tag }}" --repo "${{ github.repository }}"
+
+          if [ ! -f checksums.txt ]; then
+            echo "ERROR: checksums.txt not found in downloaded assets"
+            exit 1
+          fi
+
+          ACTUAL_CHECKSUMS_SHA256=$(sha256sum checksums.txt | awk '{print $1}')
+          if [ "$ACTUAL_CHECKSUMS_SHA256" != "${{ inputs.checksums_file_sha256 }}" ]; then
+            echo "ERROR: checksums.txt hash mismatch"
+            exit 1
+          fi
+
+          sha256sum -c checksums.txt
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Collect tested asset names
+        id: assets
+        run: |
+          set -euo pipefail
+          ASSETS=$(cd evidence-assets && find . -maxdepth 1 -type f ! -name 'checksums.txt' -printf '%f\n' | sort | jq -R . | jq -s .)
+          echo "tested_assets=$ASSETS" >> "$GITHUB_OUTPUT"
+
+      - name: Generate evidence JSON
+        run: |
+          set -euo pipefail
+          TESTED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          cat > evidence.json <<EOF
+          {
+            "schemaVersion": "1.0",
+            "platform": "${{ inputs.platform }}",
+            "releaseId": "${{ inputs.release_id }}",
+            "tag": "${{ inputs.tag }}",
+            "approvedMainSha": "${{ inputs.approved_main_sha }}",
+            "checksumsFileSha256": "${{ inputs.checksums_file_sha256 }}",
+            "actor": "${{ github.actor }}",
+            "runId": "${{ github.run_id }}",
+            "runUrl": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            "testedAt": "$TESTED_AT",
+            "result": "PASS",
+            "testedAssetNames": ${{ steps.assets.outputs.tested_assets }},
+            "notes": "${{ inputs.notes }}"
+          }
+          EOF
+          cat evidence.json | jq '.'
+
+      - name: Upload evidence artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-evidence-${{ inputs.tag }}-${{ inputs.platform }}
+          path: evidence.json
+          retention-days: 90

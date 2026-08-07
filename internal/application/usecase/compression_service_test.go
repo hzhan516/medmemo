@@ -415,7 +415,7 @@ type mockMessageRepo struct {
 	calls            int
 }
 
-func (m *mockMessageRepo) Save(_ context.Context, _ models.ConversationID, msg *entity.Message) error {
+func (m *mockMessageRepo) Save(_ context.Context, _ models.ConversationID, _ *entity.Message) error {
 	return nil
 }
 
@@ -823,7 +823,7 @@ func TestApplyStrategy(t *testing.T) {
 
 	t.Run("unsupported strategy errors", func(t *testing.T) {
 		_, _, _, err := svc.applyStrategy(context.Background(), history, "p", CompressionConfig{
-			Strategy: CompressionStrategyKind("bogus"),
+			Strategy: "bogus",
 		})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "unsupported compression strategy")

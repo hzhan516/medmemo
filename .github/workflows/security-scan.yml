@@ -2,9 +2,9 @@ name: Security Scan
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, 'release/**']
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, 'release/**']
   schedule:
     # 每周一 UTC 00:00 执行
     - cron: '0 0 * * 1'
@@ -27,11 +27,8 @@ jobs:
           repo-checkout: false
 
   npm-audit:
-    name: npm Audit
+    name: npm Audit Policy
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: web
     steps:
       - uses: actions/checkout@v6
 
@@ -42,12 +39,18 @@ jobs:
           cache-dependency-path: web/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: cd web && npm ci
 
-      - name: Run npm audit
-        run: npm audit --audit-level=high
-        # 若 audit 失败不阻断 CI，仅作为安全预警（部分前端漏洞可能无法立即修复）
-        continue-on-error: true
+      - name: Run npm audit policy
+        run: |
+          cd web
+          npm audit --omit=dev --json > /tmp/npm-audit-prod.json || true
+          npm audit --json > /tmp/npm-audit-all.json || true
+          cd ..
+          node scripts/check-npm-audit-policy.js \
+            --production /tmp/npm-audit-prod.json \
+            --all /tmp/npm-audit-all.json \
+            --allowlist scripts/npm-audit-allowlist.json
 
   secret-scan:
     name: Secret Detection

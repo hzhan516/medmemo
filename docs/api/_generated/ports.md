@@ -73,6 +73,7 @@ Installer 定义平台特定的更新安装端口。
 | `Install` | `Install(assetPath string) (string, error)` | Install 执行平台特定的安装/替换逻辑。 assetPath 为已下载且校验通过的资产文件路径。 返回安装后的新二进制路径或错误。 |
 | `Rollback` | `Rollback() error` | Rollback 在更新失败时回滚到上一版本。 |
 | `CurrentBinaryPath` | `CurrentBinaryPath() string` | CurrentBinaryPath 返回当前运行的二进制文件路径。 |
+| `InstallKind` | `InstallKind() string` | InstallKind 返回当前安装方式标识，供更新器选择对应资产与安装策略。 Linux 返回 appimage/deb/rpm/unknown；其他平台返回对应平台标识。 |
 
 ## `LLMClient`
 
@@ -171,6 +172,7 @@ Updater 定义更新信息获取与资产下载的端口。
 | Method | Signature | Description |
 |--------|-----------|-------------|
 | `FetchLatest` | `FetchLatest(ctx context.Context, channel models.UpdateChannel) (*entity.UpdateInfo, error)` | FetchLatest 查询远程最新版本信息。 channel 为 stable 时过滤掉 prerelease，为 beta 时包含全部。 |
+| `FetchByTag` | `FetchByTag(ctx context.Context, tag string) (*entity.UpdateInfo, error)` | FetchByTag 根据指定 tag 查询 Release 信息，用于下载用户点击的特定版本。 |
 | `Download` | `Download(ctx context.Context, url string, destPath string, progress func(downloaded int64, total int64)) error` | Download 下载指定 URL 的资产到本地路径，并通过 progress 回调推送进度。 progress 参数可为 nil，表示不接收进度通知。 |
 | `VerifyChecksum` | `VerifyChecksum(path string, expectedSHA256 string) error` | VerifyChecksum 校验本地文件 SHA256 是否与预期值匹配。 |
 

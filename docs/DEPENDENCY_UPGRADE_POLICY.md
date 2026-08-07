@@ -143,7 +143,6 @@ wails build -platform linux/amd64
 
 ## Related Documents
 
-- [`AGENTS.md`](../AGENTS.md) — Full development standards and stack version locks.
 - [`.github/dependabot.yml`](../.github/dependabot.yml) — Dependabot configuration with `ignore` rules.
 - [`docs/DEVELOPMENT.md`](./DEVELOPMENT.md) — Clean Architecture and coding conventions.
 

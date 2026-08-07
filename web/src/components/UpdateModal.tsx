@@ -14,14 +14,51 @@ function formatBytes(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
 }
 
+interface LinuxManualInstallMessageProps {
+  error: string
+  version: string
+  onOpenDownloadPage: (url: string) => void
+}
+
 // LinuxManualInstallMessage 从错误文本中提取命令并展示包管理手动安装指引。
-function LinuxManualInstallMessage({ error }: { error: string }) {
+// 无法识别安装方式（unknown）时引导用户前往 Release 页面手动下载。
+function LinuxManualInstallMessage({ error, version, onOpenDownloadPage }: LinuxManualInstallMessageProps) {
   const command = error.includes(':') ? error.split(':', 2)[1].trim() : ''
+  const releaseUrl = `https://github.com/hzhan516/medmemo/releases/tag/${version}`
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = async () => {
+    if (!command) return
+    try {
+      await navigator.clipboard.writeText(command)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // 复制失败时静默处理，用户可手动选择代码块
+    }
+  }
+
   return (
     <div className="space-y-2">
-      <p>Linux 包管理安装需要手动执行。请在终端运行以下命令完成更新：</p>
-      {command && (
-        <code className="block rounded bg-muted p-2 font-mono text-xs break-all">{command}</code>
+      {command ? (
+        <>
+          <p>Linux 包管理安装需要手动执行。请在终端运行以下命令完成更新：</p>
+          <div className="flex items-start gap-2">
+            <code className="block flex-1 rounded bg-muted p-2 font-mono text-xs break-all">{command}</code>
+            <Button variant="outline" size="sm" onClick={handleCopy}>
+              {copied ? '已复制' : '复制'}
+            </Button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p>无法确定当前 Linux 安装包类型，无法自动生成安装命令。</p>
+          <p>请前往 Release 页面下载适合系统的安装包（DEB / RPM / AppImage）后手动安装。</p>
+          <Button size="sm" variant="outline" onClick={() => onOpenDownloadPage(releaseUrl)}>
+            <ExternalLink size={14} className="mr-1" />
+            前往 Release 页面
+          </Button>
+        </>
       )}
     </div>
   )
@@ -151,7 +188,11 @@ export function UpdateModal({
               {IS_MACOS ? (
                 <span>macOS 自动替换需要管理员授权。请打开下载的 DMG 文件，手动将 MedMemo.app 拖拽到 Applications 文件夹完成安装。</span>
               ) : IS_LINUX ? (
-                <LinuxManualInstallMessage error={error} />
+                <LinuxManualInstallMessage
+                  error={error}
+                  version={info.version}
+                  onOpenDownloadPage={onOpenDownloadPage}
+                />
               ) : (
                 <span>{error}</span>
               )}

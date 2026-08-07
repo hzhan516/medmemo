@@ -113,11 +113,20 @@
 ### Q22：如何彻底删除所有数据？
 
 **答：** 卸载 MedMemo 并删除用户数据文件夹：
-- **Windows**：`%LOCALAPPDATA%\medmemo`
-- **macOS**：`~/Library/Application Support/medmemo`
-- **Linux**：`~/.local/share/medmemo`
+- **Windows**：详见 [安装指南 → Windows 数据存储位置](./installation.md#windows-数据存储位置)。常见位置为 `%USERPROFILE%\.medmemo\data` 或 `<installDir>\data`（例如 `%LOCALAPPDATA%\Programs\MedMemo\data`）。
+- **macOS**：`~/.medmemo/data`
+- **Linux**：`~/.medmemo/data`
 
-### Q23：MedMemo 会收集分析数据吗？
+### Q23：升级后 Windows 数据文件夹为什么变了？
+
+**答：** 从 v1.1.10 起，Windows 上的选择优先级为：
+1. 若 `%USERPROFILE%\.medmemo\data\medmemo.db` 存在，则使用旧库文件夹，保证历史数据可见。
+2. 否则，若安装目录可写，则使用 `<installDir>\data`。
+3. 若安装目录不可写，则回退到 `%USERPROFILE%\.medmemo\data`。
+
+如需强制指定文件夹，请设置 `MEDMEMO_DATA_DIR` 或 `config.yaml` 中的 `data_dir`。
+
+### Q24：MedMemo 会收集分析数据吗？
 
 **答：** 不会收集遥测或使用分析数据。唯一的"分析"是本地引导向导完成统计（仅存储在你的设备上），用于优化首次使用体验。
 
@@ -125,19 +134,19 @@
 
 ## 故障排查
 
-### Q24：安装后应用无法启动怎么办？
+### Q25：安装后应用无法启动怎么办？
 
 **答：** 详见 [故障排查 → 安装问题](./troubleshooting.md#安装问题)。
 
-### Q25：为什么某些 AI 回复上有橙色警告？
+### Q26：为什么某些 AI 回复上有橙色警告？
 
 **答：** 合规引擎检测到潜在敏感健康内容。警告提醒你，医疗决策应咨询医生。
 
-### Q26：看到红色紧急警报该怎么办？
+### Q27：看到红色紧急警报该怎么办？
 
 **答：** 请认真对待。A 级警报表示可能存在危及生命的症状。考虑拨打急救电话或前往急诊。如果你认为是误报，也可以选择继续对话。
 
-### Q27：AI 回复很慢，如何加速？
+### Q28：AI 回复很慢，如何加速？
 
 **答：** 尝试切换到更快的模型（Kimi Lite 或 GPT-4o Mini）。本地模型（Ollama）速度取决于你的硬件 —— GPU 能显著提升速度。
 
@@ -152,4 +161,4 @@
 
 ---
 
-*最后更新：2026-05-19*
+*最后更新：2026-08-05*

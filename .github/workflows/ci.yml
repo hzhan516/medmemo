@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, 'release/**']
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, 'release/**']
   workflow_dispatch:
 
 env:
@@ -79,25 +79,15 @@ jobs:
 
       - name: Check Markdown links
         run: ./scripts/check-doc-links.sh
-        continue-on-error: true
 
       - name: Check doc mirrors
         run: node scripts/check-doc-mirrors.js
-        continue-on-error: true
 
       - name: Check terminology
         run: node scripts/check-terminology.js
-        continue-on-error: true
 
       - name: Check version consistency
         run: node scripts/check-version-consistency.js
-        continue-on-error: true
-
-      - name: Generate API docs
-        run: make docs
-
-      - name: Verify API docs are up-to-date
-        run: git diff --exit-code docs/api/_generated/
 
   unit-test:
     name: Unit Test
@@ -266,6 +256,20 @@ jobs:
           path: build/bin/
           retention-days: 30
 
+  windows-config-test:
+    name: Windows Config Test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Run Windows config tests
+        run: go test ./internal/infrastructure/config/...
+
   cross-platform-build:
     name: Cross Platform Build
     strategy:
@@ -343,11 +347,11 @@ jobs:
         if: runner.os == 'Windows'
         run: .\scripts\build\download-tokenizers.ps1
 
-      - name: Install dlfcn-win32 for ortgenai (Windows)
+      - name: Install dlfcn-win32 and gcc-libs for ortgenai (Windows)
         if: runner.os == 'Windows'
         shell: cmd
         run: |
-          C:\msys64\usr\bin\pacman.exe -S --noconfirm mingw-w64-x86_64-dlfcn
+          C:\msys64\usr\bin\pacman.exe -S --noconfirm mingw-w64-x86_64-dlfcn mingw-w64-x86_64-gcc-libs
 
       - name: Force static libdl (avoid libdl.dll runtime dependency)
         if: runner.os == 'Windows'

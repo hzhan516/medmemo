@@ -62,6 +62,25 @@ MedMemo 对本地 provider（Ollama / llama.cpp）与回环端点（`localhost`�
 
 CI 流水线中集成安全扫描，高危漏洞阻断合并。
 
+### npm 审计允许列表策略
+
+前端门禁由 `scripts/check-npm-audit-policy.js` 执行，并使用 `scripts/npm-audit-allowlist.json` 作为已复核例外列表。该策略采用 fail-closed 设计：
+
+- 任何 `critical` 严重级漏洞均阻断构建。
+- 任何生产依赖中的 `high` 高危漏洞均阻断构建，除非存在标注 `scope: production` 且已复核的允许列表项。
+- 开发依赖中的 `high` 高危漏洞仅在同时满足以下条件时才可列入允许列表：在正式分发的应用中不可达、已记录具体缓解措施、并设有失效日期。
+- 生产域允许列表项仅在漏洞在已发布应用上下文中不可利用、已记录具体缓解措施、并设有失效日期时才被接受。
+- 每条允许列表项须记录 advisory ID、包名、作用域、依据、缓解措施、目标复查版本和失效日期。过期、包名不匹配或不再存在的条目均阻断构建。
+
+原始的 `npm audit` 输出保留供报告使用，但策略脚本才是最终门禁。
+
+#### v1.1.10 已复核例外
+
+| Advisory | 包 | 作用域 | 原因 | 复查目标版本 | 失效日期 |
+|---|---|---|---|---|---|
+| [GHSA-qwww-vcr4-c8h2](https://github.com/advisories/GHSA-qwww-vcr4-c8h2) | `react-router` | production | RSC/SSR CSRF 绕过；MedMemo 在桌面 Wails 壳内仅使用 HashRouter，无 RSC/SSR/服务器 action，因此该攻击向量不可达。 | `>=8.3.0` 或修复的 7.x patch | 2026-09-05 |
+| [GHSA-qwww-vcr4-c8h2](https://github.com/advisories/GHSA-qwww-vcr4-c8h2) | `react-router-dom` | production | 同一底层 advisory；仅客户端 HashRouter，无 RSC/SSR action 执行路径。 | `>=8.3.0` 或修复的 7.x patch | 2026-09-05 |
+
 ## 构建安全
 
 - 所有发布二进制通过 GitHub Actions 自动化构建，构建日志公开可审计
@@ -77,4 +96,4 @@ CI 流水线中集成安全扫描，高危漏洞阻断合并。
 
 ---
 
-*最后更新：2026-07-09*
+*最后更新：2026-08-05*

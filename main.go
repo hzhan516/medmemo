@@ -139,8 +139,10 @@ func NewEngineConfig(cfg *models.AppConfig) onnx.EngineConfig {
 	}
 }
 
-// prepareEmbeddingModels 首次启动时将打包的模型文件复制到用户数据目录。
-// 若用户目录已有模型，或找不到打包模型，则静默跳过。
+// prepareEmbeddingModels 首次启动时将打包的模型文件复制到应用数据目录下的模型子目录。
+// DataDir 解析规则由 config.Loader 决定：MEDMEMO_DATA_DIR 环境变量或配置文件显式值优先；
+// Windows 平台按“旧库存在 → 安装目录可写 → 用户主目录 .medmemo/data”的优先级选择；
+// 其他平台默认回退到 ~/.medmemo/data。若目标目录已有模型，或找不到打包模型，则静默跳过。
 func prepareEmbeddingModels(userDir string, resourceDir string) {
 	if _, err := os.Stat(filepath.Join(userDir, "model.onnx")); err == nil {
 		return

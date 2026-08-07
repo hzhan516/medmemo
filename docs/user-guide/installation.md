@@ -65,12 +65,25 @@ On first launch, MedMemo checks for local AI runtime libraries required for sema
 
 The first launch will show the onboarding wizard. See [First-Time Setup](./README.md#first-time-setup-3-steps).
 
+### Where Your Windows Data Is Stored
+
+MedMemo keeps your data in one of these places on Windows:
+
+| Scenario | Default data location |
+|----------|----------------------|
+| Upgrading from v1.1.9 or earlier (legacy database exists) | `%USERPROFILE%\.medmemo\data` |
+| New install with a writable install directory | `<installDir>\data` (for example, `%LOCALAPPDATA%\Programs\MedMemo\data`) |
+| Install directory is missing or not writable | `%USERPROFILE%\.medmemo\data` |
+| You set `MEDMEMO_DATA_DIR` or `data_dir` in `config.yaml` | The path you configured |
+
+MedMemo does not automatically move or merge databases between locations. If you have data in both the legacy folder and the install directory, the legacy folder is used until you explicitly switch with `MEDMEMO_DATA_DIR`.
+
 ### Uninstall
 
 1. Open **Settings → Apps → Installed apps**
 2. Find **MedMemo**
 3. Click **Uninstall**
-4. Optional: Delete user data folder at `%LOCALAPPDATA%\medmemo` (this also removes downloaded AI libraries)
+4. Optional: Delete user data folder. Depending on the scenario above, this may be `<installDir>\data` or `%USERPROFILE%\.medmemo\data`.
 
 ---
 
@@ -105,7 +118,7 @@ See [First-Time Setup](./README.md#first-time-setup-3-steps).
 ### Uninstall
 
 1. Drag **MedMemo.app** from Applications to Trash
-2. Optional: Delete user data at `~/Library/Application Support/medmemo`
+2. Optional: Delete user data at `~/.medmemo/data`
 
 ---
 
@@ -242,10 +255,13 @@ MedMemo supports automatic update checks:
 When an update is available, a notification appears.
 
 - **Windows / macOS / Linux AppImage:** The app downloads and installs the update automatically when possible.
-- **Linux DEB / RPM:** The app downloads the matching package and shows the file path. Install it manually with the same command used for the initial installation.
+- **Linux DEB / RPM:** The app detects the package type (via the `.install_kind` marker or by querying `dpkg`/`rpm`) and downloads the matching package. Install it manually with the same command used for the initial installation.
+- **Unknown Linux install kind:** If MedMemo cannot determine whether you installed the DEB, RPM, or AppImage variant, it opens the Release page so you can download the correct package manually.
 
+> ⚠️ If you installed a release-candidate (rc) DEB/RPM package, you must manually download and install the final DEB/RPM once after the v1.1.10 stable release. The updater does not switch package formats automatically.
+>
 > ⚠️ Security updates may be marked as **mandatory** and block usage until installed.
 
 ---
 
-*Last updated: 2026-07-14*
+*Last updated: 2026-08-05*

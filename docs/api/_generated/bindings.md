@@ -28,7 +28,7 @@ Public methods exposed by `WailsApp` and callable from the frontend via `window.
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `GenerateTitle` | `(convID string, userMessage string)` | GenerateTitle 异步生成会话标题，通过 Wails Events 推送结果。 前端应在首条用户消息发送后调用此方法。 |
+| `GenerateTitle` | `(convID string, userMessage string)` | GenerateTitle 异步生成本地会话标题，通过 Wails Events 推送结果。 前端应在首条用户消息发送后调用此方法。 当前直接采用本地规则，避免将用户首条消息原文发往云端标题模型； 云端标题恢复方案见 TODO(#041)。 |
 | `SendMessage` | `(req SendMessageRequest) (*SendMessageResponse, error)` | SendMessage 发送对话消息，编排完整对话流程（非流式）。 |
 | `SendMessageStream` | `(req SendMessageRequest) err error` | SendMessageStream 发送流式对话请求，通过 Wails Events 实时推送结构化 StreamChunk。 |
 | `StopGeneration` | `()` | StopGeneration 中断所有正在进行的流式生成。 |

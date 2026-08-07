@@ -58,9 +58,9 @@
 1. 不要手动删除或修改数据目录中的文件。
 2. 若近期重装系统或清空了系统密钥链，数据库密钥不可恢复 —— 如有备份请恢复。
 3. 作为最后手段，可将旧数据目录移走，让 MedMemo 重新创建：
-   - Windows：`%LOCALAPPDATA%\medmemo\`
-   - macOS：`~/Library/Application Support/medmemo/`
-   - Linux：`~/.local/share/medmemo/`
+   - Windows：`%USERPROFILE%\.medmemo\data`（若使用自定义安装位置，则为 `<installDir>\data`）
+   - macOS：`~/.medmemo/data`
+   - Linux：`~/.medmemo/data`
 
 ### "failed to open sqlcipher database"
 
@@ -73,6 +73,8 @@
 2. 确保运行 MedMemo 的用户对 `MEDMEMO_DATA_DIR` 有写权限。
 3. 关闭可能持有数据库锁的其他 MedMemo 实例。
 4. 若默认路径受限，可设置 `MEDMEMO_DATA_DIR` 到可写路径。
+
+在 Windows 上，若之前存在数据库，MedMemo 会优先使用旧目录 `%USERPROFILE%\.medmemo\data`；否则在注册表安装目录可写时使用 `<installDir>\data`，不可写（例如 `Program Files`）时回退到 `%USERPROFILE%\.medmemo\data`。新安装时安装目录不可写是导致该错误的常见原因。
 
 ### "failed to migrate plaintext database"
 
@@ -272,9 +274,11 @@
 ### 忘记数据存储位置
 
 **位置：**
-- **Windows**：`%LOCALAPPDATA%\medmemo\`
-- **macOS**：`~/Library/Application Support/medmemo/`
-- **Linux**：`~/.local/share/medmemo/`
+- **Windows**：详见 [安装指南 → Windows 数据存储位置](./installation.md#windows-数据存储位置)。常见位置：
+  - 旧库或兜底：`%USERPROFILE%\.medmemo\data`
+  - 单用户安装：`%LOCALAPPDATA%\Programs\MedMemo\data`
+- **macOS**：`~/.medmemo/data`
+- **Linux**：`~/.medmemo/data`
 
 > ⚠️ 这些文件夹包含加密数据，请勿手动编辑。
 
@@ -359,6 +363,20 @@
 1. 下次启动时更新会自动重试。
 2. 或手动从 GitHub Releases 下载并重新安装。
 
+### Linux 更新显示 Release 页面而非安装命令
+
+**症状：** Linux 上更新弹窗显示“请手动下载安装包”并跳转 Release 页面，而不是给出 `dpkg`/`rpm` 命令。
+
+**根因：** MedMemo 无法判断当前二进制来自 DEB、RPM 还是 AppImage 包。常见于便携构建、自定义安装路径，或系统同时缺少 `dpkg` 与 `rpm` 的情况。
+
+**解决方案：**
+1. 从 Release 页面下载适合你系统的安装包（Debian/Ubuntu 用 DEB，Fedora/openSUSE 用 RPM，便携使用选 AppImage）。
+2. 如需避免此问题，可在启动 MedMemo 前设置环境变量：
+   ```bash
+   export MEDMEMO_INSTALL_KIND=deb   # 或 rpm
+   ```
+3. 确保 DEB/RPM 包附带的 `.install_kind` 标记文件位于 `medmemo` 二进制同目录下。
+
 ---
 
 ## 问题反馈
@@ -375,4 +393,4 @@
 
 ---
 
-*最后更新：2026-07-14*
+*最后更新：2026-08-05*

@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -238,6 +239,13 @@ func migrateFromPlaintext(dbPath string, key []byte) error {
 		return fmt.Errorf("plaintext database verification failed: %w", err)
 	}
 
+	// 保留 schema 版本号，避免加密迁移后重复执行历史迁移
+	var plaintextUserVersion int
+	if err := plainDB.QueryRow("PRAGMA user_version").Scan(&plaintextUserVersion); err != nil {
+		_ = plainDB.Close()
+		return fmt.Errorf("failed to read plaintext schema version: %w", err)
+	}
+
 	// ATTACH 新的加密数据库
 	newPath := dbPath + ".new"
 	_ = os.Remove(newPath) // 清理可能残留的临时文件
@@ -263,6 +271,14 @@ func migrateFromPlaintext(dbPath string, key []byte) error {
 		_ = plainDB.Close()    // 导出失败后的清理关闭，关闭错误非关键（上方已返回主错误）
 		_ = os.Remove(newPath) // 清理临时加密文件，Remove 错误不影响主错误返回
 		return fmt.Errorf("sqlcipher_export failed: %w", err)
+	}
+
+	// sqlcipher_export 不复制 user_version，需手动恢复
+	pragmaUserVersion := "PRAGMA encrypted.user_version = " + strconv.Itoa(plaintextUserVersion)
+	if _, err := plainDB.Exec(pragmaUserVersion); err != nil {
+		_ = plainDB.Close()
+		_ = os.Remove(newPath)
+		return fmt.Errorf("failed to set encrypted schema version: %w", err)
 	}
 
 	// DETACH
@@ -301,293 +317,300 @@ func migrateFromPlaintext(dbPath string, key []byte) error {
 	return nil
 }
 
-// migrateSQLiteSchema 执行 SQLite/SQLCipher 共用的 schema 迁移。
-func migrateSQLiteSchema(ctx context.Context, db *sql.DB) error {
+// schemaMigration 描述一次 schema 升级
+type schemaMigration struct {
+	version int
+	sql     string
+}
+
+// SQLite/SQLCipher schema 迁移定义，按 version 升序排列；提取为包级变量供测试构造历史版本 fixture
+var migrations = []schemaMigration{
+	{
+		version: 1,
+		sql: `
+		CREATE TABLE IF NOT EXISTS conversations (
+			id TEXT PRIMARY KEY,
+			title TEXT NOT NULL DEFAULT '',
+			model TEXT NOT NULL DEFAULT '',
+			created_at INTEGER NOT NULL,
+			updated_at INTEGER NOT NULL,
+			archived_at INTEGER,
+			deleted_at INTEGER
+		);
+		CREATE INDEX IF NOT EXISTS idx_conversations_updated ON conversations(updated_at);
+		CREATE INDEX IF NOT EXISTS idx_conversations_deleted ON conversations(deleted_at);
+		`,
+	},
+	{
+		version: 2,
+		sql: `
+		CREATE TABLE IF NOT EXISTS messages (
+			id TEXT PRIMARY KEY,
+			conversation_id TEXT NOT NULL,
+			role TEXT NOT NULL,
+			content TEXT NOT NULL,
+			tokens INTEGER DEFAULT 0,
+			created_at INTEGER NOT NULL,
+			deleted_at INTEGER,
+			FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+		);
+		CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, created_at);
+		CREATE INDEX IF NOT EXISTS idx_messages_deleted ON messages(deleted_at);
+		`,
+	},
+	{
+		version: 3,
+		sql: `
+		CREATE TABLE IF NOT EXISTS memories (
+			id TEXT PRIMARY KEY,
+			tier INTEGER NOT NULL,
+			content TEXT NOT NULL,
+			tags TEXT,
+			source_conv TEXT,
+			confidence REAL DEFAULT 1.0,
+			created_at INTEGER NOT NULL,
+			accessed_at INTEGER NOT NULL
+		);
+		CREATE INDEX IF NOT EXISTS idx_memories_tier ON memories(tier);
+		CREATE INDEX IF NOT EXISTS idx_memories_accessed ON memories(accessed_at);
+		`,
+	},
+	{
+		version: 4,
+		sql: `
+		CREATE TABLE IF NOT EXISTS disclaimer_acceptance (
+			version TEXT PRIMARY KEY,
+			accepted_at INTEGER NOT NULL,
+			text_hash TEXT
+		);
+		`,
+	},
+	{
+		version: 5,
+		sql: `
+		CREATE TABLE IF NOT EXISTS providers (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			api_host TEXT NOT NULL,
+			api_key BLOB NOT NULL,
+			model_id TEXT NOT NULL,
+			temperature REAL DEFAULT 0.7,
+			timeout_ms INTEGER DEFAULT 30000,
+			max_retries INTEGER DEFAULT 3,
+			group_name TEXT DEFAULT '',
+			enabled INTEGER DEFAULT 1,
+			sort_order INTEGER DEFAULT 0,
+			created_at INTEGER NOT NULL,
+			updated_at INTEGER NOT NULL
+		);
+		CREATE INDEX IF NOT EXISTS idx_providers_enabled ON providers(enabled);
+		CREATE INDEX IF NOT EXISTS idx_providers_group ON providers(group_name, sort_order);
+		`,
+	},
+	{
+		version: 6,
+		sql: `
+		ALTER TABLE providers ADD COLUMN auth_method TEXT DEFAULT 'api_key';
+		ALTER TABLE providers ADD COLUMN auth_params TEXT DEFAULT '{}';
+		`,
+	},
+	{
+		version: 7,
+		sql: `
+		CREATE TABLE IF NOT EXISTS raw_dialogues (
+			message_id TEXT PRIMARY KEY,
+			session_id TEXT NOT NULL,
+			role TEXT NOT NULL CHECK(role IN ('user','assistant','system')),
+			content TEXT NOT NULL,
+			model_name TEXT,
+			timestamp INTEGER NOT NULL,
+			extraction_status TEXT DEFAULT 'unprocessed' CHECK(extraction_status IN ('unprocessed','processing','processed','failed')),
+			created_at INTEGER NOT NULL
+		);
+		CREATE INDEX IF NOT EXISTS idx_raw_session_time ON raw_dialogues(session_id, timestamp);
+		CREATE INDEX IF NOT EXISTS idx_raw_extraction_status ON raw_dialogues(extraction_status);
+
+		CREATE TABLE IF NOT EXISTS extracted_facts (
+			fact_id TEXT PRIMARY KEY,
+			subject TEXT NOT NULL,
+			predicate TEXT NOT NULL,
+			object TEXT NOT NULL,
+			confidence REAL NOT NULL CHECK(confidence >= 0 AND confidence <= 1),
+			source_msg_ids TEXT NOT NULL,
+			status TEXT DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected')),
+			scored_at INTEGER,
+			reviewed_at INTEGER,
+			created_at INTEGER NOT NULL
+		);
+		CREATE INDEX IF NOT EXISTS idx_fact_confidence ON extracted_facts(confidence);
+		CREATE INDEX IF NOT EXISTS idx_fact_status ON extracted_facts(status);
+
+		CREATE TABLE IF NOT EXISTS semantic_embeddings (
+			embedding_id TEXT PRIMARY KEY,
+			fact_id TEXT NOT NULL UNIQUE,
+			vector BLOB NOT NULL,
+			model_version TEXT NOT NULL DEFAULT 'all-MiniLM-L6-v2',
+			created_at INTEGER NOT NULL,
+			FOREIGN KEY (fact_id) REFERENCES extracted_facts(fact_id) ON DELETE CASCADE
+		);
+		CREATE INDEX IF NOT EXISTS idx_embedding_fact ON semantic_embeddings(fact_id);
+		`,
+	},
+	{
+		version: 8,
+		sql: `
+		-- v1.1 DoD A1: 为 extracted_facts 添加敏感信息标记列
+		ALTER TABLE extracted_facts ADD COLUMN is_sensitive INTEGER DEFAULT 0;
+		`,
+	},
+	{
+		version: 9,
+		sql: `
+		-- v1.1 DoD A3: 审计日志表
+		CREATE TABLE IF NOT EXISTS audit_logs (
+			id TEXT PRIMARY KEY,
+			action TEXT NOT NULL CHECK(action IN ('CREATE','APPROVE','REJECT','DELETE')),
+			target_type TEXT NOT NULL DEFAULT 'fact',
+			target_id TEXT NOT NULL,
+			old_value TEXT,
+			new_value TEXT,
+			actor TEXT NOT NULL DEFAULT 'user',
+			timestamp INTEGER NOT NULL
+		);
+		CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_logs(target_type, target_id);
+		CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_logs(timestamp);
+		`,
+	},
+	{
+		version: 10,
+		sql: `
+		-- v1.1 回答置信度机制: 扩展 messages 表存储 token 拆分与置信度
+		ALTER TABLE messages ADD COLUMN prompt_tokens INTEGER DEFAULT 0;
+		ALTER TABLE messages ADD COLUMN completion_tokens INTEGER DEFAULT 0;
+		ALTER TABLE messages ADD COLUMN confidence_score REAL;
+		ALTER TABLE messages ADD COLUMN confidence_level TEXT;
+		ALTER TABLE messages ADD COLUMN confidence_json TEXT;
+		`,
+	},
+	{
+		version: 11,
+		sql: `
+		-- v1.1.4: 为 embedding 版本迁移优化查询性能
+		CREATE INDEX IF NOT EXISTS idx_embedding_model_version 
+		    ON semantic_embeddings(model_version);
+		`,
+	},
+	{
+		version: 12,
+		sql: `
+		-- v1.1.9: 回答准确率反馈持久化
+		CREATE TABLE IF NOT EXISTS answer_feedback (
+			message_id TEXT NOT NULL,
+			answer_type TEXT NOT NULL,
+			feedback TEXT NOT NULL CHECK(feedback IN ('helpful','inaccurate')),
+			created_at INTEGER NOT NULL,
+			PRIMARY KEY (message_id, answer_type)
+		);
+
+		CREATE TABLE IF NOT EXISTS answer_accuracy_stats (
+			answer_type TEXT PRIMARY KEY,
+			correct_count INTEGER NOT NULL DEFAULT 0,
+			total_count INTEGER NOT NULL DEFAULT 0,
+			updated_at INTEGER NOT NULL
+		);
+		`,
+	},
+	{
+		version: 13,
+		sql: `
+		-- v1.1.9: 知识库 RAG 表结构
+		CREATE TABLE IF NOT EXISTS knowledge_documents (
+			document_id TEXT PRIMARY KEY,
+			title TEXT NOT NULL DEFAULT '',
+			source_type TEXT NOT NULL,
+			citation TEXT NOT NULL DEFAULT '',
+			url TEXT NOT NULL DEFAULT '',
+			language TEXT NOT NULL DEFAULT '',
+			checksum TEXT NOT NULL UNIQUE,
+			metadata_json TEXT NOT NULL DEFAULT '{}',
+			created_at INTEGER NOT NULL,
+			updated_at INTEGER NOT NULL
+		);
+
+		CREATE TABLE IF NOT EXISTS knowledge_chunks (
+			chunk_id TEXT PRIMARY KEY,
+			document_id TEXT NOT NULL,
+			chunk_index INTEGER NOT NULL,
+			content TEXT NOT NULL,
+			token_count INTEGER NOT NULL DEFAULT 0,
+			metadata_json TEXT NOT NULL DEFAULT '{}',
+			created_at INTEGER NOT NULL,
+			FOREIGN KEY (document_id) REFERENCES knowledge_documents(document_id) ON DELETE CASCADE,
+			UNIQUE(document_id, chunk_index)
+		);
+		CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_document_id ON knowledge_chunks(document_id);
+
+		CREATE TABLE IF NOT EXISTS knowledge_terms (
+			term TEXT NOT NULL,
+			chunk_id TEXT NOT NULL,
+			tf INTEGER NOT NULL DEFAULT 0,
+			document_id TEXT NOT NULL,
+			PRIMARY KEY (term, chunk_id),
+			FOREIGN KEY (chunk_id) REFERENCES knowledge_chunks(chunk_id) ON DELETE CASCADE
+		);
+		CREATE INDEX IF NOT EXISTS idx_knowledge_terms_term ON knowledge_terms(term);
+		CREATE INDEX IF NOT EXISTS idx_knowledge_terms_chunk_id ON knowledge_terms(chunk_id);
+		CREATE INDEX IF NOT EXISTS idx_knowledge_terms_document_id ON knowledge_terms(document_id);
+
+		CREATE TABLE IF NOT EXISTS knowledge_embeddings (
+			chunk_id TEXT PRIMARY KEY,
+			model_version TEXT NOT NULL,
+			dimension INTEGER NOT NULL,
+			embedding BLOB NOT NULL,
+			created_at INTEGER NOT NULL,
+			FOREIGN KEY (chunk_id) REFERENCES knowledge_chunks(chunk_id) ON DELETE CASCADE
+		);
+
+		CREATE TABLE IF NOT EXISTS knowledge_import_jobs (
+			job_id TEXT PRIMARY KEY,
+			status TEXT NOT NULL,
+			total INTEGER NOT NULL DEFAULT 0,
+			processed INTEGER NOT NULL DEFAULT 0,
+			error_message TEXT NOT NULL DEFAULT '',
+			created_at INTEGER NOT NULL,
+			updated_at INTEGER NOT NULL
+		);
+		`,
+	},
+	{
+		version: 14,
+		sql: `
+		-- v1.1.10 M07: 持久化 provider 类型，避免每次运行时靠 api_host 推断本地/云端。
+		-- 旧行 provider_type 为空，读取时回退 InferProviderType(api_host) 保持向后兼容。
+		ALTER TABLE providers ADD COLUMN provider_type TEXT DEFAULT '';
+		`,
+	},
+	{
+		version: 15,
+		sql: `
+		-- v1.1.10 M02: 持久化 provider 模型列表（含每模型最大上下文长度），
+		-- 修复重启后模型配置与 MaxContextLength 丢失、回落默认 8192 的问题。
+		ALTER TABLE providers ADD COLUMN models TEXT DEFAULT '[]';
+		`,
+	},
+}
+
+// applyMigrationsUpTo 将 schema 迁移应用到指定目标版本（含），供测试构造历史版本 fixture
+func applyMigrationsUpTo(ctx context.Context, db *sql.DB, target int) error {
 	var version int
 	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		return fmt.Errorf("failed to read schema version: %w", err)
 	}
 
-	migrations := []struct {
-		version int
-		sql     string
-	}{
-		{
-			version: 1,
-			sql: `
-			CREATE TABLE IF NOT EXISTS conversations (
-				id TEXT PRIMARY KEY,
-				title TEXT NOT NULL DEFAULT '',
-				model TEXT NOT NULL DEFAULT '',
-				created_at INTEGER NOT NULL,
-				updated_at INTEGER NOT NULL,
-				archived_at INTEGER,
-				deleted_at INTEGER
-			);
-			CREATE INDEX IF NOT EXISTS idx_conversations_updated ON conversations(updated_at);
-			CREATE INDEX IF NOT EXISTS idx_conversations_deleted ON conversations(deleted_at);
-			`,
-		},
-		{
-			version: 2,
-			sql: `
-			CREATE TABLE IF NOT EXISTS messages (
-				id TEXT PRIMARY KEY,
-				conversation_id TEXT NOT NULL,
-				role TEXT NOT NULL,
-				content TEXT NOT NULL,
-				tokens INTEGER DEFAULT 0,
-				created_at INTEGER NOT NULL,
-				deleted_at INTEGER,
-				FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
-			);
-			CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, created_at);
-			CREATE INDEX IF NOT EXISTS idx_messages_deleted ON messages(deleted_at);
-			`,
-		},
-		{
-			version: 3,
-			sql: `
-			CREATE TABLE IF NOT EXISTS memories (
-				id TEXT PRIMARY KEY,
-				tier INTEGER NOT NULL,
-				content TEXT NOT NULL,
-				tags TEXT,
-				source_conv TEXT,
-				confidence REAL DEFAULT 1.0,
-				created_at INTEGER NOT NULL,
-				accessed_at INTEGER NOT NULL
-			);
-			CREATE INDEX IF NOT EXISTS idx_memories_tier ON memories(tier);
-			CREATE INDEX IF NOT EXISTS idx_memories_accessed ON memories(accessed_at);
-			`,
-		},
-		{
-			version: 4,
-			sql: `
-			CREATE TABLE IF NOT EXISTS disclaimer_acceptance (
-				version TEXT PRIMARY KEY,
-				accepted_at INTEGER NOT NULL,
-				text_hash TEXT
-			);
-			`,
-		},
-		{
-			version: 5,
-			sql: `
-			CREATE TABLE IF NOT EXISTS providers (
-				id TEXT PRIMARY KEY,
-				name TEXT NOT NULL,
-				api_host TEXT NOT NULL,
-				api_key BLOB NOT NULL,
-				model_id TEXT NOT NULL,
-				temperature REAL DEFAULT 0.7,
-				timeout_ms INTEGER DEFAULT 30000,
-				max_retries INTEGER DEFAULT 3,
-				group_name TEXT DEFAULT '',
-				enabled INTEGER DEFAULT 1,
-				sort_order INTEGER DEFAULT 0,
-				created_at INTEGER NOT NULL,
-				updated_at INTEGER NOT NULL
-			);
-			CREATE INDEX IF NOT EXISTS idx_providers_enabled ON providers(enabled);
-			CREATE INDEX IF NOT EXISTS idx_providers_group ON providers(group_name, sort_order);
-			`,
-		},
-		{
-			version: 6,
-			sql: `
-			ALTER TABLE providers ADD COLUMN auth_method TEXT DEFAULT 'api_key';
-			ALTER TABLE providers ADD COLUMN auth_params TEXT DEFAULT '{}';
-			`,
-		},
-		{
-			version: 7,
-			sql: `
-			CREATE TABLE IF NOT EXISTS raw_dialogues (
-				message_id TEXT PRIMARY KEY,
-				session_id TEXT NOT NULL,
-				role TEXT NOT NULL CHECK(role IN ('user','assistant','system')),
-				content TEXT NOT NULL,
-				model_name TEXT,
-				timestamp INTEGER NOT NULL,
-				extraction_status TEXT DEFAULT 'unprocessed' CHECK(extraction_status IN ('unprocessed','processing','processed','failed')),
-				created_at INTEGER NOT NULL
-			);
-			CREATE INDEX IF NOT EXISTS idx_raw_session_time ON raw_dialogues(session_id, timestamp);
-			CREATE INDEX IF NOT EXISTS idx_raw_extraction_status ON raw_dialogues(extraction_status);
-
-			CREATE TABLE IF NOT EXISTS extracted_facts (
-				fact_id TEXT PRIMARY KEY,
-				subject TEXT NOT NULL,
-				predicate TEXT NOT NULL,
-				object TEXT NOT NULL,
-				confidence REAL NOT NULL CHECK(confidence >= 0 AND confidence <= 1),
-				source_msg_ids TEXT NOT NULL,
-				status TEXT DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected')),
-				scored_at INTEGER,
-				reviewed_at INTEGER,
-				created_at INTEGER NOT NULL
-			);
-			CREATE INDEX IF NOT EXISTS idx_fact_confidence ON extracted_facts(confidence);
-			CREATE INDEX IF NOT EXISTS idx_fact_status ON extracted_facts(status);
-
-			CREATE TABLE IF NOT EXISTS semantic_embeddings (
-				embedding_id TEXT PRIMARY KEY,
-				fact_id TEXT NOT NULL UNIQUE,
-				vector BLOB NOT NULL,
-				model_version TEXT NOT NULL DEFAULT 'all-MiniLM-L6-v2',
-				created_at INTEGER NOT NULL,
-				FOREIGN KEY (fact_id) REFERENCES extracted_facts(fact_id) ON DELETE CASCADE
-			);
-			CREATE INDEX IF NOT EXISTS idx_embedding_fact ON semantic_embeddings(fact_id);
-			`,
-		},
-		{
-			version: 8,
-			sql: `
-			-- v1.1 DoD A1: 为 extracted_facts 添加敏感信息标记列
-			ALTER TABLE extracted_facts ADD COLUMN is_sensitive INTEGER DEFAULT 0;
-			`,
-		},
-		{
-			version: 9,
-			sql: `
-			-- v1.1 DoD A3: 审计日志表
-			CREATE TABLE IF NOT EXISTS audit_logs (
-				id TEXT PRIMARY KEY,
-				action TEXT NOT NULL CHECK(action IN ('CREATE','APPROVE','REJECT','DELETE')),
-				target_type TEXT NOT NULL DEFAULT 'fact',
-				target_id TEXT NOT NULL,
-				old_value TEXT,
-				new_value TEXT,
-				actor TEXT NOT NULL DEFAULT 'user',
-				timestamp INTEGER NOT NULL
-			);
-			CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_logs(target_type, target_id);
-			CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_logs(timestamp);
-			`,
-		},
-		{
-			version: 10,
-			sql: `
-			-- v1.1 回答置信度机制: 扩展 messages 表存储 token 拆分与置信度
-			ALTER TABLE messages ADD COLUMN prompt_tokens INTEGER DEFAULT 0;
-			ALTER TABLE messages ADD COLUMN completion_tokens INTEGER DEFAULT 0;
-			ALTER TABLE messages ADD COLUMN confidence_score REAL;
-			ALTER TABLE messages ADD COLUMN confidence_level TEXT;
-			ALTER TABLE messages ADD COLUMN confidence_json TEXT;
-			`,
-		},
-		{
-			version: 11,
-			sql: `
-			-- v1.1.4: 为 embedding 版本迁移优化查询性能
-			CREATE INDEX IF NOT EXISTS idx_embedding_model_version 
-			    ON semantic_embeddings(model_version);
-			`,
-		},
-		{
-			version: 12,
-			sql: `
-			-- v1.1.9: 回答准确率反馈持久化
-			CREATE TABLE IF NOT EXISTS answer_feedback (
-				message_id TEXT NOT NULL,
-				answer_type TEXT NOT NULL,
-				feedback TEXT NOT NULL CHECK(feedback IN ('helpful','inaccurate')),
-				created_at INTEGER NOT NULL,
-				PRIMARY KEY (message_id, answer_type)
-			);
-
-			CREATE TABLE IF NOT EXISTS answer_accuracy_stats (
-				answer_type TEXT PRIMARY KEY,
-				correct_count INTEGER NOT NULL DEFAULT 0,
-				total_count INTEGER NOT NULL DEFAULT 0,
-				updated_at INTEGER NOT NULL
-			);
-			`,
-		},
-		{
-			version: 13,
-			sql: `
-			-- v1.1.9: 知识库 RAG 表结构
-			CREATE TABLE IF NOT EXISTS knowledge_documents (
-				document_id TEXT PRIMARY KEY,
-				title TEXT NOT NULL DEFAULT '',
-				source_type TEXT NOT NULL,
-				citation TEXT NOT NULL DEFAULT '',
-				url TEXT NOT NULL DEFAULT '',
-				language TEXT NOT NULL DEFAULT '',
-				checksum TEXT NOT NULL UNIQUE,
-				metadata_json TEXT NOT NULL DEFAULT '{}',
-				created_at INTEGER NOT NULL,
-				updated_at INTEGER NOT NULL
-			);
-
-			CREATE TABLE IF NOT EXISTS knowledge_chunks (
-				chunk_id TEXT PRIMARY KEY,
-				document_id TEXT NOT NULL,
-				chunk_index INTEGER NOT NULL,
-				content TEXT NOT NULL,
-				token_count INTEGER NOT NULL DEFAULT 0,
-				metadata_json TEXT NOT NULL DEFAULT '{}',
-				created_at INTEGER NOT NULL,
-				FOREIGN KEY (document_id) REFERENCES knowledge_documents(document_id) ON DELETE CASCADE,
-				UNIQUE(document_id, chunk_index)
-			);
-			CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_document_id ON knowledge_chunks(document_id);
-
-			CREATE TABLE IF NOT EXISTS knowledge_terms (
-				term TEXT NOT NULL,
-				chunk_id TEXT NOT NULL,
-				tf INTEGER NOT NULL DEFAULT 0,
-				document_id TEXT NOT NULL,
-				PRIMARY KEY (term, chunk_id),
-				FOREIGN KEY (chunk_id) REFERENCES knowledge_chunks(chunk_id) ON DELETE CASCADE
-			);
-			CREATE INDEX IF NOT EXISTS idx_knowledge_terms_term ON knowledge_terms(term);
-			CREATE INDEX IF NOT EXISTS idx_knowledge_terms_chunk_id ON knowledge_terms(chunk_id);
-			CREATE INDEX IF NOT EXISTS idx_knowledge_terms_document_id ON knowledge_terms(document_id);
-
-			CREATE TABLE IF NOT EXISTS knowledge_embeddings (
-				chunk_id TEXT PRIMARY KEY,
-				model_version TEXT NOT NULL,
-				dimension INTEGER NOT NULL,
-				embedding BLOB NOT NULL,
-				created_at INTEGER NOT NULL,
-				FOREIGN KEY (chunk_id) REFERENCES knowledge_chunks(chunk_id) ON DELETE CASCADE
-			);
-
-			CREATE TABLE IF NOT EXISTS knowledge_import_jobs (
-				job_id TEXT PRIMARY KEY,
-				status TEXT NOT NULL,
-				total INTEGER NOT NULL DEFAULT 0,
-				processed INTEGER NOT NULL DEFAULT 0,
-				error_message TEXT NOT NULL DEFAULT '',
-				created_at INTEGER NOT NULL,
-				updated_at INTEGER NOT NULL
-			);
-			`,
-		},
-		{
-			version: 14,
-			sql: `
-			-- v1.1.10 M07: 持久化 provider 类型，避免每次运行时靠 api_host 推断本地/云端。
-			-- 旧行 provider_type 为空，读取时回退 InferProviderType(api_host) 保持向后兼容。
-			ALTER TABLE providers ADD COLUMN provider_type TEXT DEFAULT '';
-			`,
-		},
-		{
-			version: 15,
-			sql: `
-			-- v1.1.10 M02: 持久化 provider 模型列表（含每模型最大上下文长度），
-			-- 修复重启后模型配置与 MaxContextLength 丢失、回落默认 8192 的问题。
-			ALTER TABLE providers ADD COLUMN models TEXT DEFAULT '[]';
-			`,
-		},
-	}
-
 	for _, m := range migrations {
+		if m.version > target {
+			continue
+		}
 		if version >= m.version {
 			continue
 		}
@@ -603,4 +626,9 @@ func migrateSQLiteSchema(ctx context.Context, db *sql.DB) error {
 	}
 
 	return nil
+}
+
+// migrateSQLiteSchema 执行 SQLite/SQLCipher 共用的 schema 迁移。
+func migrateSQLiteSchema(ctx context.Context, db *sql.DB) error {
+	return applyMigrationsUpTo(ctx, db, math.MaxInt)
 }

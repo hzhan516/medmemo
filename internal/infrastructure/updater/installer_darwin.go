@@ -135,6 +135,11 @@ func (d *DarwinInstaller) CurrentBinaryPath() string {
 	return d.currentPath
 }
 
+// InstallKind 返回当前 macOS 安装方式标识。
+func (d *DarwinInstaller) InstallKind() string {
+	return "dmg"
+}
+
 // resolveAppBundlePath 从当前二进制向上查找 .app 目录。
 func resolveAppBundlePath() string {
 	return resolveAppBundlePathFrom(getCurrentBinary())

@@ -60,7 +60,7 @@ func contextUsageCacheKey(providerID, modelID string, messages []models.Message)
 	_, _ = h.Write([]byte(modelID))
 	for _, m := range messages {
 		_, _ = h.Write([]byte{0})
-		_, _ = h.Write([]byte(string(m.Role)))
+		_, _ = h.Write([]byte(m.Role.String()))
 		_, _ = h.Write([]byte{1})
 		_, _ = h.Write([]byte(m.Content))
 	}
@@ -108,8 +108,8 @@ func (a *WailsApp) ResolveMaxContextLength(providerID, modelID string) (int, err
 	ctx, cancel := context.WithTimeout(a.ctx, defaultResolveMaxContextLengthTimeout)
 	defer cancel()
 
-	max := a.contextLengthResolver.Resolve(ctx, providerID, modelID)
-	return max, nil
+	maxLen := a.contextLengthResolver.Resolve(ctx, providerID, modelID)
+	return maxLen, nil
 }
 
 // EstimateContextUsage 估算当前会话上下文 token 用量及占比。

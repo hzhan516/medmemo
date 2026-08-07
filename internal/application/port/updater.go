@@ -39,6 +39,10 @@ type Installer interface {
 
 	// CurrentBinaryPath 返回当前运行的二进制文件路径。
 	CurrentBinaryPath() string
+
+	// InstallKind 返回当前安装方式标识，供更新器选择对应资产与安装策略。
+	// Linux 返回 appimage/deb/rpm/unknown；其他平台返回对应平台标识。
+	InstallKind() string
 }
 
 // ProgressReader 为 io.Reader 包装进度回调，用于下载进度追踪。

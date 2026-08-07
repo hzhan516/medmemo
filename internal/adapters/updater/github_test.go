@@ -600,9 +600,10 @@ func TestExtractChecksum(t *testing.T) {
 func TestVerifyChecksum(t *testing.T) {
 	g := &GitHubUpdater{}
 
-	t.Run("empty checksum skips", func(t *testing.T) {
+	t.Run("empty checksum rejected", func(t *testing.T) {
 		err := g.VerifyChecksum("/nonexistent", "")
-		require.NoError(t, err)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "checksum information is missing")
 	})
 
 	t.Run("valid checksum", func(t *testing.T) {
@@ -675,5 +676,51 @@ func TestDownload(t *testing.T) {
 		err := g.Download(context.Background(), server.URL, dest, nil)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "download path is a directory")
+	})
+}
+
+// TestFetchByTag_EscapesTag 验证 FetchByTag 对特殊字符 tag 进行 URL 转义。
+func TestFetchByTag_EscapesTag(t *testing.T) {
+	// 提供匹配当前平台的 asset，避免 asset 匹配失败干扰 URL 转义验证
+	linuxAsset := `{"name":"MedMemo-x86_64.AppImage","browser_download_url":"https://example.com/app","size":1}`
+
+	t.Run("normal tag", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/repos/hzhan516/medmemo/releases/tags/v1.1.10", r.URL.EscapedPath())
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(fmt.Sprintf(`{"tag_name":"v1.1.10","name":"v1.1.10","prerelease":false,"assets":[%s]}`, linuxAsset)))
+		}))
+		defer server.Close()
+
+		g := NewGitHubUpdater(server.Client())
+		g.apiBaseURL = server.URL
+		_, err := g.FetchByTag(context.Background(), "v1.1.10")
+		require.NoError(t, err)
+	})
+
+	t.Run("tag with slash is escaped", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/repos/hzhan516/medmemo/releases/tags/v0.0.0-rehearsal.1%2F2", r.URL.EscapedPath())
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(fmt.Sprintf(`{"tag_name":"v0.0.0-rehearsal.1/2","name":"rehearsal","prerelease":true,"assets":[%s]}`, linuxAsset)))
+		}))
+		defer server.Close()
+
+		g := NewGitHubUpdater(server.Client())
+		g.apiBaseURL = server.URL
+		_, err := g.FetchByTag(context.Background(), "v0.0.0-rehearsal.1/2")
+		require.NoError(t, err)
+	})
+
+	t.Run("api error", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+		}))
+		defer server.Close()
+
+		g := NewGitHubUpdater(server.Client())
+		g.apiBaseURL = server.URL
+		_, err := g.FetchByTag(context.Background(), "v0.0.0")
+		require.Error(t, err)
 	})
 }

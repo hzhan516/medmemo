@@ -13,9 +13,10 @@ const (
 	WarningThreshold = 0.75
 	// AutoCompressionThreshold 是自动压缩触发阈值（90%）。WARN: 与前端 web/src/utils/contextUsage.ts 保持一致。
 	AutoCompressionThreshold = 0.90
-	// DefaultCompressionModel 是推荐的本地压缩模型占位提示。
-	DefaultCompressionModel = "qwen3.5:2b"
 )
+
+// 防止 WarningThreshold 被静态分析标记为未使用：该常量与前端共享，属于公共契约。
+var _ = WarningThreshold
 
 // CompressionSettings 会话压缩相关的用户配置。
 type CompressionSettings struct {

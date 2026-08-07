@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -33,14 +34,15 @@ const (
 
 // GitHubUpdater 通过 GitHub Releases API 获取更新信息。
 type GitHubUpdater struct {
-	client *http.Client
+	client     *http.Client
+	apiBaseURL string // 可由同包测试覆盖
 }
 
 // NewGitHubUpdater 构造函数。
 // 测试时可传入自定义 http.Client（如带 mock Transport）以模拟 API 响应。
 func NewGitHubUpdater(client *http.Client) *GitHubUpdater {
 	if client != nil {
-		return &GitHubUpdater{client: client}
+		return &GitHubUpdater{client: client, apiBaseURL: githubAPIBase}
 	}
 	return &GitHubUpdater{
 		client: &http.Client{
@@ -51,6 +53,7 @@ func NewGitHubUpdater(client *http.Client) *GitHubUpdater {
 				},
 			},
 		},
+		apiBaseURL: githubAPIBase,
 	}
 }
 
@@ -105,9 +108,9 @@ func (g *GitHubUpdater) doGitHubGET(ctx context.Context, url string) (io.ReadClo
 // FetchLatest 查询 GitHub Releases API 获取适合当前通道的最新版本。
 // stable 通道过滤掉 prerelease，beta 通道包含全部。
 func (g *GitHubUpdater) FetchLatest(ctx context.Context, channel models.UpdateChannel) (*entity.UpdateInfo, error) {
-	url := fmt.Sprintf("%s/repos/%s/%s/releases?per_page=30", githubAPIBase, githubRepoOwner, githubRepoName)
+	apiURL := fmt.Sprintf("%s/repos/%s/%s/releases?per_page=30", g.apiBaseURL, githubRepoOwner, githubRepoName)
 
-	body, err := g.doGitHubGET(ctx, url)
+	body, err := g.doGitHubGET(ctx, apiURL)
 	if err != nil {
 		return nil, err
 	}
@@ -157,9 +160,9 @@ func (g *GitHubUpdater) FetchLatest(ctx context.Context, channel models.UpdateCh
 
 // FetchByTag 根据指定 tag 查询 GitHub Release，用于下载用户点击的特定版本。
 func (g *GitHubUpdater) FetchByTag(ctx context.Context, tag string) (*entity.UpdateInfo, error) {
-	url := fmt.Sprintf("%s/repos/%s/%s/releases/tags/%s", githubAPIBase, githubRepoOwner, githubRepoName, tag)
+	apiURL := fmt.Sprintf("%s/repos/%s/%s/releases/tags/%s", g.apiBaseURL, githubRepoOwner, githubRepoName, url.PathEscape(tag))
 
-	body, err := g.doGitHubGET(ctx, url)
+	body, err := g.doGitHubGET(ctx, apiURL)
 	if err != nil {
 		return nil, err
 	}
@@ -250,8 +253,7 @@ func (g *GitHubUpdater) Download(ctx context.Context, url, destPath string, prog
 // VerifyChecksum 校验本地文件 SHA256。
 func (g *GitHubUpdater) VerifyChecksum(path, expectedSHA256 string) error {
 	if expectedSHA256 == "" {
-		// 如果 Release 未提供 checksum，跳过校验（MVP 阶段允许）
-		return nil
+		return fmt.Errorf("checksum information is missing")
 	}
 
 	f, err := os.Open(path)

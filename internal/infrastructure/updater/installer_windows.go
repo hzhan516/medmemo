@@ -40,7 +40,7 @@ func (w *WindowsInstaller) Install(assetPath string) (string, error) {
 		return "", fmt.Errorf("failed to resolve install directory: %w", err)
 	}
 
-	backupDir := filepath.Join(installDir, "data", "backup")
+	backupDir := selectBackupDir(installDir)
 	if err := os.MkdirAll(backupDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create backup directory: %w", err)
 	}
@@ -88,6 +88,11 @@ func (w *WindowsInstaller) CurrentBinaryPath() string {
 	return w.currentPath
 }
 
+// InstallKind 返回当前 Windows 安装方式标识。
+func (w *WindowsInstaller) InstallKind() string {
+	return "exe"
+}
+
 // readInstallPathFunc 读取注册表中 InstallPath 值的函数签名。
 type readInstallPathFunc func(key registry.Key, path string) (string, error)
 
@@ -133,6 +138,33 @@ func resolveInstallDir(currentExe string, readPath readInstallPathFunc) (string,
 		return hklm, nil
 	}
 	return currentDir, nil
+}
+
+// selectBackupDir 选择 Windows 备份目录。
+// 首选安装目录下的 data\backup；若不可写则回退到 %USERPROFILE%\.medmemo\backup。
+func selectBackupDir(installDir string) string {
+	candidate := filepath.Join(installDir, "data", "backup")
+	if dirWritable(candidate) {
+		return candidate
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return candidate
+	}
+	return filepath.Join(home, ".medmemo", "backup")
+}
+
+// dirWritable 探测目录是否可写。
+func dirWritable(path string) bool {
+	if err := os.MkdirAll(path, 0755); err != nil {
+		return false
+	}
+	tmp := filepath.Join(path, ".write-test")
+	if err := os.WriteFile(tmp, []byte{}, 0644); err != nil {
+		return false
+	}
+	_ = os.Remove(tmp)
+	return true
 }
 
 // normalizeInstallPath 将注册表 InstallPath 值归一化为安装目录。

@@ -154,4 +154,79 @@ describe('UpdateModal', () => {
       Object.defineProperty(navigator, 'platform', { value: originalPlatform, configurable: true })
     }
   })
+
+  it('Linux unknown 安装方式引导前往 Release 页面', async () => {
+    vi.resetModules()
+    const originalPlatform = navigator.platform
+    Object.defineProperty(navigator, 'platform', { value: 'Linux x86_64', configurable: true })
+
+    try {
+      const { UpdateModal: LinuxUpdateModal } = await import('./UpdateModal')
+      const onOpenDownloadPage = vi.fn()
+
+      render(
+        <LinuxUpdateModal
+          info={baseInfo}
+          isDownloading={false}
+          isRestarting={false}
+          downloadProgress={null}
+          downloadPath=""
+          error="manual install required:"
+          onDownload={vi.fn()}
+          onApply={vi.fn()}
+          onSkip={vi.fn()}
+          onDismiss={vi.fn()}
+          onOpenDownloadPage={onOpenDownloadPage}
+        />
+      )
+
+      expect(screen.getByText(/无法确定当前 Linux 安装包类型/)).toBeInTheDocument()
+      await userEvent.click(screen.getByRole('button', { name: '前往 Release 页面' }))
+      expect(onOpenDownloadPage).toHaveBeenCalledWith(
+        `https://github.com/hzhan516/medmemo/releases/tag/${baseInfo.version}`
+      )
+    } finally {
+      Object.defineProperty(navigator, 'platform', { value: originalPlatform, configurable: true })
+    }
+  })
+
+  it('Linux 手动安装命令支持一键复制', async () => {
+    vi.resetModules()
+    const originalPlatform = navigator.platform
+    const originalClipboard = navigator.clipboard
+    Object.defineProperty(navigator, 'platform', { value: 'Linux x86_64', configurable: true })
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    })
+
+    try {
+      const { UpdateModal: LinuxUpdateModal } = await import('./UpdateModal')
+      render(
+        <LinuxUpdateModal
+          info={baseInfo}
+          isDownloading={false}
+          isRestarting={false}
+          downloadProgress={null}
+          downloadPath=""
+          error='manual install required: sudo dpkg -i "/tmp/MedMemo.deb"'
+          onDownload={vi.fn()}
+          onApply={vi.fn()}
+          onSkip={vi.fn()}
+          onDismiss={vi.fn()}
+          onOpenDownloadPage={vi.fn()}
+        />
+      )
+
+      await userEvent.click(screen.getByRole('button', { name: '复制' }))
+      expect(writeText).toHaveBeenCalledWith('sudo dpkg -i "/tmp/MedMemo.deb"')
+    } finally {
+      Object.defineProperty(navigator, 'platform', { value: originalPlatform, configurable: true })
+      Object.defineProperty(navigator, 'clipboard', {
+        value: originalClipboard,
+        configurable: true,
+      })
+    }
+  })
 })

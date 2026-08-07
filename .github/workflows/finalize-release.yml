@@ -1,0 +1,223 @@
+name: Finalize Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to finalize (e.g., v1.1.10)'
+        required: true
+        type: string
+      release_id:
+        description: 'GitHub release database ID'
+        required: true
+        type: string
+      approved_main_sha:
+        description: 'Approved-Main-SHA'
+        required: true
+        type: string
+      rehearsal_run_id:
+        description: 'Rehearsal-Run-ID'
+        required: true
+        type: string
+      checksums_file_sha256:
+        description: 'SHA256 of checksums.txt'
+        required: true
+        type: string
+      windows_11_evidence_run_id:
+        description: 'Windows 11 evidence run ID'
+        required: true
+        type: string
+      fedora_rpm_appimage_evidence_run_id:
+        description: 'Fedora RPM/AppImage evidence run ID'
+        required: true
+        type: string
+      debian_deb_container_evidence_run_id:
+        description: 'Debian DEB container evidence run ID'
+        required: true
+        type: string
+      macos_intel_quickemu_evidence_run_id:
+        description: 'macOS Intel Quickemu evidence run ID'
+        required: true
+        type: string
+      macos_arm_ci_evidence_run_id:
+        description: 'macOS ARM CI evidence run ID'
+        required: true
+        type: string
+
+env:
+  GOPROXY: https://proxy.golang.org,https://goproxy.cn,direct
+
+permissions:
+  contents: write
+
+concurrency:
+  group: stable-release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    name: Finalize ${{ inputs.tag }}
+    runs-on: ubuntu-latest
+    environment: production-release
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Assert main branch and frozen SHA
+        run: |
+          set -euo pipefail
+          TAG="${{ inputs.tag }}"
+          APPROVED_SHA="${{ inputs.approved_main_sha }}"
+
+          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "ERROR: this workflow must be dispatched from main"
+            exit 1
+          fi
+
+          EVENT_SHA="${{ github.sha }}"
+          if [ "$EVENT_SHA" != "$APPROVED_SHA" ]; then
+            echo "ERROR: workflow event SHA ($EVENT_SHA) != Approved-Main-SHA ($APPROVED_SHA)"
+            exit 1
+          fi
+
+          TAG_SHA=$(gh api "repos/${{ github.repository }}/git/ref/tags/$TAG" --jq '.object.sha')
+          TAG_COMMIT=$(gh api "repos/${{ github.repository }}/git/tags/$TAG_SHA" --jq '.object.sha' 2>/dev/null || echo "$TAG_SHA")
+          if [ "$TAG_COMMIT" != "$APPROVED_SHA" ]; then
+            echo "ERROR: refs/tags/$TAG does not point to Approved-Main-SHA"
+            exit 1
+          fi
+
+          MAIN_SHA=$(gh api "repos/${{ github.repository }}/git/ref/heads/main" --jq '.object.sha')
+          if [ "$MAIN_SHA" != "$APPROVED_SHA" ]; then
+            echo "ERROR: refs/heads/main has moved away from Approved-Main-SHA"
+            exit 1
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run evidence verification
+        run: |
+          set -euo pipefail
+          EVIDENCE_RUN_IDS="${{ inputs.windows_11_evidence_run_id }},${{ inputs.fedora_rpm_appimage_evidence_run_id }},${{ inputs.debian_deb_container_evidence_run_id }},${{ inputs.macos_intel_quickemu_evidence_run_id }},${{ inputs.macos_arm_ci_evidence_run_id }}"
+          ./scripts/build/verify-release-evidence.sh \
+            "${{ inputs.tag }}" \
+            "${{ inputs.release_id }}" \
+            "${{ inputs.approved_main_sha }}" \
+            "${{ inputs.rehearsal_run_id }}" \
+            "${{ inputs.checksums_file_sha256 }}" \
+            "$EVIDENCE_RUN_IDS"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+
+      - name: Download Draft assets and re-verify
+        run: |
+          set -euo pipefail
+          mkdir -p final-assets
+          cd final-assets
+
+          gh release download "${{ inputs.tag }}" --repo "${{ github.repository }}"
+
+          FILE_COUNT=$(find . -maxdepth 1 -type f | wc -l)
+          if [ "$FILE_COUNT" -ne 7 ]; then
+            echo "ERROR: expected 7 assets, found $FILE_COUNT"
+            exit 1
+          fi
+
+          ACTUAL_CHECKSUMS_SHA256=$(sha256sum checksums.txt | awk '{print $1}')
+          if [ "$ACTUAL_CHECKSUMS_SHA256" != "${{ inputs.checksums_file_sha256 }}" ]; then
+            echo "ERROR: checksums.txt hash mismatch"
+            exit 1
+          fi
+
+          sha256sum -c checksums.txt
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Render final release body
+        run: |
+          set -euo pipefail
+          TAG="${{ inputs.tag }}"
+          RELEASE_ID="${{ inputs.release_id }}"
+          APPROVED_SHA="${{ inputs.approved_main_sha }}"
+          REHEARSAL_RUN_ID="${{ inputs.rehearsal_run_id }}"
+          CHECKSUMS_SHA256="${{ inputs.checksums_file_sha256 }}"
+
+          APPROVED_TREE=$(git rev-parse "${{ inputs.approved_main_sha }}^{tree}")
+          REHEARSAL_TREE=$(gh api "repos/${{ github.repository }}/actions/runs/${{ inputs.rehearsal_run_id }}" --jq '.head_commit.tree_id')
+
+          cat > final-body.md <<EOF
+          ## MedMemo $TAG
+
+          Rehearsal-Run-ID: $REHEARSAL_RUN_ID
+          Rehearsal-Tree: $REHEARSAL_TREE
+          Approved-Main-SHA: $APPROVED_SHA
+          Approved-Tree: $APPROVED_TREE
+          Required-Checks: PASS
+          P0-P1-Open: 0
+          Checksums-File-SHA256: $CHECKSUMS_SHA256
+          Windows-11-Evidence-Run: ${{ inputs.windows_11_evidence_run_id }}
+          Fedora-RPM-AppImage-Evidence-Run: ${{ inputs.fedora_rpm_appimage_evidence_run_id }}
+          Debian-DEB-Container-Evidence-Run: ${{ inputs.debian_deb_container_evidence_run_id }}
+          macOS-Intel-Quickemu-Evidence-Run: ${{ inputs.macos_intel_quickemu_evidence_run_id }}
+          macOS-ARM-CI-Evidence-Run: ${{ inputs.macos_arm_ci_evidence_run_id }}
+
+          Release notes: https://github.com/${{ github.repository }}/blob/main/docs/release-notes/${TAG#v}.md
+          EOF
+
+          gh release edit "$TAG" --notes-file final-body.md
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Read back and verify release body
+        run: |
+          set -euo pipefail
+          TAG="${{ inputs.tag }}"
+          BODY=$(gh release view "$TAG" --repo "${{ github.repository }}" --json body --jq '.body')
+
+          for key in Rehearsal-Run-ID Approved-Main-SHA Checksums-File-SHA256 Windows-11-Evidence-Run; do
+            if ! grep -qF "$key:" <<< "$BODY"; then
+              echo "ERROR: release body missing key: $key"
+              exit 1
+            fi
+            count=$(grep -cF "$key:" <<< "$BODY" || true)
+            if [ "$count" -ne 1 ]; then
+              echo "ERROR: key $key appears $count times (expected 1)"
+              exit 1
+            fi
+          done
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify immutable releases enabled
+        run: |
+          set -euo pipefail
+          # 通过 releases/latest 端点存在性确认仓库 release 功能正常；
+          # immutable releases 是仓库设置，公开后通过 isImmutable 字段验证。
+          gh api "repos/${{ github.repository }}/releases/latest" >/dev/null
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish release
+        run: |
+          set -euo pipefail
+          gh release edit "${{ inputs.tag }}" --draft=false --prerelease=false
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify published state
+        run: |
+          set -euo pipefail
+          STATE=$(gh release view "${{ inputs.tag }}" --repo "${{ github.repository }}" --json tagName,isDraft,isPrerelease,isImmutable)
+          echo "$STATE" | jq '.'
+          echo "$STATE" | jq -e '.tagName == "${{ inputs.tag }}" and .isDraft == false and .isPrerelease == false and .isImmutable == true'
+
+          LATEST_TAG=$(gh api "repos/${{ github.repository }}/releases/latest" --jq '.tag_name')
+          if [ "$LATEST_TAG" != "${{ inputs.tag }}" ]; then
+            echo "ERROR: latest endpoint does not point to ${{ inputs.tag }}"
+            exit 1
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

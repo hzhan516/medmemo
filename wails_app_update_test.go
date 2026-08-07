@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -40,6 +42,8 @@ func (m *mockUpdater) FetchByTag(_ context.Context, tag string) (*entity.UpdateI
 
 func (m *mockUpdater) Download(_ context.Context, _, destPath string, _ func(int64, int64)) error {
 	m.downloadTo = destPath
+	_ = os.MkdirAll(filepath.Dir(destPath), 0755)
+	_ = os.WriteFile(destPath, []byte("payload"), 0644)
 	return nil
 }
 
@@ -56,6 +60,7 @@ type mockInstaller struct {
 func (m *mockInstaller) Install(_ string) (string, error) { return m.installPath, m.installErr }
 func (m *mockInstaller) Rollback() error                  { return nil }
 func (m *mockInstaller) CurrentBinaryPath() string        { return "" }
+func (m *mockInstaller) InstallKind() string              { return "unknown" }
 
 // TestCheckUpdate_NoUpdate 验证远程版本与当前一致时返回 nil。
 func TestCheckUpdate_NoUpdate(t *testing.T) {
@@ -194,7 +199,7 @@ func TestDownloadUpdate_ByVersion(t *testing.T) {
 	info := &entity.UpdateInfo{
 		Version:     "v1.1.9",
 		DownloadURL: "https://example.com/v1.1.9.AppImage",
-		Checksum:    "",
+		Checksum:    "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3",
 	}
 	mockU := &mockUpdater{fetchByTagInfo: info}
 	svc := updater.NewService(mockU, &mockInstaller{}, models.ChannelStable)

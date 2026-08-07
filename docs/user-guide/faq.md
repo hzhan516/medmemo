@@ -113,11 +113,20 @@
 ### Q22: How do I completely delete all my data?
 
 **A:** Uninstall MedMemo and delete the user data folder:
-- **Windows**: `%LOCALAPPDATA%\medmemo`
-- **macOS**: `~/Library/Application Support/medmemo`
-- **Linux**: `~/.local/share/medmemo`
+- **Windows**: see [Installation Guide → Where Your Windows Data Is Stored](./installation.md#where-your-windows-data-is-stored). Common locations are `%USERPROFILE%\.medmemo\data` or `<installDir>\data` (for example, `%LOCALAPPDATA%\Programs\MedMemo\data`).
+- **macOS**: `~/.medmemo/data`
+- **Linux**: `~/.medmemo/data`
 
-### Q23: Does MedMemo collect analytics?
+### Q23: Why is my Windows data in a different folder after upgrading?
+
+**A:** Starting with v1.1.10, MedMemo uses the following priority on Windows:
+1. If `%USERPROFILE%\.medmemo\data\medmemo.db` exists, that legacy folder is used so your existing data stays visible.
+2. Otherwise, if the install directory is writable, MedMemo uses `<installDir>\data`.
+3. If the install directory is not writable, MedMemo falls back to `%USERPROFILE%\.medmemo\data`.
+
+To force a specific folder, set `MEDMEMO_DATA_DIR` or `data_dir` in `config.yaml`.
+
+### Q24: Does MedMemo collect analytics?
 
 **A:** No telemetry or usage analytics are collected. The only "analytics" are local onboarding wizard completion stats (stored on your device only) to help improve the first-time experience.
 
@@ -125,19 +134,19 @@
 
 ## Troubleshooting
 
-### Q24: The app won't start after installation. What should I do?
+### Q25: The app won't start after installation. What should I do?
 
 **A:** See [Troubleshooting → Installation Issues](./troubleshooting.md#installation-issues).
 
-### Q25: Why do I see an orange warning on some AI responses?
+### Q26: Why do I see an orange warning on some AI responses?
 
 **A:** The compliance engine detected potentially sensitive health content. The warning reminds you to consult a doctor for medical decisions.
 
-### Q26: What should I do if I see a red emergency alert?
+### Q27: What should I do if I see a red emergency alert?
 
 **A:** Take it seriously. A-level alerts indicate potentially life-threatening symptoms. Consider calling emergency services or visiting urgent care. You can also choose to continue the conversation if you believe it's a false positive.
 
-### Q27: The AI response seems slow. How can I speed it up?
+### Q28: The AI response seems slow. How can I speed it up?
 
 **A:** Try switching to a faster model (Kimi Lite or GPT-4o Mini). Local models (Ollama) depend on your hardware — a GPU significantly improves speed.
 
@@ -152,4 +161,4 @@
 
 ---
 
-*Last updated: 2026-05-19*
+*Last updated: 2026-08-05*

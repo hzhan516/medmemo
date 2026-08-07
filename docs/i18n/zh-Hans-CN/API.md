@@ -30,6 +30,9 @@
 
 ## 内部接口契约
 
+> ⚙️ **权威接口定义已自动生成在 [`_generated/ports.md`](../../api/_generated/ports.md)。**  
+> 下方的摘要仅供快速参考；最新签名请以生成文档为准。
+
 ### LLMClient
 
 ```go
@@ -118,6 +121,8 @@ type FamilyRepository interface {
 
 ## Wails 前后端绑定
 
+> ⚙️ **完整、最新的绑定方法索引已自动生成在 [`_generated/bindings.md`](../../api/_generated/bindings.md)。**
+
 Wails v2 通过 Go 结构体方法自动生成前端 TypeScript 绑定。
 
 ### 绑定示例
@@ -162,6 +167,9 @@ EventsOn('compliance:warning', (level: string, reason: string) => {
 ## 核心类型
 
 这些共享类型在多个 Wails 绑定中出现。各模块专属的请求/响应类型见对应 API 文档。
+
+> ⚙️ **权威类型定义与完整字段表已自动生成在 [`_generated/core-types.md`](../../api/_generated/core-types.md)。**  
+> 下方的表格仅提供精选的快速参考。
 
 ### `models.ProviderConfig`
 

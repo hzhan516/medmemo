@@ -11,6 +11,11 @@ const (
 	RoleSystem    Role = "system"
 )
 
+// String 返回角色的字符串表示，便于在需要 string 类型的场景使用。
+func (r Role) String() string {
+	return string(r)
+}
+
 // Message 表示单条对话消息，用于 LLM 上下文传递。
 type Message struct {
 	Role    Role   `json:"role"`

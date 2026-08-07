@@ -145,7 +145,7 @@ MedMemo 不面向 13 岁以下儿童使用。我们不会故意收集儿童数�
 如有隐私相关问题或疑虑：
 
 - 提交 GitHub Issue（一般问题）：[github.com/hzhan516/medmemo/issues](https://github.com/hzhan516/medmemo/issues)
-- 邮件（安全/隐私）：doyle_zhang@outlook.com
+- 邮件（安全/隐私）：[doyle_zhang@outlook.com](mailto:doyle_zhang@outlook.com)
 
 ---
 

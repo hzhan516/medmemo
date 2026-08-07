@@ -65,6 +65,25 @@ The project uses the following tools for dependency security monitoring:
 
 Security scanning is integrated into the CI pipeline; high-severity vulnerabilities block merges.
 
+### npm Audit Allowlist Policy
+
+The frontend gate is implemented by `scripts/check-npm-audit-policy.js` using the reviewed allowlist in `scripts/npm-audit-allowlist.json`. The policy is fail-closed:
+
+- Any `critical` severity vulnerability blocks the build.
+- Any `high` severity vulnerability in production dependencies blocks the build, unless it is covered by a reviewed allowlist entry marked with `scope: production`.
+- `high` severity vulnerabilities in development dependencies may be allowlisted only when they are not reachable in the shipped application, a concrete mitigation is documented, and an expiry date is set.
+- Production-scope allowlist entries are only accepted when the vulnerability is not exploitable in the shipped application context, a concrete mitigation is documented, and an expiry date is set.
+- Each allowlist entry records the advisory ID, package name, scope, justification, mitigation, target review version, and expiration date. Expired, mismatched, or stale entries block the build.
+
+The raw `npm audit` output is retained for reporting, but the policy script is the authoritative gate.
+
+#### Reviewed Exceptions for v1.1.10
+
+| Advisory | Package | Scope | Reason | Review Target | Expires |
+|---|---|---|---|---|---|
+| [GHSA-qwww-vcr4-c8h2](https://github.com/advisories/GHSA-qwww-vcr4-c8h2) | `react-router` | production | RSC/SSR CSRF bypass; MedMemo uses HashRouter in a desktop Wails shell without RSC/SSR/server actions, so the vector is unreachable. | `>=8.3.0` or fixed 7.x patch | 2026-09-05 |
+| [GHSA-qwww-vcr4-c8h2](https://github.com/advisories/GHSA-qwww-vcr4-c8h2) | `react-router-dom` | production | Same underlying advisory; client-side HashRouter only, no RSC/SSR action execution path. | `>=8.3.0` or fixed 7.x patch | 2026-09-05 |
+
 ## Build Security
 
 - All release binaries are built through GitHub Actions with publicly auditable build logs.
@@ -80,4 +99,4 @@ Security scanning is integrated into the CI pipeline; high-severity vulnerabilit
 
 ---
 
-*Last updated: 2026-07-09*
+*Last updated: 2026-08-05*

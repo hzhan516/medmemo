@@ -3,11 +3,9 @@ name: Release
 on:
   push:
     tags:
-      # 仅处理正式版本 tag；预发布 rc tag（vX.Y.Z-rc.N）完全由 build-and-release.yml
-      # 负责创建，避免同一 tag 被两个工作流重复创建 Release、且 draft 状态不一致。
-      - 'v*'
-      - '!v*-rc*'
-      - '!v*-Pre-release*'
+      # 仅处理正式版本 tag 与 rehearsal tag；rc tag 与旧 Pre-release tag 由 build-and-release.yml 处理。
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v0.0.0-rehearsal.[0-9]+'
 
 env:
   GOPROXY: https://proxy.golang.org,https://goproxy.cn,direct
@@ -16,9 +14,40 @@ permissions:
   contents: write
   packages: write
 
+concurrency:
+  group: stable-release-${{ github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
+  validate:
+    name: Tag Validator
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Validate tag
+        run: |
+          set -euo pipefail
+          TAG="${{ github.ref_name }}"
+          PRODUCT_VERSION=$(jq -r '.info.productVersion' wails.json)
+
+          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            if [[ "$TAG" != "v$PRODUCT_VERSION" ]]; then
+              echo "ERROR: stable tag $TAG does not match productVersion v$PRODUCT_VERSION"
+              exit 1
+            fi
+            echo "OK: stable tag $TAG matches productVersion"
+          elif [[ "$TAG" =~ ^v0\.0\.0-rehearsal\.[0-9]+$ ]]; then
+            echo "OK: rehearsal tag $TAG"
+          else
+            echo "ERROR: unsupported tag format: $TAG"
+            exit 1
+          fi
+
   licenses-check:
     name: License Consistency Check
+    needs: validate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -93,7 +122,7 @@ jobs:
         if: matrix.platform == 'linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libsqlcipher-dev libwebkit2gtk-4.1-dev gcc
+          sudo apt-get install -y libsqlcipher-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev gcc
 
       - name: Install nfpm (Linux packaging)
         if: matrix.platform == 'linux'
@@ -115,11 +144,6 @@ jobs:
         if: matrix.platform == 'windows'
         shell: bash
         run: |
-          # ortgenai 自带 `#cgo LDFLAGS: -ldl` 与 `#include <dlfcn.h>`（无 build-tag 保护），
-          # 因此编译必须提供 dlfcn.h 头文件与 libdl。dlfcn-win32 同时安装了共享导入库
-          # (libdl.dll.a) 与静态库 (libdl.a)；若保留共享导入库，链接器会解析到 libdl.dll，
-          # 最终 MedMemo.exe 会带上 libdl.dll 运行时依赖（Windows 上不存在，导致启动即失败）。
-          # 删除共享导入库与 DLL，强制 `-ldl` 解析到静态归档，产物不再依赖 libdl.dll。
           ls -la /c/msys64/mingw64/lib/libdl* || true
           rm -f /c/msys64/mingw64/lib/libdl.dll.a /c/msys64/mingw64/bin/libdl.dll
           test -f /c/msys64/mingw64/lib/libdl.a && echo "static libdl.a present"
@@ -132,7 +156,7 @@ jobs:
         if: matrix.platform == 'linux'
         run: |
           SIZE=$(stat -c%s build/bin/MedMemo)
-          MAX=157286400  # 150MB in bytes
+          MAX=157286400
           if [ $SIZE -gt $MAX ]; then
             echo "Binary size $SIZE exceeds limit $MAX"
             exit 1
@@ -152,7 +176,6 @@ jobs:
           export MEDMEMO_DATA_DIR="$RUNNER_TEMP/medmemo-data"
           mkdir -p "$HOME" "$MEDMEMO_DATA_DIR"
 
-          # Start the binary in the background and ensure it stays alive for 5s.
           xvfb-run -a timeout 20s ./build/bin/MedMemo &
           PID=$!
           sleep 5
@@ -173,9 +196,13 @@ jobs:
           retention-days: 1
 
   release:
-    name: Release
+    name: Create GitHub Draft Release
     needs: build
     runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.create_release.outputs.release_id }}
+      checksums_sha256: ${{ steps.checksums.outputs.checksums_sha256 }}
+      tree_sha: ${{ steps.tree.outputs.tree_sha }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -186,35 +213,116 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: medmemo-linux-${{ github.ref_name }}
-          path: build/bin/
+          path: artifacts/linux/
 
       - name: Download Windows artifacts
         uses: actions/download-artifact@v4
         with:
           name: medmemo-windows-${{ github.ref_name }}
-          path: build/bin/
+          path: artifacts/windows/
 
       - name: Download macOS Intel artifacts
         uses: actions/download-artifact@v4
         with:
           name: medmemo-darwin-amd64-${{ github.ref_name }}
-          path: build/bin/
+          path: artifacts/darwin-amd64/
 
       - name: Download macOS Apple Silicon artifacts
         uses: actions/download-artifact@v4
         with:
           name: medmemo-darwin-arm64-${{ github.ref_name }}
-          path: build/bin/
+          path: artifacts/darwin-arm64/
 
-      - name: List release assets
-        run: ls -la build/bin/
+      - name: Prepare release assets
+        run: |
+          set -euo pipefail
+          VERSION="${{ github.ref_name }}"
+          ./scripts/build/prepare-release-assets.sh "$VERSION" "release-assets" \
+            "artifacts/linux" "artifacts/windows" \
+            "artifacts/darwin-amd64" "artifacts/darwin-arm64"
+          echo "Staged release assets:"
+          ls -la release-assets/
+
+      - name: Compute tree SHA
+        id: tree
+        run: |
+          set -euo pipefail
+          TREE_SHA=$(git rev-parse "${{ github.ref }}^{tree}")
+          echo "tree_sha=$TREE_SHA" >> "$GITHUB_OUTPUT"
+          echo "Tree SHA: $TREE_SHA"
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
           version: '~> v2'
-          args: release --clean --skip=validate
+          args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PLATFORM: linux
+
+      - name: Collect GoReleaser checksums
+        run: |
+          set -euo pipefail
+          if [ ! -f dist/checksums.txt ]; then
+            echo "ERROR: GoReleaser did not generate dist/checksums.txt"
+            exit 1
+          fi
+          cp dist/checksums.txt release-assets/checksums.txt
+          echo "checksums.txt copied to release-assets/"
+          cat release-assets/checksums.txt
+
+      - name: Verify release asset whitelist
+        run: |
+          set -euo pipefail
+          ./scripts/build/verify-release-assets.sh release-assets "${{ github.ref_name }}"
+
+      - name: Compute checksums file SHA256
+        id: checksums
+        run: |
+          set -euo pipefail
+          CHECKSUMS_SHA256=$(sha256sum release-assets/checksums.txt | awk '{print $1}')
+          echo "checksums_sha256=$CHECKSUMS_SHA256" >> "$GITHUB_OUTPUT"
+          echo "Checksums SHA256: $CHECKSUMS_SHA256"
+
+      - name: Set rehearsal prerelease
+        if: startsWith(github.ref_name, 'v0.0.0-rehearsal.')
+        run: |
+          set -euo pipefail
+          gh release edit "${{ github.ref_name }}" --prerelease=true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Render initial Draft body
+        run: |
+          set -euo pipefail
+          TAG="${{ github.ref_name }}"
+          RUN_ID="${{ github.run_id }}"
+          TREE_SHA="${{ steps.tree.outputs.tree_sha }}"
+          CHECKSUMS_SHA256="${{ steps.checksums.outputs.checksums_sha256 }}"
+
+          cat > release-body.md <<EOF
+          ## MedMemo $TAG Draft
+
+          This is a **Draft** release. It is not yet public and must not be distributed.
+
+          Rehearsal-Run-ID: $RUN_ID
+          Rehearsal-Tree: $TREE_SHA
+          Checksums-File-SHA256: $CHECKSUMS_SHA256
+
+          Platform evidence runs will be recorded before publication.
+          EOF
+
+          gh release edit "$TAG" --notes-file release-body.md
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Output release database ID
+        id: create_release
+        run: |
+          set -euo pipefail
+          RELEASE_ID=$(gh api "repos/${{ github.repository }}/releases/tags/${{ github.ref_name }}" --jq '.id')
+          echo "release_id=$RELEASE_ID" >> "$GITHUB_OUTPUT"
+          echo "Release database ID: $RELEASE_ID"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
