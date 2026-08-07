@@ -87,7 +87,7 @@ jobs:
         run: cd web && npm ci
 
       - name: Download Go modules
-        run: GOTOOLCHAIN=go1.26.4 go mod download all
+        run: go mod download all
 
       - name: Generate licenses
         run: make licenses
