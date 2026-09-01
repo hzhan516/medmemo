@@ -59,7 +59,7 @@ jobs:
 
       - name: Secret scanning (PR diff mode)
         if: github.event_name == 'pull_request'
-        uses: trufflesecurity/trufflehog@v3.88.0
+        uses: trufflesecurity/trufflehog@v3.97.1
         with:
           path: ./
           base: ${{ github.event.pull_request.base.sha }}
@@ -68,7 +68,7 @@ jobs:
 
       - name: Secret scanning (push incremental mode)
         if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'
-        uses: trufflesecurity/trufflehog@v3.88.0
+        uses: trufflesecurity/trufflehog@v3.97.1
         with:
           path: ./
           base: ${{ github.event.before }}
@@ -77,7 +77,7 @@ jobs:
 
       - name: Secret scanning (full scan fallback)
         if: github.event_name == 'schedule' || (github.event_name == 'push' && github.event.before == '0000000000000000000000000000000000000000')
-        uses: trufflesecurity/trufflehog@v3.88.0
+        uses: trufflesecurity/trufflehog@v3.97.1
         with:
           path: ./
           extra_args: --only-verified
